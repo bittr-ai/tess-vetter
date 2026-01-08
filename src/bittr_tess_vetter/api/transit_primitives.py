@@ -22,6 +22,46 @@ from bittr_tess_vetter.transit.vetting import (
     compute_odd_even_result as _compute_odd_even_result,
 )
 
+REFERENCES: list[dict[str, str | int | list[str]]] = [
+    {
+        "id": "coughlin_2016",
+        "type": "article",
+        "bibcode": "2016ApJS..224...12C",
+        "title": (
+            "Planetary Candidates Observed by Kepler. VII. The First Fully Uniform "
+            "Catalog Based on the Entire 48-month Data Set (Q1-Q17 DR24)"
+        ),
+        "authors": ["Coughlin, J.L.", "Mullally, F.", "Thompson, S.E."],
+        "journal": "The Astrophysical Journal Supplement Series",
+        "year": 2016,
+        "note": "Section 4.2: Original odd/even depth test in Kepler Robovetter",
+    },
+    {
+        "id": "thompson_2018",
+        "type": "article",
+        "bibcode": "2018ApJS..235...38T",
+        "title": (
+            "Planetary Candidates Observed by Kepler. VIII. A Fully Automated "
+            "Catalog with Measured Completeness and Reliability Based on Data "
+            "Release 25"
+        ),
+        "authors": ["Thompson, S.E.", "Coughlin, J.L.", "Hoffman, K."],
+        "journal": "The Astrophysical Journal Supplement Series",
+        "year": 2018,
+        "note": "Section 3.3.1: DR25 odd/even transit depth comparison",
+    },
+    {
+        "id": "prsa_2011",
+        "type": "article",
+        "bibcode": "2011AJ....141...83P",
+        "title": "Kepler Eclipsing Binary Stars. I. Catalog and Principal Characterization of 1879 Eclipsing Binaries in the First Data Release",
+        "authors": ["Prsa, A.", "Batalha, N.", "Slawson, R.W."],
+        "journal": "The Astronomical Journal",
+        "year": 2011,
+        "note": "Section 3: Eclipsing binary depth ratio characteristics (50-100% different)",
+    },
+]
+
 
 def odd_even_result(
     lc: LightCurve,

@@ -33,26 +33,26 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 # Module-level references for programmatic access
-REFERENCES: list[dict[str, str]] = [
+REFERENCES: list[dict[str, str | int | list[str]]] = [
     {
-        "id": "Prsa2022",
-        "type": "ads",
+        "id": "prsa_2022",
+        "type": "article",
         "bibcode": "2022ApJS..258...16P",
         "title": "TESS Eclipsing Binary Stars. I. Short-cadence Observations of 4584 "
         "Eclipsing Binaries in Sectors 1-26",
-        "authors": "Prsa, A.; Kochoska, A.; Conroy, K.E.; et al.",
+        "authors": ["Prsa, A.", "Kochoska, A.", "Conroy, K.E."],
         "journal": "ApJS 258, 16",
-        "year": "2022",
+        "year": 2022,
         "note": "TESS-EB catalog for nearby eclipsing binary search (V06)",
     },
     {
-        "id": "Guerrero2021",
-        "type": "ads",
+        "id": "guerrero_2021",
+        "type": "article",
         "bibcode": "2021ApJS..254...39G",
         "title": "The TESS Objects of Interest Catalog from the TESS Prime Mission",
-        "authors": "Guerrero, N.M.; Seager, S.; Huang, C.X.; et al.",
+        "authors": ["Guerrero, N.M.", "Seager, S.", "Huang, C.X."],
         "journal": "ApJS 254, 39",
-        "year": "2021",
+        "year": 2021,
         "note": "TESS TOI catalog and ExoFOP disposition definitions (V07)",
     },
 ]

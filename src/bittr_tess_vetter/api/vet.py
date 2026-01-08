@@ -35,37 +35,37 @@ from bittr_tess_vetter.api.types import (
 )
 
 # Module-level references for programmatic access
-REFERENCES: list[dict[str, str]] = [
+REFERENCES: list[dict[str, str | int | list[str]]] = [
     {
-        "id": "Coughlin2016",
-        "type": "ads",
+        "id": "coughlin_2016",
+        "type": "article",
         "bibcode": "2016ApJS..224...12C",
         "title": "Planetary Candidates Observed by Kepler. VII. The First Fully "
         "Uniform Catalog Based on the Entire 48-month Data Set (Q1-Q17 DR24)",
-        "authors": "Coughlin, J.L.; Mullally, F.; Thompson, S.E.; et al.",
+        "authors": ["Coughlin, J.L.", "Mullally, F.", "Thompson, S.E."],
         "journal": "ApJS 224, 12",
-        "year": "2016",
+        "year": 2016,
         "note": "Kepler Robovetter architecture for automated vetting",
     },
     {
-        "id": "Thompson2018",
-        "type": "ads",
+        "id": "thompson_2018",
+        "type": "article",
         "bibcode": "2018ApJS..235...38T",
         "title": "Planetary Candidates Observed by Kepler. VIII. A Fully Automated "
         "Catalog With Measured Completeness and Reliability Based on Data Release 25",
-        "authors": "Thompson, S.E.; Coughlin, J.L.; Hoffman, K.; et al.",
+        "authors": ["Thompson, S.E.", "Coughlin, J.L.", "Hoffman, K."],
         "journal": "ApJS 235, 38",
-        "year": "2018",
+        "year": 2018,
         "note": "DR25 pipeline design and tiered check execution",
     },
     {
-        "id": "Guerrero2021",
-        "type": "ads",
+        "id": "guerrero_2021",
+        "type": "article",
         "bibcode": "2021ApJS..254...39G",
         "title": "The TESS Objects of Interest Catalog from the TESS Prime Mission",
-        "authors": "Guerrero, N.M.; Seager, S.; Huang, C.X.; et al.",
+        "authors": ["Guerrero, N.M.", "Seager, S.", "Huang, C.X."],
         "journal": "ApJS 254, 39",
-        "year": "2021",
+        "year": 2021,
         "note": "TESS TOI catalog vetting procedures",
     },
 ]

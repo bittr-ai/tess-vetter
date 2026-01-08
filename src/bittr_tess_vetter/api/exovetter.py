@@ -23,27 +23,27 @@ from bittr_tess_vetter.domain.detection import TransitCandidate, VetterCheckResu
 from bittr_tess_vetter.validation.exovetter_checks import ModshiftCheck, SWEETCheck
 
 # Module-level references for programmatic access
-REFERENCES: list[dict[str, str]] = [
+REFERENCES: list[dict[str, str | int | list[str]]] = [
     {
-        "id": "Thompson2018",
-        "type": "ads",
+        "id": "thompson_2018",
+        "type": "article",
         "bibcode": "2018ApJS..235...38T",
         "title": "Planetary Candidates Observed by Kepler. VIII. A Fully Automated "
         "Catalog With Measured Completeness and Reliability Based on Data Release 25",
-        "authors": "Thompson, S.E.; Coughlin, J.L.; Hoffman, K.; et al.",
+        "authors": ["Thompson, S.E.", "Coughlin, J.L.", "Hoffman, K."],
         "journal": "ApJS 235, 38",
-        "year": "2018",
+        "year": 2018,
         "note": "DR25 Robovetter: ModShift (Sec 3.2.3) and SWEET (Sec 3.2.4) tests",
     },
     {
-        "id": "Coughlin2016",
-        "type": "ads",
+        "id": "coughlin_2016",
+        "type": "article",
         "bibcode": "2016ApJS..224...12C",
         "title": "Planetary Candidates Observed by Kepler. VII. The First Fully Uniform "
         "Catalog Based on the Entire 48-month Data Set (Q1-Q17 DR24)",
-        "authors": "Coughlin, J.L.; Mullally, F.; Thompson, S.E.; et al.",
+        "authors": ["Coughlin, J.L.", "Mullally, F.", "Thompson, S.E."],
         "journal": "ApJS 224, 12",
-        "year": "2016",
+        "year": 2016,
         "note": "DR24 Robovetter with automated vetting including ModShift and SWEET",
     },
 ]
