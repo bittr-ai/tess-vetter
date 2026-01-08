@@ -25,12 +25,28 @@ dependencies = [
 wotan = [
   "wotan>=1.1",
 ]
+# TRICERATOPS+ vendored dependencies
+triceratops = [
+  "lightkurve>=2.0.0",
+  "pytransit>=2.2",
+  "mechanicalsoup>=0.12.0",
+  "emcee>=3.0.2",
+  "seaborn>=0.11.1",
+  "numba>=0.52.0",
+  "pyrr>=0.10.3",
+  "celerite>=0.4.0",
+  "arviz>=0.12.1",
+  "corner>=2.2.1",
+  "pandas>=0.23.4",
+  "matplotlib>=3.5.1",
+  "astroquery>=0.4.6",
+]
 dev = [
   "pytest>=7.0.0",
   "ruff>=0.1.0",
   "mypy>=1.0.0",
 ]
-all = ["bittr-tess-vetter[wotan,dev]"]
+all = ["bittr-tess-vetter[wotan,triceratops,dev]"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bittr_tess_vetter"]
@@ -46,6 +62,8 @@ markers = [
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+# Exclude vendored code from linting
+exclude = ["src/bittr_tess_vetter/ext/triceratops_plus_vendor/triceratops"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]

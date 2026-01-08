@@ -24,24 +24,24 @@ Example:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import math
 import pickle
-import time
-import contextlib
 import tempfile
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 from urllib.request import Request, urlopen
 
 import numpy as np
 from pydantic import BaseModel, Field
 
 from bittr_tess_vetter.network.timeout import (
-    NetworkTimeoutError,
     TRICERATOPS_CALC_TIMEOUT,
-    TRICERATOPS_INIT_TIMEOUT,
+    NetworkTimeoutError,
     network_timeout,
 )
 
@@ -247,7 +247,6 @@ def _prefetch_trilegal_csv(
     out_path = out_dir / f"{int(tic_id)}_TRILEGAL.csv"
 
     deadline = time.time() + float(timeout_seconds)
-    last_text: str | None = None
     last_error: Exception | None = None
 
     while time.time() < deadline:
@@ -256,7 +255,6 @@ def _prefetch_trilegal_csv(
             with urlopen(req, timeout=30) as resp:  # noqa: S310 (caller controls network policy)
                 raw = resp.read()
             txt = raw.decode("utf-8", errors="replace")
-            last_text = txt
             if "#TRILEGAL normally terminated" not in txt:
                 time.sleep(float(poll_interval_seconds))
                 continue
@@ -271,11 +269,15 @@ def _prefetch_trilegal_csv(
             time.sleep(float(poll_interval_seconds))
 
     if last_error is not None:
-        raise NetworkTimeoutError(f"TRILEGAL prefetch timed out after {timeout_seconds}s: {last_error}")
+        raise NetworkTimeoutError(
+            f"TRILEGAL prefetch timed out after {timeout_seconds}s: {last_error}"
+        )
     raise NetworkTimeoutError(f"TRILEGAL prefetch timed out after {timeout_seconds}s (no response)")
 
 
-def _triceratops_target_cache_path(*, cache_dir: str | Path, tic_id: int, sectors_used: list[int]) -> Path:
+def _triceratops_target_cache_path(
+    *, cache_dir: str | Path, tic_id: int, sectors_used: list[int]
+) -> Path:
     cache_dir_path = Path(cache_dir)
     out_dir = cache_dir_path / "triceratops" / "target_cache"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -289,7 +291,9 @@ def _load_cached_triceratops_target(
     tic_id: int,
     sectors_used: list[int],
 ) -> Any | None:
-    path = _triceratops_target_cache_path(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used)
+    path = _triceratops_target_cache_path(
+        cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used
+    )
     if not path.exists():
         return None
     try:
@@ -307,7 +311,9 @@ def _save_cached_triceratops_target(
     sectors_used: list[int],
     target: Any,
 ) -> None:
-    path = _triceratops_target_cache_path(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used)
+    path = _triceratops_target_cache_path(
+        cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used
+    )
     try:
         payload = pickle.dumps(target)
     except Exception:
@@ -496,6 +502,60 @@ def _set_mechanicalsoup_default_features(*, features: str) -> None:
                 value["features"] = features
 
 
+def _write_external_lc_files(
+    external_lcs: list[Any],  # list[ExternalLightCurve] from api.fpp
+    temp_dir: Path,
+) -> tuple[list[str], list[str]]:
+    """Convert external LC arrays to temp .txt files for TRICERATOPS+.
+
+    TRICERATOPS+ expects .txt files with 3 columns, no header:
+        time_from_midtransit (days), flux, flux_err
+
+    Args:
+        external_lcs: List of ExternalLightCurve dataclass instances.
+        temp_dir: Directory to write temporary files.
+
+    Returns:
+        Tuple of (file_paths, filters) for use with calc_probs().
+
+    Raises:
+        ValueError: If external LC arrays have mismatched lengths or non-finite values.
+    """
+    file_paths: list[str] = []
+    filters: list[str] = []
+
+    for i, lc in enumerate(external_lcs):
+        # Validate array lengths
+        if len(lc.time_from_midtransit_days) != len(lc.flux):
+            raise ValueError(f"External LC {i}: time/flux array length mismatch")
+        if len(lc.flux) != len(lc.flux_err):
+            raise ValueError(f"External LC {i}: flux/flux_err array length mismatch")
+
+        # Validate finite values
+        if not np.all(np.isfinite(lc.flux)):
+            raise ValueError(f"External LC {i}: non-finite flux values detected")
+        if not np.all(np.isfinite(lc.flux_err)):
+            raise ValueError(f"External LC {i}: non-finite flux_err values detected")
+        if not np.all(np.isfinite(lc.time_from_midtransit_days)):
+            raise ValueError(f"External LC {i}: non-finite time values detected")
+
+        # Write temp file in TRICERATOPS+ expected format
+        fpath = temp_dir / f"external_lc_{i}_{lc.filter}.txt"
+        data = np.column_stack(
+            [
+                lc.time_from_midtransit_days,
+                lc.flux,
+                lc.flux_err,
+            ]
+        )
+        np.savetxt(fpath, data, fmt="%.10f", delimiter=" ")
+
+        file_paths.append(str(fpath))
+        filters.append(lc.filter)
+
+    return file_paths, filters
+
+
 # =============================================================================
 # Main Handler
 # =============================================================================
@@ -518,18 +578,20 @@ def calculate_fpp_handler(
     max_points: int | None = 3000,
     min_flux_err: float = 5e-5,
     use_empirical_noise_floor: bool = True,
+    external_lightcurves: list[Any] | None = None,
+    contrast_curve: Any | None = None,
     *,
     load_cached_target: Callable[..., Any] | None = None,
     save_cached_target: Callable[..., Any] | None = None,
     prefetch_trilegal_csv: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
-    """Execute TRICERATOPS FPP calculation.
+    """Execute TRICERATOPS+ FPP calculation.
 
     This function:
     1. Loads light curve from cache
     2. Checks target isn't saturated (Tmag < 4)
     3. Estimates duration if not provided
-    4. Calls TRICERATOPS target.calc_probs()
+    4. Calls TRICERATOPS+ target.calc_probs() with optional external LCs
     5. Returns FPP, NFPP, disposition, scenario probabilities
 
     Args:
@@ -543,10 +605,14 @@ def calculate_fpp_handler(
         stellar_radius: Stellar radius in solar radii (for duration estimation)
         stellar_mass: Stellar mass in solar masses (for duration estimation)
         tmag: TESS magnitude (for saturation check)
+        external_lightcurves: Ground-based LCs for multi-band FPP (TRICERATOPS+ feature)
+        contrast_curve: High-resolution imaging contrast curve (not yet implemented)
 
     Returns:
         Dictionary with FPP results or error information
     """
+    # Note: contrast_curve is accepted but not yet integrated
+    _ = contrast_curve
     start_time = time.time()
     cache_dir = getattr(cache, "cache_dir", None) or tempfile.gettempdir()
     deadline = None
@@ -602,7 +668,8 @@ def calculate_fpp_handler(
         duration_hours = _estimate_transit_duration(period, rad, mass)
         logger.info(f"Estimated transit duration: {duration_hours:.2f} hours")
 
-    # Step 4: Try to import and initialize TRICERATOPS
+    # Step 4: Try to import and initialize TRICERATOPS+
+    triceratops_engine: str | None = None
     try:
         # If lxml isn't installed, TRICERATOPS's transitive dependency MechanicalSoup
         # may crash while constructing BeautifulSoup(..., 'lxml').
@@ -612,10 +679,16 @@ def calculate_fpp_handler(
         except Exception:
             _set_mechanicalsoup_default_features(features="html.parser")
 
-        import triceratops.triceratops as tr
-    except ImportError:
+        # Use vendored TRICERATOPS+ for multi-band FPP support
+        from bittr_tess_vetter.ext.triceratops_plus_vendor.triceratops import (
+            triceratops as tr,
+        )
+
+        triceratops_engine = "triceratops_plus_vendor"
+    except ImportError as import_err:
+        # Vendored code should always be available; this indicates a packaging issue
         return _err(
-            "TRICERATOPS not installed. Install with: pip install triceratops",
+            f"TRICERATOPS+ vendored import failed (packaging issue): {import_err}",
             error_type="internal_error",
             stage="import_triceratops",
             sectors_used_value=sectors_used,
@@ -647,22 +720,20 @@ def calculate_fpp_handler(
                     operation=f"TRICERATOPS init (Gaia query) for TIC {tic_id}",
                 ):
                     target = tr.target(ID=tic_id, sectors=sectors_used, mission="TESS")
-                _save(
-                    cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target
-                )
+                _save(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target)
             except NetworkTimeoutError:
                 # One retry: some upstream endpoints are bursty (MAST/TessCut/Gaia).
                 rem_retry = _remaining_seconds()
                 if rem_retry is not None and rem_retry <= 0:
                     raise
                 with network_timeout(
-                    float(min(float(init_timeout) * 1.5, rem_retry)) if rem_retry is not None else float(init_timeout) * 1.5,
+                    float(min(float(init_timeout) * 1.5, rem_retry))
+                    if rem_retry is not None
+                    else float(init_timeout) * 1.5,
                     operation=f"TRICERATOPS init (Gaia query) retry for TIC {tic_id}",
                 ):
                     target = tr.target(ID=tic_id, sectors=sectors_used, mission="TESS")
-                _save(
-                    cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target
-                )
+                _save(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target)
     except NetworkTimeoutError as e:
         return _err(
             str(e),
@@ -706,8 +777,8 @@ def calculate_fpp_handler(
                         tic_id=tic_id,
                         trilegal_url=trilegal_url,
                     )
-                setattr(target, "trilegal_fname", trilegal_csv)
-                setattr(target, "trilegal_url", None)
+                target.trilegal_fname = trilegal_csv
+                target.trilegal_url = None
 
         # TRICERATOPS expects time array centered on transit midpoint
         # Fold the light curve to center on transits
@@ -765,10 +836,7 @@ def calculate_fpp_handler(
         if use_empirical_noise_floor:
             try:
                 oot_mask = np.abs(time_folded) > (dur_days / 2.0)
-                if np.any(oot_mask):
-                    oot_flux = flux_arr[oot_mask]
-                else:
-                    oot_flux = flux_arr
+                oot_flux = flux_arr[oot_mask] if np.any(oot_mask) else flux_arr
                 med = float(np.median(oot_flux))
                 mad = float(np.median(np.abs(oot_flux - med)))
                 empirical_sigma = 1.4826 * mad
@@ -807,16 +875,59 @@ def calculate_fpp_handler(
 
         # If the caller provided an overall timeout budget, let calc_probs use the remaining time.
         calc_timeout = float(TRICERATOPS_CALC_TIMEOUT) if rem is None else float(rem)
-        with network_timeout(float(calc_timeout), operation=f"TRICERATOPS calc_probs for TIC {tic_id}"):
-            target.calc_probs(
-                time=time_folded,
-                flux_0=flux_arr,
-                flux_err_0=flux_err_scalar,
-                P_orb=period,
-                N=draws,
-                exptime=float(exptime_days) if np.isfinite(exptime_days) and exptime_days > 0 else 0.00139,
-                verbose=0,  # Suppress progress output
-            )
+
+        # Prepare external LC files for TRICERATOPS+ multi-band FPP
+        external_lc_files: list[str] | None = None
+        filt_lcs: list[str] | None = None
+        n_external_lcs = 0
+        external_filters_used: list[str] = []
+
+        if external_lightcurves and len(external_lightcurves) > 0:
+            n_external_lcs = len(external_lightcurves)
+            if n_external_lcs > 4:
+                logger.warning(
+                    f"TRICERATOPS+ supports up to 4 external LCs; using first 4 of {n_external_lcs}"
+                )
+                external_lightcurves = external_lightcurves[:4]
+                n_external_lcs = 4
+
+        # Use temp directory for external LC files if needed
+        temp_dir_obj = tempfile.TemporaryDirectory() if external_lightcurves else None
+        try:
+            if external_lightcurves and temp_dir_obj is not None:
+                temp_dir_path = Path(temp_dir_obj.name)
+                external_lc_files, filt_lcs = _write_external_lc_files(
+                    external_lightcurves, temp_dir_path
+                )
+                external_filters_used = list(filt_lcs)
+                logger.info(
+                    f"TRICERATOPS+ multi-band FPP: {n_external_lcs} external LCs "
+                    f"in filters {filt_lcs}"
+                )
+
+            with network_timeout(
+                float(calc_timeout), operation=f"TRICERATOPS calc_probs for TIC {tic_id}"
+            ):
+                # Pass external LC args to calc_probs (TRICERATOPS+ extension)
+                calc_kwargs: dict[str, Any] = {
+                    "time": time_folded,
+                    "flux_0": flux_arr,
+                    "flux_err_0": flux_err_scalar,
+                    "P_orb": period,
+                    "N": draws,
+                    "exptime": float(exptime_days)
+                    if np.isfinite(exptime_days) and exptime_days > 0
+                    else 0.00139,
+                    "verbose": 0,
+                }
+                if external_lc_files:
+                    calc_kwargs["external_lc_files"] = external_lc_files
+                    calc_kwargs["filt_lcs"] = filt_lcs
+
+                target.calc_probs(**calc_kwargs)
+        finally:
+            if temp_dir_obj is not None:
+                temp_dir_obj.cleanup()
     except NetworkTimeoutError as e:
         return _err(
             str(e),
@@ -854,7 +965,11 @@ def calculate_fpp_handler(
         scenario_prob_sums: dict[str, float] = {}
         scenario_prob_top: list[dict[str, Any]] = []
         try:
-            if probs_raw is not None and hasattr(probs_raw, "__getitem__") and hasattr(probs_raw, "columns"):
+            if (
+                probs_raw is not None
+                and hasattr(probs_raw, "__getitem__")
+                and hasattr(probs_raw, "columns")
+            ):
                 # Likely a pandas DataFrame with columns: scenario, prob
                 if "scenario" in probs_raw.columns and "prob" in probs_raw.columns:
                     scenarios = list(probs_raw["scenario"])
@@ -865,7 +980,9 @@ def calculate_fpp_handler(
                     posterior_sum_total = float(sum(prob_vals))
                     for sc, pv in zip(scenarios, prob_vals, strict=False):
                         key = str(sc)
-                        scenario_prob_sums[key] = float(scenario_prob_sums.get(key, 0.0) + float(pv))
+                        scenario_prob_sums[key] = float(
+                            scenario_prob_sums.get(key, 0.0) + float(pv)
+                        )
                     scenario_prob_top = [
                         {"scenario": k, "prob": v}
                         for k, v in sorted(
@@ -935,6 +1052,7 @@ def calculate_fpp_handler(
         )
 
         out = result.to_dict()
+        out["engine"] = triceratops_engine
         out["posterior_sum_total"] = posterior_sum_total
         out["posterior_prob_nan_count"] = posterior_prob_nan_count
         out["scenario_prob_top"] = scenario_prob_top
@@ -943,7 +1061,9 @@ def calculate_fpp_handler(
             "n_points_windowed": int(n_points_windowed),
             "n_points_used": int(n_points_used),
             "half_window_days": float(half_window_days),
-            "window_duration_mult": (float(window_duration_mult) if window_duration_mult is not None else None),
+            "window_duration_mult": (
+                float(window_duration_mult) if window_duration_mult is not None else None
+            ),
             "max_points": int(max_points) if max_points is not None else None,
             "mc_draws": int(draws),
             "exptime_days": float(exptime_days),
@@ -951,6 +1071,8 @@ def calculate_fpp_handler(
             "empirical_sigma_used": float(empirical_sigma),
             "min_flux_err": float(min_flux_err),
             "use_empirical_noise_floor": bool(use_empirical_noise_floor),
+            "n_external_lcs": n_external_lcs,
+            "external_filters": external_filters_used,
         }
 
         # Provide a short reason string when TRICERATOPS returns unusable/degenerate outputs.
@@ -963,7 +1085,11 @@ def calculate_fpp_handler(
             degenerate.append("posterior_sum_total_zero")
         if posterior_prob_nan_count is not None and posterior_prob_nan_count > 0:
             degenerate.append(f"posterior_prob_nan_count={posterior_prob_nan_count}")
-        if out.get("prob_planet", 0.0) == 0.0 and out.get("prob_eb", 0.0) == 0.0 and scenario_prob_sums:
+        if (
+            out.get("prob_planet", 0.0) == 0.0
+            and out.get("prob_eb", 0.0) == 0.0
+            and scenario_prob_sums
+        ):
             degenerate.append("scenario_probs_missing_expected_keys")
         out["degenerate_reason"] = ",".join(degenerate) if degenerate else None
         return out

@@ -879,6 +879,43 @@ MORVAN_2020 = Reference(
     note="Machine learning approach to detrending",
 )
 
+# -----------------------------------------------------------------------------
+# TRICERATOPS references (triceratops_fpp.py)
+# -----------------------------------------------------------------------------
+
+GIACALONE_2021 = Reference(
+    id="giacalone_2021",
+    bibcode="2021AJ....161...24G",
+    title=(
+        "Vetting of 384 TESS Objects of Interest with TRICERATOPS and "
+        "Statistical Validation of 12 Planet Candidates"
+    ),
+    authors=("Giacalone, S.", "Dressing, C.D.", "Jensen, E.L.N."),
+    journal="AJ 161, 24",
+    year=2021,
+    doi="10.3847/1538-3881/abc6af",
+    arxiv="2002.00691",
+    note="TRICERATOPS: Bayesian FPP calculation for transit candidates",
+)
+
+TRICERATOPS_PLUS = Reference(
+    id="triceratops_plus",
+    title="TRICERATOPS+ multi-color transit validation",
+    authors=("Barrientos, J.G.",),
+    year=2025,
+    arxiv="2508.02782",
+    note="TRICERATOPS+ multi-color transit validation",
+)
+
+TRICERATOPS_PLUS_MULTIBAND = Reference(
+    id="triceratops_plus_multiband",
+    title="TRICERATOPS+ multi-band photometry validation",
+    authors=("Greklek-McKeon, M.",),
+    year=2025,
+    arxiv="2512.10007",
+    note="TRICERATOPS+ multi-band photometry validation",
+)
+
 
 # =============================================================================
 # REGISTRY ACCESS
@@ -943,6 +980,10 @@ _REGISTRY: dict[str, Reference] = {
     "luger_2016": LUGER_2016,
     "kovacs_2002": KOVACS_2002,
     "morvan_2020": MORVAN_2020,
+    # TRICERATOPS
+    "giacalone_2021": GIACALONE_2021,
+    "triceratops_plus": TRICERATOPS_PLUS,
+    "triceratops_plus_multiband": TRICERATOPS_PLUS_MULTIBAND,
 }
 
 
@@ -1230,6 +1271,9 @@ __all__ = [
     "LUGER_2016",
     "KOVACS_2002",
     "MORVAN_2020",
+    "GIACALONE_2021",
+    "TRICERATOPS_PLUS",
+    "TRICERATOPS_PLUS_MULTIBAND",
     # Registry functions
     "get_reference",
     "get_all_references",

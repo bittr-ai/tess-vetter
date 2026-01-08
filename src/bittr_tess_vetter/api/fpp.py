@@ -1,8 +1,14 @@
-"""FPP (TRICERATOPS) API with explicit presets.
+"""FPP (TRICERATOPS+) API with explicit presets.
 
 This module exposes two intended usage modes:
 - `standard`: closer to TRICERATOPS defaults (high-fidelity, slow)
 - `fast`: bounded runtime defaults suitable for interactive usage
+
+Now supports TRICERATOPS+ multi-band FPP via external_lightcurves parameter.
+
+References:
+    Giacalone, S., et al. 2021, AJ, 161, 24
+    Barrientos et al. 2025, arxiv:2508.02782 (TRICERATOPS+ multi-color)
 """
 
 from __future__ import annotations
@@ -10,11 +16,59 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
+import numpy as np
+from numpy.typing import NDArray
+
 from bittr_tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
 
 # PersistentCache type comes from caller (e.g., astro-arc-tess)
 # Using Any since bittr_tess_vetter.io doesn't exist in this package
 PersistentCache = Any
+
+# Valid photometric filter designations for external light curves
+ExternalLCFilter = Literal["g", "r", "i", "z", "J", "H", "K"]
+
+
+@dataclass(frozen=True)
+class ExternalLightCurve:
+    """Ground-based light curve for TRICERATOPS+ multi-band FPP.
+
+    TRICERATOPS+ can incorporate ground-based photometry in multiple bands
+    to improve FPP estimates by constraining achromatic vs chromatic scenarios.
+
+    References:
+        Barrientos et al. 2025, arxiv:2508.02782 (TRICERATOPS+ multi-color)
+    """
+
+    time_from_midtransit_days: NDArray[np.floating[Any]]
+    """Time array relative to transit midpoint, in days."""
+
+    flux: NDArray[np.floating[Any]]
+    """Normalized flux values."""
+
+    flux_err: NDArray[np.floating[Any]]
+    """Flux uncertainties."""
+
+    filter: ExternalLCFilter
+    """Photometric filter: g, r, i, z, J, H, or K."""
+
+
+@dataclass(frozen=True)
+class ContrastCurve:
+    """High-resolution imaging contrast curve for companion exclusion.
+
+    Used to constrain the probability of unresolved companions at
+    various angular separations.
+    """
+
+    separation_arcsec: NDArray[np.floating[Any]]
+    """Angular separation from target in arcseconds."""
+
+    delta_mag: NDArray[np.floating[Any]]
+    """Contrast (magnitude difference) achieved at each separation."""
+
+    filter: str
+    """Filter/band of the imaging observation."""
 
 
 @dataclass(frozen=True)
@@ -63,11 +117,34 @@ def calculate_fpp(
     timeout_seconds: float | None = None,
     preset: Literal["fast", "standard"] = "fast",
     overrides: dict[str, Any] | None = None,
+    external_lightcurves: list[ExternalLightCurve] | None = None,
+    contrast_curve: ContrastCurve | None = None,
 ) -> dict[str, Any]:
-    """Calculate FPP using TRICERATOPS with an explicit preset.
+    """Calculate FPP using TRICERATOPS+ with an explicit preset.
 
     `standard` is intended for offline/non-interactive analysis and may take minutes.
     `fast` is intended for interactive workflows and may have higher variance.
+
+    Args:
+        cache: Persistent cache containing light curve data.
+        tic_id: TESS Input Catalog identifier.
+        period: Orbital period in days.
+        t0: Transit epoch in BTJD.
+        depth_ppm: Transit depth in parts per million.
+        duration_hours: Transit duration in hours (estimated if None).
+        sectors: Specific sectors to analyze (all cached if None).
+        stellar_radius: Stellar radius in solar radii.
+        stellar_mass: Stellar mass in solar masses.
+        tmag: TESS magnitude (for saturation check).
+        timeout_seconds: Overall timeout budget.
+        preset: "fast" or "standard" preset selection.
+        overrides: Override specific preset parameters.
+        external_lightcurves: Ground-based light curves for multi-band FPP
+            (TRICERATOPS+ feature). Up to 4 external LCs supported.
+        contrast_curve: High-resolution imaging contrast curve (not yet implemented).
+
+    Returns:
+        Dictionary with FPP results or error information.
     """
     base = FAST_PRESET if preset == "fast" else STANDARD_PRESET
     extra = overrides or {}
@@ -92,4 +169,6 @@ def calculate_fpp(
         use_empirical_noise_floor=bool(
             extra.get("use_empirical_noise_floor", base.use_empirical_noise_floor)
         ),
+        external_lightcurves=external_lightcurves,
+        contrast_curve=contrast_curve,
     )
