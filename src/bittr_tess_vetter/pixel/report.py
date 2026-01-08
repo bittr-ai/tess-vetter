@@ -83,6 +83,14 @@ class PixelVetReport(BaseModel):
     failure_reasons: list[str] = Field(
         default_factory=list, description="Human-readable reasons for failures"
     )
+    manifest_ref: str | None = Field(
+        default=None,
+        description="Optional manifest ref for linking report provenance (e.g., pipeline manifest).",
+    )
+    plot_refs: list[str] = Field(
+        default_factory=list,
+        description="Optional store refs for plots/artifacts produced alongside the report.",
+    )
     plots: list[dict[str, Any]] = Field(default_factory=list, description="Optional plot metadata")
 
 
@@ -205,6 +213,8 @@ def generate_pixel_vet_report(
     aperture_result: ApertureDependenceResult,
     threshold_version: str = "v1",
     plots: list[dict[str, Any]] | None = None,
+    manifest_ref: str | None = None,
+    plot_refs: list[str] | None = None,
 ) -> PixelVetReport:
     """Generate a pixel vetting report from analysis results.
 
@@ -296,6 +306,8 @@ def generate_pixel_vet_report(
         aperture_result=aperture_result,
         individual_tests=individual_tests,
         failure_reasons=failure_reasons,
+        manifest_ref=manifest_ref,
+        plot_refs=plot_refs or [],
         plots=plots or [],
     )
 

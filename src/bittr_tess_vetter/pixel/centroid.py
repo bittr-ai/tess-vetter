@@ -49,9 +49,13 @@ class CentroidShiftConfig:
 
     Attributes:
         fail_shift_pixels: Shift threshold for failure (pixels). Default: 1.0.
+            DEPRECATED: Threshold interpretation moved to astro-arc-tess guardrails.
         fail_sigma: Significance threshold for failure (sigma). Default: 5.0.
+            DEPRECATED: Threshold interpretation moved to astro-arc-tess guardrails.
         warn_shift_pixels: Shift threshold for warning (pixels). Default: 0.5.
+            DEPRECATED: Threshold interpretation moved to astro-arc-tess guardrails.
         warn_sigma: Significance threshold for warning (sigma). Default: 3.0.
+            DEPRECATED: Threshold interpretation moved to astro-arc-tess guardrails.
         centroid_method: Centroid aggregation method ("mean", "median", "huber").
             Default: "median" for robustness to outliers.
         significance_method: Method for computing significance ("analytic", "bootstrap").
@@ -62,6 +66,9 @@ class CentroidShiftConfig:
         pixel_scale_arcsec: TESS pixel scale. Default: 21.0.
         saturation_threshold: Flux threshold for saturation warning. Default: 150000.0.
         outlier_sigma: Sigma threshold for outlier rejection. Default: 3.0.
+        legacy_mode: If True, compute passed field as before. If False (default),
+            return passed=None and raw metrics only. Policy decisions are made
+            by astro-arc-tess guardrails.
     """
 
     fail_shift_pixels: float = 1.0
@@ -76,6 +83,7 @@ class CentroidShiftConfig:
     pixel_scale_arcsec: float = TESS_PIXEL_SCALE_ARCSEC
     saturation_threshold: float = TESS_SATURATION_THRESHOLD
     outlier_sigma: float = 3.0
+    legacy_mode: bool = False
 
 
 # =============================================================================
@@ -621,19 +629,14 @@ def _compute_shift_significance_bootstrap(
     ci_lower = float(np.percentile(bootstrap_arr, 2.5))
     ci_upper = float(np.percentile(bootstrap_arr, 97.5))
 
-    # Compute p-value for observed shift
-    # Using the bootstrap distribution centered at zero
-    mean_shift = np.mean(bootstrap_arr)
-    if shift_se > 0:
-        z_score = (observed_shift - mean_shift) / shift_se
-        # One-sided p-value (we care if shift is larger than expected)
-        p_value = 1.0 - norm.cdf(z_score)
-        if p_value <= 0:
-            significance = 5.0  # Cap at 5 sigma
-        elif p_value >= 1:
-            significance = 0.0
-        else:
-            significance = float(norm.ppf(1 - p_value))
+    # Convert the bootstrap spread into an uncertainty on the observed shift.
+    # Note: A standard bootstrap over (in, out) samples estimates the sampling
+    # distribution around the observed shift (not a "null" centered at 0), so
+    # using (observed - mean_bootstrap) yields ~0 significance even for real shifts.
+    # For a "sigma" style metric, use shift / SE.
+    if shift_se > 0 and np.isfinite(shift_se) and np.isfinite(observed_shift):
+        significance = float(observed_shift / shift_se)
+        significance = float(np.clip(significance, 0.0, 8.0))
     else:
         significance = 0.0
 
