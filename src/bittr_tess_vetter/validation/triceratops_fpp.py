@@ -513,6 +513,8 @@ def calculate_fpp_handler(
     stellar_mass: float | None = None,
     tmag: float | None = None,
     timeout_seconds: float | None = None,
+    mc_draws: int | None = None,
+    window_duration_mult: float = 10.0,
     *,
     load_cached_target: Callable[..., Any] | None = None,
     save_cached_target: Callable[..., Any] | None = None,
@@ -715,6 +717,16 @@ def calculate_fpp_handler(
         phase = ((time_arr - t0) / period + 0.5) % 1 - 0.5
         time_folded = phase * period  # Convert phase back to days from midpoint
 
+        # Use only a local window around transit to keep calc_probs tractable.
+        # TRICERATOPS runtime scales strongly with the number of points and the MC draw count.
+        dur_days = float(duration_hours) / 24.0
+        half_window_days = max(dur_days * float(window_duration_mult), 0.5)
+        window_mask = np.abs(time_folded) <= half_window_days
+        if np.any(window_mask):
+            time_folded = time_folded[window_mask]
+            flux_arr = flux_arr[window_mask]
+            flux_err_arr = flux_err_arr[window_mask]
+
         # Calculate median flux uncertainty for scalar flux_err_0
         flux_err_scalar = float(np.median(flux_err_arr))
 
@@ -725,23 +737,36 @@ def calculate_fpp_handler(
         # It computes transit depths for all sources in the aperture
         target.calc_depths(tdepth=depth_fractional)
 
-        calc_timeout = float(TRICERATOPS_CALC_TIMEOUT)
         rem = _remaining_seconds()
+        if rem is not None and rem <= 0:
+            return _err(
+                "FPP calculation timed out before TRICERATOPS calc_probs",
+                error_type="timeout",
+                stage="triceratops_calc_probs",
+                sectors_used_value=sectors_used,
+            )
+
+        # Choose MC draw count. TRICERATOPS defaults to N=1e6 which is often too slow
+        # for interactive/MCP usage. Use a smaller, budget-aware default.
+        draws = int(mc_draws) if mc_draws is not None else 200_000
         if rem is not None:
-            if rem <= 0:
-                return _err(
-                    "FPP calculation timed out before TRICERATOPS calc_probs",
-                    error_type="timeout",
-                    stage="triceratops_calc_probs",
-                    sectors_used_value=sectors_used,
-                )
-            calc_timeout = min(calc_timeout, rem)
+            if rem < 120:
+                draws = min(draws, 50_000)
+            elif rem < 300:
+                draws = min(draws, 100_000)
+            else:
+                draws = min(draws, 200_000)
+        draws = int(max(10_000, min(draws, 1_000_000)))
+
+        # If the caller provided an overall timeout budget, let calc_probs use the remaining time.
+        calc_timeout = float(TRICERATOPS_CALC_TIMEOUT) if rem is None else float(rem)
         with network_timeout(float(calc_timeout), operation=f"TRICERATOPS calc_probs for TIC {tic_id}"):
             target.calc_probs(
                 time=time_folded,
                 flux_0=flux_arr,
                 flux_err_0=flux_err_scalar,
                 P_orb=period,
+                N=draws,
                 verbose=0,  # Suppress progress output
             )
     except NetworkTimeoutError as e:
@@ -812,7 +837,13 @@ def calculate_fpp_handler(
             runtime_seconds=runtime,
         )
 
-        return result.to_dict()
+        out = result.to_dict()
+        out["triceratops_runtime"] = {
+            "n_points_used": int(len(time_folded)),
+            "half_window_days": float(half_window_days),
+            "mc_draws": int(draws),
+        }
+        return out
 
     except Exception as e:
         logger.exception(f"Failed to extract TRICERATOPS results for TIC {tic_id}")
