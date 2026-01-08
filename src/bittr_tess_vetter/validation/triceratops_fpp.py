@@ -557,6 +557,268 @@ def _write_external_lc_files(
 
 
 # =============================================================================
+# Replicate Aggregation Helpers
+# =============================================================================
+
+
+def _is_result_degenerate(result: dict[str, Any]) -> bool:
+    """Check if an FPP result is degenerate (unusable).
+
+    A result is degenerate if:
+    - FPP is not finite
+    - posterior_sum_total is not finite or <= 0
+    - posterior_prob_nan_count > 0
+    """
+    if "error" in result:
+        return True
+
+    fpp = result.get("fpp")
+    if fpp is None or not np.isfinite(float(fpp)):
+        return True
+
+    posterior_sum_total = result.get("posterior_sum_total")
+    if posterior_sum_total is not None:
+        try:
+            pst = float(posterior_sum_total)
+            if not np.isfinite(pst) or pst <= 0:
+                return True
+        except (TypeError, ValueError):
+            return True
+
+    posterior_prob_nan_count = result.get("posterior_prob_nan_count")
+    return posterior_prob_nan_count is not None and int(posterior_prob_nan_count) > 0
+
+
+def _aggregate_replicate_results(
+    results: list[dict[str, Any]],
+    *,
+    tic_id: int,  # noqa: ARG001
+    sectors_used: list[int],  # noqa: ARG001
+    total_runtime: float,
+) -> dict[str, Any]:
+    """Aggregate successful replicate FPP results into a summary.
+
+    Args:
+        results: List of result dicts from replicate runs.
+        tic_id: TIC ID (for context/logging, not used in aggregation).
+        sectors_used: Sectors used (for context/logging, not used in aggregation).
+        total_runtime: Total runtime for all replicates.
+
+    Returns a consolidated result with:
+    - fpp_median, fpp_p16, fpp_p84 (and same for nfpp)
+    - n_success, n_fail, replicates
+    - best_run details (lowest FPP run)
+    """
+    successful = [r for r in results if not _is_result_degenerate(r)]
+    n_success = len(successful)
+    n_fail = len(results) - n_success
+
+    if n_success == 0:
+        # All runs failed - this should be handled by caller
+        return {}
+
+    # Extract FPP/NFPP values
+    fpps = [float(r["fpp"]) for r in successful]
+    nfpps = [float(r["nfpp"]) for r in successful]
+
+    # Compute percentiles
+    fpp_median = float(np.median(fpps))
+    fpp_p16 = float(np.percentile(fpps, 16))
+    fpp_p84 = float(np.percentile(fpps, 84))
+    nfpp_median = float(np.median(nfpps))
+    nfpp_p16 = float(np.percentile(nfpps, 16))
+    nfpp_p84 = float(np.percentile(nfpps, 84))
+
+    # Find best run (lowest FPP)
+    best_idx = int(np.argmin(fpps))
+    best_run = successful[best_idx]
+
+    # Build aggregated result (use best_run as base, add summary)
+    out = dict(best_run)
+    out["fpp_summary"] = {
+        "median": round(fpp_median, 6),
+        "p16": round(fpp_p16, 6),
+        "p84": round(fpp_p84, 6),
+        "values": [round(f, 6) for f in fpps],
+    }
+    out["nfpp_summary"] = {
+        "median": round(nfpp_median, 6),
+        "p16": round(nfpp_p16, 6),
+        "p84": round(nfpp_p84, 6),
+        "values": [round(f, 6) for f in nfpps],
+    }
+    out["replicates"] = len(results)
+    out["n_success"] = n_success
+    out["n_fail"] = n_fail
+    out["runtime_seconds"] = round(total_runtime, 1)
+
+    # Use median FPP for disposition
+    out["fpp"] = round(fpp_median, 6)
+    out["nfpp"] = round(nfpp_median, 6)
+    out["disposition"] = _get_disposition(fpp_median, nfpp_median)
+
+    return out
+
+
+def _extract_single_run_result(
+    target: Any,
+    *,
+    tic_id: int,
+    sectors_used: list[int],
+    triceratops_engine: str | None,
+    n_points_raw: int,
+    n_points_windowed: int,
+    n_points_used: int,
+    half_window_days: float,
+    window_duration_mult: float | None,
+    max_points: int | None,
+    draws: int,
+    exptime_days: float,
+    flux_err_scalar: float,
+    empirical_sigma: float,
+    min_flux_err: float,
+    use_empirical_noise_floor: bool,
+    n_external_lcs: int,
+    external_filters_used: list[str],
+    run_seed: int | None,
+    run_start_time: float,
+) -> dict[str, Any]:
+    """Extract FPP result from a single calc_probs run.
+
+    Returns a result dict with FPP, NFPP, scenario probs, and diagnostics.
+    Used for replicate aggregation.
+    """
+    fpp = float(target.FPP)
+    nfpp = float(target.NFPP)
+    probs_raw = getattr(target, "probs", None)
+
+    # Compute total posterior mass and per-scenario probability sums
+    posterior_sum_total: float | None = None
+    posterior_prob_nan_count: int | None = None
+    scenario_prob_sums: dict[str, float] = {}
+    scenario_prob_top: list[dict[str, Any]] = []
+    try:
+        if (
+            probs_raw is not None
+            and hasattr(probs_raw, "__getitem__")
+            and hasattr(probs_raw, "columns")
+        ):
+            if "scenario" in probs_raw.columns and "prob" in probs_raw.columns:
+                scenarios = list(probs_raw["scenario"])
+                prob_vals = [float(x) for x in list(probs_raw["prob"])]
+                posterior_prob_nan_count = int(
+                    sum(1 for v in prob_vals if not np.isfinite(float(v)))
+                )
+                posterior_sum_total = float(sum(prob_vals))
+                for sc, pv in zip(scenarios, prob_vals, strict=False):
+                    key = str(sc)
+                    scenario_prob_sums[key] = float(scenario_prob_sums.get(key, 0.0) + float(pv))
+                scenario_prob_top = [
+                    {"scenario": k, "prob": v}
+                    for k, v in sorted(
+                        scenario_prob_sums.items(), key=lambda kv: kv[1], reverse=True
+                    )[:15]
+                ]
+        elif isinstance(probs_raw, dict):
+            scenario_prob_sums = {str(k): float(v) for k, v in probs_raw.items()}
+            posterior_prob_nan_count = int(
+                sum(1 for v in scenario_prob_sums.values() if not np.isfinite(float(v)))
+            )
+            posterior_sum_total = float(sum(scenario_prob_sums.values()))
+            scenario_prob_top = [
+                {"scenario": k, "prob": v}
+                for k, v in sorted(scenario_prob_sums.items(), key=lambda kv: kv[1], reverse=True)[
+                    :15
+                ]
+            ]
+    except Exception:
+        posterior_sum_total = None
+        posterior_prob_nan_count = None
+        scenario_prob_sums = {}
+        scenario_prob_top = []
+
+    disposition = _get_disposition(fpp, nfpp)
+    n_nearby = len(target.stars) - 1 if hasattr(target, "stars") else 0
+
+    brightest_dmag: float | None = None
+    if hasattr(target, "stars") and n_nearby > 0:
+        try:
+            contaminant_mags = [s["Tmag"] for s in target.stars[1:]]
+            target_mag = target.stars[0]["Tmag"]
+            brightest_dmag = float(min(contaminant_mags) - target_mag)
+        except (KeyError, IndexError, TypeError):
+            brightest_dmag = None
+
+    runtime = time.time() - run_start_time
+
+    prob_planet = float(scenario_prob_sums.get("TP", 0.0))
+    prob_eb = float(scenario_prob_sums.get("EB", 0.0))
+    prob_beb = float(scenario_prob_sums.get("BEB", 0.0))
+    prob_neb = float(scenario_prob_sums.get("NEB", 0.0))
+    prob_ntp = float(scenario_prob_sums.get("NTP", 0.0))
+
+    result = FppResult(
+        fpp=fpp,
+        nfpp=nfpp,
+        disposition=disposition,
+        prob_planet=prob_planet,
+        prob_eb=prob_eb,
+        prob_beb=prob_beb,
+        prob_neb=prob_neb,
+        prob_ntp=prob_ntp,
+        n_nearby_sources=n_nearby,
+        brightest_contaminant_dmag=brightest_dmag,
+        target_in_crowded_field=n_nearby > 5,
+        gaia_query_complete=True,
+        aperture_modeled=True,
+        tic_id=tic_id,
+        sectors_used=sectors_used,
+        runtime_seconds=runtime,
+    )
+
+    out = result.to_dict()
+    out["engine"] = triceratops_engine
+    out["posterior_sum_total"] = posterior_sum_total
+    out["posterior_prob_nan_count"] = posterior_prob_nan_count
+    out["scenario_prob_top"] = scenario_prob_top
+    out["run_seed"] = run_seed
+    out["triceratops_runtime"] = {
+        "n_points_raw": int(n_points_raw),
+        "n_points_windowed": int(n_points_windowed),
+        "n_points_used": int(n_points_used),
+        "half_window_days": float(half_window_days),
+        "window_duration_mult": (
+            float(window_duration_mult) if window_duration_mult is not None else None
+        ),
+        "max_points": int(max_points) if max_points is not None else None,
+        "mc_draws": int(draws),
+        "exptime_days": float(exptime_days),
+        "flux_err_scalar_used": float(flux_err_scalar),
+        "empirical_sigma_used": float(empirical_sigma),
+        "min_flux_err": float(min_flux_err),
+        "use_empirical_noise_floor": bool(use_empirical_noise_floor),
+        "n_external_lcs": n_external_lcs,
+        "external_filters": external_filters_used,
+    }
+
+    # Check for degenerate results
+    degenerate: list[str] = []
+    if not np.isfinite(float(out.get("fpp", float("nan")))):
+        degenerate.append("fpp_not_finite")
+    if posterior_sum_total is not None and not np.isfinite(float(posterior_sum_total)):
+        degenerate.append("posterior_sum_not_finite")
+    if posterior_sum_total is not None and posterior_sum_total <= 0:
+        degenerate.append("posterior_sum_total_zero")
+    if posterior_prob_nan_count is not None and posterior_prob_nan_count > 0:
+        degenerate.append(f"posterior_prob_nan_count={posterior_prob_nan_count}")
+    if out.get("prob_planet", 0.0) == 0.0 and out.get("prob_eb", 0.0) == 0.0 and scenario_prob_sums:
+        degenerate.append("scenario_probs_missing_expected_keys")
+    out["degenerate_reason"] = ",".join(degenerate) if degenerate else None
+
+    return out
+
+
+# =============================================================================
 # Main Handler
 # =============================================================================
 
@@ -578,6 +840,8 @@ def calculate_fpp_handler(
     max_points: int | None = 3000,
     min_flux_err: float = 5e-5,
     use_empirical_noise_floor: bool = True,
+    replicates: int | None = None,
+    seed: int | None = None,
     external_lightcurves: list[Any] | None = None,
     contrast_curve: Any | None = None,
     *,
@@ -891,8 +1155,15 @@ def calculate_fpp_handler(
                 external_lightcurves = external_lightcurves[:4]
                 n_external_lcs = 4
 
+        # Determine number of replicates and base seed
+        n_replicates = max(1, int(replicates)) if replicates is not None else 1
+        base_seed = seed if seed is not None else int(time.time() * 1000) % (2**31)
+
         # Use temp directory for external LC files if needed
         temp_dir_obj = tempfile.TemporaryDirectory() if external_lightcurves else None
+        replicate_results: list[dict[str, Any]] = []
+        replicate_errors: list[dict[str, Any]] = []
+
         try:
             if external_lightcurves and temp_dir_obj is not None:
                 temp_dir_path = Path(temp_dir_obj.name)
@@ -905,29 +1176,96 @@ def calculate_fpp_handler(
                     f"in filters {filt_lcs}"
                 )
 
-            with network_timeout(
-                float(calc_timeout), operation=f"TRICERATOPS calc_probs for TIC {tic_id}"
-            ):
-                # Pass external LC args to calc_probs (TRICERATOPS+ extension)
-                calc_kwargs: dict[str, Any] = {
-                    "time": time_folded,
-                    "flux_0": flux_arr,
-                    "flux_err_0": flux_err_scalar,
-                    "P_orb": period,
-                    "N": draws,
-                    "exptime": float(exptime_days)
-                    if np.isfinite(exptime_days) and exptime_days > 0
-                    else 0.00139,
-                    "verbose": 0,
-                }
-                if external_lc_files:
-                    calc_kwargs["external_lc_files"] = external_lc_files
-                    calc_kwargs["filt_lcs"] = filt_lcs
+            # Run replicates
+            for rep_idx in range(n_replicates):
+                # Check timeout budget before each replicate
+                rem = _remaining_seconds()
+                if rem is not None and rem <= 0:
+                    break
 
-                target.calc_probs(**calc_kwargs)
+                run_seed = base_seed + rep_idx
+                run_start_time = time.time()
+
+                # Set numpy random seed for this replicate
+                np.random.seed(run_seed)
+
+                try:
+                    rep_timeout = (
+                        float(calc_timeout / max(1, n_replicates - rep_idx))
+                        if rem is None
+                        else float(rem / max(1, n_replicates - rep_idx))
+                    )
+
+                    with network_timeout(
+                        float(rep_timeout),
+                        operation=f"TRICERATOPS calc_probs for TIC {tic_id} (rep {rep_idx + 1}/{n_replicates})",
+                    ):
+                        # Pass external LC args to calc_probs (TRICERATOPS+ extension)
+                        calc_kwargs: dict[str, Any] = {
+                            "time": time_folded,
+                            "flux_0": flux_arr,
+                            "flux_err_0": flux_err_scalar,
+                            "P_orb": period,
+                            "N": draws,
+                            "exptime": float(exptime_days)
+                            if np.isfinite(exptime_days) and exptime_days > 0
+                            else 0.00139,
+                            "verbose": 0,
+                        }
+                        if external_lc_files:
+                            calc_kwargs["external_lc_files"] = external_lc_files
+                            calc_kwargs["filt_lcs"] = filt_lcs
+
+                        target.calc_probs(**calc_kwargs)
+
+                    # Extract result for this replicate
+                    run_result = _extract_single_run_result(
+                        target,
+                        tic_id=tic_id,
+                        sectors_used=sectors_used,
+                        triceratops_engine=triceratops_engine,
+                        n_points_raw=n_points_raw,
+                        n_points_windowed=n_points_windowed,
+                        n_points_used=n_points_used,
+                        half_window_days=half_window_days,
+                        window_duration_mult=window_duration_mult,
+                        max_points=max_points,
+                        draws=draws,
+                        exptime_days=exptime_days,
+                        flux_err_scalar=flux_err_scalar,
+                        empirical_sigma=empirical_sigma,
+                        min_flux_err=min_flux_err,
+                        use_empirical_noise_floor=use_empirical_noise_floor,
+                        n_external_lcs=n_external_lcs,
+                        external_filters_used=external_filters_used,
+                        run_seed=run_seed,
+                        run_start_time=run_start_time,
+                    )
+                    replicate_results.append(run_result)
+
+                except NetworkTimeoutError as e:
+                    replicate_errors.append(
+                        {
+                            "replicate": rep_idx + 1,
+                            "seed": run_seed,
+                            "error": str(e),
+                            "error_type": "timeout",
+                        }
+                    )
+                except Exception as e:
+                    replicate_errors.append(
+                        {
+                            "replicate": rep_idx + 1,
+                            "seed": run_seed,
+                            "error": str(e),
+                            "error_type": "internal_error",
+                        }
+                    )
+
         finally:
             if temp_dir_obj is not None:
                 temp_dir_obj.cleanup()
+
     except NetworkTimeoutError as e:
         return _err(
             str(e),
@@ -953,152 +1291,76 @@ def calculate_fpp_handler(
             sectors_used_value=sectors_used,
         )
 
-    # Step 6: Extract and format results
-    try:
-        fpp = float(target.FPP)
-        nfpp = float(target.NFPP)
-        probs_raw = getattr(target, "probs", None)
+    # Step 6: Aggregate replicate results or return degenerate error
+    total_runtime = time.time() - start_time
 
-        # Compute total posterior mass and per-scenario probability sums (TRICERATOPS stores a table).
-        posterior_sum_total: float | None = None
-        posterior_prob_nan_count: int | None = None
-        scenario_prob_sums: dict[str, float] = {}
-        scenario_prob_top: list[dict[str, Any]] = []
-        try:
-            if (
-                probs_raw is not None
-                and hasattr(probs_raw, "__getitem__")
-                and hasattr(probs_raw, "columns")
-            ):
-                # Likely a pandas DataFrame with columns: scenario, prob
-                if "scenario" in probs_raw.columns and "prob" in probs_raw.columns:
-                    scenarios = list(probs_raw["scenario"])
-                    prob_vals = [float(x) for x in list(probs_raw["prob"])]
-                    posterior_prob_nan_count = int(
-                        sum(1 for v in prob_vals if not np.isfinite(float(v)))
-                    )
-                    posterior_sum_total = float(sum(prob_vals))
-                    for sc, pv in zip(scenarios, prob_vals, strict=False):
-                        key = str(sc)
-                        scenario_prob_sums[key] = float(
-                            scenario_prob_sums.get(key, 0.0) + float(pv)
-                        )
-                    scenario_prob_top = [
-                        {"scenario": k, "prob": v}
-                        for k, v in sorted(
-                            scenario_prob_sums.items(), key=lambda kv: kv[1], reverse=True
-                        )[:15]
-                    ]
-            elif isinstance(probs_raw, dict):
-                # Some wrappers may produce a dict already.
-                scenario_prob_sums = {str(k): float(v) for k, v in probs_raw.items()}
-                posterior_prob_nan_count = int(
-                    sum(1 for v in scenario_prob_sums.values() if not np.isfinite(float(v)))
-                )
-                posterior_sum_total = float(sum(scenario_prob_sums.values()))
-                scenario_prob_top = [
-                    {"scenario": k, "prob": v}
-                    for k, v in sorted(
-                        scenario_prob_sums.items(), key=lambda kv: kv[1], reverse=True
-                    )[:15]
-                ]
-        except Exception:
-            posterior_sum_total = None
-            posterior_prob_nan_count = None
-            scenario_prob_sums = {}
-            scenario_prob_top = []
+    # Filter to successful (non-degenerate) results
+    successful_results = [r for r in replicate_results if not _is_result_degenerate(r)]
+    n_success = len(successful_results)
+    n_fail = len(replicate_results) - n_success + len(replicate_errors)
 
-        # Get disposition
-        disposition = _get_disposition(fpp, nfpp)
+    if n_success == 0:
+        # All runs failed or were degenerate - return explicit degenerate_posterior error
+        degenerate_reasons: list[str] = []
+        for r in replicate_results:
+            if r.get("degenerate_reason"):
+                degenerate_reasons.append(str(r["degenerate_reason"]))
+        for e in replicate_errors:
+            degenerate_reasons.append(f"{e.get('error_type', 'error')}:{e.get('error', 'unknown')}")
 
-        # Count nearby sources (exclude target itself)
-        n_nearby = len(target.stars) - 1 if hasattr(target, "stars") else 0
-
-        # Find brightest contaminant
-        brightest_dmag: float | None = None
-        if hasattr(target, "stars") and n_nearby > 0:
-            try:
-                contaminant_mags = [s["Tmag"] for s in target.stars[1:]]
-                target_mag = target.stars[0]["Tmag"]
-                brightest_dmag = float(min(contaminant_mags) - target_mag)
-            except (KeyError, IndexError, TypeError):
-                brightest_dmag = None
-
-        runtime = time.time() - start_time
-
-        prob_planet = float(scenario_prob_sums.get("TP", 0.0))
-        prob_eb = float(scenario_prob_sums.get("EB", 0.0))
-        prob_beb = float(scenario_prob_sums.get("BEB", 0.0))
-        prob_neb = float(scenario_prob_sums.get("NEB", 0.0))
-        prob_ntp = float(scenario_prob_sums.get("NTP", 0.0))
-
-        result = FppResult(
-            fpp=fpp,
-            nfpp=nfpp,
-            disposition=disposition,
-            prob_planet=prob_planet,
-            prob_eb=prob_eb,
-            prob_beb=prob_beb,
-            prob_neb=prob_neb,
-            prob_ntp=prob_ntp,
-            n_nearby_sources=n_nearby,
-            brightest_contaminant_dmag=brightest_dmag,
-            target_in_crowded_field=n_nearby > 5,
-            gaia_query_complete=True,
-            aperture_modeled=True,
-            tic_id=tic_id,
-            sectors_used=sectors_used,
-            runtime_seconds=runtime,
-        )
-
-        out = result.to_dict()
-        out["engine"] = triceratops_engine
-        out["posterior_sum_total"] = posterior_sum_total
-        out["posterior_prob_nan_count"] = posterior_prob_nan_count
-        out["scenario_prob_top"] = scenario_prob_top
-        out["triceratops_runtime"] = {
-            "n_points_raw": int(n_points_raw),
-            "n_points_windowed": int(n_points_windowed),
-            "n_points_used": int(n_points_used),
-            "half_window_days": float(half_window_days),
-            "window_duration_mult": (
-                float(window_duration_mult) if window_duration_mult is not None else None
-            ),
-            "max_points": int(max_points) if max_points is not None else None,
-            "mc_draws": int(draws),
-            "exptime_days": float(exptime_days),
-            "flux_err_scalar_used": float(flux_err_scalar),
-            "empirical_sigma_used": float(empirical_sigma),
-            "min_flux_err": float(min_flux_err),
-            "use_empirical_noise_floor": bool(use_empirical_noise_floor),
-            "n_external_lcs": n_external_lcs,
-            "external_filters": external_filters_used,
+        return {
+            "error": f"All {n_replicates} replicate(s) returned degenerate/invalid posteriors",
+            "error_type": "degenerate_posterior",
+            "stage": "replicate_aggregation",
+            "tic_id": tic_id,
+            "tmag": tmag,
+            "sectors_used": sectors_used,
+            "runtime_seconds": round(total_runtime, 1),
+            "replicates": n_replicates,
+            "n_success": 0,
+            "n_fail": n_fail,
+            "base_seed": base_seed,
+            "degenerate_reasons": degenerate_reasons[:10],  # Limit to first 10
+            "replicate_errors": replicate_errors[:5],  # Limit to first 5
         }
 
-        # Provide a short reason string when TRICERATOPS returns unusable/degenerate outputs.
-        degenerate: list[str] = []
-        if not np.isfinite(float(out.get("fpp", float("nan")))):
-            degenerate.append("fpp_not_finite")
-        if posterior_sum_total is not None and not np.isfinite(float(posterior_sum_total)):
-            degenerate.append("posterior_sum_not_finite")
-        if posterior_sum_total is not None and posterior_sum_total <= 0:
-            degenerate.append("posterior_sum_total_zero")
-        if posterior_prob_nan_count is not None and posterior_prob_nan_count > 0:
-            degenerate.append(f"posterior_prob_nan_count={posterior_prob_nan_count}")
-        if (
-            out.get("prob_planet", 0.0) == 0.0
-            and out.get("prob_eb", 0.0) == 0.0
-            and scenario_prob_sums
-        ):
-            degenerate.append("scenario_probs_missing_expected_keys")
-        out["degenerate_reason"] = ",".join(degenerate) if degenerate else None
-        return out
-
-    except Exception as e:
-        logger.exception(f"Failed to extract TRICERATOPS results for TIC {tic_id}")
-        return _err(
-            f"Failed to extract results: {e}",
-            error_type="internal_error",
-            stage="extract_results",
-            sectors_used_value=sectors_used,
+    # If we have successful results, aggregate them
+    if n_replicates > 1 and n_success > 1:
+        # Multiple successful replicates - aggregate
+        out = _aggregate_replicate_results(
+            replicate_results,
+            tic_id=tic_id,
+            sectors_used=sectors_used,
+            total_runtime=total_runtime,
         )
+        out["base_seed"] = base_seed
+        if replicate_errors:
+            out["replicate_errors"] = replicate_errors[:5]
+        return out
+    else:
+        # Single replicate or only one success - return that result
+        out = successful_results[0]
+        out["replicates"] = n_replicates
+        out["n_success"] = n_success
+        out["n_fail"] = n_fail
+        out["base_seed"] = base_seed
+        out["runtime_seconds"] = round(total_runtime, 1)
+        if replicate_errors:
+            out["replicate_errors"] = replicate_errors[:5]
+
+        # For single replicate with degenerate result (shouldn't happen since we filtered),
+        # check and return error
+        if _is_result_degenerate(out):
+            return {
+                "error": "FPP calculation returned degenerate posterior",
+                "error_type": "degenerate_posterior",
+                "stage": "result_validation",
+                "tic_id": tic_id,
+                "tmag": tmag,
+                "sectors_used": sectors_used,
+                "runtime_seconds": round(total_runtime, 1),
+                "degenerate_reason": out.get("degenerate_reason"),
+                "diagnostics": out,
+            }
+
+        return out

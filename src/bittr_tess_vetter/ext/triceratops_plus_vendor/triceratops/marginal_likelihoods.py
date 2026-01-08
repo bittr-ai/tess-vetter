@@ -4,7 +4,13 @@ import numpy as np
 from astropy import constants
 from pandas import read_csv
 
-from .funcs import estimate_sdss_magnitudes, flux_relation, renorm_flux, stellar_relations
+from .funcs import (
+    estimate_sdss_magnitudes,
+    flux_relation,
+    renorm_flux,
+    stellar_relations,
+    trilegal_results,
+)
 from .likelihoods import *
 from .priors import *
 
