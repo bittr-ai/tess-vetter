@@ -292,10 +292,10 @@ def make_valid_target(fpp: float = 0.01, seed: int = 0) -> MockTriceratopsTarget
 # Check if TRICERATOPS vendor is available
 try:
     from bittr_tess_vetter.ext.triceratops_plus_vendor.triceratops import (
-        triceratops as _tr,
+        triceratops as _tr,  # noqa: F401
     )
 
-    _tr  # silence unused import warning
+    del _tr  # Clean up namespace
     HAS_TRICERATOPS = True
 except ImportError:
     HAS_TRICERATOPS = False
