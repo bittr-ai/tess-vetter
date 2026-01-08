@@ -11,6 +11,7 @@ Each check returns a VetterCheckResult with pass/fail, confidence, and details.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -26,8 +27,165 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# Configuration
+# =============================================================================
+
+
+@dataclass
+class OddEvenConfig:
+    """Configuration for V01 odd/even depth check.
+
+    Attributes:
+        sigma_threshold: Significance threshold for delta_sigma (default 3.0)
+        rel_diff_threshold: Relative difference threshold (default 0.5 = 50%)
+        min_transits_per_parity: Minimum transits needed per odd/even group
+        min_points_in_transit_per_epoch: Minimum in-transit points per epoch
+        min_points_in_transit_per_parity: Minimum total in-transit points per parity
+        baseline_window_mult: Local baseline window as multiple of duration
+        use_red_noise_inflation: Whether to apply red noise inflation to uncertainties
+    """
+
+    sigma_threshold: float = 3.0
+    rel_diff_threshold: float = 0.5
+    min_transits_per_parity: int = 2
+    min_points_in_transit_per_epoch: int = 5
+    min_points_in_transit_per_parity: int = 20
+    baseline_window_mult: float = 6.0
+    use_red_noise_inflation: bool = True
+
+
+# =============================================================================
 # Tier 1: LC-Only Checks (V01-V05)
 # =============================================================================
+
+
+def _robust_std(arr: np.ndarray) -> float:
+    """Compute robust standard deviation using MAD.
+
+    Uses median absolute deviation (MAD) scaled to match standard deviation
+    for normally distributed data.
+
+    Args:
+        arr: Input array
+
+    Returns:
+        Robust estimate of standard deviation
+    """
+    if len(arr) < 2:
+        return 0.0
+    mad = np.median(np.abs(arr - np.median(arr)))
+    # Scale factor for normal distribution: MAD * 1.4826 ≈ std
+    return float(mad * 1.4826)
+
+
+def _compute_red_noise_inflation(
+    oot_residuals: np.ndarray,
+    oot_time: np.ndarray,
+    bin_size_days: float,
+) -> tuple[float, bool]:
+    """Compute red noise inflation factor from OOT residuals.
+
+    Bins the residuals and compares observed scatter to expected white noise.
+
+    Args:
+        oot_residuals: Out-of-transit flux residuals (flux - median)
+        oot_time: Time array corresponding to residuals
+        bin_size_days: Bin size in days
+
+    Returns:
+        Tuple of (inflation_factor, success_flag)
+    """
+    if len(oot_residuals) < 10 or bin_size_days <= 0:
+        return 1.0, False
+
+    # Sort by time for binning
+    sort_idx = np.argsort(oot_time)
+    sorted_residuals = oot_residuals[sort_idx]
+    sorted_time = oot_time[sort_idx]
+
+    # Create time bins
+    t_min, t_max = sorted_time[0], sorted_time[-1]
+    time_span = t_max - t_min
+    if time_span < bin_size_days * 2:
+        return 1.0, False
+
+    n_bins = max(3, int(time_span / bin_size_days))
+    bin_edges = np.linspace(t_min, t_max, n_bins + 1)
+
+    # Compute bin means
+    bin_means = []
+    bin_counts = []
+    for i in range(n_bins):
+        mask = (sorted_time >= bin_edges[i]) & (sorted_time < bin_edges[i + 1])
+        if np.sum(mask) >= 3:
+            bin_means.append(np.mean(sorted_residuals[mask]))
+            bin_counts.append(np.sum(mask))
+
+    if len(bin_means) < 3:
+        return 1.0, False
+
+    bin_means_arr = np.array(bin_means)
+    bin_counts_arr = np.array(bin_counts)
+
+    # Observed scatter of bin means
+    observed_scatter = np.std(bin_means_arr)
+
+    # Expected white noise scatter: std / sqrt(n_per_bin)
+    point_scatter = _robust_std(sorted_residuals)
+    avg_per_bin = np.mean(bin_counts_arr)
+    expected_scatter = point_scatter / np.sqrt(avg_per_bin) if avg_per_bin > 0 else point_scatter
+
+    if expected_scatter <= 0:
+        return 1.0, False
+
+    ratio = observed_scatter / expected_scatter
+    return float(max(1.0, ratio)), True
+
+
+def _compute_confidence(
+    n_odd_transits: int,
+    n_even_transits: int,
+    delta_sigma: float,
+    sigma_threshold: float,
+    has_warnings: bool,
+) -> float:
+    """Compute confidence score for odd/even check.
+
+    Args:
+        n_odd_transits: Number of odd transits with sufficient data
+        n_even_transits: Number of even transits with sufficient data
+        delta_sigma: Significance of depth difference
+        sigma_threshold: Threshold for failing
+        has_warnings: Whether warnings were issued (degrades confidence)
+
+    Returns:
+        Confidence score in [0, 1]
+    """
+    n_min = min(n_odd_transits, n_even_transits)
+
+    # Base confidence from transit count
+    if n_min <= 1:
+        base = 0.2
+    elif n_min <= 3:
+        base = 0.5
+    elif n_min <= 7:
+        base = 0.7
+    else:
+        base = 0.85
+
+    # Adjust for proximity to threshold
+    if delta_sigma > 0.8 * sigma_threshold:
+        # Near threshold - reduce confidence
+        base *= 0.85
+    elif delta_sigma < 1.0 and n_min >= 4:
+        # Strong pass with good N - boost slightly
+        base = min(0.95, base * 1.1)
+
+    # Degrade if warnings present
+    if has_warnings:
+        base *= 0.9
+
+    return round(min(0.95, base), 3)
 
 
 def check_odd_even_depth(
@@ -35,90 +193,259 @@ def check_odd_even_depth(
     period: float,
     t0: float,
     duration_hours: float,
+    config: OddEvenConfig | None = None,
 ) -> VetterCheckResult:
     """V01: Compare depth of odd vs even transits.
 
     Detects eclipsing binaries masquerading as planets at 2x the true period.
     If odd and even depths differ significantly, likely an EB.
 
+    This implementation uses per-epoch depth estimates with local baselines,
+    which is more robust to baseline drift and correlated noise than pooling
+    all in-transit points.
+
+    Decision rule (dual threshold):
+        FAIL if delta_sigma >= sigma_threshold AND rel_diff >= rel_diff_threshold
+        PASS otherwise
+
     Args:
         lightcurve: Light curve data
         period: Orbital period in days
         t0: Reference epoch (BTJD)
         duration_hours: Transit duration in hours
+        config: Optional configuration overrides
 
     Returns:
         VetterCheckResult with pass if depths are consistent
+
+    References:
+        - Thompson et al. 2018, ApJS 235, 38 (Kepler Robovetter odd/even test)
+        - Pont et al. 2006, MNRAS 373, 231 (correlated noise in transit photometry)
     """
+    if config is None:
+        config = OddEvenConfig()
+
     time = lightcurve.time[lightcurve.valid_mask]
     flux = lightcurve.flux[lightcurve.valid_mask]
 
     duration_days = duration_hours / 24.0
+    warnings: list[str] = []
 
-    # Calculate transit number for each point
+    # Calculate epoch index and parity for each point
+    # Offset by half period so epoch boundaries fall BETWEEN transits, not AT transit centers.
+    # This ensures each epoch fully contains exactly one transit.
+    # epoch 0: centered on transit at t0
+    # epoch 1: centered on transit at t0 + period
+    # etc.
+    epoch = np.floor((time - t0 + period / 2) / period).astype(int)
+
+    # Phase distance from transit center (0 = at center, 0.5 = at anti-transit)
     phase = ((time - t0) / period) % 1
-    transit_num = np.floor((time - t0) / period).astype(int)
+    phase_dist = np.minimum(phase, 1 - phase)  # Distance to nearest transit center
 
-    # In-transit mask
-    in_transit = (phase < duration_days / period / 2) | (phase > 1 - duration_days / period / 2)
+    # In-transit mask: within half-duration of transit center
+    half_dur_phase = 0.5 * (duration_days / period)
+    in_transit = phase_dist < half_dur_phase
 
-    # Separate odd and even transits
-    odd_mask = in_transit & (transit_num % 2 == 1)
-    even_mask = in_transit & (transit_num % 2 == 0)
+    # Get unique epochs
+    unique_epochs = np.unique(epoch)
 
-    odd_flux = flux[odd_mask]
-    even_flux = flux[even_mask]
+    # Per-epoch depth extraction with local baselines
+    epoch_data: dict[int, dict[str, float]] = {}
 
-    if len(odd_flux) < 5 or len(even_flux) < 5:
-        # Insufficient data for comparison
+    for ep in unique_epochs:
+        epoch_mask = epoch == ep
+        epoch_in_transit = epoch_mask & in_transit
+        n_in = np.sum(epoch_in_transit)
+
+        if n_in < config.min_points_in_transit_per_epoch:
+            continue
+
+        # Define local OOT baseline window around epoch center
+        epoch_center = t0 + ep * period
+        baseline_half_window = config.baseline_window_mult * duration_days
+        local_window = (time >= epoch_center - baseline_half_window) & (
+            time <= epoch_center + baseline_half_window
+        )
+        local_oot = local_window & ~in_transit
+
+        n_oot = np.sum(local_oot)
+        if n_oot < 5:
+            # Fall back to global OOT if local is too sparse
+            local_oot = ~in_transit
+            n_oot = np.sum(local_oot)
+            if n_oot < 10:
+                continue
+
+        # Compute local baseline
+        baseline_flux = flux[local_oot]
+        baseline = float(np.median(baseline_flux))
+
+        if baseline <= 0:
+            continue
+
+        # Compute depth for this epoch
+        in_flux = flux[epoch_in_transit]
+        depth_k = 1.0 - float(np.median(in_flux)) / baseline
+
+        # Compute uncertainty: robust_std(oot) / sqrt(n_in) / baseline
+        oot_scatter = _robust_std(baseline_flux)
+        sigma_k = oot_scatter / np.sqrt(n_in) / baseline if n_in > 0 else float("inf")
+
+        # Optional red noise inflation
+        if config.use_red_noise_inflation and n_oot >= 20:
+            oot_residuals = baseline_flux - baseline
+            oot_time = time[local_oot]
+            inflation, success = _compute_red_noise_inflation(
+                oot_residuals, oot_time, duration_days / 2
+            )
+            if success:
+                sigma_k *= inflation
+            elif n_oot < 30:
+                warnings.append(f"Epoch {ep}: insufficient OOT for red noise estimation")
+
+        epoch_data[int(ep)] = {
+            "depth": depth_k,
+            "sigma": sigma_k,
+            "n_in": int(n_in),
+            "baseline": baseline,
+        }
+
+    # Separate odd and even epochs
+    odd_epochs = {k: v for k, v in epoch_data.items() if k % 2 == 1}
+    even_epochs = {k: v for k, v in epoch_data.items() if k % 2 == 0}
+
+    n_odd_transits = len(odd_epochs)
+    n_even_transits = len(even_epochs)
+
+    # Total in-transit points per parity (for legacy compatibility)
+    n_odd_points = sum(v["n_in"] for v in odd_epochs.values())
+    n_even_points = sum(v["n_in"] for v in even_epochs.values())
+
+    # Check minimum data requirements
+    insufficient_data = False
+    if n_odd_transits < config.min_transits_per_parity:
+        warnings.append(
+            f"Only {n_odd_transits} odd transit(s), need {config.min_transits_per_parity}"
+        )
+        insufficient_data = True
+    if n_even_transits < config.min_transits_per_parity:
+        warnings.append(
+            f"Only {n_even_transits} even transit(s), need {config.min_transits_per_parity}"
+        )
+        insufficient_data = True
+    if n_odd_points < config.min_points_in_transit_per_parity:
+        warnings.append(
+            f"Only {n_odd_points} odd in-transit points, need "
+            f"{config.min_points_in_transit_per_parity}"
+        )
+        insufficient_data = True
+    if n_even_points < config.min_points_in_transit_per_parity:
+        warnings.append(
+            f"Only {n_even_points} even in-transit points, need "
+            f"{config.min_points_in_transit_per_parity}"
+        )
+        insufficient_data = True
+
+    if insufficient_data:
+        # Cannot reject with insufficient data - return low-confidence pass
         return VetterCheckResult(
             id="V01",
             name="odd_even_depth",
-            passed=True,  # Assume pass if not enough data
-            confidence=0.3,
+            passed=True,
+            confidence=0.2,
             details={
-                "n_odd_points": len(odd_flux),
-                "n_even_points": len(even_flux),
-                "note": "Insufficient data for odd/even comparison",
+                # Legacy keys
+                "odd_depth": 0.0,
+                "even_depth": 0.0,
+                "depth_diff_sigma": 0.0,
+                "n_odd_points": n_odd_points,
+                "n_even_points": n_even_points,
+                # New keys
+                "n_odd_transits": n_odd_transits,
+                "n_even_transits": n_even_transits,
+                "depth_odd_ppm": 0.0,
+                "depth_even_ppm": 0.0,
+                "depth_err_odd_ppm": 0.0,
+                "depth_err_even_ppm": 0.0,
+                "delta_ppm": 0.0,
+                "delta_sigma": 0.0,
+                "rel_diff": 0.0,
+                "warnings": warnings,
+                "method": "per_epoch_median",
+                "epoch_depths_odd_ppm": [],
+                "epoch_depths_even_ppm": [],
             },
         )
 
-    # Calculate depths as deviation from median
-    out_of_transit = ~in_transit
-    baseline = np.median(flux[out_of_transit]) if np.any(out_of_transit) else 1.0
+    # Aggregate odd depths
+    odd_depths = np.array([v["depth"] for v in odd_epochs.values()])
+    odd_sigmas = np.array([v["sigma"] for v in odd_epochs.values()])
+    median_odd = float(np.median(odd_depths))
+    # Aggregate uncertainty: median(sigma_k) / sqrt(n_transits)
+    sigma_odd = float(np.median(odd_sigmas)) / np.sqrt(n_odd_transits)
 
-    odd_depth = 1.0 - np.median(odd_flux) / baseline
-    even_depth = 1.0 - np.median(even_flux) / baseline
+    # Aggregate even depths
+    even_depths = np.array([v["depth"] for v in even_epochs.values()])
+    even_sigmas = np.array([v["sigma"] for v in even_epochs.values()])
+    median_even = float(np.median(even_depths))
+    sigma_even = float(np.median(even_sigmas)) / np.sqrt(n_even_transits)
 
-    # Error in depth estimate (simplified)
-    odd_err = np.std(odd_flux) / np.sqrt(len(odd_flux)) / baseline
-    even_err = np.std(even_flux) / np.sqrt(len(even_flux)) / baseline
+    # Compute delta and significance
+    delta = median_odd - median_even
+    sigma_delta = np.sqrt(sigma_odd**2 + sigma_even**2)
+    delta_sigma = abs(delta) / sigma_delta if sigma_delta > 0 else 0.0
 
-    # Combined uncertainty
-    combined_err = np.sqrt(odd_err**2 + even_err**2)
+    # Relative difference
+    eps = 1e-10
+    max_depth = max(abs(median_odd), abs(median_even), eps)
+    rel_diff = abs(delta) / max_depth
 
-    # Significance of depth difference
-    depth_diff_sigma = abs(odd_depth - even_depth) / combined_err if combined_err > 0 else 0.0
+    # Decision rule: FAIL if BOTH thresholds exceeded
+    passed = not (delta_sigma >= config.sigma_threshold and rel_diff >= config.rel_diff_threshold)
 
-    # Pass if difference < 3 sigma
-    passed = depth_diff_sigma < 3.0
+    # Confidence
+    confidence = _compute_confidence(
+        n_odd_transits, n_even_transits, delta_sigma, config.sigma_threshold, len(warnings) > 0
+    )
 
-    # Confidence based on number of transits and sigma
-    confidence = min(0.95, 0.5 + 0.1 * min(len(odd_flux), len(even_flux)) / 10)
-    if depth_diff_sigma > 2.0:
-        confidence *= 0.7  # Lower confidence if marginal
+    # Convert to ppm for output
+    depth_odd_ppm = median_odd * 1e6
+    depth_even_ppm = median_even * 1e6
+    depth_err_odd_ppm = sigma_odd * 1e6
+    depth_err_even_ppm = sigma_even * 1e6
+    delta_ppm = delta * 1e6
+
+    # Cap epoch depths arrays to 20 elements
+    epoch_depths_odd_ppm = [round(d * 1e6, 1) for d in odd_depths[:20]]
+    epoch_depths_even_ppm = [round(d * 1e6, 1) for d in even_depths[:20]]
 
     return VetterCheckResult(
         id="V01",
         name="odd_even_depth",
         passed=passed,
-        confidence=round(confidence, 3),
+        confidence=confidence,
         details={
-            "odd_depth": round(odd_depth, 6),
-            "even_depth": round(even_depth, 6),
-            "depth_diff_sigma": round(depth_diff_sigma, 2),
-            "n_odd_points": len(odd_flux),
-            "n_even_points": len(even_flux),
+            # Legacy keys (fractional depths)
+            "odd_depth": round(median_odd, 6),
+            "even_depth": round(median_even, 6),
+            "depth_diff_sigma": round(delta_sigma, 2),
+            "n_odd_points": n_odd_points,
+            "n_even_points": n_even_points,
+            # New keys (ppm and extended diagnostics)
+            "n_odd_transits": n_odd_transits,
+            "n_even_transits": n_even_transits,
+            "depth_odd_ppm": round(depth_odd_ppm, 1),
+            "depth_even_ppm": round(depth_even_ppm, 1),
+            "depth_err_odd_ppm": round(depth_err_odd_ppm, 1),
+            "depth_err_even_ppm": round(depth_err_even_ppm, 1),
+            "delta_ppm": round(delta_ppm, 1),
+            "delta_sigma": round(delta_sigma, 2),
+            "rel_diff": round(rel_diff, 3),
+            "warnings": warnings,
+            "method": "per_epoch_median",
+            "epoch_depths_odd_ppm": epoch_depths_odd_ppm,
+            "epoch_depths_even_ppm": epoch_depths_even_ppm,
         },
     )
 
