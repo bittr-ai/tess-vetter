@@ -58,7 +58,7 @@ class CentroidShiftConfig:
             DEPRECATED: Threshold interpretation moved to astro-arc-tess guardrails.
         centroid_method: Centroid aggregation method ("mean", "median", "huber").
             Default: "median" for robustness to outliers.
-        significance_method: Method for computing significance ("analytic", "bootstrap").
+        significance_method: Method for computing significance ("analytic", "bootstrap", "permutation").
             Default: "bootstrap" for proper uncertainty quantification.
         n_bootstrap: Number of bootstrap iterations. Default: 1000.
         min_in_transit_cadences: Minimum in-transit cadences required. Default: 5.
@@ -76,7 +76,7 @@ class CentroidShiftConfig:
     warn_shift_pixels: float = 0.5
     warn_sigma: float = 3.0
     centroid_method: Literal["mean", "median", "huber"] = "median"
-    significance_method: Literal["analytic", "bootstrap"] = "bootstrap"
+    significance_method: Literal["analytic", "bootstrap", "permutation"] = "bootstrap"
     n_bootstrap: int = 1000
     min_in_transit_cadences: int = MIN_IN_TRANSIT_CADENCES
     min_out_transit_cadences: int = MIN_OUT_TRANSIT_CADENCES
@@ -643,6 +643,87 @@ def _compute_shift_significance_bootstrap(
     return (significance, shift_se, ci_lower, ci_upper)
 
 
+def _compute_shift_significance_permutation(
+    tpf_data: NDArray[np.floating],
+    in_transit_mask: NDArray[np.bool_],
+    out_of_transit_mask: NDArray[np.bool_],
+    observed_shift: float,
+    n_permutations: int = 1000,
+    rng: np.random.Generator | None = None,
+    centroid_method: Literal["mean", "median", "huber"] = "median",
+    outlier_sigma: float = 3.0,
+) -> tuple[float, float, float, float, float]:
+    """Compute centroid shift significance via label permutation.
+
+    This estimates a *null* distribution by randomizing which cadences are
+    treated as "in-transit" vs "out-of-transit" while preserving group sizes.
+
+    Returns:
+        (significance_sigma, p_value, null_sigma, null_ci_lower, null_ci_upper)
+    """
+    _rng: np.random.Generator = rng if rng is not None else np.random.default_rng()
+
+    in_centroids_x, in_centroids_y = _compute_per_cadence_centroids(tpf_data, in_transit_mask)
+    out_centroids_x, out_centroids_y = _compute_per_cadence_centroids(tpf_data, out_of_transit_mask)
+
+    # Reject outliers (same as bootstrap path).
+    in_centroids_x, in_centroids_y, _ = _reject_outliers(
+        in_centroids_x, in_centroids_y, sigma=outlier_sigma
+    )
+    out_centroids_x, out_centroids_y, _ = _reject_outliers(
+        out_centroids_x, out_centroids_y, sigma=outlier_sigma
+    )
+
+    n_in = len(in_centroids_x)
+    n_out = len(out_centroids_x)
+    if n_in < 3 or n_out < 3:
+        return (np.nan, np.nan, np.nan, np.nan, np.nan)
+
+    pool = np.concatenate(
+        [
+            np.column_stack([in_centroids_x, in_centroids_y]),
+            np.column_stack([out_centroids_x, out_centroids_y]),
+        ],
+        axis=0,
+    )
+    n_total = pool.shape[0]
+    if n_permutations < 10 or n_total < (n_in + n_out):
+        return (np.nan, np.nan, np.nan, np.nan, np.nan)
+
+    perm_shifts = np.empty(n_permutations, dtype=np.float64)
+    idx = np.arange(n_total)
+
+    for i in range(n_permutations):
+        perm = _rng.permutation(idx)
+        in_idx = perm[:n_in]
+        out_idx = perm[n_in : n_in + n_out]
+        in_sample = pool[in_idx]
+        out_sample = pool[out_idx]
+
+        if centroid_method == "median":
+            in_cx = float(np.median(in_sample[:, 0]))
+            in_cy = float(np.median(in_sample[:, 1]))
+            out_cx = float(np.median(out_sample[:, 0]))
+            out_cy = float(np.median(out_sample[:, 1]))
+        else:
+            in_cx = float(np.mean(in_sample[:, 0]))
+            in_cy = float(np.mean(in_sample[:, 1]))
+            out_cx = float(np.mean(out_sample[:, 0]))
+            out_cy = float(np.mean(out_sample[:, 1]))
+
+        perm_shifts[i] = np.sqrt((in_cx - out_cx) ** 2 + (in_cy - out_cy) ** 2)
+
+    ge = int(np.sum(perm_shifts >= observed_shift))
+    p_value = float((ge + 1) / (n_permutations + 1))
+    significance = float(norm.isf(p_value)) if 0 < p_value < 1 else (8.0 if p_value == 0 else 0.0)
+    significance = float(np.clip(significance, 0.0, 8.0))
+
+    null_sigma = float(np.std(perm_shifts, ddof=1))
+    ci_lower = float(np.percentile(perm_shifts, 2.5))
+    ci_upper = float(np.percentile(perm_shifts, 97.5))
+    return (significance, p_value, null_sigma, ci_lower, ci_upper)
+
+
 def _compute_shift_significance_analytic(
     tpf_data: NDArray[np.floating],
     in_transit_mask: NDArray[np.bool_],
@@ -821,7 +902,7 @@ def compute_centroid_shift(
     time: NDArray[np.floating],
     transit_params: TransitParams,
     window_policy_version: str = "v1",
-    significance_method: Literal["analytic", "bootstrap"] = "bootstrap",
+    significance_method: Literal["analytic", "bootstrap", "permutation"] = "bootstrap",
     n_bootstrap: int = 1000,
     bootstrap_seed: int | None = None,
     centroid_method: Literal["mean", "median", "huber"] = "median",
@@ -855,10 +936,11 @@ def compute_centroid_shift(
     window_policy_version : str, optional
         Version of window policy to use. Default is "v1".
         - "v1": k_in=1.0, k_buffer=0.5
-    significance_method : {"analytic", "bootstrap"}, optional
+    significance_method : {"analytic", "bootstrap", "permutation"}, optional
         Method for computing significance. Default is "bootstrap".
         - "analytic": Uses error propagation from centroid scatter.
         - "bootstrap": Uses bootstrap resampling (more robust).
+        - "permutation": Uses label permutation to estimate a null p-value.
     n_bootstrap : int, optional
         Number of bootstrap iterations if using bootstrap method.
         Default is 1000.
@@ -1019,6 +1101,20 @@ def compute_centroid_shift(
             centroid_method=centroid_method,
             outlier_sigma=outlier_sigma,
         )
+    elif significance_method == "permutation":
+        rng = np.random.default_rng(bootstrap_seed) if bootstrap_seed is not None else None
+        significance, p_value, shift_se, ci_lower, ci_upper = _compute_shift_significance_permutation(
+            tpf_data,
+            in_transit_mask,
+            out_of_transit_mask,
+            shift,
+            n_permutations=n_bootstrap,
+            rng=rng,
+            centroid_method=centroid_method,
+            outlier_sigma=outlier_sigma,
+        )
+        if np.isfinite(p_value):
+            warnings.append(f"permutation_p={p_value:.3g}")
     else:  # analytic
         significance, shift_se = _compute_shift_significance_analytic(
             tpf_data,
