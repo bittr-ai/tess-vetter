@@ -474,6 +474,28 @@ def _gather_light_curves(
     }, sectors_used
 
 
+def _set_mechanicalsoup_default_features(*, features: str) -> None:
+    """Best-effort: force MechanicalSoup to use a different default BS4 parser.
+
+    MechanicalSoup defaults to soup_config={'features': 'lxml'} which hard-fails
+    when lxml isn't installed. TRICERATOPS pulls MechanicalSoup transitively for
+    some upstream interactions, so this can prevent initialization.
+    """
+    try:
+        import mechanicalsoup.browser as ms_browser
+        import mechanicalsoup.stateful_browser as ms_stateful
+    except Exception:
+        return
+
+    for init_fn in (ms_browser.Browser.__init__, ms_stateful.StatefulBrowser.__init__):
+        defaults = getattr(init_fn, "__defaults__", None)
+        if not defaults:
+            continue
+        for value in defaults:
+            if isinstance(value, dict) and value.get("features") == "lxml":
+                value["features"] = features
+
+
 # =============================================================================
 # Main Handler
 # =============================================================================
@@ -569,6 +591,14 @@ def calculate_fpp_handler(
 
     # Step 4: Try to import and initialize TRICERATOPS
     try:
+        # If lxml isn't installed, TRICERATOPS's transitive dependency MechanicalSoup
+        # may crash while constructing BeautifulSoup(..., 'lxml').
+        # Default to stdlib html.parser in that case to keep the tool usable.
+        try:
+            import lxml  # noqa: F401
+        except Exception:
+            _set_mechanicalsoup_default_features(features="html.parser")
+
         import triceratops.triceratops as tr
     except ImportError:
         return _err(
