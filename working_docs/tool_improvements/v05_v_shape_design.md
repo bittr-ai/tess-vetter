@@ -2,9 +2,33 @@
 
 **Check ID:** V05
 **Check Name:** `v_shape`
-**Status:** Draft
+**Status:** Draft (Updated with Critical Bug Fix)
 **Author:** Claude Code
 **Date:** 2026-01-08
+**Last Updated:** 2026-01-08
+
+---
+
+## 0. CRITICAL BUG ALERT
+
+**The current implementation produces INVERTED results.** Testing with synthetic light curves reveals:
+
+| Input Shape | Expected | Actual | shape_ratio |
+|-------------|----------|--------|-------------|
+| U-shape (planet) | PASS | **FAIL** | ~1.0 |
+| V-shape (EB) | FAIL | **PASS** | ~3.4 |
+| Box transit | PASS | **FAIL** | ~1.0 |
+
+**Correct classification rate: 19% (3/16 test cases)** - worse than random!
+
+**Root Cause:** The "edge" region (phase from half_dur/2 to half_dur) samples the **flat bottom** of a typical planetary transit, not the ingress/egress slopes. For a U-shape transit with 20% ingress/egress duration:
+- True ingress: outer 20% of transit (phase 0.8*half_dur to half_dur from center)
+- Code's "edge" region: phase half_dur/2 to half_dur (outer 50% of transit)
+- Result: edge region samples mostly flat bottom, so depth_edge ~ depth_bottom, ratio ~ 1.0
+
+For V-shape: edge region samples the slopes at ~half depth, so depth_edge << depth_bottom, ratio >> 1.0. This inverts the expected logic.
+
+**This bug must be fixed as a priority.**
 
 ---
 
@@ -12,7 +36,7 @@
 
 ### 1.1 Implementation Summary
 
-The current `check_v_shape` function (lines 717-812 of `lc_checks.py`) distinguishes U-shaped (planetary) from V-shaped (grazing EB) transits using a simple depth ratio metric.
+The current `check_v_shape` function (lines 722-817 of `lc_checks.py`) distinguishes U-shaped (planetary) from V-shaped (grazing EB) transits using a simple depth ratio metric.
 
 **Current Algorithm:**
 1. Phase-fold the light curve centered on transit (phase 0 = mid-transit)
@@ -29,7 +53,28 @@ The current `check_v_shape` function (lines 717-812 of `lc_checks.py`) distingui
 - `shape` ("U-shaped" or "V-shaped")
 - `n_bottom_points`, `n_edge_points`
 
-### 1.2 Limitations
+### 1.2 Critical Bug Details
+
+The region definitions are fundamentally flawed:
+
+```
+For a 3-hour transit at period 5 days:
+  duration_phase = 0.025
+  half_dur = 0.0125
+
+Current code regions:
+  Ingress:  phase in (-0.0125, -0.00625)  <- outer 25-50% of transit
+  Bottom:   phase in (-0.003125, 0.003125) <- central 25% of transit
+  Egress:   phase in (0.00625, 0.0125)    <- outer 25-50% of transit
+
+For a typical U-shape transit with 20% ingress/egress:
+  True ingress slope: phase (-0.0125, -0.01)  <- outer 20% only!
+  True flat bottom:   phase (-0.01, 0.01)     <- central 80%
+
+Problem: The "edge" region samples mostly FLAT BOTTOM, not slopes!
+```
+
+### 1.3 Additional Limitations
 
 1. **No uncertainty quantification:** The `shape_ratio` has no associated error bar, making it impossible to assess significance.
 
@@ -246,7 +291,42 @@ class VShapeConfig:
 
 ## 6. Test Matrix
 
-### 6.1 Synthetic Test Cases
+### 6.0 Current Implementation Test Results (BUG DEMONSTRATION)
+
+Testing with synthetic light curves at 2-min and 30-min cadence:
+
+| Test Case | Current shape_ratio | Current passed | Expected passed | Status |
+|-----------|---------------------|----------------|-----------------|--------|
+| 2min_u_shape_high_snr | 1.007 | False | True | **FAIL** |
+| 2min_v_shape_high_snr | 3.427 | True | False | **FAIL** |
+| 2min_grazing_planet_high_snr | 1.603 | True | True | OK |
+| 2min_box_high_snr | 1.004 | False | True | **FAIL** |
+| 30min_u_shape_high_snr | 1.006 | False | True | **FAIL** |
+| 30min_v_shape_high_snr | 3.069 | True | False | **FAIL** |
+| 30min_grazing_planet_high_snr | 1.217 | False | True | **FAIL** |
+| 30min_box_high_snr | 1.006 | False | True | **FAIL** |
+
+**Summary: 3/16 correct (19%)** - The algorithm is fundamentally broken.
+
+### 6.0.1 Chi-squared Landscape Analysis (Trapezoid Fitting)
+
+Testing the proposed trapezoid fitting approach:
+
+```
+2-min cadence:
+  u_shape        : best tF/tT = 0.80, chi2 = 1.95e-07 (correct)
+  v_shape        : best tF/tT = 0.15, chi2 = 6.43e-05 (correct)
+  box            : best tF/tT = 1.00, chi2 = 1.99e-07 (correct)
+
+30-min cadence:
+  u_shape        : best tF/tT = 0.70, chi2 = 1.21e-08 (correct)
+  v_shape        : best tF/tT = 0.00, chi2 = 1.04e-08 (correct)
+  box            : best tF/tT = 1.00, chi2 = 1.64e-08 (correct)
+```
+
+The trapezoid fitting approach correctly identifies all shape types.
+
+### 6.1 Synthetic Test Cases (Proposed Implementation)
 
 | Case | tF/tT | Depth (ppm) | Cadence | N_transits | Expected Outcome |
 |------|-------|-------------|---------|------------|------------------|
@@ -381,32 +461,62 @@ def v_shape(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
 
 ### 8.1 Primary References
 
-| Reference | Bibcode | Relevance |
-|-----------|---------|-----------|
+| Reference | Bibcode/arXiv | Relevance |
+|-----------|---------------|-----------|
 | Seager & Mallen-Ornelas 2003 | 2003ApJ...585.1038S | tF/tT ratio definition, transit geometry |
 | Thompson et al. 2018 | 2018ApJS..235...38T | Kepler DR25 V-shape metric (Not Transit-Like) |
 | Prsa et al. 2011 | 2011AJ....141...83P | EB morphology classification |
+| **Kipping 2010** | arXiv:1004.3819 | Transit duration expressions, T14/T23 definitions |
+| **Gilbert 2022** | arXiv:2201.08350 | Grazing transit modeling with umbrella sampling |
+| **Hippke & Heller 2019** | arXiv:1901.02015 | TLS algorithm, transit template optimization |
 
 ### 8.2 Secondary References
 
-| Reference | Bibcode | Relevance |
-|-----------|---------|-----------|
+| Reference | Bibcode/arXiv | Relevance |
+|-----------|---------------|-----------|
 | Coughlin et al. 2016 | 2016ApJS..224...12C | Robovetter methodology |
 | Claret 2018 | 2018A&A...618A..20C | TESS limb darkening coefficients |
 | Mandel & Agol 2002 | 2002ApJ...580L.171M | Analytic transit model |
+| **Kreidberg 2015** | arXiv:1507.08285 | batman transit model package |
+| **Maxted 2016** | arXiv:1603.08484 | ELLC light curve model for EBs and planets |
+| **Morris et al. 2018** | arXiv:1807.04886 | Ingress/egress duration constraints |
+| **Kostov et al. 2019** | arXiv:1901.07459 | K2 vetting tools (DAVE) benchmarking |
+| **Lillo-Box et al. 2015** | arXiv:1502.03267 | Kepler-447b: extremely grazing transit |
+| **Oshagh et al. 2015** | arXiv:1510.00841 | Polar spots and grazing transit detection |
 
-### 8.3 Docstring Citation Block
+### 8.3 Key Insights from Literature
+
+**From Gilbert (2022, arXiv:2201.08350):**
+> "A transit is considered grazing if b > 1 - r, meaning the planet does not fully overlap the stellar disk at mid-transit."
+
+**From Hippke & Heller (2019, arXiv:1901.02015):**
+> "An eccentric or V-form grazing transit shape is substantially different from a box. This causes increased noise, resulting in lower detection efficiency."
+
+**From Morris et al. (2018, arXiv:1807.04886):**
+> "The ratio of ingress duration to total transit duration provides a geometric constraint on the planet radius that is independent of transit depth contamination by starspots."
+
+**From Kipping (2010, arXiv:1004.3819):**
+> "Transiting exoplanets and eclipsing binaries produce familiar U- and V-shaped lightcurves with several defining quantities, such as the mid-eclipse time, eclipse depth and duration."
+
+### 8.4 Docstring Citation Block
 
 ```python
 """V05: Distinguish U-shaped (planet) vs V-shaped (grazing EB) transits.
 
+Uses trapezoid model fitting to extract tF/tT ratio (flat-bottom to total
+duration), the standard shape discriminant in the literature.
+
 References:
     [1] Seager & Mallen-Ornelas 2003, ApJ 585, 1038 (2003ApJ...585.1038S)
         Section 3: Transit shape parameters tF/tT and impact parameter b
-    [2] Thompson et al. 2018, ApJS 235, 38 (2018ApJS..235...38T)
+    [2] Kipping 2010, MNRAS 407, 301 (arXiv:1004.3819)
+        Transit duration expressions and T14/T23 definitions
+    [3] Gilbert 2022, AJ (arXiv:2201.08350)
+        Grazing transit geometry: b > 1-r criterion
+    [4] Hippke & Heller 2019, A&A 623, A39 (arXiv:1901.02015)
+        TLS algorithm and V-shape detection limitations
+    [5] Thompson et al. 2018, ApJS 235, 38 (2018ApJS..235...38T)
         Section 3.1: Not Transit-Like (V-shape) metric in DR25 Robovetter
-    [3] Prsa et al. 2011, AJ 141, 83 (2011AJ....141...83P)
-        Section 3.2: Morphology classification of eclipsing binaries
 """
 ```
 

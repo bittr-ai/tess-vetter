@@ -3,24 +3,45 @@
 This module integrates the exovetter library's Modshift and SWEET tests
 into a validation pipeline.
 
-Modshift: Detects eccentric eclipsing binaries where the secondary eclipse
-occurs at an unexpected phase (not 0.5). This catches EBs that would be
-missed by the standard secondary eclipse search at phase 0.5.
+V11 - Modshift: Detects eccentric eclipsing binaries where the secondary
+eclipse occurs at an unexpected phase (not 0.5). This catches EBs that would
+be missed by the standard secondary eclipse search at phase 0.5.
 
-SWEET: Sine Wave Evaluation for Ephemeris Transits - Detects stellar
+Algorithm: Phase-folds data, convolves with transit template, measures
+primary/secondary/tertiary signal strengths and red noise (Fred).
+
+Key Metrics:
+- pri: Primary (transit) signal strength
+- sec: Secondary eclipse signal at any phase
+- ter: Tertiary signal (third strongest dip)
+- pos: Positive (brightening) signal
+- Fred: Red noise level = std(convolution) / std(lightcurve)
+- false_alarm_threshold: 1-sigma noise floor
+
+V12 - SWEET: Sine Wave Evaluation for Ephemeris Transits - Detects stellar
 variability (e.g., rotation) that could masquerade as planetary transits.
 If a sine wave at the transit period fits the data well, the signal may
 be stellar variability rather than a transit.
 
 References:
-- Coughlin et al. (2014) - Modshift technique for EB detection
-- Thompson et al. (2018) - Kepler DR25 vetting methodology
+    [1] Thompson et al. 2018, ApJS 235, 38 (arXiv:1710.06758)
+        Section 3.2.3: ModShift in DR25 Robovetter; Table 3 metric summary
+        Section 3.2.4: SWEET test for stellar variability detection
+    [2] Coughlin et al. 2016, ApJS 224, 12 (arXiv:1512.06149)
+        Section 4.3: ModShift false positive identification in DR24
+        Section 4.4: Original SWEET implementation methodology
+    [3] Santerne et al. 2013, A&A 557, A139 (arXiv:1307.2003)
+        Secondary eclipse phase offset for eccentric orbits
+    [4] Twicken et al. 2018, PASP 130, 064502 (arXiv:1803.04526)
+        DV pipeline architecture context
+    [5] McQuillan et al. 2014, ApJS 211, 24 (arXiv:1402.5694)
+        Stellar rotation periods establishing expected variability timescales
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -36,6 +57,108 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# Fred Regime Classification
+# =============================================================================
+
+
+def _classify_fred_regime(fred: float) -> str:
+    """Classify Fred value into reliability regime.
+
+    Fred ("Fraction of Red noise") quantifies correlated noise impact.
+    Higher values indicate more correlated noise.
+
+    Args:
+        fred: Fred value from ModShift
+
+    Returns:
+        Regime string: "low", "standard", "high", or "critical"
+    """
+    if fred < 1.5:
+        return "low"
+    elif fred < 2.5:
+        return "standard"
+    elif fred < 3.5:
+        return "high"
+    else:
+        return "critical"
+
+
+def _is_likely_folded(time: np.ndarray, period: float) -> bool:
+    """Detect if input appears to be phase-folded.
+
+    ModShift requires unfolded time series to work properly. If the input
+    is already phase-folded, the algorithm cannot properly identify
+    secondary eclipse phases.
+
+    Args:
+        time: Time array
+        period: Orbital period in days
+
+    Returns:
+        True if the input appears to be phase-folded
+    """
+    if len(time) < 2:
+        return False
+
+    baseline = float(time.max() - time.min())
+
+    # If baseline < 1.5 periods, likely folded
+    if baseline < 1.5 * period:
+        return True
+
+    # If time is normalized to [0, period], definitely folded
+    return bool(time.min() >= 0 and time.max() <= period * 1.1)
+
+
+def _compute_inputs_summary(
+    lightcurve: LightCurveData,
+    candidate: TransitCandidate,
+    is_folded: bool,
+) -> dict[str, Any]:
+    """Compute input data summary for transparency.
+
+    Args:
+        lightcurve: Light curve data
+        candidate: Transit candidate parameters
+        is_folded: Whether input appears phase-folded
+
+    Returns:
+        Dictionary with input summary fields
+    """
+    mask = lightcurve.valid_mask
+    time = lightcurve.time[mask]
+
+    if len(time) < 2:
+        return {
+            "n_points": len(time),
+            "n_transits_expected": 0,
+            "cadence_median_min": 0.0,
+            "baseline_days": 0.0,
+            "snr": candidate.snr if candidate.snr > 0 else None,
+            "is_folded": is_folded,
+            "flux_err_available": lightcurve.flux_err is not None,
+        }
+
+    baseline_days = float(time.max() - time.min())
+    n_transits = int(baseline_days / candidate.period) if candidate.period > 0 else 0
+
+    # Compute median cadence
+    time_diff = np.diff(time)
+    cadence_median = float(np.median(time_diff)) if len(time_diff) > 0 else 0.0
+    cadence_median_min = cadence_median * 24.0 * 60.0  # Convert to minutes
+
+    return {
+        "n_points": int(np.sum(mask)),
+        "n_transits_expected": n_transits,
+        "cadence_median_min": round(cadence_median_min, 2),
+        "baseline_days": round(baseline_days, 2),
+        "snr": candidate.snr if candidate.snr > 0 else None,
+        "is_folded": is_folded,
+        "flux_err_available": lightcurve.flux_err is not None,
+    }
+
+
+# =============================================================================
 # V11: Modshift Check
 # =============================================================================
 
@@ -47,7 +170,7 @@ class ModshiftCheck(VetterCheck):
     --------------------------
     The standard secondary eclipse search looks at phase 0.5, which is correct
     for circular orbits. However, eccentric orbits can have secondary eclipses
-    at phases significantly different from 0.5.
+    at phases significantly different from 0.5 (Santerne et al. 2013).
 
     The Modshift test (Coughlin et al. 2014) searches for the strongest
     secondary signal at any phase by computing:
@@ -64,12 +187,21 @@ class ModshiftCheck(VetterCheck):
     - High Fred indicates correlated noise that could produce false signals
 
     Pass Criteria:
-    - secondary/primary ratio < threshold (default 0.5)
-    - secondary < false_alarm_threshold OR no significant secondary
+    - passed=True: "No strong evidence of eclipsing binary or systematic"
+    - passed=False: "Strong evidence of secondary eclipse suggesting EB/blend"
 
     Confidence Calculation:
-    - High confidence (0.95) when sec/pri << threshold
-    - Lower confidence near threshold or with high Fred (red noise)
+    - Regime-based on Fred value and sec/pri ratio
+    - Degraded when fred > 2.0 (red noise)
+    - Degraded when n_transits < 5
+
+    References:
+        [1] Thompson et al. 2018, ApJS 235, 38 (arXiv:1710.06758)
+            Section 3.2.3: ModShift in DR25 Robovetter
+        [2] Coughlin et al. 2016, ApJS 224, 12 (arXiv:1512.06149)
+            Section 4.3: ModShift false positive identification
+        [3] Santerne et al. 2013, A&A 557, A139 (arXiv:1307.2003)
+            Secondary eclipse phase offset for eccentric orbits
     """
 
     id = "V11"
@@ -83,7 +215,9 @@ class ModshiftCheck(VetterCheck):
             threshold=0.5,  # Max secondary/primary ratio before flagging as EB
             additional={
                 "fred_warning_threshold": 2.0,  # Fred > 2 indicates significant red noise
+                "fred_critical_threshold": 3.5,  # Fred > 3.5 makes result unreliable
                 "tertiary_warning_threshold": 0.3,  # If ter/pri > this, warn
+                "marginal_secondary_threshold": 0.3,  # Warn if sec/pri > this
             },
         )
 
@@ -112,13 +246,46 @@ class ModshiftCheck(VetterCheck):
                 details={
                     "status": "skipped",
                     "reason": "Light curve data required for Modshift test",
+                    "warnings": ["NO_LIGHTCURVE_DATA"],
+                    "passed_meaning": "no_strong_eb_evidence",
                 },
             )
 
         threshold = self.config.threshold or 0.5
         additional = self.config.additional or {}
         fred_warn = additional.get("fred_warning_threshold", 2.0)
+        fred_critical = additional.get("fred_critical_threshold", 3.5)
         ter_warn = additional.get("tertiary_warning_threshold", 0.3)
+        marginal_sec = additional.get("marginal_secondary_threshold", 0.3)
+
+        # Check for folded input
+        mask = lightcurve.valid_mask
+        time = lightcurve.time[mask]
+        is_folded = _is_likely_folded(time, candidate.period)
+
+        # Compute inputs summary
+        inputs_summary = _compute_inputs_summary(lightcurve, candidate, is_folded)
+
+        # If input is folded, return early with warning
+        if is_folded:
+            return VetterCheckResult(
+                id=self.id,
+                name=self.name,
+                passed=True,
+                confidence=0.10,
+                details={
+                    "status": "invalid",
+                    "reason": "ModShift requires unfolded time series",
+                    "warnings": ["FOLDED_INPUT_DETECTED"],
+                    "inputs_summary": inputs_summary,
+                    "fred_regime": "unknown",
+                    "passed_meaning": "no_strong_eb_evidence",
+                    "interpretation": (
+                        "ModShift requires unfolded time series; result is invalid. "
+                        "The input appears to be phase-folded."
+                    ),
+                },
+            )
 
         try:
             # Import exovetter components
@@ -126,7 +293,6 @@ class ModshiftCheck(VetterCheck):
             from exovetter.vetters import ModShift
 
             # Create a lightkurve-like object for exovetter
-            # exovetter expects a lightkurve object with time, flux attributes
             lk_obj = _create_lightkurve_like(lightcurve)
 
             # Create TCE (Threshold Crossing Event) object
@@ -155,6 +321,9 @@ class ModshiftCheck(VetterCheck):
                 details={
                     "status": "error",
                     "reason": f"Exovetter import failed: {e}",
+                    "warnings": ["EXOVETTER_IMPORT_ERROR"],
+                    "inputs_summary": inputs_summary,
+                    "passed_meaning": "no_strong_eb_evidence",
                 },
             )
         except Exception as e:
@@ -167,6 +336,9 @@ class ModshiftCheck(VetterCheck):
                 details={
                     "status": "error",
                     "reason": f"Modshift test failed: {e}",
+                    "warnings": ["MODSHIFT_EXECUTION_ERROR"],
+                    "inputs_summary": inputs_summary,
+                    "passed_meaning": "no_strong_eb_evidence",
                 },
             )
 
@@ -182,36 +354,57 @@ class ModshiftCheck(VetterCheck):
         sec_pri_ratio = sec / pri if pri > 0 else 0.0
         ter_pri_ratio = ter / pri if pri > 0 else 0.0
 
-        # Determine pass/fail
-        # Fail if secondary is significant fraction of primary
+        # Classify Fred regime
+        fred_regime = _classify_fred_regime(fred)
+
+        # Build warnings list
+        warnings: list[str] = []
+        if fred > fred_critical:
+            warnings.append("FRED_UNRELIABLE")
+        elif fred > fred_warn:
+            warnings.append("HIGH_RED_NOISE")
+        if ter_pri_ratio > ter_warn:
+            warnings.append("TERTIARY_SIGNAL")
+        if pos > pri:
+            warnings.append("POSITIVE_SIGNAL_HIGH")
+        if pri < 5 * fa_thresh and fa_thresh > 0:
+            warnings.append("LOW_PRIMARY_SNR")
+        n_transits = inputs_summary.get("n_transits_expected", 0)
+        if n_transits < 5:
+            warnings.append("LOW_TRANSIT_COUNT")
+        if sec_pri_ratio > marginal_sec and sec_pri_ratio <= threshold:
+            warnings.append("MARGINAL_SECONDARY")
+
+        # Determine pass/fail with Fred-gated reliability
+        # If Fred is critical, we cannot reliably assess - default to pass
+        if fred >= fred_critical:
+            passed = True
+            reliable_result = False
+        else:
+            reliable_result = True
+            # Fail if secondary is significant fraction of primary
+            significant_secondary = sec_pri_ratio > threshold
+            # Also check if secondary exceeds ~80% of false alarm threshold (margin)
+            sec_above_fa = sec > fa_thresh * 0.8 and sec > 0
+            passed = not (significant_secondary and sec_above_fa)
+
+        # Legacy variables for backward compatibility
         significant_secondary = sec_pri_ratio > threshold
-        # Also check if secondary exceeds false alarm threshold
         sec_above_fa = sec > fa_thresh and sec > 0
 
-        passed = not (significant_secondary and sec_above_fa)
-
-        # Calculate confidence
-        if not passed:
-            # Failed - high confidence it's an EB
-            if sec_pri_ratio > 0.8:
-                confidence = 0.98
-            elif sec_pri_ratio > threshold:
-                confidence = 0.90
-            else:
-                confidence = 0.85
-        else:
-            # Passed
-            if fred > fred_warn:
-                # High red noise - lower confidence
-                confidence = 0.70
-            elif ter_pri_ratio > ter_warn:
-                # Tertiary signal present - moderate concern
-                confidence = 0.80
-            elif sec_pri_ratio < threshold / 2:
-                # Well below threshold
-                confidence = 0.95
-            else:
-                confidence = 0.85
+        # Calculate confidence with regime-based logic
+        confidence = self._compute_confidence(
+            passed=passed,
+            sec_pri_ratio=sec_pri_ratio,
+            fred=fred,
+            fred_warn=fred_warn,
+            fred_critical=fred_critical,
+            ter_pri_ratio=ter_pri_ratio,
+            ter_warn=ter_warn,
+            n_transits=n_transits,
+            snr=inputs_summary.get("snr"),
+            reliable_result=reliable_result,
+        )
 
         # Build interpretation
         interpretation = self._build_interpretation(
@@ -223,6 +416,8 @@ class ModshiftCheck(VetterCheck):
             threshold=threshold,
             fred_warn=fred_warn,
             ter_warn=ter_warn,
+            fred_regime=fred_regime,
+            reliable_result=reliable_result,
         )
 
         return VetterCheckResult(
@@ -231,6 +426,7 @@ class ModshiftCheck(VetterCheck):
             passed=passed,
             confidence=round(confidence, 3),
             details={
+                # Legacy keys (preserved for backward compatibility)
                 "primary_signal": round(pri, 4),
                 "secondary_signal": round(sec, 4),
                 "tertiary_signal": round(ter, 4),
@@ -243,8 +439,78 @@ class ModshiftCheck(VetterCheck):
                 "significant_secondary": significant_secondary,
                 "secondary_above_fa": sec_above_fa,
                 "interpretation": interpretation,
+                # New keys
+                "warnings": warnings,
+                "inputs_summary": inputs_summary,
+                "fred_regime": fred_regime,
+                "passed_meaning": "no_strong_eb_evidence",
             },
         )
+
+    def _compute_confidence(
+        self,
+        passed: bool,
+        sec_pri_ratio: float,
+        fred: float,
+        fred_warn: float,
+        fred_critical: float,
+        ter_pri_ratio: float,
+        ter_warn: float,
+        n_transits: int | None,
+        snr: float | None,
+        reliable_result: bool,
+    ) -> float:
+        """Compute confidence based on result quality indicators.
+
+        Args:
+            passed: Whether the check passed
+            sec_pri_ratio: Secondary/primary signal ratio
+            fred: Fred (red noise) value
+            fred_warn: Fred warning threshold
+            fred_critical: Fred critical threshold
+            ter_pri_ratio: Tertiary/primary ratio
+            ter_warn: Tertiary warning threshold
+            n_transits: Number of expected transits
+            snr: Signal-to-noise ratio
+            reliable_result: Whether Fred is below critical
+
+        Returns:
+            Confidence value between 0.1 and 0.98
+        """
+        if not reliable_result:
+            # Fred is critical - result is unreliable
+            return 0.35
+
+        if not passed:
+            # Failed check - confidence in the EB detection
+            if sec_pri_ratio > 0.8:
+                base = 0.95
+            elif sec_pri_ratio > 0.6:
+                base = 0.90
+            else:
+                base = 0.85
+        else:
+            # Passed check - confidence that it's NOT an EB
+            if fred > 3.0:
+                base = 0.35  # High red noise undermines result
+            elif fred > fred_warn:
+                base = 0.60
+            elif sec_pri_ratio < 0.2:
+                base = 0.90  # Well below threshold
+            elif sec_pri_ratio < 0.35:
+                base = 0.80
+            else:
+                base = 0.70  # Near threshold
+
+        # Modifiers
+        if ter_pri_ratio > ter_warn:
+            base -= 0.10
+        if n_transits is not None and n_transits > 5:
+            base += 0.05
+        if snr is not None and snr > 10:
+            base += 0.05
+
+        return max(0.1, min(0.98, base))
 
     def _build_interpretation(
         self,
@@ -256,9 +522,19 @@ class ModshiftCheck(VetterCheck):
         threshold: float,
         fred_warn: float,
         ter_warn: float,
+        fred_regime: str,
+        reliable_result: bool,
     ) -> str:
         """Build human-readable interpretation of Modshift results."""
         parts = []
+
+        if not reliable_result:
+            parts.append(
+                f"Warning: Fred={fred:.2f} is in the '{fred_regime}' regime. "
+                "Red noise is too high for reliable ModShift analysis. "
+                "Defaulting to pass with very low confidence."
+            )
+            return " ".join(parts)
 
         if not passed:
             parts.append(
@@ -272,7 +548,7 @@ class ModshiftCheck(VetterCheck):
 
         if fred > fred_warn:
             parts.append(
-                f"Warning: High red noise level (Fred = {fred:.2f}). "
+                f"Warning: High red noise level (Fred = {fred:.2f}, regime = '{fred_regime}'). "
                 "Results may be affected by correlated noise."
             )
 
@@ -300,7 +576,7 @@ class SWEETCheck(VetterCheck):
     (rotation, pulsation) rather than a planetary transit.
 
     Many stars exhibit sinusoidal brightness variations due to:
-    - Stellar rotation with starspots
+    - Stellar rotation with starspots (~40% of planet host stars, McQuillan 2013)
     - Ellipsoidal variations in close binaries
     - Pulsations (delta Scuti, RR Lyrae, etc.)
 
@@ -316,12 +592,29 @@ class SWEETCheck(VetterCheck):
     Key metric: amplitude-to-uncertainty ratio (amp_ratio)
     - If amp_ratio > threshold at P, signal may be stellar variability
 
+    Harmonic Aliasing Detection:
+    - P/2 aliasing: Stellar rotation at 2*P can create transit-like dips
+      when phase-folded at P. The amplitude at P/2 creates depth ~ 2*A.
+    - 2P aliasing: Can cause odd/even depth differences
+
     Pass Criteria:
-    - amplitude-to-uncertainty ratio at period < threshold (default 3.0)
+    - passed=True: "No strong evidence that variability explains transit"
+    - passed=False: "Strong evidence of stellar variability at transit period"
 
     Confidence Calculation:
-    - High confidence (0.95) when amp_ratio << threshold
-    - Lower confidence when amp_ratio approaches threshold
+    - Degraded when n_cycles < 5
+    - Degraded when n_transits < 5
+    - Degraded when harmonic variability detected
+
+    References:
+        [1] Thompson et al. 2018, ApJS 235, 38 (arXiv:1710.06758)
+            Section 3.2.4: SWEET test for stellar variability in DR25
+        [2] Coughlin et al. 2016, ApJS 224, 12 (2016ApJS..224...12C)
+            Section 4.4: Original SWEET implementation in DR24
+        [3] McQuillan et al. 2014, ApJS 211, 24 (arXiv:1402.5694)
+            Stellar rotation periods establishing expected variability
+        [4] Basri et al. 2013, ApJ 769, 37 (arXiv:1304.0136)
+            Typical stellar variability amplitudes (0.1-10 mmag)
     """
 
     id = "V12"
@@ -332,10 +625,14 @@ class SWEETCheck(VetterCheck):
         """Default SWEET configuration."""
         return CheckConfig(
             enabled=True,
-            threshold=3.0,  # amplitude-to-uncertainty ratio threshold
+            threshold=3.5,  # amplitude-to-uncertainty ratio threshold at P
             additional={
-                "half_period_threshold": 4.0,  # Higher threshold for P/2
-                "double_period_threshold": 4.0,  # Higher threshold for 2P
+                "half_period_threshold": 3.5,  # Threshold for P/2
+                "double_period_threshold": 4.0,  # Higher threshold for 2P (warning only)
+                "min_cycles_for_fit": 2.0,  # Minimum baseline/period ratio
+                "variability_depth_threshold": 0.5,  # Fraction of depth explainable
+                "confidence_floor": 0.30,  # Minimum confidence for degraded checks
+                "include_harmonic_analysis": True,  # Enable harmonic failure logic
             },
         )
 
@@ -364,13 +661,41 @@ class SWEETCheck(VetterCheck):
                 details={
                     "status": "skipped",
                     "reason": "Light curve data required for SWEET test",
+                    "warnings": ["NO_LIGHTCURVE_DATA"],
                 },
             )
 
-        threshold = self.config.threshold or 3.0
+        threshold = self.config.threshold or 3.5
         additional = self.config.additional or {}
-        half_p_thresh = additional.get("half_period_threshold", 4.0)
+        half_p_thresh = additional.get("half_period_threshold", 3.5)
         double_p_thresh = additional.get("double_period_threshold", 4.0)
+        min_cycles = additional.get("min_cycles_for_fit", 2.0)
+        var_depth_thresh = additional.get("variability_depth_threshold", 0.5)
+        conf_floor = additional.get("confidence_floor", 0.30)
+        include_harmonic = additional.get("include_harmonic_analysis", True)
+
+        # Compute inputs summary
+        inputs_summary = self._compute_inputs_summary(lightcurve, candidate)
+        n_cycles = inputs_summary.get("n_cycles_observed", 0)
+
+        # Check minimum data requirements
+        warnings: list[str] = []
+        if n_cycles < min_cycles:
+            warnings.append("LOW_BASELINE_CYCLES")
+        if n_cycles < 4.0:
+            # Cannot reliably detect 2P variability
+            inputs_summary["can_detect_2p"] = False
+            warnings.append("CANNOT_DETECT_2P")
+        else:
+            inputs_summary["can_detect_2p"] = True
+
+        n_transits = inputs_summary.get("n_transits", 0)
+        if n_transits < 3:
+            warnings.append("INSUFFICIENT_TRANSITS")
+
+        snr = inputs_summary.get("snr")
+        if snr is not None and snr < 7:
+            warnings.append("LOW_SNR")
 
         try:
             # Import exovetter components
@@ -406,6 +731,8 @@ class SWEETCheck(VetterCheck):
                 details={
                     "status": "error",
                     "reason": f"Exovetter import failed: {e}",
+                    "warnings": ["EXOVETTER_IMPORT_ERROR"],
+                    "inputs_summary": inputs_summary,
                 },
             )
         except Exception as e:
@@ -418,6 +745,8 @@ class SWEETCheck(VetterCheck):
                 details={
                     "status": "error",
                     "reason": f"SWEET test failed: {e}",
+                    "warnings": ["SWEET_EXECUTION_ERROR"],
+                    "inputs_summary": inputs_summary,
                 },
             )
 
@@ -450,36 +779,53 @@ class SWEETCheck(VetterCheck):
         period_ratio = amp_results.get("period", {}).get("ratio", 0.0)
         double_p_ratio = amp_results.get("double_period", {}).get("ratio", 0.0)
 
+        # Compute harmonic analysis
+        transit_depth_ppm = candidate.depth * 1e6
+        harmonic_analysis = self._analyze_harmonics(
+            amp_results, transit_depth_ppm, candidate.period
+        )
+
+        # Compute aliasing flags
+        aliasing_flags = self._compute_aliasing_flags(
+            amp_results, transit_depth_ppm, half_p_thresh, var_depth_thresh
+        )
+
+        # Add harmonic warnings
+        if half_p_ratio > 2.0 or double_p_ratio > 2.0:
+            warnings.append("HARMONIC_VARIABILITY_DETECTED")
+        var_explains = harmonic_analysis.get("variability_explains_depth_fraction", 0.0)
+        if var_explains > 0.3:
+            warnings.append("VARIABILITY_MAY_EXPLAIN_TRANSIT")
+
         # Determine pass/fail
         # Primary concern is the period itself
         fails_at_period = period_ratio > threshold
         fails_at_half = half_p_ratio > half_p_thresh
         fails_at_double = double_p_ratio > double_p_thresh
 
-        # Fail if significant variability at the transit period
-        passed = not fails_at_period
-
-        # Calculate confidence
-        if not passed:
-            # Failed - high confidence it's stellar variability
-            if period_ratio > threshold * 2:
-                confidence = 0.95
-            elif period_ratio > threshold:
-                confidence = 0.85
-            else:
-                confidence = 0.80
+        # Improved pass/fail logic with harmonic analysis
+        if include_harmonic:
+            # Also fail if P/2 variability explains significant fraction of depth
+            half_p_depth = harmonic_analysis.get("variability_induced_depth_at_half_P_ppm", 0.0)
+            fails_at_half_with_depth = (
+                fails_at_half and half_p_depth > transit_depth_ppm * var_depth_thresh
+            )
+            passed = not (fails_at_period or fails_at_half_with_depth)
         else:
-            # Passed
-            if fails_at_half or fails_at_double:
-                # Variability at harmonics - moderate concern
-                confidence = 0.75
-            elif period_ratio < threshold / 2:
-                # Well below threshold
-                confidence = 0.95
-            elif period_ratio < threshold:
-                confidence = 0.85
-            else:
-                confidence = 0.80
+            # Legacy behavior: only fail on period itself
+            passed = not fails_at_period
+
+        # Calculate confidence with data quality scaling
+        confidence = self._compute_confidence(
+            passed=passed,
+            period_ratio=period_ratio,
+            threshold=threshold,
+            fails_at_half=fails_at_half,
+            fails_at_double=fails_at_double,
+            warnings=warnings,
+            inputs_summary=inputs_summary,
+            conf_floor=conf_floor,
+        )
 
         # Build interpretation
         interpretation = self._build_interpretation(
@@ -491,6 +837,8 @@ class SWEETCheck(VetterCheck):
             half_p_thresh=half_p_thresh,
             double_p_thresh=double_p_thresh,
             msg=msg,
+            harmonic_analysis=harmonic_analysis,
+            include_harmonic=include_harmonic,
         )
 
         return VetterCheckResult(
@@ -499,6 +847,7 @@ class SWEETCheck(VetterCheck):
             passed=passed,
             confidence=round(confidence, 3),
             details={
+                # Legacy keys (preserved for backward compatibility)
                 "period_amplitude_ratio": round(period_ratio, 4),
                 "half_period_amplitude_ratio": round(half_p_ratio, 4),
                 "double_period_amplitude_ratio": round(double_p_ratio, 4),
@@ -509,8 +858,227 @@ class SWEETCheck(VetterCheck):
                 "fails_at_double_period": fails_at_double,
                 "exovetter_message": msg,
                 "interpretation": interpretation,
+                # New keys
+                "warnings": warnings,
+                "inputs_summary": inputs_summary,
+                "harmonic_analysis": harmonic_analysis,
+                "aliasing_flags": aliasing_flags,
             },
         )
+
+    def _compute_inputs_summary(
+        self,
+        lightcurve: LightCurveData,
+        candidate: TransitCandidate,
+    ) -> dict[str, Any]:
+        """Compute input data quality summary for SWEET analysis.
+
+        Args:
+            lightcurve: Light curve data
+            candidate: Transit candidate parameters
+
+        Returns:
+            Dictionary with input summary fields
+        """
+        mask = lightcurve.valid_mask
+        time = lightcurve.time[mask]
+
+        if len(time) < 2:
+            return {
+                "n_points": len(time),
+                "n_transits": 0,
+                "n_cycles_observed": 0.0,
+                "baseline_days": 0.0,
+                "cadence_minutes": 0.0,
+                "snr": candidate.snr if candidate.snr > 0 else None,
+                "can_detect_2p": False,
+            }
+
+        baseline_days = float(time.max() - time.min())
+        n_cycles = baseline_days / candidate.period if candidate.period > 0 else 0.0
+        n_transits = int(n_cycles) if n_cycles > 0 else 0
+
+        # Compute median cadence
+        time_diff = np.diff(time)
+        cadence_min = float(np.median(time_diff)) * 24.0 * 60.0 if len(time_diff) > 0 else 0.0
+
+        return {
+            "n_points": int(np.sum(mask)),
+            "n_transits": n_transits,
+            "n_cycles_observed": round(n_cycles, 2),
+            "baseline_days": round(baseline_days, 2),
+            "cadence_minutes": round(cadence_min, 2),
+            "snr": candidate.snr if candidate.snr > 0 else None,
+            "can_detect_2p": n_cycles >= 4.0,
+        }
+
+    def _analyze_harmonics(
+        self,
+        amp_results: dict[str, dict[str, float]],
+        transit_depth_ppm: float,
+        period: float,
+    ) -> dict[str, Any]:
+        """Compute whether variability at harmonics could explain the transit.
+
+        For P/2 variability: amplitude A creates transit-like depth of ~2*A
+        when phase-folded at period P.
+
+        Args:
+            amp_results: Amplitude results from exovetter
+            transit_depth_ppm: Transit depth in ppm
+            period: Orbital period in days
+
+        Returns:
+            Dictionary with harmonic analysis results
+        """
+        # Variability at P/2 with amplitude A creates transit-like depth of ~2*A
+        amp_at_half_p = amp_results.get("half_period", {}).get("amplitude", 0.0) * 1e6
+        variability_depth_at_half_p = 2.0 * amp_at_half_p
+
+        # Variability at P directly maps to depth
+        amp_at_p = amp_results.get("period", {}).get("amplitude", 0.0) * 1e6
+        variability_depth_at_p = 2.0 * amp_at_p
+
+        # Fraction of transit depth explainable by variability
+        max_var_depth = max(variability_depth_at_p, variability_depth_at_half_p)
+        var_explains_fraction = max_var_depth / transit_depth_ppm if transit_depth_ppm > 0 else 0.0
+
+        # Identify dominant variability period
+        half_p_ratio = amp_results.get("half_period", {}).get("ratio", 0.0)
+        period_ratio = amp_results.get("period", {}).get("ratio", 0.0)
+        double_p_ratio = amp_results.get("double_period", {}).get("ratio", 0.0)
+
+        if period_ratio > half_p_ratio and period_ratio > double_p_ratio:
+            dominant = "P"
+        elif half_p_ratio > period_ratio and half_p_ratio > double_p_ratio:
+            dominant = "P/2"
+        elif double_p_ratio > period_ratio and double_p_ratio > half_p_ratio:
+            dominant = "2P"
+        else:
+            dominant = "none"
+
+        return {
+            "variability_induced_depth_at_P_ppm": round(variability_depth_at_p, 1),
+            "variability_induced_depth_at_half_P_ppm": round(variability_depth_at_half_p, 1),
+            "variability_explains_depth_fraction": round(min(var_explains_fraction, 1.0), 3),
+            "dominant_variability_period": dominant,
+        }
+
+    def _compute_aliasing_flags(
+        self,
+        amp_results: dict[str, dict[str, float]],
+        transit_depth_ppm: float,
+        half_p_thresh: float,
+        var_depth_thresh: float,
+    ) -> dict[str, Any]:
+        """Compute aliasing risk flags.
+
+        Args:
+            amp_results: Amplitude results from exovetter
+            transit_depth_ppm: Transit depth in ppm
+            half_p_thresh: Threshold for P/2 significance
+            var_depth_thresh: Threshold for depth explanation fraction
+
+        Returns:
+            Dictionary with aliasing flag information
+        """
+        half_p_ratio = amp_results.get("half_period", {}).get("ratio", 0.0)
+        double_p_ratio = amp_results.get("double_period", {}).get("ratio", 0.0)
+
+        amp_at_half_p = amp_results.get("half_period", {}).get("amplitude", 0.0) * 1e6
+        var_depth_half_p = 2.0 * amp_at_half_p
+
+        # P/2 alias risk: variability at P/2 could mimic transit
+        half_p_alias_risk = (
+            (half_p_ratio > half_p_thresh * 0.5 and var_depth_half_p > transit_depth_ppm * 0.3)
+            if transit_depth_ppm > 0
+            else False
+        )
+
+        # 2P alias risk: variability at 2P could affect odd/even
+        double_p_alias_risk = double_p_ratio > 3.0
+
+        # Dominant alias
+        if half_p_alias_risk and not double_p_alias_risk:
+            dominant_alias = "P/2"
+        elif double_p_alias_risk and not half_p_alias_risk:
+            dominant_alias = "2P"
+        elif half_p_alias_risk and double_p_alias_risk:
+            dominant_alias = "P/2"  # P/2 is more concerning
+        else:
+            dominant_alias = None
+
+        return {
+            "half_period_alias_risk": half_p_alias_risk,
+            "double_period_alias_risk": double_p_alias_risk,
+            "dominant_alias": dominant_alias,
+        }
+
+    def _compute_confidence(
+        self,
+        passed: bool,
+        period_ratio: float,
+        threshold: float,
+        fails_at_half: bool,
+        fails_at_double: bool,
+        warnings: list[str],
+        inputs_summary: dict[str, Any],
+        conf_floor: float,
+    ) -> float:
+        """Compute confidence with data-quality scaling.
+
+        Args:
+            passed: Whether the check passed
+            period_ratio: Amplitude ratio at transit period
+            threshold: Significance threshold
+            fails_at_half: Whether P/2 fails threshold
+            fails_at_double: Whether 2P fails threshold
+            warnings: List of warning strings
+            inputs_summary: Input data quality summary
+            conf_floor: Minimum confidence floor
+
+        Returns:
+            Confidence value
+        """
+        # Base confidence
+        if not passed:
+            # Failed - confidence in variability detection
+            if period_ratio > threshold * 2:
+                base = 0.95
+            elif period_ratio > threshold:
+                base = 0.85
+            else:
+                base = 0.80
+        else:
+            # Passed
+            if fails_at_half or fails_at_double:
+                base = 0.75
+            elif period_ratio < threshold / 2:
+                base = 0.95
+            elif period_ratio < threshold:
+                base = 0.85
+            else:
+                base = 0.80
+
+        # Apply penalties for data quality issues
+        penalties = 0.0
+
+        n_cycles = inputs_summary.get("n_cycles_observed", 0)
+        if n_cycles < 5:
+            penalties += 0.15
+
+        n_transits = inputs_summary.get("n_transits", 10)
+        if n_transits < 5:
+            penalties += 0.10
+
+        snr = inputs_summary.get("snr")
+        if snr is not None and snr < 10:
+            penalties += 0.10
+
+        if "HARMONIC_VARIABILITY_DETECTED" in warnings:
+            penalties += 0.10
+
+        return max(base - penalties, conf_floor)
 
     def _build_interpretation(
         self,
@@ -522,6 +1090,8 @@ class SWEETCheck(VetterCheck):
         half_p_thresh: float,
         double_p_thresh: float,
         msg: str,
+        harmonic_analysis: dict[str, Any],
+        include_harmonic: bool,
     ) -> str:
         """Build human-readable interpretation of SWEET results."""
         parts = []
@@ -532,6 +1102,12 @@ class SWEETCheck(VetterCheck):
                 f"(amp/sigma = {period_ratio:.2f}, threshold = {threshold}). "
                 "This signal may be stellar variability rather than a planet transit."
             )
+            if include_harmonic:
+                var_frac = harmonic_analysis.get("variability_explains_depth_fraction", 0.0)
+                if var_frac > 0.3:
+                    parts.append(
+                        f"Variability can explain {var_frac * 100:.0f}% of the transit depth."
+                    )
         else:
             parts.append(
                 f"No significant sinusoidal variability at transit period "
@@ -543,6 +1119,12 @@ class SWEETCheck(VetterCheck):
                 f"Note: Significant signal at half-period (amp/sigma = {half_p_ratio:.2f}). "
                 "May indicate even-harmonic variability."
             )
+            if include_harmonic:
+                depth_half = harmonic_analysis.get("variability_induced_depth_at_half_P_ppm", 0.0)
+                if depth_half > 0:
+                    parts.append(
+                        f"P/2 variability could induce {depth_half:.0f} ppm transit-like depth."
+                    )
 
         if double_p_ratio > double_p_thresh and passed:
             parts.append(

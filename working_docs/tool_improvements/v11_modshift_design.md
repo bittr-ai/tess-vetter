@@ -1,5 +1,10 @@
 # Design Note: Improved ModShift Check (V11)
 
+**Version:** 1.1
+**Last Updated:** 2026-01-08
+**Status:** Draft
+**Author:** Claude Opus 4.5
+
 ## 1. Executive Summary
 
 The current `ModshiftCheck` (V11) wraps the exovetter library's ModShift implementation to detect secondary eclipses at arbitrary phases, identifying eccentric eclipsing binaries that would be missed by the standard phase-0.5 secondary search. This design note proposes improvements to standardize output semantics, add structured diagnostics, and improve confidence mapping.
@@ -10,6 +15,7 @@ The current `ModshiftCheck` (V11) wraps the exovetter library's ModShift impleme
 - Structured `warnings` list and `inputs_summary` for downstream interpretation
 - Explicit handling of folded/pre-processed inputs
 - Unified interpretation text across all result paths
+- Fred-gated reliability regime classification
 
 ---
 
@@ -52,6 +58,67 @@ details = {
     "interpretation": str,        # Human-readable text
 }
 ```
+
+---
+
+## 2.5 Literature Background: ModShift Algorithm
+
+### 2.5.1 Origin and Purpose
+
+The Model-Shift test was developed for the Kepler Data Validation (DV) pipeline to identify eclipsing binaries (EBs) that might masquerade as planet candidates. The fundamental insight is that true transiting planets should only produce a single periodic dip (the transit), while EBs typically show both primary and secondary eclipses.
+
+**Key problem addressed:** Standard secondary eclipse searches look only at orbital phase 0.5 (opposite the primary). However, eccentric orbits can place the secondary eclipse at other phases. The ModShift algorithm searches ALL phases for secondary signals.
+
+### 2.5.2 Algorithm Description (from Thompson et al. 2018)
+
+The ModShift algorithm works as follows:
+
+1. **Phase-fold the light curve** at the candidate orbital period
+2. **Create a matched filter** (transit-shaped kernel based on reported duration)
+3. **Cross-correlate (convolve)** the folded light curve with the transit template
+4. **Identify signal peaks** in the convolution result:
+   - **pri (primary):** Most negative value (the detected transit/eclipse)
+   - **sec (secondary):** Second most negative value at any phase
+   - **ter (tertiary):** Third most negative value
+   - **pos (positive):** Most positive value (brightening events)
+5. **Compute the Fred metric:** std(convolution) / std(lightcurve)
+
+### 2.5.3 The Fred Metric
+
+Fred ("Fraction of Red noise") quantifies correlated noise impact:
+
+```
+Fred = std(convolution_result) / std(phase_folded_flux)
+```
+
+**Interpretation:**
+- **Fred ~ 1.0:** Light curve dominated by white noise; convolution effectively suppresses noise, results reliable
+- **Fred ~ 1.5-2.0:** Some red noise present; results should be interpreted with caution
+- **Fred > 2.0:** Significant correlated noise; convolution may produce spurious signals
+- **Fred > 3.5:** Severe red noise; ModShift results unreliable
+
+From Thompson et al. 2018, Section 3.2.3: "High Fred values indicate that correlated noise in the light curve could produce false secondary eclipse detections. The Robovetter uses Fred as a major factor in assessing ModShift reliability."
+
+### 2.5.4 Secondary Eclipse Phase Offset
+
+For eccentric orbits, the secondary eclipse phase depends on orbital elements. From Santerne et al. 2013 (arXiv:1307.2003):
+
+```
+phi_secondary = 0.5 + (2 * e * cos(omega)) / pi    [for small e]
+```
+
+Where:
+- e = orbital eccentricity
+- omega = argument of periastron
+
+This means secondaries can appear at phases ranging from ~0.2 to ~0.8 for moderate eccentricities, making phase-agnostic searches essential.
+
+### 2.5.5 False Positive Rates (Santerne et al. 2013)
+
+Key findings on secondary-only eclipsing binary false positives:
+- **0.061% +/- 0.017%** of main-sequence binary stars present only secondary eclipses mimicking planetary transits
+- **0.009% +/- 0.002%** of stars harbor giant planets showing only occultations (thermal emission)
+- These rates are significant for large surveys: ~43 Kepler KOIs could be secondary-only false positives
 
 ---
 
@@ -304,18 +371,54 @@ All existing fields are preserved for backward compatibility:
 
 ### 7.1 Synthetic Test Cases
 
-| Scenario | pri | sec | ter | fred | Expected `passed` | Expected `confidence` | Key Assertions |
-|----------|-----|-----|-----|------|-------------------|----------------------|----------------|
-| Clean planet | 100 | 5 | 3 | 1.2 | True | 0.90 | sec/pri=0.05, well below threshold |
-| Secondary at phase 0.5 | 100 | 60 | 5 | 1.3 | False | 0.90 | sec/pri=0.60, clear EB |
-| Eccentric EB | 100 | 55 | 8 | 1.5 | False | 0.85 | sec/pri=0.55, secondary at non-0.5 phase |
-| Marginal secondary | 100 | 40 | 5 | 1.8 | True | 0.70 | sec/pri=0.40, below threshold but warned |
-| Red noise dominated | 100 | 45 | 30 | 4.5 | True | 0.35 | fred > 3.5, result unreliable |
-| Multiple signals (EB) | 100 | 70 | 50 | 1.4 | False | 0.80 | High ter/pri triggers warning |
-| Low SNR planet | 20 | 3 | 2 | 2.2 | True | 0.65 | Low pri, moderate fred |
-| Folded input | N/A | N/A | N/A | N/A | True | 0.10 | Detected folded, skipped |
+| Case ID | Scenario | Primary (ppm) | Secondary (ppm) | Sec Phase | Fred | N_transits | Expected `passed` | Expected `confidence` |
+|---------|----------|---------------|-----------------|-----------|------|------------|-------------------|----------------------|
+| T01 | Clean planet | 1000 | 0 | - | ~1.0 | 10 | True | 0.90+ |
+| T02 | EB at phase 0.5 | 10000 | 8000 | 0.50 | ~1.0 | 10 | False | 0.90+ |
+| T03 | Eccentric EB | 10000 | 6000 | 0.30 | ~1.0 | 10 | False | 0.85+ |
+| T04 | Shallow secondary | 5000 | 1500 | 0.50 | ~1.0 | 10 | True* | 0.75+ |
+| T05 | High red noise | 1000 | 0 | - | 4.0 | 10 | True | <0.50 |
+| T06 | Low SNR planet | 300 | 0 | - | ~2.0 | 10 | True | 0.65-0.80 |
+| T07 | Few transits | 1000 | 0 | - | ~1.0 | 2 | True | 0.70-0.80 |
+| T08 | Tertiary present | 5000 | 2000 | 0.50 | ~1.0 | 10 | False | 0.80+ |
+| T09 | Positive event | 1000 | 0 | - | ~1.0 | 10 | True | 0.85 |
+| T10 | Grazing EB | 2000 | 1800 | 0.50 | ~1.0 | 10 | False | 0.95 |
+| T11 | Folded input | - | - | - | - | - | True | 0.10 |
 
-### 7.2 Test Implementation
+\* T04: sec/pri = 0.30 is below threshold (0.5) but warns as marginal
+
+### 7.2 Exovetter Metric Values (Mocked)
+
+| Case ID | pri | sec | ter | pos | fred | fa_thresh |
+|---------|-----|-----|-----|-----|------|-----------|
+| T01 | 100 | 5 | 3 | 2 | 1.2 | 10 |
+| T02 | 100 | 80 | 5 | 3 | 1.1 | 10 |
+| T03 | 100 | 60 | 8 | 4 | 1.3 | 10 |
+| T04 | 100 | 30 | 5 | 3 | 1.2 | 10 |
+| T05 | 100 | 45 | 30 | 20 | 4.5 | 10 |
+| T06 | 20 | 3 | 2 | 2 | 2.2 | 5 |
+| T07 | 100 | 8 | 5 | 3 | 1.0 | 10 |
+| T08 | 100 | 40 | 35 | 5 | 1.3 | 10 |
+| T09 | 100 | 5 | 3 | 120 | 1.1 | 10 |
+| T10 | 100 | 90 | 5 | 3 | 1.0 | 10 |
+
+### 7.3 Expected Warnings per Test Case
+
+| Case ID | Expected Warnings |
+|---------|-------------------|
+| T01 | [] (none) |
+| T02 | [] (fail is clear) |
+| T03 | [] (fail is clear) |
+| T04 | ["MARGINAL_SECONDARY"] |
+| T05 | ["HIGH_RED_NOISE", "FRED_UNRELIABLE"] |
+| T06 | ["LOW_PRIMARY_SNR"] |
+| T07 | ["LOW_TRANSIT_COUNT"] |
+| T08 | ["TERTIARY_SIGNAL"] |
+| T09 | ["POSITIVE_SIGNAL_HIGH"] |
+| T10 | [] (fail is clear) |
+| T11 | ["FOLDED_INPUT_DETECTED"] |
+
+### 7.4 Test Implementation
 
 ```python
 import pytest
@@ -441,35 +544,61 @@ None required - all changes are additive.
 
 ### 9.1 Primary References
 
-**Coughlin et al. 2014** (ModShift original technique)
-- ADS Bibcode: `2014ApJS..212...25C`
-- Title: "Contamination in the Kepler Field: Identification of 685 KOIs as False Positives"
-- Section: Describes the Model-Shift uniqueness test for EB detection
-- Note: Original paper on systematically searching for secondary eclipses at arbitrary phases
-
-**Thompson et al. 2018** (DR25 Robovetter)
+**Thompson et al. 2018** (DR25 Robovetter - Definitive Reference)
+- arXiv: [1710.06758](https://arxiv.org/abs/1710.06758)
 - ADS Bibcode: `2018ApJS..235...38T`
-- Title: "Planetary Candidates Observed by Kepler. VIII. A Fully Automated Catalog..."
-- Section 3.2.3: ModShift implementation in DR25 Robovetter
-- Note: Describes operational use of ModShift for Kepler planet candidate vetting
+- Title: "Planetary Candidates Observed by Kepler. VIII. A Fully Automated Catalog With Measured Completeness and Reliability Based on Data Release 25"
+- **Section 3.2.3:** ModShift implementation in DR25 Robovetter
+- **Table 3:** Summary of Robovetter tests including ModShift metrics
+- Relevance: Describes operational thresholds and Fred usage for 4034 planet candidates
 
 **Coughlin et al. 2016** (DR24 Robovetter)
+- arXiv: [1601.05413](https://arxiv.org/abs/1601.05413)
 - ADS Bibcode: `2016ApJS..224...12C`
-- Title: "Planetary Candidates Observed by Kepler. VII. The First Fully Uniform Catalog..."
-- Section 4.3: ModShift false positive identification
-- Note: Earlier implementation details and threshold calibration
+- Title: "Planetary Candidates Observed by Kepler. VII. The First Fully Uniform Catalog Based on The Entire 48 Month Data Set (Q1-Q17 DR24)"
+- **Section 4.3:** ModShift false positive identification methodology
+- Relevance: Earlier threshold calibration and decision logic
 
-### 9.2 Supporting References
+**Twicken et al. 2018** (Kepler DV Pipeline)
+- arXiv: [1803.04526](https://arxiv.org/abs/1803.04526)
+- ADS Bibcode: `2018PASP..130f4502T`
+- Title: "Kepler Data Validation I - Architecture, Diagnostic Tests, and Data Products for Vetting Transiting Planet Candidates"
+- Relevance: DV pipeline architecture; diagnostic test suite context
 
-**Mullally et al. 2015** (Kepler Q1-Q16)
-- ADS Bibcode: `2015ApJS..217...31M`
-- Note: Uses ModShift in vetting pipeline
+### 9.2 Secondary Eclipse False Positive Reference
+
+**Santerne et al. 2013** (Secondary Eclipse False Positives)
+- arXiv: [1307.2003](https://arxiv.org/abs/1307.2003)
+- ADS Bibcode: `2013A&A...557A.139S`
+- Title: "The contribution of secondary eclipses as astrophysical false positives to exoplanet transit surveys"
+- **Key results:**
+  - 0.061% +/- 0.017% of MS binaries present secondary-only eclipses mimicking planets
+  - Secondary phase offset formula for eccentric orbits
+  - Re-estimated Kepler false positive rate from 9.4% to 11.3%
+- Relevance: Theoretical basis for why ModShift phase-agnostic search is necessary
+
+### 9.3 Supporting References
+
+**Mullally et al. 2016** (False Alarm Identification)
+- arXiv: [1602.03204](https://arxiv.org/abs/1602.03204)
+- ADS Bibcode: `2016PASP..128g4502M`
+- Title: "Identifying False Alarms in the Kepler Planet Candidate Catalog"
+- Relevance: Individual transit event vetting; complements ModShift with per-event analysis
+
+**Coughlin et al. 2014** (Contamination Study)
+- ADS Bibcode: `2014ApJS..212...25C`
+- Title: "Contamination in the Kepler Field: Identification of 685 KOIs as False Positives"
+- Relevance: Early systematic use of Model-Shift for contamination identification
+
+### 9.4 Software References
 
 **exovetter library**
-- URL: https://github.com/spacetelescope/exovetter
-- Note: Implementation used by this check; wraps original algorithms
+- Repository: [spacetelescope/exovetter](https://github.com/spacetelescope/exovetter)
+- Documentation: [exovetter.readthedocs.io](https://exovetter.readthedocs.io/)
+- Relevance: Implementation used by V11; `ModShift` class wraps original algorithms
+- ModShift API: [exovetter.vetters.ModShift](https://exovetter.readthedocs.io/en/latest/api/exovetter.vetters.ModShift.html)
 
-### 9.3 Code Citation Block
+### 9.5 Code Citation Block
 
 ```python
 """V11: ModShift test for secondary eclipse detection at arbitrary phase.
@@ -478,15 +607,33 @@ Detects eccentric eclipsing binaries where the secondary eclipse occurs at
 an unexpected phase (not 0.5). This catches EBs that would be missed by
 the standard secondary eclipse search at phase 0.5.
 
-References:
-    [1] Coughlin et al. 2014, ApJS 212, 25 (2014ApJS..212...25C)
-        Original Model-Shift uniqueness test for contamination identification
-    [2] Thompson et al. 2018, ApJS 235, 38 (2018ApJS..235...38T)
-        Section 3.2.3: ModShift in DR25 Robovetter
-    [3] Coughlin et al. 2016, ApJS 224, 12 (2016ApJS..224...12C)
-        Section 4.3: ModShift false positive identification in DR24
+Algorithm: Phase-folds data, convolves with transit template, measures
+primary/secondary/tertiary signal strengths and red noise (Fred).
 
-Novelty: standard (implements established Kepler vetting technique)
+Key Metrics:
+- pri: Primary (transit) signal strength
+- sec: Secondary eclipse signal at any phase
+- ter: Tertiary signal (third strongest dip)
+- pos: Positive (brightening) signal
+- Fred: Red noise level = std(convolution) / std(lightcurve)
+- false_alarm_threshold: 1-sigma noise floor
+
+Decision Logic:
+- passed=False if sec/pri > threshold AND sec > false_alarm_threshold
+- confidence degraded when Fred > 2.0 (red noise)
+- confidence degraded when n_transits < 5
+
+References:
+    [1] Thompson et al. 2018, ApJS 235, 38 (arXiv:1710.06758)
+        Section 3.2.3: ModShift in DR25 Robovetter; Table 3 metric summary
+    [2] Coughlin et al. 2016, ApJS 224, 12 (arXiv:1601.05413)
+        Section 4.3: ModShift false positive identification in DR24
+    [3] Santerne et al. 2013, A&A 557, A139 (arXiv:1307.2003)
+        Secondary eclipse phase offset for eccentric orbits
+    [4] Twicken et al. 2018, PASP 130, 064502 (arXiv:1803.04526)
+        DV pipeline architecture context
+
+Novelty: standard (implements established Kepler vetting technique via exovetter)
 """
 ```
 

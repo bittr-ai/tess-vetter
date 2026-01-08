@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -111,6 +111,13 @@ class CentroidShiftCheck(VetterCheck):
                 "fail_sigma_threshold": 5.0,
                 "warn_shift_threshold": 0.5,
                 "warn_sigma_threshold": 3.0,
+                # New V08 v2 parameters
+                "centroid_method": "median",  # "mean", "median", "huber"
+                "significance_method": "bootstrap",  # "analytic", "bootstrap"
+                "n_bootstrap": 1000,
+                "outlier_sigma": 3.0,
+                "min_in_transit_cadences": 5,
+                "min_out_transit_cadences": 20,
             },
         )
 
@@ -174,13 +181,31 @@ class CentroidShiftCheck(VetterCheck):
             duration=candidate.duration_hours,  # hours
         )
 
-        # Run centroid shift computation
+        # Get config parameters for centroid computation
+        # Use type-safe literals with validation
+        centroid_method_raw = self.config.additional.get("centroid_method", "median")
+        centroid_method: Literal["mean", "median", "huber"] = (
+            centroid_method_raw if centroid_method_raw in ("mean", "median", "huber") else "median"
+        )
+        significance_method_raw = self.config.additional.get("significance_method", "bootstrap")
+        significance_method: Literal["analytic", "bootstrap"] = (
+            significance_method_raw
+            if significance_method_raw in ("analytic", "bootstrap")
+            else "bootstrap"
+        )
+        n_bootstrap = self.config.additional.get("n_bootstrap", 1000)
+        outlier_sigma = self.config.additional.get("outlier_sigma", 3.0)
+
+        # Run centroid shift computation with new robust methods
         try:
             result: CentroidResult = compute_centroid_shift(
                 tpf_data=self.tpf_data,
                 time=self.time,
                 transit_params=transit_params,
-                significance_method="analytic",
+                centroid_method=centroid_method,
+                significance_method=significance_method,
+                n_bootstrap=n_bootstrap,
+                outlier_sigma=outlier_sigma,
             )
         except ValueError as e:
             return make_result(
@@ -239,10 +264,13 @@ class CentroidShiftCheck(VetterCheck):
                 base_confidence = 0.6
             confidence = base_confidence
 
-        # Build details dict
+        # Build details dict with all V08 v2 output fields
         details: dict[str, Any] = {
+            # Core results
             "centroid_shift_pixels": round(shift, 4),
+            "centroid_shift_arcsec": round(result.centroid_shift_arcsec, 2),
             "significance_sigma": round(sigma, 2),
+            # Centroids
             "in_transit_centroid": (
                 round(result.in_transit_centroid[0], 3),
                 round(result.in_transit_centroid[1], 3),
@@ -251,9 +279,36 @@ class CentroidShiftCheck(VetterCheck):
                 round(result.out_of_transit_centroid[0], 3),
                 round(result.out_of_transit_centroid[1], 3),
             ),
-            "n_in_transit_cadences": result.n_in_transit_cadences,
-            "n_out_transit_cadences": result.n_out_transit_cadences,
-            "shift_arcsec": round(shift * 21.0, 2),  # TESS pixel scale
+            # Cadence counts
+            "n_in_transit": result.n_in_transit_cadences,
+            "n_out_of_transit": result.n_out_transit_cadences,
+            # Uncertainty estimates (new in v2)
+            "shift_uncertainty_pixels": (
+                round(result.shift_uncertainty_pixels, 4)
+                if np.isfinite(result.shift_uncertainty_pixels)
+                else None
+            ),
+            "shift_ci_lower_pixels": (
+                round(result.shift_ci_lower_pixels, 4)
+                if np.isfinite(result.shift_ci_lower_pixels)
+                else None
+            ),
+            "shift_ci_upper_pixels": (
+                round(result.shift_ci_upper_pixels, 4)
+                if np.isfinite(result.shift_ci_upper_pixels)
+                else None
+            ),
+            # Saturation risk (new in v2)
+            "saturation_risk": result.saturation_risk,
+            "max_flux_fraction": round(result.max_flux_fraction, 2),
+            # Method metadata (new in v2)
+            "centroid_method": result.centroid_method,
+            "significance_method": result.significance_method,
+            "n_bootstrap": result.n_bootstrap,
+            "n_outliers_rejected": result.n_outliers_rejected,
+            # Warnings from centroid module
+            "centroid_warnings": list(result.warnings) if result.warnings else [],
+            # Thresholds for reference
             "thresholds": {
                 "fail_shift": fail_shift,
                 "fail_sigma": fail_sigma,
@@ -264,6 +319,12 @@ class CentroidShiftCheck(VetterCheck):
 
         if is_warn and not is_fail:
             details["warning"] = "Marginal centroid shift detected - recommend follow-up"
+
+        # Add saturation warning if detected
+        if result.saturation_risk:
+            details["saturation_warning"] = (
+                "Saturation detected - centroid may be biased toward bleed trails"
+            )
 
         return make_result(
             "V08",
@@ -283,10 +344,15 @@ def check_centroid_shift_with_tpf(
     fail_sigma_threshold: float = 5.0,
     warn_shift_threshold: float = 0.5,
     warn_sigma_threshold: float = 3.0,
+    centroid_method: Literal["mean", "median", "huber"] = "median",
+    significance_method: Literal["analytic", "bootstrap"] = "bootstrap",
+    n_bootstrap: int = 1000,
+    outlier_sigma: float = 3.0,
 ) -> VetterCheckResult:
     """V08: Centroid shift check (functional interface).
 
     Convenience function for running V08 without creating a check instance.
+    Uses robust centroid estimation with bootstrap uncertainties by default.
 
     Args:
         tpf_data: TPF flux data with shape (time, rows, cols).
@@ -298,9 +364,18 @@ def check_centroid_shift_with_tpf(
         fail_sigma_threshold: Significance threshold for failure (sigma).
         warn_shift_threshold: Shift threshold for warning (pixels).
         warn_sigma_threshold: Significance threshold for warning (sigma).
+        centroid_method: Centroid aggregation method ("mean", "median", "huber").
+        significance_method: Method for significance ("analytic", "bootstrap").
+        n_bootstrap: Number of bootstrap iterations.
+        outlier_sigma: Sigma threshold for outlier rejection.
 
     Returns:
-        VetterCheckResult with centroid shift analysis.
+        VetterCheckResult with centroid shift analysis including:
+        - centroid_shift_pixels, centroid_shift_arcsec
+        - significance_sigma
+        - shift_uncertainty_pixels, shift_ci_lower_pixels, shift_ci_upper_pixels
+        - saturation_risk, n_outliers_rejected
+        - centroid_warnings
     """
     # Validate inputs
     if tpf_data.ndim != 3:
@@ -326,13 +401,16 @@ def check_centroid_shift_with_tpf(
         duration=duration_hours,  # hours
     )
 
-    # Run centroid shift computation
+    # Run centroid shift computation with robust methods
     try:
         result: CentroidResult = compute_centroid_shift(
             tpf_data=tpf_data,
             time=time,
             transit_params=transit_params,
-            significance_method="analytic",
+            centroid_method=centroid_method,
+            significance_method=significance_method,
+            n_bootstrap=n_bootstrap,
+            outlier_sigma=outlier_sigma,
         )
     except ValueError as e:
         return make_result(
@@ -352,7 +430,8 @@ def check_centroid_shift_with_tpf(
                 "reason": "insufficient_data",
                 "message": "Could not compute centroid",
                 "n_in_transit": result.n_in_transit_cadences,
-                "n_out_transit": result.n_out_transit_cadences,
+                "n_out_of_transit": result.n_out_transit_cadences,
+                "centroid_warnings": list(result.warnings) if result.warnings else [],
             },
         )
 
@@ -373,9 +452,13 @@ def check_centroid_shift_with_tpf(
         passed = True
         confidence = 0.85 if result.n_in_transit_cadences >= 10 else 0.6
 
+    # Build comprehensive details dict
     details: dict[str, Any] = {
+        # Core results
         "centroid_shift_pixels": round(shift, 4),
+        "centroid_shift_arcsec": round(result.centroid_shift_arcsec, 2),
         "significance_sigma": round(sigma, 2),
+        # Centroids
         "in_transit_centroid": (
             round(result.in_transit_centroid[0], 3),
             round(result.in_transit_centroid[1], 3),
@@ -384,13 +467,44 @@ def check_centroid_shift_with_tpf(
             round(result.out_of_transit_centroid[0], 3),
             round(result.out_of_transit_centroid[1], 3),
         ),
-        "n_in_transit_cadences": result.n_in_transit_cadences,
-        "n_out_transit_cadences": result.n_out_transit_cadences,
-        "shift_arcsec": round(shift * 21.0, 2),
+        # Cadence counts
+        "n_in_transit": result.n_in_transit_cadences,
+        "n_out_of_transit": result.n_out_transit_cadences,
+        # Uncertainty estimates
+        "shift_uncertainty_pixels": (
+            round(result.shift_uncertainty_pixels, 4)
+            if np.isfinite(result.shift_uncertainty_pixels)
+            else None
+        ),
+        "shift_ci_lower_pixels": (
+            round(result.shift_ci_lower_pixels, 4)
+            if np.isfinite(result.shift_ci_lower_pixels)
+            else None
+        ),
+        "shift_ci_upper_pixels": (
+            round(result.shift_ci_upper_pixels, 4)
+            if np.isfinite(result.shift_ci_upper_pixels)
+            else None
+        ),
+        # Saturation risk
+        "saturation_risk": result.saturation_risk,
+        "max_flux_fraction": round(result.max_flux_fraction, 2),
+        # Method metadata
+        "centroid_method": result.centroid_method,
+        "significance_method": result.significance_method,
+        "n_bootstrap": result.n_bootstrap,
+        "n_outliers_rejected": result.n_outliers_rejected,
+        # Warnings
+        "centroid_warnings": list(result.warnings) if result.warnings else [],
     }
 
     if is_warn and not is_fail:
         details["warning"] = "Marginal centroid shift detected"
+
+    if result.saturation_risk:
+        details["saturation_warning"] = (
+            "Saturation detected - centroid may be biased toward bleed trails"
+        )
 
     return make_result("V08", passed=passed, confidence=round(confidence, 3), details=details)
 
@@ -1032,9 +1146,13 @@ class ApertureDependenceCheck(VetterCheck):
             "n_out_of_transit_cadences": int(getattr(result, "n_out_of_transit_cadences", 0)),
             "n_transit_epochs": int(getattr(result, "n_transit_epochs", 0)),
             "baseline_mode": str(getattr(result, "baseline_mode", "unknown")),
-            "local_baseline_window_days": float(getattr(result, "local_baseline_window_days", float("nan"))),
+            "local_baseline_window_days": float(
+                getattr(result, "local_baseline_window_days", float("nan"))
+            ),
             "background_mode": str(getattr(result, "background_mode", "unknown")),
-            "background_annulus_radii_pixels": list(getattr(result, "background_annulus_radii_pixels", []) or []),
+            "background_annulus_radii_pixels": list(
+                getattr(result, "background_annulus_radii_pixels", []) or []
+            ),
             "n_background_pixels": int(getattr(result, "n_background_pixels", 0)),
             "drift_fraction_recommended": getattr(result, "drift_fraction_recommended", None),
             "flags": list(getattr(result, "flags", []) or []),

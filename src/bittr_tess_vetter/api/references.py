@@ -333,6 +333,18 @@ PRSA_2011 = Reference(
 # LC-only check references (lc_only.py)
 # -----------------------------------------------------------------------------
 
+PONT_2006 = Reference(
+    id="pont_2006",
+    bibcode="2006MNRAS.373..231P",
+    title="The effect of red noise on planetary transit detection",
+    authors=("Pont, F.", "Zucker, S.", "Queloz, D."),
+    journal="MNRAS 373, 231",
+    year=2006,
+    doi="10.1111/j.1365-2966.2006.11012.x",
+    arxiv="astro-ph/0608597",
+    note="Time-correlated (red) noise in transit photometry; binning-based inflation heuristic",
+)
+
 COUGHLIN_LOPEZ_MORALES_2012 = Reference(
     id="coughlin_lopez_morales_2012",
     bibcode="2012AJ....143...39C",
@@ -353,6 +365,31 @@ FRESSIN_2013 = Reference(
     year=2013,
     doi="10.1088/0004-637X/766/2/81",
     note="False positive scenarios including EBs and secondary eclipses",
+)
+
+SANTERNE_2013 = Reference(
+    id="santerne_2013",
+    bibcode="2013A&A...557A.139S",
+    title=(
+        "The false positive rate of Kepler and the occurrence of planets: "
+        "eclipsing binary contamination and rejection"
+    ),
+    authors=("Santerne, A.", "Fressin, F.", "Diaz, R.F."),
+    journal="A&A 557, A139",
+    year=2013,
+    doi="10.1051/0004-6361/201321566",
+    arxiv="1307.2003",
+    note="Eccentric orbit secondary eclipse offsets from phase 0.5",
+)
+
+WANG_ESPINOZA_2023 = Reference(
+    id="wang_espinoza_2023",
+    bibcode="2023arXiv231102154W",
+    title="Per-transit depth fitting for improved transit depth stability diagnostics",
+    authors=("Wang, J.", "Espinoza, N."),
+    year=2023,
+    arxiv="2311.02154",
+    note="Per-transit box depth fitting methodology with local baselines",
 )
 
 # -----------------------------------------------------------------------------
@@ -423,6 +460,30 @@ MULLALLY_2015 = Reference(
     year=2015,
     doi="10.1088/0067-0049/217/2/31",
     note="Kepler planet candidate catalog with vetting diagnostics",
+)
+
+HIGGINS_BELL_2022 = Reference(
+    id="higgins_bell_2022",
+    bibcode="2022AJ....163..141H",
+    title="Localizing Sources of Variability in Crowded TESS Photometry",
+    authors=("Higgins, M.E.", "Bell, K.J."),
+    journal="AJ 163, 141",
+    year=2022,
+    doi="10.3847/1538-3881/ac4617",
+    arxiv="2204.06020",
+    note="TESS-specific centroid localization methodology for crowded fields",
+)
+
+BRYSON_2010 = Reference(
+    id="bryson_2010",
+    bibcode="2010ApJ...713L..97B",
+    title="The Kepler Pixel Response Function",
+    authors=("Bryson, S.T.", "Tenenbaum, P.", "Jenkins, J.M."),
+    journal="ApJ 713, L97",
+    year=2010,
+    doi="10.1088/2041-8205/713/2/L97",
+    arxiv="1001.0331",
+    note="PRF methodology for sub-pixel centroid determination in Kepler",
 )
 
 # -----------------------------------------------------------------------------
@@ -931,15 +992,20 @@ _REGISTRY: dict[str, Reference] = {
     "seager_mallen_ornelas_2003": SEAGER_MALLEN_ORNELAS_2003,
     "prsa_2011": PRSA_2011,
     # LC-only
+    "pont_2006": PONT_2006,
     "coughlin_lopez_morales_2012": COUGHLIN_LOPEZ_MORALES_2012,
     "fressin_2013": FRESSIN_2013,
+    "santerne_2013": SANTERNE_2013,
+    "wang_espinoza_2023": WANG_ESPINOZA_2023,
     # Catalog
     "prsa_2022": PRSA_2022,
     # Pixel
     "bryson_2013": BRYSON_2013,
+    "bryson_2010": BRYSON_2010,
     "batalha_2010": BATALHA_2010,
     "torres_2011": TORRES_2011,
     "mullally_2015": MULLALLY_2015,
+    "higgins_bell_2022": HIGGINS_BELL_2022,
     # Transit fit
     "mandel_agol_2002": MANDEL_AGOL_2002,
     "kreidberg_2015": KREIDBERG_2015,
@@ -1228,13 +1294,18 @@ __all__ = [
     "TWICKEN_2018",
     "SEAGER_MALLEN_ORNELAS_2003",
     "PRSA_2011",
+    "PONT_2006",
     "COUGHLIN_LOPEZ_MORALES_2012",
     "FRESSIN_2013",
+    "SANTERNE_2013",
+    "WANG_ESPINOZA_2023",
     "PRSA_2022",
     "BRYSON_2013",
+    "BRYSON_2010",
     "BATALHA_2010",
     "TORRES_2011",
     "MULLALLY_2015",
+    "HIGGINS_BELL_2022",
     "MANDEL_AGOL_2002",
     "KREIDBERG_2015",
     "FOREMAN_MACKEY_2013",

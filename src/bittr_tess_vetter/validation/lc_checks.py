@@ -36,22 +36,131 @@ class OddEvenConfig:
     """Configuration for V01 odd/even depth check.
 
     Attributes:
-        sigma_threshold: Significance threshold for delta_sigma (default 3.0)
-        rel_diff_threshold: Relative difference threshold (default 0.5 = 50%)
+        sigma_threshold: Significance threshold for delta_sigma to FAIL (default 3.0)
+        rel_diff_threshold: Relative difference threshold to FAIL (default 0.5 = 50%)
+        suspicious_sigma_threshold: Significance threshold to flag as SUSPICIOUS (default 2.5)
+        suspicious_rel_diff_threshold: Relative diff threshold to flag SUSPICIOUS (default 0.1 = 10%)
         min_transits_per_parity: Minimum transits needed per odd/even group
         min_points_in_transit_per_epoch: Minimum in-transit points per epoch
         min_points_in_transit_per_parity: Minimum total in-transit points per parity
         baseline_window_mult: Local baseline window as multiple of duration
+        baseline_window_max_fraction_of_period: Cap baseline window to this fraction of period
+            to avoid spanning adjacent transits for short-period candidates (default 0.45)
         use_red_noise_inflation: Whether to apply red noise inflation to uncertainties
     """
 
     sigma_threshold: float = 3.0
     rel_diff_threshold: float = 0.5
+    suspicious_sigma_threshold: float = 2.5
+    suspicious_rel_diff_threshold: float = 0.1
     min_transits_per_parity: int = 2
     min_points_in_transit_per_epoch: int = 5
     min_points_in_transit_per_parity: int = 20
     baseline_window_mult: float = 6.0
+    baseline_window_max_fraction_of_period: float = 0.45
     use_red_noise_inflation: bool = True
+
+
+@dataclass
+class VShapeConfig:
+    """Configuration for V05 transit shape check.
+
+    Uses trapezoid model fitting to extract tF/tT ratio (flat-bottom to total
+    duration), the standard shape discriminant in the literature.
+
+    Attributes:
+        tflat_ttotal_threshold: Below this, flag as V-shaped (default 0.15)
+        grazing_threshold: Below this but above tflat_ttotal_threshold,
+            classify as grazing (default 0.3)
+        grazing_depth_ppm: Maximum depth (ppm) for grazing planet classification
+            (deeper signals are more likely EBs) (default 50000)
+        min_points_in_transit: Minimum total in-transit points (default 10)
+        min_transit_coverage: Minimum fraction of transit phases with data (default 0.6)
+        n_bootstrap: Number of bootstrap iterations for uncertainty (default 100)
+        bootstrap_ci: Confidence interval for bootstrap (default 0.68 = 1-sigma)
+        shape_ratio_threshold: Legacy threshold for shape_ratio (default 1.3)
+    """
+
+    tflat_ttotal_threshold: float = 0.15
+    grazing_threshold: float = 0.3
+    grazing_depth_ppm: float = 50000.0
+    min_points_in_transit: int = 10
+    min_transit_coverage: float = 0.6
+    n_bootstrap: int = 100
+    bootstrap_ci: float = 0.68
+    shape_ratio_threshold: float = 1.3
+
+
+@dataclass
+class SecondaryEclipseConfig:
+    """Configuration for V02 secondary eclipse check.
+
+    Attributes:
+        secondary_center: Center of secondary search window in phase (default 0.5)
+        secondary_half_width: Half-width of search window in phase units (default 0.15)
+            This covers phase 0.35-0.65, widened from 0.10 to catch eccentric orbit EBs.
+        baseline_half_width: Half-width of adjacent baseline windows (default 0.15)
+        sigma_threshold: Significance threshold for detection (default 3.0)
+        depth_threshold: Minimum depth for flagging as significant (default 0.005 = 0.5%)
+        min_secondary_points: Minimum points in secondary window (default 10)
+        min_baseline_points: Minimum points in baseline windows (default 10)
+        min_secondary_events: Minimum distinct orbital cycles with secondary data (default 2)
+        min_phase_coverage: Minimum phase coverage fraction for reliable result (default 0.3)
+        use_red_noise_inflation: Whether to apply red noise inflation (default True)
+        default_inflation: Fallback inflation factor when estimation fails (default 1.5)
+        n_coverage_bins: Number of bins for phase coverage calculation (default 20)
+
+    References:
+        - Coughlin & Lopez-Morales 2012, AJ 143, 39 (secondary eclipse methodology)
+        - Thompson et al. 2018, ApJS 235, 38 (Robovetter significant secondary test)
+        - Pont et al. 2006, MNRAS 373, 231 (red noise inflation)
+        - Santerne et al. 2013, A&A 557, A139 (eccentric orbit secondary offsets)
+    """
+
+    secondary_center: float = 0.5
+    secondary_half_width: float = 0.15
+    baseline_half_width: float = 0.15
+    sigma_threshold: float = 3.0
+    depth_threshold: float = 0.005
+    min_secondary_points: int = 10
+    min_baseline_points: int = 10
+    min_secondary_events: int = 2
+    min_phase_coverage: float = 0.3
+    use_red_noise_inflation: bool = True
+    default_inflation: float = 1.5
+    n_coverage_bins: int = 20
+
+
+@dataclass
+class DepthStabilityConfig:
+    """Configuration for V04 depth stability check.
+
+    Attributes:
+        min_transits_for_confidence: Minimum transits for meaningful scatter (default 3)
+        min_points_per_epoch: Minimum in-transit points per epoch (default 5)
+        baseline_window_mult: Local baseline window as multiple of duration (default 6.0)
+        chi2_threshold_pass: Chi-squared threshold for definite pass (default 2.0)
+        chi2_threshold_fail: Chi-squared threshold for definite fail (default 4.0)
+        outlier_sigma: MAD-based outlier flagging threshold (default 4.0)
+        use_red_noise_inflation: Whether to apply red noise inflation (default True)
+        legacy_mode: If True, use original RMS scatter threshold (default False)
+        rms_scatter_threshold: Legacy threshold for backward compatibility (default 0.3)
+
+    References:
+        - Thompson et al. 2018, ApJS 235, 38 (depth consistency tests)
+        - Pont et al. 2006, MNRAS 373, 231 (correlated noise)
+        - Wang & Espinoza 2023, arXiv:2311.02154 (per-transit depth fitting)
+    """
+
+    min_transits_for_confidence: int = 3
+    min_points_per_epoch: int = 5
+    baseline_window_mult: float = 6.0
+    chi2_threshold_pass: float = 2.0
+    chi2_threshold_fail: float = 4.0
+    outlier_sigma: float = 4.0
+    use_red_noise_inflation: bool = True
+    legacy_mode: bool = False
+    rms_scatter_threshold: float = 0.3
 
 
 # =============================================================================
@@ -252,6 +361,8 @@ def check_odd_even_depth(
 
     # Per-epoch depth extraction with local baselines
     epoch_data: dict[int, dict[str, float]] = {}
+    global_oot_fallback_count = 0
+    epochs_processed = 0
 
     for ep in unique_epochs:
         epoch_mask = epoch == ep
@@ -262,20 +373,30 @@ def check_odd_even_depth(
             continue
 
         # Define local OOT baseline window around epoch center
+        # Cap baseline window to avoid spanning adjacent transits for short periods
         epoch_center = t0 + ep * period
-        baseline_half_window = config.baseline_window_mult * duration_days
+        baseline_half_window = min(
+            config.baseline_window_mult * duration_days,
+            config.baseline_window_max_fraction_of_period * period,
+        )
         local_window = (time >= epoch_center - baseline_half_window) & (
             time <= epoch_center + baseline_half_window
         )
         local_oot = local_window & ~in_transit
 
         n_oot = np.sum(local_oot)
+        used_global_fallback = False
         if n_oot < 5:
             # Fall back to global OOT if local is too sparse
             local_oot = ~in_transit
             n_oot = np.sum(local_oot)
+            used_global_fallback = True
             if n_oot < 10:
                 continue
+
+        epochs_processed += 1
+        if used_global_fallback:
+            global_oot_fallback_count += 1
 
         # Compute local baseline
         baseline_flux = flux[local_oot]
@@ -310,6 +431,13 @@ def check_odd_even_depth(
             "n_in": int(n_in),
             "baseline": baseline,
         }
+
+    # Warn if global OOT fallback used for ≥50% of epochs
+    if epochs_processed > 0 and global_oot_fallback_count >= epochs_processed * 0.5:
+        warnings.append(
+            f"odd_even_baseline_fallback_global_oot: {global_oot_fallback_count}/{epochs_processed} "
+            "epochs used global OOT baseline (local window too sparse)"
+        )
 
     # Separate odd and even epochs
     odd_epochs = {k: v for k, v in epoch_data.items() if k % 2 == 1}
@@ -371,6 +499,7 @@ def check_odd_even_depth(
                 "delta_ppm": 0.0,
                 "delta_sigma": 0.0,
                 "rel_diff": 0.0,
+                "suspicious": False,  # Cannot determine with insufficient data
                 "warnings": warnings,
                 "method": "per_epoch_median",
                 "epoch_depths_odd_ppm": [],
@@ -403,6 +532,12 @@ def check_odd_even_depth(
 
     # Decision rule: FAIL if BOTH thresholds exceeded
     passed = not (delta_sigma >= config.sigma_threshold and rel_diff >= config.rel_diff_threshold)
+
+    # Suspicious flag: lower threshold than fail, either criterion triggers
+    suspicious = (
+        delta_sigma >= config.suspicious_sigma_threshold
+        or rel_diff >= config.suspicious_rel_diff_threshold
+    )
 
     # Confidence
     confidence = _compute_confidence(
@@ -442,6 +577,7 @@ def check_odd_even_depth(
             "delta_ppm": round(delta_ppm, 1),
             "delta_sigma": round(delta_sigma, 2),
             "rel_diff": round(rel_diff, 3),
+            "suspicious": suspicious,
             "warnings": warnings,
             "method": "per_epoch_median",
             "epoch_depths_odd_ppm": epoch_depths_odd_ppm,
@@ -454,79 +590,224 @@ def check_secondary_eclipse(
     lightcurve: LightCurveData,
     period: float,
     t0: float,
+    config: SecondaryEclipseConfig | None = None,
 ) -> VetterCheckResult:
     """V02: Search for secondary eclipse at phase 0.5.
 
     Presence of secondary eclipse indicates hot planet (thermal emission)
     or eclipsing binary. Significant secondary suggests EB.
 
+    This implementation uses:
+    - Local baseline windows adjacent to the secondary (not global)
+    - Widened search window (phase 0.35-0.65) to catch eccentric orbit EBs
+    - Red noise inflation for uncertainty estimation
+    - Phase coverage metric and event counting
+    - Graduated confidence based on data quality
+
     Args:
         lightcurve: Light curve data
         period: Orbital period in days
         t0: Reference epoch (BTJD)
+        config: Optional configuration overrides
 
     Returns:
         VetterCheckResult with details on secondary eclipse search
+
+    References:
+        - Coughlin & Lopez-Morales 2012, AJ 143, 39 (secondary eclipse methodology)
+        - Thompson et al. 2018, ApJS 235, 38 (Robovetter significant secondary test)
+        - Pont et al. 2006, MNRAS 373, 231 (red noise inflation)
+        - Santerne et al. 2013, A&A 557, A139 (eccentric orbit secondary offsets)
     """
+    if config is None:
+        config = SecondaryEclipseConfig()
+
     time = lightcurve.time[lightcurve.valid_mask]
     flux = lightcurve.flux[lightcurve.valid_mask]
+
+    warnings: list[str] = []
 
     # Calculate phase
     phase = ((time - t0) / period) % 1
 
-    # Define regions
-    # Secondary around phase 0.5 (using 0.40-0.60 = 10% half-width)
-    # Widened from 5% to catch eccentric orbit EBs where secondary
-    # can occur at phase 0.4-0.6 rather than exactly 0.5
-    secondary_mask = (phase > 0.40) & (phase < 0.60)
-    # Out of transit/eclipse (0.15-0.35 and 0.65-0.85)
-    # Adjusted baseline regions to avoid overlap with wider secondary window
-    baseline_mask = ((phase > 0.15) & (phase < 0.35)) | ((phase > 0.65) & (phase < 0.85))
+    # Define regions with configurable widths
+    # Secondary window: center +/- half_width (default: 0.35-0.65)
+    sec_lo = config.secondary_center - config.secondary_half_width
+    sec_hi = config.secondary_center + config.secondary_half_width
+    secondary_mask = (phase > sec_lo) & (phase < sec_hi)
+
+    # Adjacent baseline windows (before and after secondary)
+    # Before: sec_lo - baseline_half_width to sec_lo
+    # After: sec_hi to sec_hi + baseline_half_width
+    baseline_before_lo = sec_lo - config.baseline_half_width
+    baseline_after_hi = sec_hi + config.baseline_half_width
+
+    # Avoid wrapping around transit at phase 0 (exclude 0-0.1 and 0.9-1.0)
+    baseline_before_mask = (phase > max(0.10, baseline_before_lo)) & (phase < sec_lo)
+    baseline_after_mask = (phase > sec_hi) & (phase < min(0.90, baseline_after_hi))
+    baseline_mask = baseline_before_mask | baseline_after_mask
 
     secondary_flux = flux[secondary_mask]
     baseline_flux = flux[baseline_mask]
+    secondary_time = time[secondary_mask]
+    baseline_time = time[baseline_mask]
 
-    if len(secondary_flux) < 10 or len(baseline_flux) < 10:
+    n_secondary_points = len(secondary_flux)
+    n_baseline_points = len(baseline_flux)
+
+    # Check minimum data requirements
+    if n_secondary_points < config.min_secondary_points:
+        warnings.append(
+            f"Only {n_secondary_points} secondary points, need {config.min_secondary_points}"
+        )
+    if n_baseline_points < config.min_baseline_points:
+        warnings.append(
+            f"Only {n_baseline_points} baseline points, need {config.min_baseline_points}"
+        )
+
+    if (
+        n_secondary_points < config.min_secondary_points
+        or n_baseline_points < config.min_baseline_points
+    ):
         return VetterCheckResult(
             id="V02",
             name="secondary_eclipse",
             passed=True,
             confidence=0.3,
             details={
-                "n_secondary_points": len(secondary_flux),
-                "n_baseline_points": len(baseline_flux),
+                "n_secondary_points": n_secondary_points,
+                "n_baseline_points": n_baseline_points,
+                "secondary_depth_ppm": 0.0,
+                "secondary_depth_err_ppm": 0.0,
+                "secondary_depth_sigma": 0.0,
+                "secondary_phase_coverage": 0.0,
+                "n_secondary_events_effective": 0,
+                "warnings": warnings,
                 "note": "Insufficient data for secondary eclipse search",
             },
         )
 
-    # Calculate secondary depth
-    baseline_median = np.median(baseline_flux)
-    secondary_median = np.median(secondary_flux)
+    # Count distinct secondary events (orbital cycles with data in secondary window)
+    secondary_epochs = np.floor((secondary_time - t0) / period).astype(int)
+    n_secondary_events = len(np.unique(secondary_epochs))
+
+    if n_secondary_events < config.min_secondary_events:
+        warnings.append(
+            f"Only {n_secondary_events} secondary event(s), need {config.min_secondary_events}"
+        )
+
+    # Compute phase coverage within secondary window
+    secondary_phases = phase[secondary_mask]
+    coverage_bins = np.linspace(sec_lo, sec_hi, config.n_coverage_bins + 1)
+    coverage_counts = np.histogram(secondary_phases, bins=coverage_bins)[0]
+    n_covered_bins = np.sum(coverage_counts > 0)
+    phase_coverage = n_covered_bins / config.n_coverage_bins
+
+    if phase_coverage < config.min_phase_coverage:
+        warnings.append(f"Phase coverage {phase_coverage:.2f} < {config.min_phase_coverage}")
+
+    # Calculate secondary depth using local baseline
+    baseline_median = float(np.median(baseline_flux))
+    secondary_median = float(np.median(secondary_flux))
+
+    if baseline_median <= 0:
+        return VetterCheckResult(
+            id="V02",
+            name="secondary_eclipse",
+            passed=True,
+            confidence=0.2,
+            details={
+                "n_secondary_points": n_secondary_points,
+                "n_baseline_points": n_baseline_points,
+                "warnings": warnings + ["Invalid baseline median <= 0"],
+                "note": "Invalid baseline flux",
+            },
+        )
+
     secondary_depth = 1.0 - secondary_median / baseline_median
 
-    # Uncertainty
-    secondary_std = np.std(secondary_flux) / np.sqrt(len(secondary_flux))
-    secondary_depth_sigma = abs(secondary_depth) / (secondary_std / baseline_median)
+    # Uncertainty estimation with red noise inflation
+    baseline_scatter = _robust_std(baseline_flux)
+    secondary_err_base = baseline_scatter / np.sqrt(n_secondary_points) / baseline_median
 
-    # A deep secondary (>3 sigma and >50% of primary-like depth) suggests EB
-    # For planets, secondary should be very shallow (<<1%)
-    significant_secondary = secondary_depth_sigma > 3.0 and secondary_depth > 0.005
+    inflation = 1.0
+    if config.use_red_noise_inflation and n_baseline_points >= 20:
+        baseline_residuals = baseline_flux - baseline_median
+        inflation, rn_success = _compute_red_noise_inflation(
+            baseline_residuals, baseline_time, period / 10
+        )
+        if not rn_success:
+            inflation = config.default_inflation
+            warnings.append("Red noise estimation failed, using default inflation")
+    elif config.use_red_noise_inflation:
+        inflation = config.default_inflation
+        warnings.append("Insufficient baseline for red noise, using default inflation")
+
+    secondary_err = secondary_err_base * inflation
+    secondary_depth_sigma = abs(secondary_depth) / secondary_err if secondary_err > 0 else 0.0
+
+    # Decision: significant secondary if BOTH sigma and depth thresholds exceeded
+    significant_secondary = (
+        secondary_depth_sigma >= config.sigma_threshold
+        and secondary_depth >= config.depth_threshold
+    )
 
     passed = not significant_secondary
 
-    confidence = 0.8 if len(secondary_flux) > 50 else 0.5 + 0.006 * len(secondary_flux)
+    # Confidence degradation model
+    # Base confidence from phase coverage and event count
+    if phase_coverage >= 0.7 and n_secondary_events >= 5:
+        base_confidence = 0.85
+    elif phase_coverage >= 0.5 and n_secondary_events >= 3:
+        base_confidence = 0.7
+    elif (
+        phase_coverage >= config.min_phase_coverage
+        and n_secondary_events >= config.min_secondary_events
+    ):
+        base_confidence = 0.55
+    else:
+        base_confidence = 0.4
+
+    # Adjust for proximity to threshold
+    if significant_secondary:
+        # Confidence in failure scales with sigma excess
+        sigma_margin = secondary_depth_sigma - config.sigma_threshold
+        base_confidence = min(0.9, base_confidence + 0.05 * sigma_margin)
+    elif secondary_depth_sigma > 0.7 * config.sigma_threshold:
+        # Near threshold - reduce confidence
+        base_confidence *= 0.85
+
+    # Degrade if warnings
+    if warnings:
+        base_confidence *= 0.9
+
+    confidence = round(min(0.95, max(0.2, base_confidence)), 3)
+
+    # Convert to ppm for output
+    secondary_depth_ppm = secondary_depth * 1e6
+    secondary_err_ppm = secondary_err * 1e6
 
     return VetterCheckResult(
         id="V02",
         name="secondary_eclipse",
         passed=passed,
-        confidence=round(min(confidence, 0.95), 3),
+        confidence=confidence,
         details={
+            # Legacy keys
             "secondary_depth": round(secondary_depth, 6),
             "secondary_depth_sigma": round(secondary_depth_sigma, 2),
             "baseline_flux": round(baseline_median, 6),
-            "n_secondary_points": len(secondary_flux),
+            "n_secondary_points": n_secondary_points,
             "significant_secondary": significant_secondary,
+            # New keys
+            "secondary_depth_ppm": round(secondary_depth_ppm, 1),
+            "secondary_depth_err_ppm": round(secondary_err_ppm, 2),
+            "secondary_phase_coverage": round(phase_coverage, 3),
+            "n_secondary_events_effective": n_secondary_events,
+            "n_baseline_points": n_baseline_points,
+            "red_noise_inflation": round(inflation, 2),
+            "search_window": [round(sec_lo, 3), round(sec_hi, 3)],
+            "warnings": warnings,
         },
     )
 
@@ -637,86 +918,404 @@ def check_depth_stability(
     period: float,
     t0: float,
     duration_hours: float,
+    config: DepthStabilityConfig | None = None,
 ) -> VetterCheckResult:
     """V04: Check depth consistency across individual transits.
 
     Variable depth suggests blended eclipsing binary or systematic issues.
     Real planets have consistent depths.
 
+    This implementation uses:
+    - Per-transit box depth fitting with local baselines
+    - Chi-squared ratio metric (observed vs expected scatter)
+    - Red noise inflation for uncertainty estimation
+    - Outlier epoch detection and flagging
+    - Graduated confidence based on N_transits
+
     Args:
         lightcurve: Light curve data
         period: Orbital period in days
         t0: Reference epoch (BTJD)
         duration_hours: Transit duration in hours
+        config: Optional configuration overrides
 
     Returns:
         VetterCheckResult with depth stability metrics
+
+    References:
+        - Thompson et al. 2018, ApJS 235, 38 (depth consistency tests)
+        - Pont et al. 2006, MNRAS 373, 231 (correlated noise)
+        - Wang & Espinoza 2023, arXiv:2311.02154 (per-transit depth fitting)
     """
+    if config is None:
+        config = DepthStabilityConfig()
+
     time = lightcurve.time[lightcurve.valid_mask]
     flux = lightcurve.flux[lightcurve.valid_mask]
 
     duration_days = duration_hours / 24.0
+    warnings: list[str] = []
 
-    # Calculate transit number for each point
-    transit_num = np.floor((time - t0) / period).astype(int)
+    # Calculate epoch index for each point (same logic as odd/even)
+    epoch = np.floor((time - t0 + period / 2) / period).astype(int)
+
+    # Phase distance from transit center
     phase = ((time - t0) / period) % 1
+    phase_dist = np.minimum(phase, 1 - phase)
 
     # In-transit mask
-    in_transit = (phase < duration_days / period / 2) | (phase > 1 - duration_days / period / 2)
+    half_dur_phase = 0.5 * (duration_days / period)
+    in_transit = phase_dist < half_dur_phase
 
-    # Out-of-transit baseline
-    baseline = np.median(flux[~in_transit]) if np.any(~in_transit) else 1.0
+    unique_epochs = np.unique(epoch)
 
-    # Measure depth for each transit
-    unique_transits = np.unique(transit_num[in_transit])
-    individual_depths = []
+    # Per-epoch depth extraction with local baselines
+    epoch_depths: list[float] = []
+    epoch_sigmas: list[float] = []
+    epoch_indices: list[int] = []
+    global_oot_fallback_count = 0
+    epochs_processed = 0
 
-    for tn in unique_transits:
-        transit_mask = in_transit & (transit_num == tn)
-        transit_flux = flux[transit_mask]
-        if len(transit_flux) >= 3:
-            depth = 1.0 - np.median(transit_flux) / baseline
-            if depth > 0:  # Only count actual dips
-                individual_depths.append(depth)
+    for ep in unique_epochs:
+        epoch_mask = epoch == ep
+        epoch_in_transit = epoch_mask & in_transit
+        n_in = int(np.sum(epoch_in_transit))
 
-    if len(individual_depths) < 2:
+        if n_in < config.min_points_per_epoch:
+            continue
+
+        # Define local OOT baseline window
+        epoch_center = t0 + ep * period
+        baseline_half_window = config.baseline_window_mult * duration_days
+        local_window = (time >= epoch_center - baseline_half_window) & (
+            time <= epoch_center + baseline_half_window
+        )
+        local_oot = local_window & ~in_transit
+
+        n_oot = int(np.sum(local_oot))
+        used_global_fallback = False
+        if n_oot < 5:
+            # Fall back to global OOT
+            local_oot = ~in_transit
+            n_oot = int(np.sum(local_oot))
+            used_global_fallback = True
+            if n_oot < 10:
+                continue
+
+        epochs_processed += 1
+        if used_global_fallback:
+            global_oot_fallback_count += 1
+
+        # Compute local baseline
+        baseline_flux = flux[local_oot]
+        baseline = float(np.median(baseline_flux))
+
+        if baseline <= 0:
+            continue
+
+        # Compute depth for this epoch
+        in_flux = flux[epoch_in_transit]
+        depth_k = 1.0 - float(np.median(in_flux)) / baseline
+
+        # Skip if not a real dip
+        if depth_k <= 0:
+            continue
+
+        # Compute uncertainty: robust_std(oot) / sqrt(n_in) / baseline
+        oot_scatter = _robust_std(baseline_flux)
+        sigma_k = oot_scatter / np.sqrt(n_in) / baseline if n_in > 0 else float("inf")
+
+        # Optional red noise inflation
+        if config.use_red_noise_inflation and n_oot >= 20:
+            oot_residuals = baseline_flux - baseline
+            oot_time = time[local_oot]
+            inflation, success = _compute_red_noise_inflation(
+                oot_residuals, oot_time, duration_days / 2
+            )
+            if success:
+                sigma_k *= inflation
+
+        epoch_depths.append(depth_k)
+        epoch_sigmas.append(sigma_k)
+        epoch_indices.append(int(ep))
+
+    # Warn if global OOT fallback used for >=50% of epochs
+    if epochs_processed > 0 and global_oot_fallback_count >= epochs_processed * 0.5:
+        warnings.append(
+            f"depth_stability_baseline_fallback: {global_oot_fallback_count}/{epochs_processed} "
+            "epochs used global OOT baseline"
+        )
+
+    n_transits = len(epoch_depths)
+
+    if n_transits < 2:
         return VetterCheckResult(
             id="V04",
             name="depth_stability",
             passed=True,
             confidence=0.3,
             details={
-                "n_transits_measured": len(individual_depths),
+                "n_transits_measured": n_transits,
+                "depths_ppm": [],
+                "depth_scatter_ppm": 0.0,
+                "expected_scatter_ppm": 0.0,
+                "chi2_reduced": 0.0,
+                "warnings": warnings,
                 "note": "Insufficient transits for depth stability check",
             },
         )
 
-    depths = np.array(individual_depths)
-    mean_depth = np.mean(depths)
-    std_depth = np.std(depths)
-    rms_scatter = std_depth / mean_depth if mean_depth > 0 else 0
+    depths_arr = np.array(epoch_depths)
+    sigmas_arr = np.array(epoch_sigmas)
 
-    # Pass if RMS scatter < 30% of mean depth
-    passed = bool(rms_scatter < 0.3)
+    mean_depth = float(np.mean(depths_arr))
+    median_depth = float(np.median(depths_arr))
+    std_depth = float(np.std(depths_arr))
 
-    # Confidence increases with number of transits
-    confidence = min(0.95, 0.5 + 0.1 * len(depths))
-    if rms_scatter > 0.2:
-        confidence *= 0.8
+    # RMS scatter for legacy compatibility
+    rms_scatter = std_depth / mean_depth if mean_depth > 0 else 0.0
+
+    # Compute expected scatter from individual uncertainties
+    # Expected: sqrt(sum(sigma_k^2)) / N
+    expected_scatter = float(np.sqrt(np.sum(sigmas_arr**2))) / n_transits if n_transits > 0 else 0.0
+
+    # Chi-squared: sum((depth_k - mean)^2 / sigma_k^2)
+    if np.all(sigmas_arr > 0):
+        residuals = depths_arr - mean_depth
+        chi2 = float(np.sum((residuals / sigmas_arr) ** 2))
+        dof = n_transits - 1  # 1 parameter (mean)
+        chi2_reduced = chi2 / dof if dof > 0 else 0.0
+    else:
+        chi2 = 0.0
+        chi2_reduced = 0.0
+        warnings.append("Some sigma values are zero, chi2 unreliable")
+
+    # Outlier detection using MAD
+    outlier_epochs: list[int] = []
+    if n_transits >= config.min_transits_for_confidence:
+        mad = float(np.median(np.abs(depths_arr - median_depth)))
+        mad_scale = mad * 1.4826  # Scale to std
+        if mad_scale > 0:
+            outlier_mask = np.abs(depths_arr - median_depth) > config.outlier_sigma * mad_scale
+            outlier_epochs = [epoch_indices[i] for i in range(n_transits) if outlier_mask[i]]
+            if outlier_epochs:
+                warnings.append(f"Outlier epochs detected: {outlier_epochs}")
+
+    # Decision logic
+    if config.legacy_mode:
+        # Use original RMS scatter threshold
+        passed = bool(rms_scatter < config.rms_scatter_threshold)
+    else:
+        # Use chi-squared based decision
+        if chi2_reduced < config.chi2_threshold_pass:
+            passed = True
+        elif chi2_reduced > config.chi2_threshold_fail:
+            passed = False
+        else:
+            # Intermediate zone: use RMS scatter as tie-breaker
+            passed = bool(rms_scatter < config.rms_scatter_threshold)
+
+    # Graduated confidence by N_transits
+    if n_transits < config.min_transits_for_confidence:
+        base_confidence = 0.35
+    elif n_transits < 5:
+        base_confidence = 0.55
+    elif n_transits < 10:
+        base_confidence = 0.7
+    elif n_transits < 20:
+        base_confidence = 0.8
+    else:
+        base_confidence = 0.85
+
+    # Adjust for chi2 proximity to threshold
+    if passed and chi2_reduced > 0.7 * config.chi2_threshold_pass:
+        base_confidence *= 0.9
+    elif not passed and chi2_reduced > config.chi2_threshold_fail * 1.5:
+        # Strong fail - boost confidence
+        base_confidence = min(0.9, base_confidence * 1.1)
+
+    # Degrade if outliers or warnings
+    if outlier_epochs:
+        base_confidence *= 0.85
+    if warnings and base_confidence > 0.5:
+        base_confidence *= 0.95
+
+    confidence = round(min(0.95, max(0.2, base_confidence)), 3)
+
+    # Convert to ppm
+    depths_ppm = [round(d * 1e6, 1) for d in depths_arr[:20]]  # Cap at 20
+    depth_scatter_ppm = std_depth * 1e6
+    expected_scatter_ppm = expected_scatter * 1e6
+    mean_depth_ppm = mean_depth * 1e6
 
     return VetterCheckResult(
         id="V04",
         name="depth_stability",
         passed=passed,
-        confidence=round(confidence, 3),
+        confidence=confidence,
         details={
+            # Legacy keys
             "mean_depth": round(mean_depth, 6),
             "std_depth": round(std_depth, 6),
             "rms_scatter": round(rms_scatter, 4),
-            "n_transits_measured": len(depths),
-            "individual_depths": [round(d, 6) for d in depths[:10]],  # First 10
+            "n_transits_measured": n_transits,
+            "individual_depths": [round(d, 6) for d in depths_arr[:10]],
+            # New keys
+            "mean_depth_ppm": round(mean_depth_ppm, 1),
+            "depths_ppm": depths_ppm,
+            "depth_scatter_ppm": round(depth_scatter_ppm, 1),
+            "expected_scatter_ppm": round(expected_scatter_ppm, 2),
+            "chi2_reduced": round(chi2_reduced, 2),
+            "outlier_epochs": outlier_epochs,
+            "warnings": warnings,
+            "method": "per_epoch_local_baseline",
         },
     )
+
+
+def _trapezoid_model(
+    phase: np.ndarray,
+    t_flat_phase: float,
+    t_total_phase: float,
+    depth: float,
+) -> np.ndarray:
+    """Symmetric trapezoid transit model.
+
+    Args:
+        phase: Phase array centered on transit (0 = mid-transit)
+        t_flat_phase: Flat-bottom duration in phase units
+        t_total_phase: Total transit duration in phase units
+        depth: Transit depth (fractional)
+
+    Returns:
+        Model flux array (1.0 = baseline, 1.0 - depth = bottom)
+    """
+    half_flat = t_flat_phase / 2
+    half_total = t_total_phase / 2
+
+    flux = np.ones_like(phase)
+
+    # Pure V-shape case: no flat bottom
+    if half_flat <= 0:
+        # Linear from baseline to depth at center
+        in_transit = np.abs(phase) < half_total
+        if np.any(in_transit):
+            # Linear ramp: depth at center, 0 at edges
+            flux[in_transit] = 1 - depth * (1 - np.abs(phase[in_transit]) / half_total)
+        return flux
+
+    # Flat bottom region
+    flat_mask = np.abs(phase) < half_flat
+    flux[flat_mask] = 1 - depth
+
+    # Ingress/egress slopes
+    if half_total > half_flat:
+        slope_width = half_total - half_flat
+        ingress_mask = (phase < -half_flat) & (phase > -half_total)
+        egress_mask = (phase > half_flat) & (phase < half_total)
+
+        # Ingress: goes from 1 at -half_total to (1-depth) at -half_flat
+        if np.any(ingress_mask):
+            frac = (-phase[ingress_mask] - half_flat) / slope_width
+            flux[ingress_mask] = (1 - depth) + depth * frac
+
+        # Egress: goes from (1-depth) at +half_flat to 1 at +half_total
+        if np.any(egress_mask):
+            frac = (phase[egress_mask] - half_flat) / slope_width
+            flux[egress_mask] = (1 - depth) + depth * frac
+
+    return flux
+
+
+def _fit_trapezoid_grid_search(
+    phase: np.ndarray,
+    flux: np.ndarray,
+    t_total_phase: float,
+    n_grid: int = 20,
+) -> tuple[float, float, float]:
+    """Fit trapezoid model using grid search over tF/tT ratio.
+
+    Args:
+        phase: Phase array centered on transit
+        flux: Normalized flux array
+        t_total_phase: Total transit duration in phase units (from input ephemeris)
+        n_grid: Number of grid points for tF/tT ratio search
+
+    Returns:
+        Tuple of (best_tflat_ttotal_ratio, best_depth, min_chi2)
+    """
+    # Grid of tF/tT ratios from 0 (V-shape) to 1 (box)
+    tflat_ttotal_ratios = np.linspace(0, 1, n_grid)
+
+    best_ratio = 0.5
+    best_depth = 0.001
+    min_chi2 = float("inf")
+
+    for ratio in tflat_ttotal_ratios:
+        t_flat_phase = ratio * t_total_phase
+
+        # Estimate depth analytically: median of central region
+        central_mask = np.abs(phase) < t_total_phase / 4
+        if np.sum(central_mask) < 3:
+            continue
+
+        depth_estimate = 1 - float(np.median(flux[central_mask]))
+        if depth_estimate <= 0:
+            depth_estimate = 0.001
+
+        # Compute model and chi2
+        model = _trapezoid_model(phase, t_flat_phase, t_total_phase, depth_estimate)
+        residuals = flux - model
+        chi2 = float(np.sum(residuals**2))
+
+        if chi2 < min_chi2:
+            min_chi2 = chi2
+            best_ratio = ratio
+            best_depth = depth_estimate
+
+    return float(best_ratio), float(best_depth), float(min_chi2)
+
+
+def _compute_v_shape_confidence(
+    n_in_transit: int,
+    transit_coverage: float,
+    has_warnings: bool,
+    near_threshold: bool,
+) -> float:
+    """Compute confidence score for V-shape check.
+
+    Args:
+        n_in_transit: Number of in-transit points
+        transit_coverage: Fraction of transit phases with data
+        has_warnings: Whether warnings were issued
+        near_threshold: Whether result is near decision threshold
+
+    Returns:
+        Confidence score in [0, 1]
+    """
+    # Base confidence from data quantity
+    if n_in_transit < 10:
+        base = 0.2
+    elif n_in_transit < 30:
+        base = 0.5
+    elif n_in_transit < 100:
+        base = 0.7
+    else:
+        base = 0.85
+
+    # Adjust for coverage
+    if transit_coverage >= 0.8:
+        base = min(0.95, base * 1.1)
+    elif transit_coverage < 0.6:
+        base *= 0.8
+
+    # Degrade if near threshold or warnings
+    if near_threshold:
+        base *= 0.85
+    if has_warnings:
+        base *= 0.9
+
+    return round(min(0.95, base), 3)
 
 
 def check_v_shape(
@@ -724,95 +1323,256 @@ def check_v_shape(
     period: float,
     t0: float,
     duration_hours: float,
+    config: VShapeConfig | None = None,
 ) -> VetterCheckResult:
     """V05: Distinguish U-shaped (planet) vs V-shaped (grazing EB) transits.
 
-    Planets have flat-bottomed U-shaped transits. Grazing eclipsing binaries
-    show V-shaped transits with no flat bottom.
+    Uses trapezoid model fitting to extract tF/tT ratio (flat-bottom to total
+    duration), the standard shape discriminant in the literature.
+
+    **Classification (3-tier):**
+    - U_SHAPE: tF/tT > grazing_threshold (normal planet transit)
+    - GRAZING: tflat_ttotal_threshold < tF/tT <= grazing_threshold (grazing geometry)
+    - V_SHAPE: tF/tT <= tflat_ttotal_threshold (likely eclipsing binary)
+
+    **Decision rule:**
+    - PASS if classification is U_SHAPE or GRAZING with depth < grazing_depth_ppm
+    - FAIL if classification is V_SHAPE or GRAZING with depth >= grazing_depth_ppm
 
     Args:
         lightcurve: Light curve data
         period: Orbital period in days
         t0: Reference epoch (BTJD)
         duration_hours: Transit duration in hours
+        config: Optional configuration overrides
 
     Returns:
-        VetterCheckResult with shape analysis
+        VetterCheckResult with shape analysis including tF/tT ratio
+
+    References:
+        [1] Seager & Mallen-Ornelas 2003, ApJ 585, 1038 (2003ApJ...585.1038S)
+            Section 3: Transit shape parameters tF/tT and impact parameter b
+        [2] Kipping 2010, MNRAS 407, 301 (arXiv:1004.3819)
+            Transit duration expressions and T14/T23 definitions
+        [3] Thompson et al. 2018, ApJS 235, 38 (2018ApJS..235...38T)
+            Section 3.1: Not Transit-Like (V-shape) metric in DR25 Robovetter
+        [4] Prsa et al. 2011, AJ 141, 83 (2011AJ....141...83P)
+            EB morphology classification; V-shape vs U-shape distinction
     """
+    if config is None:
+        config = VShapeConfig()
+
     time = lightcurve.time[lightcurve.valid_mask]
     flux = lightcurve.flux[lightcurve.valid_mask]
 
     duration_days = duration_hours / 24.0
+    warnings: list[str] = []
 
-    # Calculate phase centered on transit
-    phase = ((time - t0) / period + 0.5) % 1 - 0.5  # -0.5 to 0.5, transit at 0
+    # Calculate phase centered on transit (-0.5 to 0.5, transit at 0)
+    phase = ((time - t0) / period + 0.5) % 1 - 0.5
 
-    # Define regions: ingress, flat bottom, egress
-    half_dur = duration_days / period / 2
+    # Duration in phase units
+    t_total_phase = duration_days / period
+    half_dur_phase = t_total_phase / 2
 
-    ingress_mask = (phase > -half_dur) & (phase < -half_dur / 2)
-    bottom_mask = (phase > -half_dur / 4) & (phase < half_dur / 4)
-    egress_mask = (phase > half_dur / 2) & (phase < half_dur)
-    baseline_mask = (abs(phase) > half_dur * 1.5) & (abs(phase) < 0.25)
+    # Define in-transit and baseline masks
+    in_transit_mask = np.abs(phase) < half_dur_phase * 1.2  # Slight buffer
+    baseline_mask = (np.abs(phase) > half_dur_phase * 1.5) & (np.abs(phase) < 0.25)
 
-    ingress_flux = flux[ingress_mask]
-    bottom_flux = flux[bottom_mask]
-    egress_flux = flux[egress_mask]
-    baseline_flux = flux[baseline_mask]
+    n_in_transit = int(np.sum(in_transit_mask))
+    n_baseline = int(np.sum(baseline_mask))
 
-    if len(bottom_flux) < 5 or len(baseline_flux) < 10:
+    # Compute transit coverage: fraction of transit phase bins with data
+    n_phase_bins = 20
+    phase_bins = np.linspace(-half_dur_phase, half_dur_phase, n_phase_bins + 1)
+    bins_with_data = 0
+    for i in range(n_phase_bins):
+        bin_mask = (phase >= phase_bins[i]) & (phase < phase_bins[i + 1])
+        if np.sum(bin_mask) >= 1:
+            bins_with_data += 1
+    transit_coverage = bins_with_data / n_phase_bins
+
+    # Check minimum data requirements
+    insufficient_data = False
+    if n_in_transit < config.min_points_in_transit:
+        warnings.append(
+            f"Only {n_in_transit} in-transit points, need {config.min_points_in_transit}"
+        )
+        insufficient_data = True
+    if n_baseline < 10:
+        warnings.append(f"Only {n_baseline} baseline points, need 10")
+        insufficient_data = True
+    if transit_coverage < config.min_transit_coverage:
+        warnings.append(
+            f"Transit coverage {transit_coverage:.2f} below minimum {config.min_transit_coverage}"
+        )
+        insufficient_data = True
+
+    if insufficient_data:
+        # Cannot reject with insufficient data - return low-confidence pass
         return VetterCheckResult(
             id="V05",
             name="v_shape",
             passed=True,
-            confidence=0.3,
+            confidence=0.2,
             details={
-                "n_bottom_points": len(bottom_flux),
-                "n_baseline_points": len(baseline_flux),
-                "note": "Insufficient data for V-shape analysis",
+                # Legacy keys
+                "depth_bottom": 0.0,
+                "depth_edge": 0.0,
+                "shape_ratio": 2.0,
+                "shape": "U-shaped",
+                "n_bottom_points": 0,
+                "n_edge_points": 0,
+                # New keys
+                "t_flat_hours": 0.0,
+                "t_total_hours": duration_hours,
+                "tflat_ttotal_ratio": 0.5,
+                "tflat_ttotal_ratio_err": 0.5,
+                "shape_metric_uncertainty": 0.5,
+                "classification": "INSUFFICIENT_DATA",
+                "transit_coverage": round(transit_coverage, 3),
+                "n_in_transit": n_in_transit,
+                "n_baseline": n_baseline,
+                "warnings": warnings,
+                "method": "trapezoid_grid_search",
             },
         )
 
-    baseline_median = np.median(baseline_flux)
-    bottom_median = np.median(bottom_flux)
+    # Normalize flux using baseline
+    baseline_flux = flux[baseline_mask]
+    baseline_median = float(np.median(baseline_flux))
+    normalized_flux = flux / baseline_median
 
-    # For U-shape: bottom should be at max depth (flat)
-    # For V-shape: bottom similar to ingress/egress
-    depth_bottom = 1.0 - bottom_median / baseline_median
+    # Select in-transit data for fitting
+    in_transit_phase = phase[in_transit_mask]
+    in_transit_flux = normalized_flux[in_transit_mask]
 
-    # Calculate average depth during ingress/egress
-    edge_flux = (
+    # Fit trapezoid model using grid search
+    tflat_ttotal_ratio, depth, _ = _fit_trapezoid_grid_search(
+        in_transit_phase, in_transit_flux, t_total_phase
+    )
+
+    # Bootstrap uncertainty estimation
+    rng = np.random.default_rng(42)
+    bootstrap_ratios: list[float] = []
+
+    for _ in range(config.n_bootstrap):
+        # Resample in-transit points with replacement
+        indices = rng.choice(len(in_transit_phase), size=len(in_transit_phase), replace=True)
+        boot_phase = in_transit_phase[indices]
+        boot_flux = in_transit_flux[indices]
+
+        # Fit on bootstrap sample
+        boot_ratio, _, _ = _fit_trapezoid_grid_search(boot_phase, boot_flux, t_total_phase)
+        bootstrap_ratios.append(boot_ratio)
+
+    # Compute uncertainty from bootstrap distribution
+    if len(bootstrap_ratios) > 10:
+        lower_pct = (1 - config.bootstrap_ci) / 2 * 100
+        upper_pct = (1 + config.bootstrap_ci) / 2 * 100
+        lower_bound = float(np.percentile(bootstrap_ratios, lower_pct))
+        upper_bound = float(np.percentile(bootstrap_ratios, upper_pct))
+        tflat_ttotal_ratio_err = (upper_bound - lower_bound) / 2
+    else:
+        tflat_ttotal_ratio_err = 0.2  # Default uncertainty
+
+    # Convert to physical units
+    t_flat_hours = tflat_ttotal_ratio * duration_hours
+    t_total_hours = duration_hours
+
+    # Compute depth in ppm
+    depth_ppm = depth * 1e6
+
+    # Classification (3-tier)
+    if tflat_ttotal_ratio > config.grazing_threshold:
+        classification = "U_SHAPE"
+    elif tflat_ttotal_ratio > config.tflat_ttotal_threshold:
+        classification = "GRAZING"
+    else:
+        classification = "V_SHAPE"
+
+    # Decision rule
+    if classification == "U_SHAPE":
+        passed = True
+    elif classification == "GRAZING":
+        # Grazing planets are OK if depth is small enough
+        passed = depth_ppm < config.grazing_depth_ppm
+        if not passed:
+            warnings.append(
+                f"Grazing geometry with deep transit ({depth_ppm:.0f} ppm >= "
+                f"{config.grazing_depth_ppm:.0f} ppm threshold)"
+            )
+    else:  # V_SHAPE
+        passed = False
+
+    # Check if near threshold
+    near_threshold = abs(tflat_ttotal_ratio - config.tflat_ttotal_threshold) < 0.1
+
+    # Compute confidence
+    confidence = _compute_v_shape_confidence(
+        n_in_transit, transit_coverage, len(warnings) > 0, near_threshold
+    )
+
+    # Compute legacy metrics for backward compatibility
+    # Legacy regions (keeping the original buggy definitions for backward compat in output only)
+    half_dur = duration_days / period / 2
+    ingress_mask = (phase > -half_dur) & (phase < -half_dur / 2)
+    bottom_mask = (phase > -half_dur / 4) & (phase < half_dur / 4)
+    egress_mask = (phase > half_dur / 2) & (phase < half_dur)
+
+    bottom_flux = flux[bottom_mask]
+    ingress_flux = flux[ingress_mask]
+    egress_flux = flux[egress_mask]
+
+    # Legacy depth calculations
+    if len(bottom_flux) > 0:
+        depth_bottom = 1.0 - float(np.median(bottom_flux)) / baseline_median
+    else:
+        depth_bottom = depth
+
+    edge_flux_arr = (
         np.concatenate([ingress_flux, egress_flux])
         if len(ingress_flux) > 0 or len(egress_flux) > 0
         else np.array([])
     )
-    if len(edge_flux) > 3:
-        depth_edge = 1.0 - np.median(edge_flux) / baseline_median
-    else:
-        depth_edge = depth_bottom * 0.5  # Assume half depth at edges
 
-    # V-shape ratio: how much deeper is bottom vs edges
-    # U-shape: ratio >> 1 (bottom much deeper)
-    # V-shape: ratio ~ 1 (bottom similar to edges)
+    if len(edge_flux_arr) > 3:
+        depth_edge = 1.0 - float(np.median(edge_flux_arr)) / baseline_median
+    else:
+        depth_edge = depth_bottom * 0.5
+
+    # Legacy shape_ratio (kept for backward compatibility)
     shape_ratio = depth_bottom / depth_edge if depth_edge > 0 and depth_bottom > 0 else 2.0
 
-    # Pass if shape_ratio > 1.3 (U-shaped, bottom is significantly deeper)
-    passed = shape_ratio > 1.3
-
-    confidence = 0.7 if len(bottom_flux) > 20 else 0.4 + 0.015 * len(bottom_flux)
+    # Legacy shape label based on new classification
+    legacy_shape = "V-shaped" if classification == "V_SHAPE" else "U-shaped"
 
     return VetterCheckResult(
         id="V05",
         name="v_shape",
         passed=passed,
-        confidence=round(min(confidence, 0.9), 3),
+        confidence=confidence,
         details={
+            # Legacy keys (preserved for backward compatibility)
             "depth_bottom": round(depth_bottom, 6),
             "depth_edge": round(depth_edge, 6),
             "shape_ratio": round(shape_ratio, 3),
-            "shape": "U-shaped" if passed else "V-shaped",
+            "shape": legacy_shape,
             "n_bottom_points": len(bottom_flux),
-            "n_edge_points": len(edge_flux),
+            "n_edge_points": len(edge_flux_arr),
+            # New keys
+            "t_flat_hours": round(t_flat_hours, 4),
+            "t_total_hours": round(t_total_hours, 4),
+            "tflat_ttotal_ratio": round(tflat_ttotal_ratio, 4),
+            "tflat_ttotal_ratio_err": round(tflat_ttotal_ratio_err, 4),
+            "shape_metric_uncertainty": round(tflat_ttotal_ratio_err, 4),
+            "classification": classification,
+            "depth_ppm": round(depth_ppm, 1),
+            "transit_coverage": round(transit_coverage, 3),
+            "n_in_transit": n_in_transit,
+            "n_baseline": n_baseline,
+            "warnings": warnings,
+            "method": "trapezoid_grid_search",
         },
     )
 

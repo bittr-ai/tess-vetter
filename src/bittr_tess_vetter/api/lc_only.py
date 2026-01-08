@@ -27,6 +27,7 @@ from bittr_tess_vetter.api.references import (
     COUGHLIN_LOPEZ_MORALES_2012,
     FRESSIN_2013,
     GUERRERO_2021,
+    PONT_2006,
     PRSA_2011,
     SEAGER_MALLEN_ORNELAS_2003,
     THOMPSON_2018,
@@ -89,7 +90,10 @@ def _convert_result(result: object) -> CheckResult:
 @cites(
     cite(COUGHLIN_2016, "§4.2 odd/even depth test"),
     cite(THOMPSON_2018, "§3.3.1 DR25 odd/even comparison"),
-    cite(PRSA_2011, "§3 EB morphology classification"),
+    cite(
+        PONT_2006,
+        "§2–3 time-binning correlated noise; used here as OOT red-noise inflation heuristic",
+    ),
 )
 def odd_even_depth(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     """V01: Compare depth of odd vs even transits.
@@ -111,8 +115,8 @@ def odd_even_depth(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
             Section 4.2: Odd/even depth test in Kepler Robovetter
         [2] Thompson et al. 2018, ApJS 235, 38 (2018ApJS..235...38T)
             Section 3.3.1: DR25 odd/even transit depth comparison
-        [3] Prsa et al. 2011, AJ 141, 83 (2011AJ....141...83P)
-            Section 3: EB morphology classification
+        [3] Pont et al. 2006, MNRAS 373, 231 (2006MNRAS.373..231P)
+            Sections 2-3: Time-correlated (red) noise; binning-based inflation
     """
     internal_lc = lc.to_internal()
     result = _check_odd_even_depth(

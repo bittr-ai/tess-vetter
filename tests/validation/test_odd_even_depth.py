@@ -198,9 +198,7 @@ class TestOddEvenDepth:
             f"even_ppm={result.details['depth_even_ppm']}"
         )
         # delta_sigma should be high given the large depth difference
-        assert result.details["delta_sigma"] >= 3.0, (
-            f"delta_sigma={result.details['delta_sigma']}"
-        )
+        assert result.details["delta_sigma"] >= 3.0, f"delta_sigma={result.details['delta_sigma']}"
         # Should fail the dual threshold test
         assert result.passed is False, (
             f"Expected FAIL but got PASS: delta_sigma={result.details['delta_sigma']}, "
@@ -438,6 +436,114 @@ class TestOddEvenDepth:
         assert result.id == "V01"
         assert result.name == "odd_even_depth"
 
+    def test_suspicious_flag_true_for_eb_like_signal(self, make_synthetic_lc) -> None:
+        """Suspicious flag should be True for clear EB-like depth difference."""
+        # Clear EB case: odd depth is 20% of even depth
+        lc, t0 = make_synthetic_lc(
+            n_transits=20,
+            depth_ppm=10000,
+            odd_even_ratio=0.2,
+            noise_ppm=50,
+        )
+        result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
+
+        # Should fail AND be suspicious
+        assert result.passed is False
+        assert "suspicious" in result.details
+        assert bool(result.details["suspicious"]) is True
+
+    def test_suspicious_flag_false_for_planet_like_signal(self, make_synthetic_lc) -> None:
+        """Suspicious flag should be False for equal depths (planet-like)."""
+        lc, t0 = make_synthetic_lc(
+            n_transits=20,
+            depth_ppm=2000,
+            odd_even_ratio=1.0,
+            noise_ppm=50,
+        )
+        result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
+
+        # Should pass AND not be suspicious
+        assert result.passed is True
+        assert "suspicious" in result.details
+        assert bool(result.details["suspicious"]) is False
+
+    def test_suspicious_flag_false_for_insufficient_data(self, make_synthetic_lc) -> None:
+        """Suspicious flag should be False when insufficient data."""
+        # Single transit only
+        lc, t0 = make_synthetic_lc(
+            n_transits=1,
+            depth_ppm=1000,
+            odd_even_ratio=1.0,
+        )
+        result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
+
+        # Should pass with low confidence, suspicious = False
+        assert result.passed is True
+        assert result.confidence <= 0.3
+        assert "suspicious" in result.details
+        assert bool(result.details["suspicious"]) is False
+
+    def test_short_period_baseline_cap_no_nans(self, make_synthetic_lc) -> None:
+        """Short-period candidates should not produce NaN/Inf with baseline cap."""
+        # Short period where baseline_window_mult * duration could exceed period/2
+        # Period = 0.5 days, duration = 2 hours = 0.0833 days
+        # Without cap: baseline_half_window = 6.0 * 0.0833 = 0.5 days = period!
+        # With cap: min(0.5, 0.45 * 0.5) = min(0.5, 0.225) = 0.225 days
+        period = 0.5
+        duration_hours = 2.0
+        duration_days = duration_hours / 24.0
+
+        # Verify the cap would be triggered with default config
+        config = OddEvenConfig()
+        uncapped = config.baseline_window_mult * duration_days
+        capped = config.baseline_window_max_fraction_of_period * period
+        assert uncapped > capped, (
+            f"Test parameters should trigger cap: uncapped={uncapped:.3f} > capped={capped:.3f}"
+        )
+
+        lc, t0 = make_synthetic_lc(
+            n_transits=20,
+            depth_ppm=2000,
+            period=period,
+            duration_hours=duration_hours,
+            odd_even_ratio=1.0,
+            noise_ppm=100,
+        )
+        result = check_odd_even_depth(lc, period=period, t0=t0, duration_hours=duration_hours)
+
+        # Should not produce NaN/Inf
+        assert not np.isnan(result.details.get("delta_sigma", 0))
+        assert not np.isinf(result.details.get("delta_sigma", 0))
+        assert not np.isnan(result.details.get("rel_diff", 0))
+        assert not np.isinf(result.details.get("rel_diff", 0))
+        # Should still produce a valid result with good data
+        assert result.passed in (True, False)
+        assert 0.0 <= result.confidence <= 1.0
+        # Should have processed epochs (not all skipped due to sparse data)
+        assert result.details.get("n_odd_transits", 0) > 0
+        assert result.details.get("n_even_transits", 0) > 0
+
+    def test_global_oot_fallback_warning(self, make_synthetic_lc) -> None:
+        """Frequent global OOT fallback should emit warning."""
+        # Create a scenario where local OOT is sparse
+        # Very short period with long transits relative to period
+        lc, t0 = make_synthetic_lc(
+            n_transits=10,
+            depth_ppm=2000,
+            period=0.3,  # Very short period
+            duration_hours=3.0,  # Long transit relative to period
+            odd_even_ratio=1.0,
+            noise_ppm=100,
+            cadence_minutes=10.0,  # Coarser cadence to reduce OOT points
+        )
+        result = check_odd_even_depth(lc, period=0.3, t0=t0, duration_hours=3.0)
+
+        # Check if we got the fallback warning (may or may not trigger depending on data)
+        # At minimum, the result should be valid
+        assert result.passed in (True, False)
+        # This test is informational - we just verify no crash and valid output
+        assert "warnings" in result.details  # warnings key should always exist
+
 
 class TestOddEvenConfig:
     """Tests for OddEvenConfig dataclass."""
@@ -448,10 +554,13 @@ class TestOddEvenConfig:
 
         assert config.sigma_threshold == 3.0
         assert config.rel_diff_threshold == 0.5
+        assert config.suspicious_sigma_threshold == 2.5
+        assert config.suspicious_rel_diff_threshold == 0.1
         assert config.min_transits_per_parity == 2
         assert config.min_points_in_transit_per_epoch == 5
         assert config.min_points_in_transit_per_parity == 20
         assert config.baseline_window_mult == 6.0
+        assert config.baseline_window_max_fraction_of_period == 0.45
         assert config.use_red_noise_inflation is True
 
     def test_custom_values(self) -> None:

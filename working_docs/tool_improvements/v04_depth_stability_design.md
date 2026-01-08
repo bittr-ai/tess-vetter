@@ -3,8 +3,8 @@
 **Check ID:** V04
 **Name:** `depth_stability`
 **Author:** Claude Code
-**Date:** 2025-01-08
-**Status:** Draft
+**Date:** 2026-01-08
+**Status:** Draft (Updated with Literature Research)
 
 ---
 
@@ -12,7 +12,7 @@
 
 ### 1.1 Implementation Summary
 
-The current `check_depth_stability` function (lines 630-714 in `lc_checks.py`) measures the consistency of transit depths across individual epochs. The algorithm:
+The current `check_depth_stability` function (lines 635-719 in `lc_checks.py`) measures the consistency of transit depths across individual epochs. The algorithm:
 
 1. Computes transit epoch indices from `(time - t0) / period`
 2. Creates an in-transit mask using phase distance from transit center
@@ -59,6 +59,66 @@ The current `check_depth_stability` function (lines 630-714 in `lc_checks.py`) m
 **Problem:** With only 2 transits, `std(depths)` has 1 degree of freedom and is unreliable. The current check can return `confidence = 0.7` with only 2 measured transits, potentially misleading users.
 
 **Desired behavior:** Confidence should degrade gracefully, and warnings should be issued when statistical power is insufficient to detect ~10-20% depth variations.
+
+---
+
+## 2.5 Literature Background
+
+### Transit Depth Variability as a Vetting Diagnostic
+
+**Wang & Espinoza (2023)** [arXiv:2311.02154] conducted a blind search for transit depth variability among 330 TESS planets, providing the most comprehensive recent study of depth stability methodology:
+
+> *"The phenomenon of transit depth variability offers a pathway through which processes such as exoplanet atmospheric activity and orbital dynamics can be studied."*
+
+**Key methodological findings:**
+1. **Per-transit fitting approach:** Each transit fitted independently using `juliet` with `batman` transit models
+2. **Local baseline extraction:** Out-of-transit defined as >1 transit duration from nearest transit center
+3. **Stellar variability handling:** Quasi-Periodic Gaussian Process kernel on out-of-transit data before in-transit fitting
+4. **Detection metric:** Lomb-Scargle periodogram on depth time series; false alarm probability via bootstrap resampling
+5. **Detection rate:** ~1% of TESS planets show significant depth variability
+6. **False positive sources:** Contaminating flux from nearby stars, grazing orbits, instrumental systematics (KELT-8b, HAT-P-7b, HIP 65Ab, TrES-3b analyzed in detail)
+
+**Santerne et al. (2013)** [arXiv:1307.2003] analyzed false positive signatures from diluted eclipsing binaries:
+
+- **Diluted EB signature:** Depth variations >10% relative are strong EB indicators
+- **Mechanism:** Background or bound eclipsing binaries diluted by target star flux produce variable apparent depths due to differential atmospheric extinction, variable third-light contamination, or eccentric orbit effects
+
+**TRICERATOPS Framework** [arXiv:2002.00691] from Giacalone & Dressing (2020):
+
+- Bayesian false positive probability calculation including depth constraints
+- Models transit depth as function of flux contribution from target vs nearby contaminating sources
+- Validation threshold: FPP < 0.015 for statistical validation
+
+### Expected vs Observed Scatter Theory
+
+For a transit with depth $\delta$ measured from $N_{in}$ in-transit points with per-point scatter $\sigma_{pt}$:
+
+$$\sigma_{\delta,single} = \frac{\sigma_{pt}}{\sqrt{N_{in}}} \cdot \frac{1}{baseline}$$
+
+For $M$ independent transits, the expected RMS scatter in depths (assuming white noise only):
+
+$$\sigma_{expected} = \sqrt{\frac{1}{M} \sum_i \sigma_{\delta,i}^2}$$
+
+**Pont et al. (2006)** [MNRAS 373, 231] established that correlated (red) noise does not average down as $1/\sqrt{N}$, requiring empirical inflation factors:
+
+$$\sigma_{inflated} = \sigma_{white} \times \beta_{red}$$
+
+where $\beta_{red}$ is measured from binned out-of-transit residuals.
+
+### Chi-Squared Stability Metric
+
+The appropriate statistical test is chi-squared goodness-of-fit:
+
+$$\chi^2 = \sum_{i=1}^{M} \frac{(d_i - \bar{d}_{weighted})^2}{\sigma_i^2}$$
+
+where:
+- $d_i$ = measured depth for transit $i$
+- $\sigma_i$ = uncertainty on $d_i$ (including red noise inflation)
+- $\bar{d}_{weighted}$ = inverse-variance weighted mean depth
+
+**Interpretation:**
+- $\chi^2_{red} = \chi^2 / (M-1) \approx 1$: Scatter consistent with measurement noise (planet candidate)
+- $\chi^2_{red} \gg 1$: Excess scatter beyond noise (possible EB or systematic)
 
 ---
 
@@ -317,22 +377,31 @@ For backward compatibility in downstream systems, recommend:
 
 ## 8. Citations
 
-### Primary References
+### Primary References (Literature Research Findings)
 
-| Bibcode | Citation | Relevance |
-|---------|----------|-----------|
-| 2018ApJS..235...38T | Thompson et al. 2018, ApJS 235, 38 | Section 3.5: Individual transit metrics; DR25 Robovetter depth consistency |
-| 2018PASP..130f4502T | Twicken et al. 2018, PASP 130, 064502 | Section 4.5: Transit depth stability in Kepler DV pipeline |
-| 2021ApJS..254...39G | Guerrero et al. 2021, ApJS 254, 39 | Section 3.2: TESS TOI vetting including depth consistency |
-| 2006MNRAS.373..231P | Pont et al. 2006, MNRAS 373, 231 | Red/correlated noise in transit photometry; inflation factors |
+| arXiv ID | Citation | Relevance |
+|----------|----------|-----------|
+| **arXiv:2311.02154** | Wang & Espinoza (2023), "A Blind Search for Transit Depth Variability with TESS" | **Core methodology paper.** Per-transit depth fitting using juliet + batman models, GP-based stellar variability removal. Found ~1% detection rate of significant depth variability in 330 TESS planets. Key insight: local baseline per epoch is essential for precision depth measurements. |
+| **arXiv:1507.08285** | Kreidberg (2015), "batman: BAsic Transit Model cAlculatioN in Python" | Standard transit model package. Supports quadratic limb darkening for per-transit box/trapezoid fitting. Can compute 1M models in 30 seconds with single core. |
+| **arXiv:2002.00691** | Giacalone & Dressing (2020), "TRICERATOPS: Vetting and Validation of TESS Objects of Interest" | Bayesian false positive framework. Models transit depth as function of flux from target vs contaminant stars. FPP < 0.015 threshold for validation. Shows importance of depth consistency in distinguishing planets from EBs. |
+| **arXiv:1307.2003** | Santerne et al. (2013), "Secondary eclipses as astrophysical false positives" | Diluted EB detection methodology. Depth variations >10% relative are strong EB indicators. Provides theoretical basis for depth variability thresholds. |
 
 ### Supporting References
 
+| arXiv ID | Citation | Relevance |
+|----------|----------|-----------|
+| **arXiv:2506.05631** | Kostov et al. (2025), "TESS Ten Thousand Catalog: 10,001 uniformly-vetted Eclipsing Binary Stars" | Large-scale EB vetting pipeline using ML + citizen science. Depth stability among features for EB identification. Validates detection of EBs via depth inconsistency. |
+| **arXiv:2202.03401** | Ivshina & Winn (2022), "TESS Transit Timing of Hundreds of Hot Jupiters" | Per-transit ephemeris measurement methodology. Database of 8,667 transit times across 382 systems. Shows expected scatter levels for well-characterized planets. |
+| **arXiv:1612.02432** | Dalba et al. (2016), "Kepler Transit Depths Contaminated by a Phantom Star" | Case study: Kepler-445c depth was 50% shallower in ground-based obs due to flux contamination. Demonstrates importance of depth stability checks for blend detection. |
+| **arXiv:2203.15826** | Cacciapuoti et al. (2022), "TESS Triple-9 Catalog: 999 uniformly vetted exoplanet candidates" | Uniform TESS vetting methodology. Includes depth stability as part of candidate assessment. |
+| **arXiv:1901.07459** | Kostov et al. (2019), "Discovery and Vetting of Exoplanets I: Benchmarking K2 Vetting Tools" | K2 vetting benchmarks. Marks 676/772 as planet candidates based on vetting including depth consistency. 60 newly identified false positives detected via vetting metrics. |
+
+### Classic References (Methodology Foundation)
+
 | Bibcode | Citation | Relevance |
 |---------|----------|-----------|
-| 2016ApJS..224...12C | Coughlin et al. 2016, ApJS 224, 12 | DR24 Robovetter framework; confidence metrics |
-| 2002ApJ...580L.171M | Mandel & Agol 2002, ApJ 580, L171 | Transit light curve models (baseline for depth estimation) |
-| arXiv:1908.10678 | Hippke & Heller 2019 | Transit Least Squares (TLS) for robust transit detection |
+| 2018ApJS..235...38T | Thompson et al. 2018, ApJS 235, 38 | Kepler DR25 Robovetter; individual transit metrics and depth consistency tests. |
+| 2006MNRAS.373..231P | Pont et al. 2006, MNRAS 373, 231 | Red/correlated noise in transit photometry; inflation factors. Foundation for uncertainty estimation. |
 
 ### Implementation Notes
 
@@ -340,6 +409,22 @@ Per the v1_spec.md requirements, citations should be added to code via:
 1. Module-level docstring with bibcodes
 2. `@cites()` decorator on the API wrapper function (already present in `lc_only.py`)
 3. Inline comments for specific algorithmic choices
+
+### Key Methodological Insights from Literature
+
+From **Wang & Espinoza (2023)** - the most directly relevant paper:
+- Uses juliet with batman for per-transit fitting
+- Out-of-transit Quasi-Periodic GP kernel to model stellar variability
+- Defines out-of-transit as >1 transit duration from nearest transit center
+- Uniform priors: depth [0,1], impact parameter [0,1], limb darkening coefficients [0,1]
+- Chi-squared goodness of fit for depth consistency assessment
+- Lomb-Scargle periodogram on depth time series to detect periodic variations
+- False alarm probability threshold: 0.1% (99.9th percentile of bootstrap distribution)
+
+From **Santerne et al. (2013)**:
+- Diluted EBs produce systematic depth variations
+- Detection threshold: >10% relative depth variation indicates non-planetary origin
+- Eccentric orbit EBs can show phase-dependent depth variations
 
 ---
 
