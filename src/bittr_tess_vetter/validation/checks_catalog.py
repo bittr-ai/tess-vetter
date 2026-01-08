@@ -15,7 +15,7 @@ from __future__ import annotations
 import contextlib
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import requests
 
@@ -103,6 +103,7 @@ class NearbyEBCheck(VetterCheck):
         config: CheckConfig | None = None,
         search_radius_arcsec: float = 42.0,
         period_tolerance: float = 0.1,
+        http_get: Callable[..., Any] | None = None,
     ) -> None:
         """Initialize NearbyEBCheck.
 
@@ -114,6 +115,7 @@ class NearbyEBCheck(VetterCheck):
         super().__init__(config)
         self.search_radius_arcsec = search_radius_arcsec
         self.period_tolerance = period_tolerance
+        self._http_get = http_get or requests.get
 
     @classmethod
     def _default_config(cls) -> CheckConfig:
@@ -276,7 +278,7 @@ class NearbyEBCheck(VetterCheck):
             "-out.max": "100",
         }
 
-        response = requests.get(
+        response = self._http_get(
             VIZIER_TAP_URL,
             params=params,
             timeout=REQUEST_TIMEOUT,
@@ -357,6 +359,14 @@ class ExoFOPDispositionCheck(VetterCheck):
 
     id: ClassVar[str] = "V07"
     name: ClassVar[str] = "exofop_disposition"
+
+    def __init__(
+        self,
+        config: CheckConfig | None = None,
+        http_get: Callable[..., Any] | None = None,
+    ) -> None:
+        super().__init__(config)
+        self._http_get = http_get or requests.get
 
     @classmethod
     def _default_config(cls) -> CheckConfig:
@@ -502,7 +512,7 @@ class ExoFOPDispositionCheck(VetterCheck):
             "output": "pipe",
         }
 
-        response = requests.get(
+        response = self._http_get(
             EXOFOP_TOI_URL,
             params=params,
             timeout=REQUEST_TIMEOUT,

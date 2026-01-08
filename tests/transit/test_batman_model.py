@@ -453,6 +453,10 @@ class TestFitTransitModelMCMC:
             from bittr_tess_vetter.transit import fit_transit_model
         except ImportError:
             pytest.skip("batman-package and emcee not installed")
+        try:
+            import arviz  # noqa: F401
+        except ImportError:
+            pytest.skip("arviz not installed")
 
         time = synthetic_transit_lc["time"]
         flux = synthetic_transit_lc["flux"]
@@ -496,6 +500,10 @@ class TestFitTransitModelMCMC:
             from bittr_tess_vetter.transit import fit_transit_model
         except ImportError:
             pytest.skip("batman-package, emcee, and arviz not installed")
+        try:
+            import arviz  # noqa: F401
+        except ImportError:
+            pytest.skip("arviz not installed")
 
         time = synthetic_transit_lc["time"]
         flux = synthetic_transit_lc["flux"]

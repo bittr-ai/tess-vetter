@@ -31,7 +31,7 @@ import time
 import contextlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 from urllib.request import Request, urlopen
 
 import numpy as np
@@ -490,6 +490,10 @@ def calculate_fpp_handler(
     stellar_mass: float | None = None,
     tmag: float | None = None,
     timeout_seconds: float | None = None,
+    *,
+    load_cached_target: Callable[..., Any] | None = None,
+    save_cached_target: Callable[..., Any] | None = None,
+    prefetch_trilegal_csv: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     """Execute TRICERATOPS FPP calculation.
 
@@ -574,7 +578,11 @@ def calculate_fpp_handler(
 
     try:
         # Prefer a cached TRICERATOPS target object to avoid repeating slow upstream calls.
-        target = _load_cached_triceratops_target(
+        _load = load_cached_target or _load_cached_triceratops_target
+        _save = save_cached_target or _save_cached_triceratops_target
+        _prefetch = prefetch_trilegal_csv or _prefetch_trilegal_csv
+
+        target = _load(
             cache_dir=cache.cache_dir, tic_id=tic_id, sectors_used=sectors_used
         )
         if target is None:
@@ -588,7 +596,7 @@ def calculate_fpp_handler(
                     operation=f"TRICERATOPS init (Gaia query) for TIC {tic_id}",
                 ):
                     target = tr.target(ID=tic_id, sectors=sectors_used, mission="TESS")
-                _save_cached_triceratops_target(
+                _save(
                     cache_dir=cache.cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target
                 )
             except NetworkTimeoutError:
@@ -598,7 +606,7 @@ def calculate_fpp_handler(
                     operation=f"TRICERATOPS init (Gaia query) retry for TIC {tic_id}",
                 ):
                     target = tr.target(ID=tic_id, sectors=sectors_used, mission="TESS")
-                _save_cached_triceratops_target(
+                _save(
                     cache_dir=cache.cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target
                 )
     except NetworkTimeoutError as e:
@@ -631,7 +639,7 @@ def calculate_fpp_handler(
                     float(prefetch_timeout),
                     operation=f"TRILEGAL prefetch for TIC {tic_id}",
                 ):
-                    trilegal_csv = _prefetch_trilegal_csv(
+                    trilegal_csv = _prefetch(
                         cache_dir=cache.cache_dir,
                         tic_id=tic_id,
                         trilegal_url=trilegal_url,

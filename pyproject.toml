@@ -59,3 +59,9 @@ warn_unused_configs = true
 [[tool.mypy.overrides]]
 module = ["numpy", "numpy.*"]
 ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "ruff>=0.14.10",
+]

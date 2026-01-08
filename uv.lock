@@ -72,6 +72,12 @@ wotan = [
     { name = "wotan" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "astropy", specifier = ">=5.0.0" },
@@ -87,6 +93,12 @@ requires-dist = [
     { name = "wotan", marker = "extra == 'wotan'", specifier = ">=1.1" },
 ]
 provides-extras = ["wotan", "dev", "all"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.0.2" },
+    { name = "ruff", specifier = ">=0.14.10" },
+]
 
 [[package]]
 name = "certifi"
