@@ -135,7 +135,7 @@ VetterResult = VetterCheckResult
 
 def make_result(
     check_id: str,
-    passed: bool,
+    passed: bool | None,
     confidence: float,
     details: dict[str, Any] | None = None,
 ) -> VetterResult:
@@ -143,7 +143,7 @@ def make_result(
 
     Args:
         check_id: Check identifier (V01-V13)
-        passed: Whether the check passed
+        passed: Whether the check passed, or None for metrics-only mode
         confidence: Confidence in the result (0-1)
         details: Check-specific details
 
@@ -156,6 +156,14 @@ def make_result(
             passed=True,
             confidence=0.95,
             details={"odd_depth": 0.0012, "even_depth": 0.0011}
+        )
+
+        # Metrics-only mode
+        result = make_result(
+            "V08",
+            passed=None,  # Policy decision deferred to caller
+            confidence=0.85,
+            details={"centroid_shift_pixels": 0.5, "_metrics_only": True}
         )
     """
     name = CHECK_NAMES.get(check_id, "unknown")
@@ -510,13 +518,22 @@ def compute_verdict(
     catalog_checks = catalog_checks or []
 
     # Count failures
-    lc_failures = sum(1 for c in lc_checks if not c.passed)
-    cat_failures = sum(1 for c in catalog_checks if not c.passed)
+    #
+    # passed semantics:
+    # - True: explicit pass
+    # - False: explicit fail
+    # - None: metrics-only / unknown (policy deferred to downstream guardrails)
+    #
+    # IMPORTANT: Unknown is not a failure; treat it separately so the aggregation
+    # does not reject candidates just because a check is operating in metrics-only mode.
+    lc_failures = sum(1 for c in lc_checks if c.passed is False)
+    cat_failures = sum(1 for c in catalog_checks if c.passed is False)
+    unknown_checks = [c for c in (lc_checks + catalog_checks) if c.passed is None]
 
     # Check for low-confidence passes
     all_checks = lc_checks + catalog_checks
     low_confidence_passes = [
-        c for c in all_checks if c.passed and c.confidence < cfg.low_confidence_threshold
+        c for c in all_checks if c.passed is True and c.confidence < cfg.low_confidence_threshold
     ]
 
     # REJECT conditions
@@ -534,6 +551,11 @@ def compute_verdict(
         return Verdict.WARN
 
     if cfg.warn_on_low_confidence and low_confidence_passes:
+        return Verdict.WARN
+
+    # Metrics-only mode: if any checks are unknown, return WARN to signal that
+    # downstream guardrails (e.g., astro-arc-tess) must make the policy decision.
+    if unknown_checks:
         return Verdict.WARN
 
     # PASS
@@ -583,9 +605,11 @@ def generate_summary(
     Returns:
         Summary string describing the validation outcome
     """
-    n_passed = sum(1 for c in checks if c.passed)
-    n_failed = len(checks) - n_passed
-    failed_names = [c.name for c in checks if not c.passed]
+    n_passed = sum(1 for c in checks if c.passed is True)
+    n_failed = sum(1 for c in checks if c.passed is False)
+    n_unknown = sum(1 for c in checks if c.passed is None)
+    failed_names = [c.name for c in checks if c.passed is False]
+    unknown_names = [c.name for c in checks if c.passed is None]
 
     if verdict == Verdict.PASS:
         return f"Passed all {len(checks)} vetting checks. Candidate is a likely planet."
@@ -596,6 +620,12 @@ def generate_summary(
                 f"Passed {n_passed}/{len(checks)} checks. "
                 f"Marginal on: {', '.join(failed_names)}. "
                 "Requires further investigation."
+            )
+        if unknown_names:
+            return (
+                f"Passed {n_passed}/{len(checks)} checks with {n_unknown} metrics-only check(s). "
+                f"Policy decision deferred for: {', '.join(unknown_names)}. "
+                "Requires downstream guardrails / further investigation."
             )
         # Warn due to low confidence
         return "Passed all checks but with low confidence. Requires further investigation."

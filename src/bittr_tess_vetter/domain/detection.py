@@ -98,6 +98,13 @@ class VetterCheckResult(FrozenModel):
     Check IDs:
     - V01-V10: Canonical vetting checks (see lc_checks.py)
     - PF01-PF99: Pre-filter checks (optional, run before V01-V10)
+
+    Passed field:
+    - True: Check passed (candidate is consistent with planet)
+    - False: Check failed (candidate shows signs of false positive)
+    - None: Metrics-only mode (policy decision deferred to caller)
+      When passed=None, the check returns raw metrics and the caller
+      (e.g., astro-arc-tess guardrails) makes the policy decision.
     """
 
     id: str = Field(
@@ -105,7 +112,7 @@ class VetterCheckResult(FrozenModel):
         description="Check ID (V01-V10 for canonical, PF01-PF99 for pre-filters)",
     )
     name: str = Field(description="Human-readable check name")
-    passed: bool
+    passed: bool | None = Field(description="Pass/fail status. None indicates metrics-only mode.")
     confidence: float = Field(ge=0, le=1, description="Confidence in result")
     details: dict[str, Any] = Field(default_factory=dict)
 
@@ -129,17 +136,27 @@ class ValidationResult(FrozenModel):
     @property
     def n_passed(self) -> int:
         """Number of checks that passed."""
-        return sum(1 for c in self.checks if c.passed)
+        return sum(1 for c in self.checks if c.passed is True)
 
     @property
     def n_failed(self) -> int:
         """Number of checks that failed."""
-        return sum(1 for c in self.checks if not c.passed)
+        return sum(1 for c in self.checks if c.passed is False)
 
     @property
     def failed_checks(self) -> list[str]:
         """IDs of failed checks."""
-        return [c.id for c in self.checks if not c.passed]
+        return [c.id for c in self.checks if c.passed is False]
+
+    @property
+    def n_unknown(self) -> int:
+        """Number of checks that returned metrics-only results (passed=None)."""
+        return sum(1 for c in self.checks if c.passed is None)
+
+    @property
+    def unknown_checks(self) -> list[str]:
+        """IDs of checks that returned metrics-only results (passed=None)."""
+        return [c.id for c in self.checks if c.passed is None]
 
 
 class Detection(FrozenModel):
@@ -185,7 +202,7 @@ class PeriodogramResult(FrozenModel):
     period_range: tuple[float, float]
 
     @model_validator(mode="after")
-    def _validate_n_periods_searched(self) -> "PeriodogramResult":
+    def _validate_n_periods_searched(self) -> PeriodogramResult:
         # For BLS/LS we always search an explicit period grid, so 0 is nonsensical.
         # TLS can generate its own adaptive grid and may not expose the effective count.
         if self.method != "tls" and self.n_periods_searched < 1:
