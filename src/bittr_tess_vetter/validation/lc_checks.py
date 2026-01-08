@@ -36,13 +36,17 @@ class OddEvenConfig:
     """Configuration for V01 odd/even depth check.
 
     Attributes:
-        sigma_threshold: Significance threshold for delta_sigma to FAIL (default 3.0)
-        rel_diff_threshold: Relative difference threshold to FAIL (default 0.5 = 50%)
-        suspicious_sigma_threshold: Significance threshold to flag as SUSPICIOUS (default 3.0)
-        suspicious_rel_diff_threshold: Relative diff threshold to flag SUSPICIOUS (default 0.15 = 15%)
+        sigma_threshold: [DEPRECATED] Significance threshold for delta_sigma to FAIL (default 3.0)
+            Threshold interpretation moved to astro-arc-tess guardrails.
+        rel_diff_threshold: [DEPRECATED] Relative difference threshold to FAIL (default 0.5 = 50%)
+            Threshold interpretation moved to astro-arc-tess guardrails.
+        suspicious_sigma_threshold: [DEPRECATED] Significance threshold to flag as SUSPICIOUS (default 3.0)
+            Threshold interpretation moved to astro-arc-tess guardrails.
+        suspicious_rel_diff_threshold: [DEPRECATED] Relative diff threshold to flag SUSPICIOUS (default 0.15 = 15%)
             Note: Uses AND logic (both criteria required). Thresholds empirically derived from
             1,437 labeled TOIs achieving 9% FPR on planets, 52% TPR on FPs.
             See working_docs/bittr_tess_vetter/tool_optimization/v01_threshold_analysis.md
+            Threshold interpretation moved to astro-arc-tess guardrails.
         min_transits_per_parity: Minimum transits needed per odd/even group
         min_points_in_transit_per_epoch: Minimum in-transit points per epoch
         min_points_in_transit_per_parity: Minimum total in-transit points per parity
@@ -50,6 +54,8 @@ class OddEvenConfig:
         baseline_window_max_fraction_of_period: Cap baseline window to this fraction of period
             to avoid spanning adjacent transits for short-period candidates (default 0.45)
         use_red_noise_inflation: Whether to apply red noise inflation to uncertainties
+        legacy_mode: If True, compute passed as before (for existing consumers).
+            If False (default), return passed=None with raw metrics only.
     """
 
     sigma_threshold: float = 3.0
@@ -62,6 +68,7 @@ class OddEvenConfig:
     baseline_window_mult: float = 6.0
     baseline_window_max_fraction_of_period: float = 0.45
     use_red_noise_inflation: bool = True
+    legacy_mode: bool = False
 
 
 @dataclass
@@ -72,16 +79,22 @@ class VShapeConfig:
     duration), the standard shape discriminant in the literature.
 
     Attributes:
-        tflat_ttotal_threshold: Below this, flag as V-shaped (default 0.15)
-        grazing_threshold: Below this but above tflat_ttotal_threshold,
+        tflat_ttotal_threshold: [DEPRECATED] Below this, flag as V-shaped (default 0.15)
+            Threshold interpretation moved to astro-arc-tess guardrails.
+        grazing_threshold: [DEPRECATED] Below this but above tflat_ttotal_threshold,
             classify as grazing (default 0.3)
-        grazing_depth_ppm: Maximum depth (ppm) for grazing planet classification
+            Threshold interpretation moved to astro-arc-tess guardrails.
+        grazing_depth_ppm: [DEPRECATED] Maximum depth (ppm) for grazing planet classification
             (deeper signals are more likely EBs) (default 50000)
+            Threshold interpretation moved to astro-arc-tess guardrails.
         min_points_in_transit: Minimum total in-transit points (default 10)
         min_transit_coverage: Minimum fraction of transit phases with data (default 0.6)
         n_bootstrap: Number of bootstrap iterations for uncertainty (default 100)
         bootstrap_ci: Confidence interval for bootstrap (default 0.68 = 1-sigma)
-        shape_ratio_threshold: Legacy threshold for shape_ratio (default 1.3)
+        shape_ratio_threshold: [DEPRECATED] Legacy threshold for shape_ratio (default 1.3)
+            Threshold interpretation moved to astro-arc-tess guardrails.
+        legacy_mode: If True, compute passed as before (for existing consumers).
+            If False (default), return passed=None with raw metrics only.
     """
 
     tflat_ttotal_threshold: float = 0.15
@@ -92,6 +105,7 @@ class VShapeConfig:
     n_bootstrap: int = 100
     bootstrap_ci: float = 0.68
     shape_ratio_threshold: float = 1.3
+    legacy_mode: bool = False
 
 
 @dataclass
@@ -103,8 +117,10 @@ class SecondaryEclipseConfig:
         secondary_half_width: Half-width of search window in phase units (default 0.15)
             This covers phase 0.35-0.65, widened from 0.10 to catch eccentric orbit EBs.
         baseline_half_width: Half-width of adjacent baseline windows (default 0.15)
-        sigma_threshold: Significance threshold for detection (default 3.0)
-        depth_threshold: Minimum depth for flagging as significant (default 0.005 = 0.5%)
+        sigma_threshold: [DEPRECATED] Significance threshold for detection (default 3.0)
+            Threshold interpretation moved to astro-arc-tess guardrails.
+        depth_threshold: [DEPRECATED] Minimum depth for flagging as significant (default 0.005 = 0.5%)
+            Threshold interpretation moved to astro-arc-tess guardrails.
         min_secondary_points: Minimum points in secondary window (default 10)
         min_baseline_points: Minimum points in baseline windows (default 10)
         min_secondary_events: Minimum distinct orbital cycles with secondary data (default 2)
@@ -112,6 +128,8 @@ class SecondaryEclipseConfig:
         use_red_noise_inflation: Whether to apply red noise inflation (default True)
         default_inflation: Fallback inflation factor when estimation fails (default 1.5)
         n_coverage_bins: Number of bins for phase coverage calculation (default 20)
+        legacy_mode: If True, compute passed as before (for existing consumers).
+            If False (default), return passed=None with raw metrics only.
 
     References:
         - Coughlin & Lopez-Morales 2012, AJ 143, 39 (secondary eclipse methodology)
@@ -132,6 +150,7 @@ class SecondaryEclipseConfig:
     use_red_noise_inflation: bool = True
     default_inflation: float = 1.5
     n_coverage_bins: int = 20
+    legacy_mode: bool = False
 
 
 @dataclass
@@ -142,12 +161,17 @@ class DepthStabilityConfig:
         min_transits_for_confidence: Minimum transits for meaningful scatter (default 3)
         min_points_per_epoch: Minimum in-transit points per epoch (default 5)
         baseline_window_mult: Local baseline window as multiple of duration (default 6.0)
-        chi2_threshold_pass: Chi-squared threshold for definite pass (default 2.0)
-        chi2_threshold_fail: Chi-squared threshold for definite fail (default 4.0)
-        outlier_sigma: MAD-based outlier flagging threshold (default 4.0)
+        chi2_threshold_pass: [DEPRECATED] Chi-squared threshold for definite pass (default 2.0)
+            Threshold interpretation moved to astro-arc-tess guardrails.
+        chi2_threshold_fail: [DEPRECATED] Chi-squared threshold for definite fail (default 4.0)
+            Threshold interpretation moved to astro-arc-tess guardrails.
+        outlier_sigma: [DEPRECATED] MAD-based outlier flagging threshold (default 4.0)
+            Threshold interpretation moved to astro-arc-tess guardrails.
         use_red_noise_inflation: Whether to apply red noise inflation (default True)
-        legacy_mode: If True, use original RMS scatter threshold (default False)
-        rms_scatter_threshold: Legacy threshold for backward compatibility (default 0.3)
+        legacy_mode: If True, compute passed as before (for existing consumers).
+            If False (default), return passed=None with raw metrics only.
+        rms_scatter_threshold: [DEPRECATED] Legacy threshold for backward compatibility (default 0.3)
+            Threshold interpretation moved to astro-arc-tess guardrails.
 
     References:
         - Thompson et al. 2018, ApJS 235, 38 (depth consistency tests)
@@ -480,6 +504,10 @@ def check_odd_even_depth(
 
     if insufficient_data:
         # Cannot reject with insufficient data - return low-confidence pass
+        # Policy decision moved to astro-arc-tess guardrails
+        # Always return True (cannot reject without sufficient evidence)
+        if not config.legacy_mode:
+            warnings.append("insufficient_data_for_odd_even_check")
         return VetterCheckResult(
             id="V01",
             name="odd_even_depth",
@@ -507,6 +535,7 @@ def check_odd_even_depth(
                 "method": "per_epoch_median",
                 "epoch_depths_odd_ppm": [],
                 "epoch_depths_even_ppm": [],
+                "_metrics_only": not config.legacy_mode,
             },
         )
 
@@ -534,9 +563,12 @@ def check_odd_even_depth(
     rel_diff = abs(delta) / max_depth
 
     # Decision rule: FAIL if BOTH thresholds exceeded
+    # In non-legacy mode, we still compute the pass/fail but mark _metrics_only=True
+    # to indicate the policy decision should be made by downstream guardrails.
+    # The passed value must always be a boolean (cannot be None).
     passed = not (delta_sigma >= config.sigma_threshold and rel_diff >= config.rel_diff_threshold)
 
-    # Suspicious flag: requires BOTH criteria (AND logic)
+    # Suspicious flag computation (kept for metrics, not policy)
     # Empirically tuned on 1,437 labeled TOIs: 9% FPR on planets, 52% TPR on FPs
     # OR logic tested but rejected due to 48% FPR - see v01_threshold_analysis.md
     suspicious = (
@@ -587,6 +619,7 @@ def check_odd_even_depth(
             "method": "per_epoch_median",
             "epoch_depths_odd_ppm": epoch_depths_odd_ppm,
             "epoch_depths_even_ppm": epoch_depths_even_ppm,
+            "_metrics_only": not config.legacy_mode,
         },
     )
 
@@ -674,10 +707,12 @@ def check_secondary_eclipse(
         n_secondary_points < config.min_secondary_points
         or n_baseline_points < config.min_baseline_points
     ):
+        # Policy decision moved to astro-arc-tess guardrails
+        passed_value: bool | None = True if config.legacy_mode else None
         return VetterCheckResult(
             id="V02",
             name="secondary_eclipse",
-            passed=True,
+            passed=passed_value,
             confidence=0.3,
             details={
                 "n_secondary_points": n_secondary_points,
@@ -689,6 +724,7 @@ def check_secondary_eclipse(
                 "n_secondary_events_effective": 0,
                 "warnings": warnings,
                 "note": "Insufficient data for secondary eclipse search",
+                "_metrics_only": not config.legacy_mode,
             },
         )
 
@@ -716,16 +752,19 @@ def check_secondary_eclipse(
     secondary_median = float(np.median(secondary_flux))
 
     if baseline_median <= 0:
+        # Policy decision moved to astro-arc-tess guardrails
+        passed_value = True if config.legacy_mode else None
         return VetterCheckResult(
             id="V02",
             name="secondary_eclipse",
-            passed=True,
+            passed=passed_value,
             confidence=0.2,
             details={
                 "n_secondary_points": n_secondary_points,
                 "n_baseline_points": n_baseline_points,
                 "warnings": warnings + ["Invalid baseline median <= 0"],
                 "note": "Invalid baseline flux",
+                "_metrics_only": not config.legacy_mode,
             },
         )
 
@@ -751,13 +790,18 @@ def check_secondary_eclipse(
     secondary_err = secondary_err_base * inflation
     secondary_depth_sigma = abs(secondary_depth) / secondary_err if secondary_err > 0 else 0.0
 
-    # Decision: significant secondary if BOTH sigma and depth thresholds exceeded
+    # Significant secondary computation (kept for metrics, not policy)
     significant_secondary = (
         secondary_depth_sigma >= config.sigma_threshold
         and secondary_depth >= config.depth_threshold
     )
 
-    passed = not significant_secondary
+    # Policy decision moved to astro-arc-tess guardrails
+    # Raw metrics returned for downstream interpretation
+    passed: bool | None = None
+    if config.legacy_mode:
+        # Legacy decision: FAIL if significant secondary detected
+        passed = not significant_secondary
 
     # Confidence degradation model
     # Base confidence from phase coverage and event count
@@ -773,7 +817,7 @@ def check_secondary_eclipse(
     else:
         base_confidence = 0.4
 
-    # Adjust for proximity to threshold
+    # Adjust for proximity to threshold (only in legacy mode, but confidence is informational)
     if significant_secondary:
         # Confidence in failure scales with sigma excess
         sigma_margin = secondary_depth_sigma - config.sigma_threshold
@@ -813,6 +857,7 @@ def check_secondary_eclipse(
             "red_noise_inflation": round(inflation, 2),
             "search_window": [round(sec_lo, 3), round(sec_hi, 3)],
             "warnings": warnings,
+            "_metrics_only": not config.legacy_mode,
         },
     )
 
@@ -1054,10 +1099,12 @@ def check_depth_stability(
     n_transits = len(epoch_depths)
 
     if n_transits < 2:
+        # Policy decision moved to astro-arc-tess guardrails
+        passed_value: bool | None = True if config.legacy_mode else None
         return VetterCheckResult(
             id="V04",
             name="depth_stability",
-            passed=True,
+            passed=passed_value,
             confidence=0.3,
             details={
                 "n_transits_measured": n_transits,
@@ -1067,6 +1114,7 @@ def check_depth_stability(
                 "chi2_reduced": 0.0,
                 "warnings": warnings,
                 "note": "Insufficient transits for depth stability check",
+                "_metrics_only": not config.legacy_mode,
             },
         )
 
@@ -1106,12 +1154,12 @@ def check_depth_stability(
             if outlier_epochs:
                 warnings.append(f"Outlier epochs detected: {outlier_epochs}")
 
-    # Decision logic
+    # Policy decision moved to astro-arc-tess guardrails
+    # Raw metrics returned for downstream interpretation
+    passed: bool | None = None
     if config.legacy_mode:
-        # Use original RMS scatter threshold
-        passed = bool(rms_scatter < config.rms_scatter_threshold)
-    else:
-        # Use chi-squared based decision
+        # Legacy decision logic
+        # Use chi-squared based decision with RMS scatter fallback
         if chi2_reduced < config.chi2_threshold_pass:
             passed = True
         elif chi2_reduced > config.chi2_threshold_fail:
@@ -1132,10 +1180,10 @@ def check_depth_stability(
     else:
         base_confidence = 0.85
 
-    # Adjust for chi2 proximity to threshold
-    if passed and chi2_reduced > 0.7 * config.chi2_threshold_pass:
+    # Adjust for chi2 proximity to threshold (informational confidence adjustment)
+    if passed is True and chi2_reduced > 0.7 * config.chi2_threshold_pass:
         base_confidence *= 0.9
-    elif not passed and chi2_reduced > config.chi2_threshold_fail * 1.5:
+    elif passed is False and chi2_reduced > config.chi2_threshold_fail * 1.5:
         # Strong fail - boost confidence
         base_confidence = min(0.9, base_confidence * 1.1)
 
@@ -1174,6 +1222,7 @@ def check_depth_stability(
             "outlier_epochs": outlier_epochs,
             "warnings": warnings,
             "method": "per_epoch_local_baseline",
+            "_metrics_only": not config.legacy_mode,
         },
     )
 
@@ -1414,11 +1463,13 @@ def check_v_shape(
         insufficient_data = True
 
     if insufficient_data:
-        # Cannot reject with insufficient data - return low-confidence pass
+        # Cannot reject with insufficient data - return low-confidence pass (legacy) or None
+        # Policy decision moved to astro-arc-tess guardrails
+        passed_value: bool | None = True if config.legacy_mode else None
         return VetterCheckResult(
             id="V05",
             name="v_shape",
-            passed=True,
+            passed=passed_value,
             confidence=0.2,
             details={
                 # Legacy keys
@@ -1440,6 +1491,7 @@ def check_v_shape(
                 "n_baseline": n_baseline,
                 "warnings": warnings,
                 "method": "trapezoid_grid_search",
+                "_metrics_only": not config.legacy_mode,
             },
         )
 
@@ -1488,7 +1540,7 @@ def check_v_shape(
     # Compute depth in ppm
     depth_ppm = depth * 1e6
 
-    # Classification (3-tier)
+    # Classification (3-tier) - kept for metrics
     if tflat_ttotal_ratio > config.grazing_threshold:
         classification = "U_SHAPE"
     elif tflat_ttotal_ratio > config.tflat_ttotal_threshold:
@@ -1496,19 +1548,23 @@ def check_v_shape(
     else:
         classification = "V_SHAPE"
 
-    # Decision rule
-    if classification == "U_SHAPE":
-        passed = True
-    elif classification == "GRAZING":
-        # Grazing planets are OK if depth is small enough
-        passed = depth_ppm < config.grazing_depth_ppm
-        if not passed:
-            warnings.append(
-                f"Grazing geometry with deep transit ({depth_ppm:.0f} ppm >= "
-                f"{config.grazing_depth_ppm:.0f} ppm threshold)"
-            )
-    else:  # V_SHAPE
-        passed = False
+    # Policy decision moved to astro-arc-tess guardrails
+    # Raw metrics returned for downstream interpretation
+    passed: bool | None = None
+    if config.legacy_mode:
+        # Legacy decision rule
+        if classification == "U_SHAPE":
+            passed = True
+        elif classification == "GRAZING":
+            # Grazing planets are OK if depth is small enough
+            passed = depth_ppm < config.grazing_depth_ppm
+            if not passed:
+                warnings.append(
+                    f"Grazing geometry with deep transit ({depth_ppm:.0f} ppm >= "
+                    f"{config.grazing_depth_ppm:.0f} ppm threshold)"
+                )
+        else:  # V_SHAPE
+            passed = False
 
     # Check if near threshold
     near_threshold = abs(tflat_ttotal_ratio - config.tflat_ttotal_threshold) < 0.1
@@ -1578,6 +1634,7 @@ def check_v_shape(
             "n_baseline": n_baseline,
             "warnings": warnings,
             "method": "trapezoid_grid_search",
+            "_metrics_only": not config.legacy_mode,
         },
     )
 

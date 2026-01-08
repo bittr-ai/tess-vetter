@@ -209,15 +209,24 @@ class ModshiftCheck(VetterCheck):
 
     @classmethod
     def _default_config(cls) -> CheckConfig:
-        """Default Modshift configuration."""
+        """Default Modshift configuration.
+
+        Note: Threshold fields are DEPRECATED. Threshold interpretation has been
+        moved to astro-arc-tess guardrails. By default, this check returns
+        passed=None (metrics-only mode). Set legacy_mode=True to compute
+        passed based on thresholds.
+        """
         return CheckConfig(
             enabled=True,
-            threshold=0.5,  # Max secondary/primary ratio before flagging as EB
+            threshold=0.5,  # Max secondary/primary ratio before flagging as EB (DEPRECATED)
             additional={
-                "fred_warning_threshold": 2.0,  # Fred > 2 indicates significant red noise
-                "fred_critical_threshold": 3.5,  # Fred > 3.5 makes result unreliable
-                "tertiary_warning_threshold": 0.3,  # If ter/pri > this, warn
-                "marginal_secondary_threshold": 0.3,  # Warn if sec/pri > this
+                "fred_warning_threshold": 2.0,  # Fred > 2 indicates significant red noise (DEPRECATED)
+                "fred_critical_threshold": 3.5,  # Fred > 3.5 makes result unreliable (DEPRECATED)
+                "tertiary_warning_threshold": 0.3,  # If ter/pri > this, warn (DEPRECATED)
+                "marginal_secondary_threshold": 0.3,  # Warn if sec/pri > this (DEPRECATED)
+                # Metrics-only mode (default): passed=None
+                # Set legacy_mode=True to compute passed based on thresholds
+                "legacy_mode": False,
             },
         )
 
@@ -375,26 +384,34 @@ class ModshiftCheck(VetterCheck):
         if sec_pri_ratio > marginal_sec and sec_pri_ratio <= threshold:
             warnings.append("MARGINAL_SECONDARY")
 
-        # Determine pass/fail with Fred-gated reliability
-        # If Fred is critical, we cannot reliably assess - default to pass
-        if fred >= fred_critical:
-            passed = True
-            reliable_result = False
-        else:
-            reliable_result = True
-            # Fail if secondary is significant fraction of primary
-            significant_secondary = sec_pri_ratio > threshold
-            # Also check if secondary exceeds ~80% of false alarm threshold (margin)
-            sec_above_fa = sec > fa_thresh * 0.8 and sec > 0
-            passed = not (significant_secondary and sec_above_fa)
+        # Get legacy_mode setting
+        legacy_mode = self.config.additional.get("legacy_mode", False)
 
-        # Legacy variables for backward compatibility
+        # Compute threshold-based flags (for reference, even in metrics-only mode)
         significant_secondary = sec_pri_ratio > threshold
-        sec_above_fa = sec > fa_thresh and sec > 0
+        sec_above_fa = sec > fa_thresh * 0.8 and sec > 0
+        sec_above_fa_strict = sec > fa_thresh and sec > 0
+
+        # Determine if Fred makes result unreliable
+        reliable_result = fred < fred_critical
+
+        # Determine passed value based on mode
+        if legacy_mode:
+            # Legacy mode: compute passed based on thresholds
+            if fred >= fred_critical:
+                passed: bool | None = True  # Cannot reliably assess, default to pass
+            else:
+                # Fail if secondary is significant fraction of primary
+                passed = not (significant_secondary and sec_above_fa)
+        else:
+            # Metrics-only mode: return passed=None, let caller make policy decisions
+            passed = None
 
         # Calculate confidence with regime-based logic
+        # For metrics-only mode, use True as placeholder for confidence calculation
+        confidence_passed = passed if passed is not None else True
         confidence = self._compute_confidence(
-            passed=passed,
+            passed=confidence_passed,
             sec_pri_ratio=sec_pri_ratio,
             fred=fred,
             fred_warn=fred_warn,
@@ -408,11 +425,11 @@ class ModshiftCheck(VetterCheck):
 
         # Build interpretation
         interpretation = self._build_interpretation(
-            passed=passed,
+            passed=confidence_passed,
             sec_pri_ratio=sec_pri_ratio,
             ter_pri_ratio=ter_pri_ratio,
             fred=fred,
-            sec_above_fa=sec_above_fa,
+            sec_above_fa=sec_above_fa_strict,
             threshold=threshold,
             fred_warn=fred_warn,
             ter_warn=ter_warn,
@@ -426,6 +443,8 @@ class ModshiftCheck(VetterCheck):
             passed=passed,
             confidence=round(confidence, 3),
             details={
+                # Metrics-only mode marker
+                "_metrics_only": not legacy_mode,
                 # Legacy keys (preserved for backward compatibility)
                 "primary_signal": round(pri, 4),
                 "secondary_signal": round(sec, 4),
@@ -437,13 +456,14 @@ class ModshiftCheck(VetterCheck):
                 "tertiary_primary_ratio": round(ter_pri_ratio, 4),
                 "threshold": threshold,
                 "significant_secondary": significant_secondary,
-                "secondary_above_fa": sec_above_fa,
+                "secondary_above_fa": sec_above_fa_strict,
                 "interpretation": interpretation,
                 # New keys
                 "warnings": warnings,
                 "inputs_summary": inputs_summary,
                 "fred_regime": fred_regime,
                 "passed_meaning": "no_strong_eb_evidence",
+                "reliable_result": reliable_result,
             },
         )
 
@@ -622,17 +642,26 @@ class SWEETCheck(VetterCheck):
 
     @classmethod
     def _default_config(cls) -> CheckConfig:
-        """Default SWEET configuration."""
+        """Default SWEET configuration.
+
+        Note: Threshold fields are DEPRECATED. Threshold interpretation has been
+        moved to astro-arc-tess guardrails. By default, this check returns
+        passed=None (metrics-only mode). Set legacy_mode=True to compute
+        passed based on thresholds.
+        """
         return CheckConfig(
             enabled=True,
-            threshold=3.5,  # amplitude-to-uncertainty ratio threshold at P
+            threshold=3.5,  # amplitude-to-uncertainty ratio threshold at P (DEPRECATED)
             additional={
-                "half_period_threshold": 3.5,  # Threshold for P/2
-                "double_period_threshold": 4.0,  # Higher threshold for 2P (warning only)
+                "half_period_threshold": 3.5,  # Threshold for P/2 (DEPRECATED)
+                "double_period_threshold": 4.0,  # Higher threshold for 2P (DEPRECATED)
                 "min_cycles_for_fit": 2.0,  # Minimum baseline/period ratio
                 "variability_depth_threshold": 0.5,  # Fraction of depth explainable
                 "confidence_floor": 0.30,  # Minimum confidence for degraded checks
                 "include_harmonic_analysis": True,  # Enable harmonic failure logic
+                # Metrics-only mode (default): passed=None
+                # Set legacy_mode=True to compute passed based on thresholds
+                "legacy_mode": False,
             },
         )
 
@@ -797,27 +826,39 @@ class SWEETCheck(VetterCheck):
         if var_explains > 0.3:
             warnings.append("VARIABILITY_MAY_EXPLAIN_TRANSIT")
 
-        # Determine pass/fail
+        # Get legacy_mode setting
+        legacy_mode = self.config.additional.get("legacy_mode", False)
+
+        # Compute threshold-based flags (for reference, even in metrics-only mode)
         # Primary concern is the period itself
         fails_at_period = period_ratio > threshold
         fails_at_half = half_p_ratio > half_p_thresh
         fails_at_double = double_p_ratio > double_p_thresh
 
-        # Improved pass/fail logic with harmonic analysis
-        if include_harmonic:
-            # Also fail if P/2 variability explains significant fraction of depth
-            half_p_depth = harmonic_analysis.get("variability_induced_depth_at_half_P_ppm", 0.0)
-            fails_at_half_with_depth = (
-                fails_at_half and half_p_depth > transit_depth_ppm * var_depth_thresh
-            )
-            passed = not (fails_at_period or fails_at_half_with_depth)
+        # Compute harmonic-based failure flag
+        half_p_depth = harmonic_analysis.get("variability_induced_depth_at_half_P_ppm", 0.0)
+        fails_at_half_with_depth = (
+            fails_at_half and half_p_depth > transit_depth_ppm * var_depth_thresh
+        )
+
+        # Determine passed value based on mode
+        if legacy_mode:
+            # Legacy mode: compute passed based on thresholds
+            if include_harmonic:
+                # Also fail if P/2 variability explains significant fraction of depth
+                passed: bool | None = not (fails_at_period or fails_at_half_with_depth)
+            else:
+                # Legacy behavior: only fail on period itself
+                passed = not fails_at_period
         else:
-            # Legacy behavior: only fail on period itself
-            passed = not fails_at_period
+            # Metrics-only mode: return passed=None, let caller make policy decisions
+            passed = None
 
         # Calculate confidence with data quality scaling
+        # For metrics-only mode, use True as placeholder for confidence calculation
+        confidence_passed = passed if passed is not None else True
         confidence = self._compute_confidence(
-            passed=passed,
+            passed=confidence_passed,
             period_ratio=period_ratio,
             threshold=threshold,
             fails_at_half=fails_at_half,
@@ -829,7 +870,7 @@ class SWEETCheck(VetterCheck):
 
         # Build interpretation
         interpretation = self._build_interpretation(
-            passed=passed,
+            passed=confidence_passed,
             period_ratio=period_ratio,
             half_p_ratio=half_p_ratio,
             double_p_ratio=double_p_ratio,
@@ -847,6 +888,8 @@ class SWEETCheck(VetterCheck):
             passed=passed,
             confidence=round(confidence, 3),
             details={
+                # Metrics-only mode marker
+                "_metrics_only": not legacy_mode,
                 # Legacy keys (preserved for backward compatibility)
                 "period_amplitude_ratio": round(period_ratio, 4),
                 "half_period_amplitude_ratio": round(half_p_ratio, 4),

@@ -40,4 +40,3 @@ def test_compute_depth_over_depth_err_snr_reasonable() -> None:
     )
     assert depth_err > 0
     assert snr > 0
-
