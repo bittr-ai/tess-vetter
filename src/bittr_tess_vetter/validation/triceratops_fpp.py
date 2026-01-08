@@ -843,6 +843,7 @@ def calculate_fpp_handler(
 
         # Compute total posterior mass and per-scenario probability sums (TRICERATOPS stores a table).
         posterior_sum_total: float | None = None
+        posterior_prob_nan_count: int | None = None
         scenario_prob_sums: dict[str, float] = {}
         scenario_prob_top: list[dict[str, Any]] = []
         try:
@@ -851,6 +852,9 @@ def calculate_fpp_handler(
                 if "scenario" in probs_raw.columns and "prob" in probs_raw.columns:
                     scenarios = list(probs_raw["scenario"])
                     prob_vals = [float(x) for x in list(probs_raw["prob"])]
+                    posterior_prob_nan_count = int(
+                        sum(1 for v in prob_vals if not np.isfinite(float(v)))
+                    )
                     posterior_sum_total = float(sum(prob_vals))
                     for sc, pv in zip(scenarios, prob_vals, strict=False):
                         key = str(sc)
@@ -864,6 +868,9 @@ def calculate_fpp_handler(
             elif isinstance(probs_raw, dict):
                 # Some wrappers may produce a dict already.
                 scenario_prob_sums = {str(k): float(v) for k, v in probs_raw.items()}
+                posterior_prob_nan_count = int(
+                    sum(1 for v in scenario_prob_sums.values() if not np.isfinite(float(v)))
+                )
                 posterior_sum_total = float(sum(scenario_prob_sums.values()))
                 scenario_prob_top = [
                     {"scenario": k, "prob": v}
@@ -873,6 +880,7 @@ def calculate_fpp_handler(
                 ]
         except Exception:
             posterior_sum_total = None
+            posterior_prob_nan_count = None
             scenario_prob_sums = {}
             scenario_prob_top = []
 
@@ -921,6 +929,7 @@ def calculate_fpp_handler(
 
         out = result.to_dict()
         out["posterior_sum_total"] = posterior_sum_total
+        out["posterior_prob_nan_count"] = posterior_prob_nan_count
         out["scenario_prob_top"] = scenario_prob_top
         out["triceratops_runtime"] = {
             "n_points_raw": int(n_points_raw),
@@ -939,8 +948,12 @@ def calculate_fpp_handler(
         degenerate: list[str] = []
         if not np.isfinite(float(out.get("fpp", float("nan")))):
             degenerate.append("fpp_not_finite")
+        if posterior_sum_total is not None and not np.isfinite(float(posterior_sum_total)):
+            degenerate.append("posterior_sum_not_finite")
         if posterior_sum_total is not None and posterior_sum_total <= 0:
             degenerate.append("posterior_sum_total_zero")
+        if posterior_prob_nan_count is not None and posterior_prob_nan_count > 0:
+            degenerate.append(f"posterior_prob_nan_count={posterior_prob_nan_count}")
         if out.get("prob_planet", 0.0) == 0.0 and out.get("prob_eb", 0.0) == 0.0 and scenario_prob_sums:
             degenerate.append("scenario_probs_missing_expected_keys")
         out["degenerate_reason"] = ",".join(degenerate) if degenerate else None
