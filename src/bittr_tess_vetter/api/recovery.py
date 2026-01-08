@@ -21,10 +21,21 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
+from bittr_tess_vetter.api.references import (
+    AIGRAIN_2016,
+    BARROS_2020,
+    HIPPKE_2019_WOTAN,
+    HIPPKE_HELLER_2019_TLS,
+    KOVACS_2002,
+    LUGER_2016,
+    MORVAN_2020,
+    PETIGURA_2012,
+    cites,
+)
 from bittr_tess_vetter.api.types import Candidate, LightCurve
 from bittr_tess_vetter.compute.detrend import WOTAN_AVAILABLE
 from bittr_tess_vetter.recovery.primitives import (
@@ -39,92 +50,19 @@ from bittr_tess_vetter.recovery.primitives import (
 if TYPE_CHECKING:
     from bittr_tess_vetter.activity.result import ActivityResult
 
-# Module-level references for programmatic access
-REFERENCES: list[dict[str, Any]] = [
-    {
-        "id": "hippke_2019_wotan",
-        "type": "article",
-        "bibcode": "2019AJ....158..143H",
-        "title": "Wotan: Comprehensive Time-series De-trending in Python",
-        "authors": ["Hippke, M.", "David, T. J.", "Mulders, G. D.", "Heller, R."],
-        "journal": "The Astronomical Journal",
-        "year": 2019,
-        "arxiv": "1906.00966",
-        "note": "Stellar detrending methods benchmark and wotan package",
-    },
-    {
-        "id": "hippke_heller_2019_tls",
-        "type": "article",
-        "bibcode": "2019A&A...623A..39H",
-        "title": "Transit Least Squares: Optimized transit detection algorithm",
-        "authors": ["Hippke, M.", "Heller, R."],
-        "journal": "Astronomy & Astrophysics",
-        "year": 2019,
-        "arxiv": "1901.02015",
-        "note": "TLS algorithm for transit detection after detrending",
-    },
-    {
-        "id": "barros_2020",
-        "type": "article",
-        "bibcode": "2020A&A...634A..75B",
-        "title": "Improving transit characterisation with Gaussian process modelling",
-        "authors": ["Barros, S. C. C.", "Demangeon, O.", "Diaz, R. F.", "et al."],
-        "journal": "Astronomy & Astrophysics",
-        "year": 2020,
-        "arxiv": "2001.07975",
-        "note": "GP-based stellar variability modeling for transit recovery",
-    },
-    {
-        "id": "aigrain_2016",
-        "type": "article",
-        "bibcode": "2016MNRAS.459.2408A",
-        "title": "K2SC: Flexible systematics correction and detrending for K2",
-        "authors": ["Aigrain, S.", "Parviainen, H.", "Pope, B. J. S."],
-        "journal": "Monthly Notices of the Royal Astronomical Society",
-        "year": 2016,
-        "note": "GP-based systematics correction for K2",
-    },
-    {
-        "id": "petigura_2012",
-        "type": "article",
-        "bibcode": "2013ApJ...770...69P",
-        "title": "An Algorithm for Automatic Kepler Light Curve Detrending",
-        "authors": ["Petigura, E. A.", "Marcy, G. W."],
-        "journal": "The Astrophysical Journal",
-        "year": 2013,
-        "note": "Spline-based detrending methodology",
-    },
-    {
-        "id": "luger_2016",
-        "type": "article",
-        "bibcode": "2016AJ....152..100L",
-        "title": "EVEREST: Pixel Level Decorrelation of K2 Light Curves",
-        "authors": ["Luger, R.", "Agol, E.", "Kruse, E.", "et al."],
-        "journal": "The Astronomical Journal",
-        "year": 2016,
-        "note": "Pixel-level decorrelation for systematics removal",
-    },
-    {
-        "id": "kovacs_2002",
-        "type": "article",
-        "bibcode": "2002A&A...391..369K",
-        "title": "A box-fitting algorithm in the search for periodic transits",
-        "authors": ["Kovacs, G.", "Zucker, S.", "Mazeh, T."],
-        "journal": "Astronomy & Astrophysics",
-        "year": 2002,
-        "note": "Original BLS algorithm for transit detection",
-    },
-    {
-        "id": "morvan_2020",
-        "type": "article",
-        "bibcode": "2020AJ....159..166M",
-        "title": "Detrending Exoplanetary Transit Light Curves with LSTM Networks",
-        "authors": ["Morvan, M.", "Nikolaou, N.", "Tsiaras, A.", "Waldmann, I. P."],
-        "journal": "The Astronomical Journal",
-        "year": 2020,
-        "arxiv": "2001.03370",
-        "note": "Machine learning approach to detrending",
-    },
+# Module-level references for programmatic access (generated from central registry)
+REFERENCES = [
+    ref.to_dict()
+    for ref in [
+        HIPPKE_2019_WOTAN,
+        HIPPKE_HELLER_2019_TLS,
+        BARROS_2020,
+        AIGRAIN_2016,
+        PETIGURA_2012,
+        LUGER_2016,
+        KOVACS_2002,
+        MORVAN_2020,
+    ]
 ]
 
 
@@ -162,6 +100,7 @@ class RecoveryResult:
     converged: bool
 
 
+@cites(HIPPKE_2019_WOTAN, HIPPKE_HELLER_2019_TLS)
 def recover_transit(
     lc: LightCurve,
     candidate: Candidate,
@@ -321,6 +260,7 @@ def recover_transit(
     )
 
 
+@cites(HIPPKE_2019_WOTAN)
 def detrend(
     lc: LightCurve,
     candidate: Candidate,

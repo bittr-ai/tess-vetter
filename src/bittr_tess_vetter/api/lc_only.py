@@ -22,6 +22,17 @@ References:
 
 from __future__ import annotations
 
+from bittr_tess_vetter.api.references import (
+    COUGHLIN_2016,
+    COUGHLIN_LOPEZ_MORALES_2012,
+    FRESSIN_2013,
+    GUERRERO_2021,
+    PRSA_2011,
+    SEAGER_MALLEN_ORNELAS_2003,
+    THOMPSON_2018,
+    TWICKEN_2018,
+    cites,
+)
 from bittr_tess_vetter.api.types import CheckResult, Ephemeris, LightCurve, StellarParams
 from bittr_tess_vetter.validation.lc_checks import (
     check_depth_stability as _check_depth_stability,
@@ -39,94 +50,19 @@ from bittr_tess_vetter.validation.lc_checks import (
     check_v_shape as _check_v_shape,
 )
 
-# Module-level references for programmatic access
-REFERENCES: list[dict[str, str | int | list[str]]] = [
-    {
-        "id": "seager_mallen_ornelas_2003",
-        "type": "article",
-        "bibcode": "2003ApJ...585.1038S",
-        "title": "On the Unique Solution of Planet and Star Parameters from an "
-        "Extrasolar Planet Transit Light Curve",
-        "authors": ["Seager, S.", "Mallen-Ornelas, G."],
-        "journal": "ApJ 585, 1038",
-        "year": 2003,
-        "note": "Transit duration-stellar density relationship; transit shape analysis",
-    },
-    {
-        "id": "prsa_2011",
-        "type": "article",
-        "bibcode": "2011AJ....141...83P",
-        "title": "Kepler Eclipsing Binary Stars. I. Catalog and Principal "
-        "Characterization of 1879 Eclipsing Binaries in the First Data Release",
-        "authors": ["Prsa, A.", "Batalha, N.", "Slawson, R.W."],
-        "journal": "AJ 141, 83",
-        "year": 2011,
-        "note": "EB morphology classification; V-shape vs U-shape distinction",
-    },
-    {
-        "id": "coughlin_lopez_morales_2012",
-        "type": "article",
-        "bibcode": "2012AJ....143...39C",
-        "title": "A Uniform Search for Secondary Eclipses of Hot Jupiters in "
-        "Kepler Q2 Light Curves",
-        "authors": ["Coughlin, J.L.", "Lopez-Morales, M."],
-        "journal": "AJ 143, 39",
-        "year": 2012,
-        "note": "Secondary eclipse detection methodology for hot Jupiters",
-    },
-    {
-        "id": "fressin_2013",
-        "type": "article",
-        "bibcode": "2013ApJ...766...81F",
-        "title": "The False Positive Rate of Kepler and the Occurrence of Planets",
-        "authors": ["Fressin, F.", "Torres, G.", "Charbonneau, D."],
-        "journal": "ApJ 766, 81",
-        "year": 2013,
-        "note": "False positive scenarios including EBs and secondary eclipses",
-    },
-    {
-        "id": "coughlin_2016",
-        "type": "article",
-        "bibcode": "2016ApJS..224...12C",
-        "title": "Planetary Candidates Observed by Kepler. VII. The First Fully "
-        "Uniform Catalog Based on the Entire 48-month Data Set (Q1-Q17 DR24)",
-        "authors": ["Coughlin, J.L.", "Mullally, F.", "Thompson, S.E."],
-        "journal": "ApJS 224, 12",
-        "year": 2016,
-        "note": "Kepler Robovetter methodology for automated vetting",
-    },
-    {
-        "id": "thompson_2018",
-        "type": "article",
-        "bibcode": "2018ApJS..235...38T",
-        "title": "Planetary Candidates Observed by Kepler. VIII. A Fully Automated "
-        "Catalog With Measured Completeness and Reliability Based on Data Release 25",
-        "authors": ["Thompson, S.E.", "Coughlin, J.L.", "Hoffman, K."],
-        "journal": "ApJS 235, 38",
-        "year": 2018,
-        "note": "DR25 Robovetter: odd/even, secondary eclipse, V-shape tests",
-    },
-    {
-        "id": "twicken_2018",
-        "type": "article",
-        "bibcode": "2018PASP..130f4502T",
-        "title": "Kepler Data Validation I -- Architecture, Diagnostic Tests, and "
-        "Data Products for Vetting Transiting Planet Candidates",
-        "authors": ["Twicken, J.D.", "Catanzarite, J.H.", "Clarke, B.D."],
-        "journal": "PASP 130, 064502",
-        "year": 2018,
-        "note": "Kepler DV pipeline diagnostic tests for transit validation",
-    },
-    {
-        "id": "guerrero_2021",
-        "type": "article",
-        "bibcode": "2021ApJS..254...39G",
-        "title": "The TESS Objects of Interest Catalog from the TESS Prime Mission",
-        "authors": ["Guerrero, N.M.", "Seager, S.", "Huang, C.X."],
-        "journal": "ApJS 254, 39",
-        "year": 2021,
-        "note": "TESS TOI catalog and vetting procedures",
-    },
+# Module-level references for programmatic access (generated from central registry)
+REFERENCES = [
+    ref.to_dict()
+    for ref in [
+        SEAGER_MALLEN_ORNELAS_2003,
+        PRSA_2011,
+        COUGHLIN_LOPEZ_MORALES_2012,
+        FRESSIN_2013,
+        COUGHLIN_2016,
+        THOMPSON_2018,
+        TWICKEN_2018,
+        GUERRERO_2021,
+    ]
 ]
 
 
@@ -149,6 +85,7 @@ def _convert_result(result: object) -> CheckResult:
     )
 
 
+@cites(COUGHLIN_2016, THOMPSON_2018, PRSA_2011)
 def odd_even_depth(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     """V01: Compare depth of odd vs even transits.
 
@@ -182,6 +119,7 @@ def odd_even_depth(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     return _convert_result(result)
 
 
+@cites(COUGHLIN_LOPEZ_MORALES_2012, THOMPSON_2018, FRESSIN_2013)
 def secondary_eclipse(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     """V02: Search for secondary eclipse at phase 0.5.
 
@@ -214,6 +152,7 @@ def secondary_eclipse(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     return _convert_result(result)
 
 
+@cites(SEAGER_MALLEN_ORNELAS_2003, TWICKEN_2018, THOMPSON_2018)
 def duration_consistency(
     ephemeris: Ephemeris,
     stellar: StellarParams | None,
@@ -250,6 +189,7 @@ def duration_consistency(
     return _convert_result(result)
 
 
+@cites(THOMPSON_2018, TWICKEN_2018, GUERRERO_2021)
 def depth_stability(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     """V04: Check depth consistency across individual transits.
 
@@ -283,6 +223,7 @@ def depth_stability(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     return _convert_result(result)
 
 
+@cites(SEAGER_MALLEN_ORNELAS_2003, PRSA_2011, THOMPSON_2018)
 def v_shape(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     """V05: Distinguish U-shaped (planet) vs V-shaped (grazing EB) transits.
 

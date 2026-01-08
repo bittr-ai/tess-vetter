@@ -36,6 +36,19 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
+from bittr_tess_vetter.api.references import (
+    CLARET_2018,
+    CLARET_SOUTHWORTH_2022,
+    ESPINOZA_JORDAN_2015,
+    ESPINOZA_JORDAN_2016,
+    FOREMAN_MACKEY_2013,
+    KREIDBERG_2015,
+    MANDEL_AGOL_2002,
+    PARVIAINEN_2015,
+    SEAGER_MALLEN_ORNELAS_2003,
+    SING_2010,
+    cites,
+)
 from bittr_tess_vetter.api.types import Candidate, LightCurve, StellarParams
 
 if TYPE_CHECKING:
@@ -44,120 +57,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # =============================================================================
-# Module-level references for programmatic access
+# Module-level references for programmatic access (generated from central registry)
 # =============================================================================
 
-REFERENCES: list[dict[str, Any]] = [
-    {
-        "id": "mandel_agol_2002",
-        "type": "article",
-        "bibcode": "2002ApJ...580L.171M",
-        "title": "Analytic Light Curves for Planetary Transit Searches",
-        "authors": ["Mandel, K.", "Agol, E."],
-        "journal": "The Astrophysical Journal Letters",
-        "year": 2002,
-        "arxiv": "astro-ph/0210099",
-        "note": "Foundational analytic transit model with limb darkening",
-    },
-    {
-        "id": "kreidberg_2015",
-        "type": "article",
-        "bibcode": "2015PASP..127.1161K",
-        "title": "batman: BAsic Transit Model cAlculatioN in Python",
-        "authors": ["Kreidberg, L."],
-        "journal": "Publications of the Astronomical Society of the Pacific",
-        "year": 2015,
-        "arxiv": "1507.08285",
-        "note": "Python transit model package used for light curve computation",
-    },
-    {
-        "id": "foreman_mackey_2013",
-        "type": "article",
-        "bibcode": "2013PASP..125..306F",
-        "title": "emcee: The MCMC Hammer",
-        "authors": ["Foreman-Mackey, D.", "Hogg, D. W.", "Lang, D.", "Goodman, J."],
-        "journal": "Publications of the Astronomical Society of the Pacific",
-        "year": 2013,
-        "arxiv": "1202.3665",
-        "note": "MCMC sampler used for posterior estimation",
-    },
-    {
-        "id": "claret_2018",
-        "type": "article",
-        "bibcode": "2018A&A...618A..20C",
-        "title": "Limb and gravity-darkening coefficients for the TESS satellite",
-        "authors": ["Claret, A."],
-        "journal": "Astronomy & Astrophysics",
-        "year": 2018,
-        "arxiv": "1804.10295",
-        "note": "TESS-specific limb darkening coefficients from ATLAS/PHOENIX models",
-    },
-    {
-        "id": "parviainen_2015",
-        "type": "article",
-        "bibcode": "2015MNRAS.453.3821P",
-        "title": "LDTk: Limb Darkening Toolkit",
-        "authors": ["Parviainen, H.", "Aigrain, S."],
-        "journal": "Monthly Notices of the Royal Astronomical Society",
-        "year": 2015,
-        "arxiv": "1508.02634",
-        "note": "Python package for computing custom limb darkening profiles",
-    },
-    {
-        "id": "espinoza_jordan_2015",
-        "type": "article",
-        "bibcode": "2015MNRAS.450.1879E",
-        "title": "Limb darkening and exoplanets: testing stellar model atmospheres",
-        "authors": ["Espinoza, N.", "Jordan, A."],
-        "journal": "Monthly Notices of the Royal Astronomical Society",
-        "year": 2015,
-        "arxiv": "1503.07020",
-        "note": "Analysis of limb darkening biases in transit parameters",
-    },
-    {
-        "id": "espinoza_jordan_2016",
-        "type": "article",
-        "bibcode": "2016MNRAS.457.3573E",
-        "title": "Limb-darkening and exoplanets II: Choosing the Best Law",
-        "authors": ["Espinoza, N.", "Jordan, A."],
-        "journal": "Monthly Notices of the Royal Astronomical Society",
-        "year": 2016,
-        "arxiv": "1601.05485",
-        "note": "Comparison of limb darkening laws for transit fitting",
-    },
-    {
-        "id": "sing_2010",
-        "type": "article",
-        "bibcode": "2010A&A...510A..21S",
-        "title": "Stellar Limb-Darkening Coefficients for CoRot and Kepler",
-        "authors": ["Sing, D. K."],
-        "journal": "Astronomy & Astrophysics",
-        "year": 2010,
-        "arxiv": "0912.2274",
-        "note": "Limb darkening coefficients for space missions",
-    },
-    {
-        "id": "claret_southworth_2022",
-        "type": "article",
-        "bibcode": "2022A&A...664A..91C",
-        "title": "Power-2 limb-darkening coefficients for multiple photometric systems",
-        "authors": ["Claret, A.", "Southworth, J."],
-        "journal": "Astronomy & Astrophysics",
-        "year": 2022,
-        "arxiv": "2206.11098",
-        "note": "Power-2 law limb darkening coefficients including TESS",
-    },
-    {
-        "id": "seager_mallen_ornelas_2003",
-        "type": "article",
-        "bibcode": "2003ApJ...585.1038S",
-        "title": "On the Unique Solution of Planet and Star Parameters",
-        "authors": ["Seager, S.", "Mallen-Ornelas, G."],
-        "journal": "The Astrophysical Journal",
-        "year": 2003,
-        "arxiv": "astro-ph/0206228",
-        "note": "Analytic transit parameter relations for quick estimation",
-    },
+REFERENCES = [
+    ref.to_dict()
+    for ref in [
+        MANDEL_AGOL_2002,
+        KREIDBERG_2015,
+        FOREMAN_MACKEY_2013,
+        CLARET_2018,
+        PARVIAINEN_2015,
+        ESPINOZA_JORDAN_2015,
+        ESPINOZA_JORDAN_2016,
+        SING_2010,
+        CLARET_SOUTHWORTH_2022,
+        SEAGER_MALLEN_ORNELAS_2003,
+    ]
 ]
 
 
@@ -285,6 +201,7 @@ def _make_error_result(error_message: str) -> TransitFitResult:
 # =============================================================================
 
 
+@cites(SEAGER_MALLEN_ORNELAS_2003)
 def quick_estimate(
     depth_ppm: float,
     duration_hours: float,
@@ -332,6 +249,7 @@ def quick_estimate(
     }
 
 
+@cites(MANDEL_AGOL_2002, KREIDBERG_2015, CLARET_2018)
 def fit_transit(
     lc: LightCurve,
     candidate: Candidate,

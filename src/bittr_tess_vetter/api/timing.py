@@ -18,8 +18,19 @@ References:
 
 from __future__ import annotations
 
-from typing import Any
-
+from bittr_tess_vetter.api.references import (
+    AGOL_2005,
+    FABRYCKY_2012,
+    FORD_2012,
+    HADDEN_2019,
+    HADDEN_LITHWICK_2016,
+    HOLMAN_MURRAY_2005,
+    IVSHINA_WINN_2022,
+    LITHWICK_2012,
+    RAGOZZINE_HOLMAN_2019,
+    STEFFEN_AGOL_2006,
+    cites,
+)
 from bittr_tess_vetter.api.types import Candidate, LightCurve
 from bittr_tess_vetter.transit.result import TransitTime, TTVResult
 from bittr_tess_vetter.transit.timing import (
@@ -36,119 +47,25 @@ __all__ = [
     "measure_transit_times",
 ]
 
-# Module-level references for programmatic access
-REFERENCES: list[dict[str, Any]] = [
-    {
-        "id": "holman_murray_2005",
-        "type": "article",
-        "bibcode": "2005Sci...307.1288H",
-        "title": "The Use of Transit Timing to Detect Terrestrial-Mass Extrasolar Planets",
-        "authors": ["Holman, M. J.", "Murray, N. W."],
-        "journal": "Science",
-        "year": 2005,
-        "note": "Foundational TTV theory paper - perturbations from additional planets",
-    },
-    {
-        "id": "agol_2005",
-        "type": "article",
-        "bibcode": "2005MNRAS.359..567A",
-        "title": "On detecting terrestrial planets with timing of giant planet transits",
-        "authors": ["Agol, E.", "Steffen, J.", "Sari, R.", "Clarkson, W."],
-        "journal": "Monthly Notices of the Royal Astronomical Society",
-        "year": 2005,
-        "note": "TTV theory - sensitivity to perturbing planets",
-    },
-    {
-        "id": "lithwick_2012",
-        "type": "article",
-        "bibcode": "2012ApJ...761..122L",
-        "title": "Extracting Planet Mass and Eccentricity from TTV Data",
-        "authors": ["Lithwick, Y.", "Xie, J.", "Wu, Y."],
-        "journal": "The Astrophysical Journal",
-        "year": 2012,
-        "arxiv": "1207.4192",
-        "note": "Analytic TTV formulae for near-resonant planet pairs",
-    },
-    {
-        "id": "hadden_lithwick_2016",
-        "type": "article",
-        "bibcode": "2017AJ....154....5H",
-        "title": "Kepler Planet Masses and Eccentricities from TTV Analysis",
-        "authors": ["Hadden, S.", "Lithwick, Y."],
-        "journal": "The Astronomical Journal",
-        "year": 2017,
-        "arxiv": "1611.03516",
-        "note": "Uniform TTV analysis of Kepler multiplanet systems",
-    },
-    {
-        "id": "hadden_2019",
-        "type": "article",
-        "bibcode": "2019AJ....158..146H",
-        "title": "Prospects for TTV Detection and Dynamical Constraints with TESS",
-        "authors": ["Hadden, S.", "Barclay, T.", "Payne, M. J.", "Holman, M. J."],
-        "journal": "The Astronomical Journal",
-        "year": 2019,
-        "arxiv": "1811.01970",
-        "note": "TTV yield predictions for TESS mission",
-    },
-    {
-        "id": "ivshina_winn_2022",
-        "type": "article",
-        "bibcode": "2022ApJS..259...62I",
-        "title": "TESS Transit Timing of Hundreds of Hot Jupiters",
-        "authors": ["Ivshina, E. S.", "Winn, J. N."],
-        "journal": "The Astrophysical Journal Supplement Series",
-        "year": 2022,
-        "arxiv": "2202.03401",
-        "note": "TESS transit timing database and methods",
-    },
-    {
-        "id": "steffen_agol_2006",
-        "type": "article",
-        "bibcode": "2007MNRAS.374..941A",
-        "title": "Developments in Planet Detection using Transit Timing Variations",
-        "authors": ["Steffen, J. H.", "Agol, E."],
-        "journal": "Monthly Notices of the Royal Astronomical Society",
-        "year": 2007,
-        "arxiv": "astro-ph/0612442",
-        "note": "TTV detection sensitivity and methods",
-    },
-    {
-        "id": "ford_2012",
-        "type": "article",
-        "bibcode": "2012ApJ...750..113F",
-        "title": "Transit Timing Observations from Kepler: VI. TTV Candidates",
-        "authors": ["Ford, E. B.", "Ragozzine, D.", "Rowe, J. F.", "et al."],
-        "journal": "The Astrophysical Journal",
-        "year": 2012,
-        "arxiv": "1201.1892",
-        "note": "Kepler TTV detection methodology",
-    },
-    {
-        "id": "fabrycky_2012",
-        "type": "article",
-        "bibcode": "2012ApJ...750..114F",
-        "title": "Transit Timing Observations from Kepler: IV. Confirmation by Physical Models",
-        "authors": ["Fabrycky, D. C.", "Ford, E. B.", "Steffen, J. H.", "et al."],
-        "journal": "The Astrophysical Journal",
-        "year": 2012,
-        "arxiv": "1201.5415",
-        "note": "Multi-planet TTV confirmation methodology",
-    },
-    {
-        "id": "ragozzine_holman_2019",
-        "type": "article",
-        "bibcode": "2019AJ....157..218R",
-        "title": "Kepler-9: The First Multi-Transiting System and First TTVs",
-        "authors": ["Ragozzine, D.", "Holman, M. J."],
-        "journal": "The Astronomical Journal",
-        "year": 2019,
-        "arxiv": "1905.04426",
-        "note": "Historical context of first TTV detection",
-    },
+# Module-level references for programmatic access (generated from central registry)
+REFERENCES = [
+    ref.to_dict()
+    for ref in [
+        HOLMAN_MURRAY_2005,
+        AGOL_2005,
+        LITHWICK_2012,
+        HADDEN_LITHWICK_2016,
+        HADDEN_2019,
+        IVSHINA_WINN_2022,
+        STEFFEN_AGOL_2006,
+        FORD_2012,
+        FABRYCKY_2012,
+        RAGOZZINE_HOLMAN_2019,
+    ]
 ]
 
 
+@cites(IVSHINA_WINN_2022, FORD_2012, HOLMAN_MURRAY_2005, AGOL_2005)
 def measure_transit_times(
     lc: LightCurve,
     candidate: Candidate,
@@ -209,6 +126,7 @@ def measure_transit_times(
     )
 
 
+@cites(LITHWICK_2012, HADDEN_LITHWICK_2016, HADDEN_2019)
 def analyze_ttvs(
     transit_times: list[TransitTime],
     period_days: float,

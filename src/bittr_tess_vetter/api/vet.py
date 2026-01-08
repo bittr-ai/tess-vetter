@@ -25,6 +25,11 @@ from __future__ import annotations
 import importlib.metadata
 from typing import Any
 
+from bittr_tess_vetter.api.references import (
+    COUGHLIN_2016,
+    GUERRERO_2021,
+    THOMPSON_2018,
+)
 from bittr_tess_vetter.api.types import (
     Candidate,
     CheckResult,
@@ -34,41 +39,8 @@ from bittr_tess_vetter.api.types import (
     VettingBundleResult,
 )
 
-# Module-level references for programmatic access
-REFERENCES: list[dict[str, str | int | list[str]]] = [
-    {
-        "id": "coughlin_2016",
-        "type": "article",
-        "bibcode": "2016ApJS..224...12C",
-        "title": "Planetary Candidates Observed by Kepler. VII. The First Fully "
-        "Uniform Catalog Based on the Entire 48-month Data Set (Q1-Q17 DR24)",
-        "authors": ["Coughlin, J.L.", "Mullally, F.", "Thompson, S.E."],
-        "journal": "ApJS 224, 12",
-        "year": 2016,
-        "note": "Kepler Robovetter architecture for automated vetting",
-    },
-    {
-        "id": "thompson_2018",
-        "type": "article",
-        "bibcode": "2018ApJS..235...38T",
-        "title": "Planetary Candidates Observed by Kepler. VIII. A Fully Automated "
-        "Catalog With Measured Completeness and Reliability Based on Data Release 25",
-        "authors": ["Thompson, S.E.", "Coughlin, J.L.", "Hoffman, K."],
-        "journal": "ApJS 235, 38",
-        "year": 2018,
-        "note": "DR25 pipeline design and tiered check execution",
-    },
-    {
-        "id": "guerrero_2021",
-        "type": "article",
-        "bibcode": "2021ApJS..254...39G",
-        "title": "The TESS Objects of Interest Catalog from the TESS Prime Mission",
-        "authors": ["Guerrero, N.M.", "Seager, S.", "Huang, C.X."],
-        "journal": "ApJS 254, 39",
-        "year": 2021,
-        "note": "TESS TOI catalog vetting procedures",
-    },
-]
+# Module-level references for programmatic access (generated from central registry)
+REFERENCES = [ref.to_dict() for ref in [COUGHLIN_2016, THOMPSON_2018, GUERRERO_2021]]
 
 
 # Default check sets per tier

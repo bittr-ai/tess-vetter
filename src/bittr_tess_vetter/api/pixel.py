@@ -22,6 +22,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from bittr_tess_vetter.api.references import (
+    BATALHA_2010,
+    BRYSON_2013,
+    GUERRERO_2021,
+    MULLALLY_2015,
+    TORRES_2011,
+    TWICKEN_2018,
+    cites,
+)
 from bittr_tess_vetter.api.types import Candidate, CheckResult, TPFStamp
 from bittr_tess_vetter.validation.checks_pixel import (
     ApertureDependenceCheck,
@@ -32,71 +41,17 @@ from bittr_tess_vetter.validation.checks_pixel import (
 if TYPE_CHECKING:
     pass
 
-# Module-level references for programmatic access
-REFERENCES: list[dict[str, str | int | list[str]]] = [
-    {
-        "id": "bryson_2013",
-        "type": "article",
-        "bibcode": "2013PASP..125..889B",
-        "title": "Identification of Background False Positives from Kepler Data",
-        "authors": ["Bryson, S.T.", "Jenkins, J.M.", "Gilliland, R.L."],
-        "journal": "PASP 125, 889",
-        "year": 2013,
-        "note": "Pixel-level diagnostics for identifying background false positives",
-    },
-    {
-        "id": "twicken_2018",
-        "type": "article",
-        "bibcode": "2018PASP..130f4502T",
-        "title": "Kepler Data Validation I -- Architecture, Diagnostic Tests, and "
-        "Data Products for Vetting Transiting Planet Candidates",
-        "authors": ["Twicken, J.D.", "Catanzarite, J.H.", "Clarke, B.D."],
-        "journal": "PASP 130, 064502",
-        "year": 2018,
-        "note": "Kepler DV pipeline: centroid offset, difference imaging, ghost diagnostics",
-    },
-    {
-        "id": "batalha_2010",
-        "type": "article",
-        "bibcode": "2010ApJ...713L.109B",
-        "title": "Selection, Prioritization, and Characteristics of Kepler Target Stars",
-        "authors": ["Batalha, N.M.", "Borucki, W.J.", "Koch, D.G."],
-        "journal": "ApJ 713, L109",
-        "year": 2010,
-        "note": "Kepler target star selection and stellar classification methodology",
-    },
-    {
-        "id": "torres_2011",
-        "type": "article",
-        "bibcode": "2011ApJ...727...24T",
-        "title": "Modeling Kepler Transit Light Curves as False Positives: "
-        "Rejection of Blend Scenarios for Kepler-9, and Validation of Kepler-9 d, "
-        "a Super-Earth-size Planet in a Multiple System",
-        "authors": ["Torres, G.", "Fressin, F.", "Batalha, N.M."],
-        "journal": "ApJ 727, 24",
-        "year": 2011,
-        "note": "Background blend detection and rejection methodology",
-    },
-    {
-        "id": "guerrero_2021",
-        "type": "article",
-        "bibcode": "2021ApJS..254...39G",
-        "title": "The TESS Objects of Interest Catalog from the TESS Prime Mission",
-        "authors": ["Guerrero, N.M.", "Seager, S.", "Huang, C.X."],
-        "journal": "ApJS 254, 39",
-        "year": 2021,
-        "note": "TESS TOI catalog pixel-level vetting procedures",
-    },
-    {
-        "id": "mullally_2015",
-        "type": "article",
-        "bibcode": "2015ApJS..217...31M",
-        "title": "Planetary Candidates Observed by Kepler VI: Planet Sample from Q1-Q16 (47 Months)",
-        "authors": ["Mullally, F.", "Coughlin, J.L.", "Thompson, S.E."],
-        "journal": "ApJS 217, 31",
-        "year": 2015,
-        "note": "Kepler planet candidate catalog with vetting diagnostics and false alarm identification",
-    },
+# Module-level references for programmatic access (generated from central registry)
+REFERENCES = [
+    ref.to_dict()
+    for ref in [
+        BRYSON_2013,
+        TWICKEN_2018,
+        BATALHA_2010,
+        TORRES_2011,
+        GUERRERO_2021,
+        MULLALLY_2015,
+    ]
 ]
 
 
@@ -139,6 +94,7 @@ def _extract_arrays_from_tpf(
     return time_arr, flux_arr
 
 
+@cites(BRYSON_2013, TWICKEN_2018)
 def centroid_shift(
     tpf: TPFStamp,
     candidate: Candidate,
@@ -221,6 +177,7 @@ def centroid_shift(
     return _convert_result(result)
 
 
+@cites(BRYSON_2013, TORRES_2011, TWICKEN_2018)
 def difference_image_localization(
     tpf: TPFStamp,
     candidate: Candidate,
@@ -315,6 +272,7 @@ def difference_image_localization(
     return _convert_result(result)
 
 
+@cites(BRYSON_2013, GUERRERO_2021, MULLALLY_2015)
 def aperture_dependence(
     tpf: TPFStamp,
     candidate: Candidate,

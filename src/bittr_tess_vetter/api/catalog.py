@@ -22,6 +22,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from bittr_tess_vetter.api.references import (
+    GUERRERO_2021,
+    PRSA_2022,
+    cites,
+)
 from bittr_tess_vetter.api.types import Candidate, CheckResult
 from bittr_tess_vetter.domain.detection import TransitCandidate
 from bittr_tess_vetter.validation.checks_catalog import (
@@ -32,30 +37,8 @@ from bittr_tess_vetter.validation.checks_catalog import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-# Module-level references for programmatic access
-REFERENCES: list[dict[str, str | int | list[str]]] = [
-    {
-        "id": "prsa_2022",
-        "type": "article",
-        "bibcode": "2022ApJS..258...16P",
-        "title": "TESS Eclipsing Binary Stars. I. Short-cadence Observations of 4584 "
-        "Eclipsing Binaries in Sectors 1-26",
-        "authors": ["Prsa, A.", "Kochoska, A.", "Conroy, K.E."],
-        "journal": "ApJS 258, 16",
-        "year": 2022,
-        "note": "TESS-EB catalog for nearby eclipsing binary search (V06)",
-    },
-    {
-        "id": "guerrero_2021",
-        "type": "article",
-        "bibcode": "2021ApJS..254...39G",
-        "title": "The TESS Objects of Interest Catalog from the TESS Prime Mission",
-        "authors": ["Guerrero, N.M.", "Seager, S.", "Huang, C.X."],
-        "journal": "ApJS 254, 39",
-        "year": 2021,
-        "note": "TESS TOI catalog and ExoFOP disposition definitions (V07)",
-    },
-]
+# Module-level references for programmatic access (generated from central registry)
+REFERENCES = [ref.to_dict() for ref in [PRSA_2022, GUERRERO_2021]]
 
 
 def _convert_result(result: object) -> CheckResult:
@@ -117,6 +100,7 @@ def _candidate_to_internal(candidate: Candidate) -> TransitCandidate:
     )
 
 
+@cites(PRSA_2022, GUERRERO_2021)
 def nearby_eb_search(
     candidate: Candidate,
     *,
@@ -177,6 +161,7 @@ def nearby_eb_search(
     return _convert_result(result)
 
 
+@cites(GUERRERO_2021)
 def exofop_disposition(
     candidate: Candidate,
     *,

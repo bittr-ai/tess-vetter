@@ -16,8 +16,6 @@ References:
 
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
 
 from bittr_tess_vetter.activity.primitives import (
@@ -34,6 +32,18 @@ from bittr_tess_vetter.activity.primitives import (
     mask_flares as _mask_flares,
 )
 from bittr_tess_vetter.activity.result import ActivityResult, Flare
+from bittr_tess_vetter.api.references import (
+    BASRI_2013,
+    DAVENPORT_2014,
+    DAVENPORT_2016,
+    DAVENPORT_2019,
+    MCQUILLAN_2013,
+    MCQUILLAN_2014,
+    NIELSEN_2013,
+    REINHOLD_2020,
+    TOVAR_MENDOZA_2022,
+    cites,
+)
 from bittr_tess_vetter.api.types import LightCurve
 
 # Re-export result types for public API
@@ -45,110 +55,24 @@ __all__ = [
     "mask_flares",
 ]
 
-# Module-level references for programmatic access
-REFERENCES: list[dict[str, Any]] = [
-    {
-        "id": "mcquillan_2014",
-        "type": "article",
-        "bibcode": "2014ApJS..211...24M",
-        "title": "Rotation Periods of 34,030 Kepler Main-Sequence Stars: "
-        "The Full Autocorrelation Sample",
-        "authors": ["McQuillan, A.", "Mazeh, T.", "Aigrain, S."],
-        "journal": "The Astrophysical Journal Supplement Series",
-        "year": 2014,
-        "arxiv": "1402.5694",
-        "note": "Autocorrelation-based rotation period measurement methodology",
-    },
-    {
-        "id": "mcquillan_2013",
-        "type": "article",
-        "bibcode": "2013MNRAS.432.1203M",
-        "title": "Measuring the rotation period distribution of field M dwarfs with Kepler",
-        "authors": ["McQuillan, A.", "Aigrain, S.", "Mazeh, T."],
-        "journal": "Monthly Notices of the Royal Astronomical Society",
-        "year": 2013,
-        "arxiv": "1303.6787",
-        "note": "ACF method development for rotation periods",
-    },
-    {
-        "id": "davenport_2016",
-        "type": "article",
-        "bibcode": "2016ApJ...829...23D",
-        "title": "The Kepler Catalog of Stellar Flares",
-        "authors": ["Davenport, J. R. A."],
-        "journal": "The Astrophysical Journal",
-        "year": 2016,
-        "arxiv": "1607.03494",
-        "note": "Comprehensive flare detection methodology for Kepler",
-    },
-    {
-        "id": "davenport_2014",
-        "type": "article",
-        "bibcode": "2014ApJ...797..122D",
-        "title": "The Shape of M Dwarf Flares in Kepler Light Curves",
-        "authors": ["Davenport, J. R. A."],
-        "journal": "The Astrophysical Journal",
-        "year": 2014,
-        "arxiv": "1510.05695",
-        "note": "Empirical flare template and morphology",
-    },
-    {
-        "id": "basri_2013",
-        "type": "article",
-        "bibcode": "2013ApJ...769...37B",
-        "title": "Photometric Variability in Kepler Target Stars III: Comparison with the Sun",
-        "authors": ["Basri, G.", "Walkowicz, L.", "Reiners, A."],
-        "journal": "The Astrophysical Journal",
-        "year": 2013,
-        "arxiv": "1304.0136",
-        "note": "Stellar variability metrics and solar comparison",
-    },
-    {
-        "id": "nielsen_2013",
-        "type": "article",
-        "bibcode": "2013A&A...557L..10N",
-        "title": "Rotation periods of 12,000 main-sequence Kepler stars",
-        "authors": ["Nielsen, M. B.", "Gizon, L.", "Schunker, H.", "Karoff, C."],
-        "journal": "Astronomy & Astrophysics",
-        "year": 2013,
-        "arxiv": "1305.5721",
-        "note": "Alternative rotation period measurement approach",
-    },
-    {
-        "id": "reinhold_2020",
-        "type": "article",
-        "bibcode": "2020Sci...368..518R",
-        "title": "The Sun is less active than other solar-like stars",
-        "authors": ["Reinhold, T.", "Shapiro, A. I.", "Solanki, S. K.", "et al."],
-        "journal": "Science",
-        "year": 2020,
-        "note": "Solar activity in context of stellar variability",
-    },
-    {
-        "id": "davenport_2019",
-        "type": "article",
-        "bibcode": "2019ApJ...871..241D",
-        "title": "The Evolution of Flare Activity with Stellar Age",
-        "authors": ["Davenport, J. R. A.", "Covey, K. R.", "Clarke, R. W.", "et al."],
-        "journal": "The Astrophysical Journal",
-        "year": 2019,
-        "arxiv": "1901.00890",
-        "note": "Flare activity vs Rossby number and stellar age",
-    },
-    {
-        "id": "tovar_mendoza_2022",
-        "type": "article",
-        "bibcode": "2022ApJ...927...31T",
-        "title": "Llamaradas Estelares: Modeling the Morphology of White-Light Flares",
-        "authors": ["Tovar Mendoza, G.", "Davenport, J. R. A.", "Agol, E.", "et al."],
-        "journal": "The Astrophysical Journal",
-        "year": 2022,
-        "arxiv": "2205.05706",
-        "note": "Improved analytic flare model",
-    },
+# Module-level references for programmatic access (generated from central registry)
+REFERENCES = [
+    ref.to_dict()
+    for ref in [
+        MCQUILLAN_2014,
+        MCQUILLAN_2013,
+        DAVENPORT_2016,
+        DAVENPORT_2014,
+        BASRI_2013,
+        NIELSEN_2013,
+        REINHOLD_2020,
+        DAVENPORT_2019,
+        TOVAR_MENDOZA_2022,
+    ]
 ]
 
 
+@cites(MCQUILLAN_2014, DAVENPORT_2016, BASRI_2013)
 def characterize_activity(
     lc: LightCurve,
     *,
