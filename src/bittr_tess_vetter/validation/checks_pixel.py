@@ -891,7 +891,8 @@ class ApertureDependenceCheck(VetterCheck):
         super().__init__(config)
         self.tpf_data = tpf_data
         self.time = time
-        self.aperture_radii = aperture_radii or [1.0, 1.5, 2.0, 2.5, 3.0]
+        # Default starts at 1.5px to avoid fragile 1.0px behavior on small/synthetic stamps.
+        self.aperture_radii = aperture_radii or [1.5, 2.0, 2.5, 3.0, 3.5]
 
     @classmethod
     def _default_config(cls) -> CheckConfig:
@@ -1122,7 +1123,7 @@ def check_aperture_dependence_with_tpf(
         )
 
     if aperture_radii is None:
-        aperture_radii = [1.0, 1.5, 2.0, 2.5, 3.0]
+        aperture_radii = [1.5, 2.0, 2.5, 3.0, 3.5]
 
     # Create TransitParams for aperture module
     duration_days = duration_hours / 24.0
