@@ -174,6 +174,13 @@ from bittr_tess_vetter.api.periodogram import (  # noqa: F401
     tls_search_per_sector,
 )
 
+# Primitive catalog (host-facing)
+from bittr_tess_vetter.api.primitives import (  # noqa: F401
+    PRIMITIVES_CATALOG,
+    PrimitiveInfo,
+    list_primitives,
+)
+
 # Pixel/PRF compute facade (host-facing)
 from bittr_tess_vetter.api.pixel_prf import (  # noqa: F401
     FLIP_RATE_FAIL_THRESHOLD,
@@ -400,6 +407,10 @@ __all__ = [
     "detect_sector_gaps",
     "split_by_sectors",
     "merge_candidates",
+    # Primitive catalog (host-facing)
+    "PrimitiveInfo",
+    "PRIMITIVES_CATALOG",
+    "list_primitives",
     # Pixel/PRF facade (host-facing)
     "PRFParams",
     "PRFFitResult",
