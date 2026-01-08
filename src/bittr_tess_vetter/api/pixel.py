@@ -175,6 +175,7 @@ def centroid_shift(
         t0=candidate.ephemeris.t0_btjd,
         duration_hours=candidate.ephemeris.duration_hours,
         depth=candidate.depth or 0.001,
+        snr=0.0,  # Placeholder - not used by pixel checks
     )
 
     result = check.run(internal_candidate)
@@ -274,6 +275,7 @@ def difference_image_localization(
         t0=candidate.ephemeris.t0_btjd,
         duration_hours=candidate.ephemeris.duration_hours,
         depth=candidate.depth or 0.001,
+        snr=0.0,  # Placeholder - not used by pixel checks
     )
 
     result = check.run(internal_candidate)
@@ -366,6 +368,7 @@ def aperture_dependence(
         t0=candidate.ephemeris.t0_btjd,
         duration_hours=candidate.ephemeris.duration_hours,
         depth=candidate.depth or 0.001,
+        snr=0.0,  # Placeholder - not used by pixel checks
     )
 
     result = check.run(internal_candidate)

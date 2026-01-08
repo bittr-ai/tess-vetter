@@ -12,8 +12,9 @@ from typing import Any, Literal
 
 from bittr_tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
 
-if False:  # TYPE_CHECKING without import cost in runtime environments
-    from bittr_tess_vetter.io import PersistentCache  # pragma: no cover
+# PersistentCache type comes from caller (e.g., astro-arc-tess)
+# Using Any since bittr_tess_vetter.io doesn't exist in this package
+PersistentCache = Any
 
 
 @dataclass(frozen=True)

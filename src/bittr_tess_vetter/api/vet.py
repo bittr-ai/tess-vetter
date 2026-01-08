@@ -155,9 +155,9 @@ def vet_candidate(
         )
         results.extend(lc_results)
 
-    # Run catalog checks (V06-V07) if enabled
+    # Run catalog checks (V06-V07) if enabled and required metadata provided
     catalog_checks_to_run = checks_to_run & _CATALOG_CHECKS
-    if catalog_checks_to_run:
+    if catalog_checks_to_run and ra_deg is not None and dec_deg is not None and tic_id is not None:
         from bittr_tess_vetter.api.catalog import vet_catalog
 
         catalog_results = vet_catalog(
@@ -167,7 +167,6 @@ def vet_candidate(
             tic_id=tic_id,
             network=network,
             enabled=catalog_checks_to_run,
-            config={k: v for k, v in config.items() if k in _CATALOG_CHECKS},
         )
         results.extend(catalog_results)
 
