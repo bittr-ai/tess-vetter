@@ -157,6 +157,13 @@ def centroid_shift(
                 "fail_sigma_threshold": config.get("fail_sigma_threshold", 5.0),
                 "warn_shift_threshold": config.get("warn_shift_threshold", 0.5),
                 "warn_sigma_threshold": config.get("warn_sigma_threshold", 3.0),
+                # Method/uncertainty knobs (optional)
+                "centroid_method": config.get("centroid_method", "median"),
+                "significance_method": config.get("significance_method", "bootstrap"),
+                "n_bootstrap": config.get("n_bootstrap", 1000),
+                "bootstrap_seed": config.get("bootstrap_seed"),
+                "outlier_sigma": config.get("outlier_sigma", 3.0),
+                "legacy_mode": config.get("legacy_mode", False),
             },
         )
 
