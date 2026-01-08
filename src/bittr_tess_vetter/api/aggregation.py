@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from bittr_tess_vetter.api.references import COUGHLIN_2016, THOMPSON_2018, cite, cites
 from bittr_tess_vetter.api.types import CheckResult
 from bittr_tess_vetter.domain.detection import Disposition, Verdict, VetterCheckResult
 from bittr_tess_vetter.validation import base as validation_base
@@ -44,6 +45,10 @@ def _to_internal(check: CheckResult) -> VetterCheckResult:
     )
 
 
+@cites(
+    cite(COUGHLIN_2016, "Kepler Robovetter methodology and diagnostic rollups"),
+    cite(THOMPSON_2018, "DR25 Robovetter tiered verdict/disposition logic"),
+)
 def aggregate_checks(
     checks: list[CheckResult],
     *,
@@ -89,4 +94,3 @@ def aggregate_checks(
         unknown_ids=unknown_ids,
         summary=summary,
     )
-

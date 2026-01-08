@@ -90,6 +90,49 @@ from bittr_tess_vetter.compute.joint_likelihood import (  # noqa: F401
     select_best_hypothesis_joint,
 )
 
+from bittr_tess_vetter.api.references import (
+    BRYSON_2010,
+    BRYSON_2013,
+    HIGGINS_BELL_2022,
+    TORRES_2011,
+    cite,
+    cites,
+)
+
+# Attach citations to imported callables (no wrapping; adds __references__ metadata).
+build_prf_model = cites(cite(BRYSON_2010, "PRF model construction"))(build_prf_model)
+build_prf_model_at_pixels = cites(cite(BRYSON_2010, "PRF evaluation on pixel grids"))(  # type: ignore[assignment]
+    build_prf_model_at_pixels
+)
+evaluate_prf_weights = cites(cite(BRYSON_2010, "PRF weight evaluation"))(evaluate_prf_weights)
+
+score_hypotheses_prf_lite = cites(
+    cite(BRYSON_2010, "PRF-based modeling and centroid inference lineage"),
+    cite(BRYSON_2013, "Pixel-level diagnostics for background false positives"),
+    cite(HIGGINS_BELL_2022, "TESS-specific source localization in crowded fields"),
+)(score_hypotheses_prf_lite)
+
+score_hypotheses_with_prf = cites(
+    cite(BRYSON_2010, "PRF-based modeling and centroid inference lineage"),
+    cite(BRYSON_2013, "Pixel-level diagnostics for background false positives"),
+    cite(HIGGINS_BELL_2022, "TESS-specific source localization in crowded fields"),
+)(score_hypotheses_with_prf)
+
+fit_aperture_hypothesis = cites(
+    cite(BRYSON_2013, "Aperture/difference-image evidence for blend rejection"),
+    cite(TORRES_2011, "Blend scenario modeling and rejection"),
+)(fit_aperture_hypothesis)
+
+predict_depth_vs_aperture = cites(
+    cite(BRYSON_2013, "Aperture-dependent depth behavior in blended signals"),
+    cite(TORRES_2011, "Blend scenario modeling and rejection"),
+)(predict_depth_vs_aperture)
+
+detect_aperture_conflict = cites(
+    cite(BRYSON_2013, "Aperture/difference-image evidence for blend rejection"),
+    cite(TORRES_2011, "Blend scenario modeling and rejection"),
+)(detect_aperture_conflict)
+
 __all__ = [
     # PRF-lite
     "build_prf_model",

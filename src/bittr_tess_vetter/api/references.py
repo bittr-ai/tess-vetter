@@ -901,6 +901,16 @@ TOVAR_MENDOZA_2022 = reference(Reference(
     note="Improved analytic flare model",
 ))
 
+GILBERT_2021 = reference(Reference(
+    id="gilbert_2021",
+    title="Flares, Rotation, and Planets of the AU Mic System from TESS Observations",
+    authors=("Gilbert, E.A.", "Barclay, T.", "Quintana, E.V.", "Walkowicz, L.M."),
+    year=2021,
+    arxiv="2109.03924",
+    url="https://arxiv.org/abs/2109.03924",
+    note="Example of flare-heavy TESS light-curve analysis; motivates flare masking prior to transit/rotation modeling",
+))
+
 # -----------------------------------------------------------------------------
 # Transit recovery references (recovery.py)
 # -----------------------------------------------------------------------------
@@ -985,6 +995,38 @@ KOVACS_2002 = reference(Reference(
     year=2002,
     doi="10.1051/0004-6361:20020802",
     note="Original BLS algorithm for transit detection",
+))
+
+LOMB_1976 = reference(Reference(
+    id="lomb_1976",
+    bibcode="1976Ap&SS..39..447L",
+    title="Least-Squares Frequency Analysis of Unequally Spaced Data",
+    authors=("Lomb, N.R.",),
+    journal="Ap&SS 39, 447",
+    year=1976,
+    note="Original Lomb periodogram for unevenly spaced time series",
+))
+
+SCARGLE_1982 = reference(Reference(
+    id="scargle_1982",
+    bibcode="1982ApJ...263..835S",
+    title="Studies in astronomical time series analysis. II. Statistical aspects of spectral analysis of unevenly spaced data.",
+    authors=("Scargle, J.D.",),
+    journal="ApJ 263, 835",
+    year=1982,
+    doi="10.1086/160554",
+    note="Lomb-Scargle periodogram normalization and statistical interpretation",
+))
+
+ZECHMEISTER_KURSTER_2009 = reference(Reference(
+    id="zechmeister_kurster_2009",
+    bibcode="2009A&A...496..577Z",
+    title="The generalised Lomb-Scargle periodogram. A new formalism for the floating-mean and Keplerian periodograms",
+    authors=("Zechmeister, M.", "Kurster, M."),
+    journal="A&A 496, 577",
+    year=2009,
+    doi="10.1051/0004-6361:200811296",
+    note="Generalized Lomb-Scargle formalism (floating mean, weights) often used in modern implementations",
 ))
 
 SUNDARARAJAN_2017 = reference(Reference(
@@ -1345,6 +1387,7 @@ __all__ = [
     "REINHOLD_2020",
     "DAVENPORT_2019",
     "TOVAR_MENDOZA_2022",
+    "GILBERT_2021",
     "HIPPKE_2019_WOTAN",
     "HIPPKE_HELLER_2019_TLS",
     "BARROS_2020",
@@ -1352,6 +1395,9 @@ __all__ = [
     "PETIGURA_2012",
     "LUGER_2016",
     "KOVACS_2002",
+    "LOMB_1976",
+    "SCARGLE_1982",
+    "ZECHMEISTER_KURSTER_2009",
     "SUNDARARAJAN_2017",
     "MORVAN_2020",
     "GIACALONE_2021",

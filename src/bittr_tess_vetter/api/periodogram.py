@@ -24,8 +24,21 @@ from bittr_tess_vetter.compute.periodogram import (  # noqa: F401
     tls_search_per_sector,
 )
 from bittr_tess_vetter.domain.detection import PeriodogramPeak, PeriodogramResult  # noqa: F401
+from bittr_tess_vetter.api.references import (
+    HIPPKE_HELLER_2019_TLS,
+    KOVACS_2002,
+    LOMB_1976,
+    SCARGLE_1982,
+    cite,
+    cites,
+)
 
 
+@cites(
+    cite(HIPPKE_HELLER_2019_TLS, "Transit Least Squares (TLS) periodogram for transit detection"),
+    cite(LOMB_1976, "Lomb periodogram for unevenly spaced time series"),
+    cite(SCARGLE_1982, "Lomb-Scargle normalization/statistics for uneven sampling"),
+)
 def run_periodogram(
     *,
     time: np.ndarray,
@@ -69,6 +82,7 @@ def run_periodogram(
     )
 
 
+@cites(cite(KOVACS_2002, "Box-shaped transit model (BLS lineage)"))
 def compute_transit_model(
     *,
     time: np.ndarray,

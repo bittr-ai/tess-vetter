@@ -105,6 +105,7 @@ class RecoveryResult:
 @cites(
     cite(HIPPKE_2019_WOTAN, "§2-3 detrending methods benchmark"),
     cite(HIPPKE_HELLER_2019_TLS, "§2,4 TLS for active stars"),
+    cite(KOVACS_2002, "Phase-folding and stacking transit signals (BLS lineage)"),
 )
 def recover_transit(
     lc: LightCurve,

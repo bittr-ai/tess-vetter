@@ -37,6 +37,7 @@ from bittr_tess_vetter.api.references import (
     DAVENPORT_2014,
     DAVENPORT_2016,
     DAVENPORT_2019,
+    GILBERT_2021,
     MCQUILLAN_2013,
     MCQUILLAN_2014,
     NIELSEN_2013,
@@ -69,6 +70,7 @@ REFERENCES = [
         REINHOLD_2020,
         DAVENPORT_2019,
         TOVAR_MENDOZA_2022,
+        GILBERT_2021,
     ]
 ]
 
@@ -186,6 +188,10 @@ def characterize_activity(
     )
 
 
+@cites(
+    cite(DAVENPORT_2016, "Flare identification and characterization in Kepler light curves"),
+    cite(GILBERT_2021, "Example of flare-heavy TESS light-curve analysis with flares removed/masked prior to modeling"),
+)
 def mask_flares(
     lc: LightCurve,
     flares: list[Flare],
