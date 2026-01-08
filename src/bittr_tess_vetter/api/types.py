@@ -191,14 +191,14 @@ class CheckResult:
     Attributes:
         id: Check identifier (e.g., "V01", "V02")
         name: Human-readable check name (e.g., "odd_even_depth")
-        passed: Whether the check passed
+        passed: Whether the check passed, or None for metrics-only mode
         confidence: Confidence in the result (0.0 to 1.0)
         details: Check-specific details dictionary
     """
 
     id: str
     name: str
-    passed: bool
+    passed: bool | None
     confidence: float
     details: dict[str, Any]
 

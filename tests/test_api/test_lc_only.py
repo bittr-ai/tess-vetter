@@ -138,7 +138,8 @@ class TestSecondaryEclipse:
         assert isinstance(result, CheckResult)
         assert result.id == "V02"
         assert result.name == "secondary_eclipse"
-        assert isinstance(result.passed, bool)
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
         assert 0.0 <= result.confidence <= 1.0
 
     def test_secondary_eclipse_passes_no_secondary(self) -> None:
@@ -149,8 +150,10 @@ class TestSecondaryEclipse:
 
         result = secondary_eclipse(lc, eph)
 
-        # No secondary eclipse -> should pass
-        assert result.passed
+        # Default is metrics-only; caller makes policy decision downstream.
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
+        assert "secondary_depth" in result.details
 
 
 class TestDurationConsistency:
@@ -205,7 +208,8 @@ class TestDepthStability:
         assert isinstance(result, CheckResult)
         assert result.id == "V04"
         assert result.name == "depth_stability"
-        assert isinstance(result.passed, bool)
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
         assert 0.0 <= result.confidence <= 1.0
 
     def test_depth_stability_stable_transits(self) -> None:
@@ -216,8 +220,10 @@ class TestDepthStability:
 
         result = depth_stability(lc, eph)
 
-        # Consistent depth should pass
-        assert result.passed
+        # Default is metrics-only; caller makes policy decision downstream.
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
+        assert "warnings" in result.details
 
 
 class TestVShape:
@@ -234,7 +240,8 @@ class TestVShape:
         assert isinstance(result, CheckResult)
         assert result.id == "V05"
         assert result.name == "v_shape"
-        assert isinstance(result.passed, bool)
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
         assert 0.0 <= result.confidence <= 1.0
 
 
