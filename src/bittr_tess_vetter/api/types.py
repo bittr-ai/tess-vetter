@@ -8,6 +8,17 @@ This module provides user-facing types for the API facade:
 - Candidate: Transit candidate container (v2)
 - TPFStamp: Target Pixel File data container (v2)
 - VettingBundleResult: Orchestrator output with provenance (v2)
+
+v3 type re-exports:
+- TransitFitResult: Physical transit model fit result
+- TransitTime: Single transit timing measurement
+- TTVResult: Transit timing variation analysis summary
+- OddEvenResult: Odd/even depth comparison for EB vetting
+- ActivityResult: Stellar activity characterization
+- Flare: Individual flare detection
+- StackedTransit: Stacked transit light curve data
+- TrapezoidFit: Trapezoid model fit parameters
+- RecoveryResult: Transit recovery result from active star
 """
 
 from __future__ import annotations
@@ -17,8 +28,30 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+# v3 type re-exports from internal modules
+from bittr_tess_vetter.activity.result import ActivityResult, Flare
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.domain.target import StellarParameters
+from bittr_tess_vetter.recovery.result import StackedTransit, TrapezoidFit
+from bittr_tess_vetter.transit.result import OddEvenResult, TransitTime, TTVResult
+
+# Re-export v3 types for public API
+__all__ = [
+    "ActivityResult",
+    "Candidate",
+    "CheckResult",
+    "Ephemeris",
+    "Flare",
+    "LightCurve",
+    "OddEvenResult",
+    "StackedTransit",
+    "StellarParams",
+    "TPFStamp",
+    "TransitTime",
+    "TrapezoidFit",
+    "TTVResult",
+    "VettingBundleResult",
+]
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
