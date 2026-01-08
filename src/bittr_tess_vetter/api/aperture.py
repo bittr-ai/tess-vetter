@@ -5,6 +5,7 @@ Delegates to `bittr_tess_vetter.pixel.aperture`.
 
 from __future__ import annotations
 
+from bittr_tess_vetter.api.references import BRYSON_2013, TORRES_2011, cite, cites
 from bittr_tess_vetter.pixel.aperture import (
     DEFAULT_APERTURE_RADII,
     ApertureDependenceResult,
@@ -17,6 +18,11 @@ from bittr_tess_vetter.pixel.aperture import (
     compute_aperture_dependence,
 )
 
+compute_aperture_dependence = cites(
+    cite(BRYSON_2013, "Aperture-dependent behavior as a contamination diagnostic"),
+    cite(TORRES_2011, "Blend scenario interpretation and rejection"),
+)(compute_aperture_dependence)
+
 __all__ = [
     "DEFAULT_APERTURE_RADII",
     "ApertureDependenceResult",
@@ -28,4 +34,3 @@ __all__ = [
     "_select_recommended_aperture",
     "compute_aperture_dependence",
 ]
-

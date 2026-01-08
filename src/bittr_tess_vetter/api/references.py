@@ -1029,6 +1029,28 @@ ZECHMEISTER_KURSTER_2009 = reference(Reference(
     note="Generalized Lomb-Scargle formalism (floating mean, weights) often used in modern implementations",
 ))
 
+BYRD_1995_LBFGSB = reference(Reference(
+    id="byrd_1995_lbfgsb",
+    bibcode="1995SJSC...16.1190B",
+    title="A Limited Memory Algorithm for Bound Constrained Optimization",
+    authors=("Byrd, R.H.", "Lu, P.", "Nocedal, J.", "Zhu, C."),
+    journal="SIAM Journal on Scientific Computing 16, 1190",
+    year=1995,
+    doi="10.1137/0916069",
+    note="L-BFGS-B bound-constrained optimization algorithm (used via SciPy minimize(method='L-BFGS-B'))",
+))
+
+GOODMAN_WEARE_2010 = reference(Reference(
+    id="goodman_weare_2010",
+    bibcode="2010CAMCS...5...65G",
+    title="Ensemble samplers with affine invariance",
+    authors=("Goodman, J.", "Weare, J."),
+    journal="Communications in Applied Mathematics and Computational Science 5, 65",
+    year=2010,
+    arxiv="1008.4686",
+    note="Affine-invariant ensemble MCMC sampler underlying emcee",
+))
+
 SUNDARARAJAN_2017 = reference(Reference(
     id="sundararajan_2017",
     title="Axiomatic Attribution for Deep Networks",
@@ -1398,6 +1420,8 @@ __all__ = [
     "LOMB_1976",
     "SCARGLE_1982",
     "ZECHMEISTER_KURSTER_2009",
+    "BYRD_1995_LBFGSB",
+    "GOODMAN_WEARE_2010",
     "SUNDARARAJAN_2017",
     "MORVAN_2020",
     "GIACALONE_2021",

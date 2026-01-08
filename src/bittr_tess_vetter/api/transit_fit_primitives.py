@@ -9,6 +9,18 @@ Note: The higher-level, researcher-facing API is `bittr_tess_vetter.api.transit_
 
 from __future__ import annotations
 
+from bittr_tess_vetter.api.references import (
+    BYRD_1995_LBFGSB,
+    CLARET_2018,
+    FOREMAN_MACKEY_2013,
+    GOODMAN_WEARE_2010,
+    KREIDBERG_2015,
+    MANDEL_AGOL_2002,
+    PARVIAINEN_2015,
+    SEAGER_MALLEN_ORNELAS_2003,
+    cite,
+    cites,
+)
 from bittr_tess_vetter.transit.batman_model import (  # noqa: F401
     ParameterEstimate,
     TransitFitResult,
@@ -23,6 +35,34 @@ from bittr_tess_vetter.transit.batman_model import (  # noqa: F401
     quick_estimate,
 )
 
+# Attach citations to key model/fitting primitives (no wrapping; adds __references__ metadata).
+get_ld_coefficients = cites(
+    cite(CLARET_2018, "TESS limb darkening coefficients"),
+    cite(PARVIAINEN_2015, "LDTk limb darkening toolkit"),
+)(get_ld_coefficients)
+
+compute_batman_model = cites(
+    cite(MANDEL_AGOL_2002, "Analytic transit light curve model"),
+    cite(KREIDBERG_2015, "batman implementation"),
+)(compute_batman_model)
+
+fit_optimize = cites(cite(BYRD_1995_LBFGSB, "L-BFGS-B bound-constrained optimization"))(fit_optimize)
+
+fit_mcmc = cites(
+    cite(FOREMAN_MACKEY_2013, "emcee sampler implementation"),
+    cite(GOODMAN_WEARE_2010, "affine-invariant ensemble MCMC"),
+)(fit_mcmc)
+
+quick_estimate = cites(cite(SEAGER_MALLEN_ORNELAS_2003, "Transit-shape analytic relations"))(
+    quick_estimate
+)
+
+fit_transit_model = cites(
+    cite(MANDEL_AGOL_2002, "Analytic transit model; Rp/Rs, a/Rs, b inference"),
+    cite(KREIDBERG_2015, "batman implementation"),
+    cite(FOREMAN_MACKEY_2013, "emcee for posterior sampling"),
+)(fit_transit_model)
+
 __all__ = [
     "ParameterEstimate",
     "TransitFitResult",
@@ -36,4 +76,3 @@ __all__ = [
     "compute_uncertainties",
     "fit_transit_model",
 ]
-
