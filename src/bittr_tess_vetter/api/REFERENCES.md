@@ -5,6 +5,58 @@ cited in the `lc_only.py` and `transit_primitives.py` modules.
 
 ## Core References
 
+### Greisen & Calabretta 2002 (WCS Paper I)
+
+**Bibcode:** `2002A&A...395.1061G`
+
+> Greisen, E.W., & Calabretta, M.R. 2002, "Representations of world coordinates in FITS,"
+> A&A, 395, 1061
+>
+> arXiv: [astro-ph/0207407](https://arxiv.org/abs/astro-ph/0207407)
+>
+> ADS: [2002A&A...395.1061G](https://ui.adsabs.harvard.edu/abs/2002A%26A...395.1061G)
+
+**Relevance:** Defines the generalized FITS WCS framework (Paper I). This is the
+foundational reference for WCS extraction and world↔pixel transforms used in
+`pixel/wcs_utils.py` and WCS-aware localization.
+
+---
+
+### Calabretta & Greisen 2002 (WCS Paper II)
+
+**Bibcode:** `2002A&A...395.1077C`
+
+> Calabretta, M.R., & Greisen, E.W. 2002, "Representations of celestial coordinates in FITS,"
+> A&A, 395, 1077
+>
+> arXiv: [astro-ph/0207413](https://arxiv.org/abs/astro-ph/0207413)
+>
+> ADS: [2002A&A...395.1077C](https://ui.adsabs.harvard.edu/abs/2002A%26A...395.1077C)
+
+**Relevance:** Defines celestial coordinate conventions and map projections within
+the FITS WCS framework (Paper II). Used as the conceptual basis for RA/Dec handling
+in `pixel/wcs_utils.py`.
+
+---
+
+### Astropy Collaboration 2013
+
+**Bibcode:** `2013A&A...558A..33A`
+
+> Astropy Collaboration 2013, "Astropy: A Community Python Package for Astronomy,"
+> A&A, 558, A33
+>
+> DOI: [10.1051/0004-6361/201322068](https://doi.org/10.1051/0004-6361/201322068)
+>
+> arXiv: [1307.6212](https://arxiv.org/abs/1307.6212)
+>
+> ADS: [2013A&A...558A..33A](https://ui.adsabs.harvard.edu/abs/2013A%26A...558A..33A)
+
+**Relevance:** Software reference for `astropy.wcs`, which is the implementation used
+for WCS extraction and coordinate transforms in `pixel/wcs_utils.py`.
+
+---
+
 ### Seager & Mallen-Ornelas 2003
 
 **Bibcode:** `2003ApJ...585.1038S`
@@ -163,6 +215,13 @@ the TESS-specific vetting including depth consistency checks. Used in V04
 | Duration Consistency | V03 | Seager&Mallen-Ornelas 2003, Twicken+2018, Thompson+2018 |
 | Depth Stability | V04 | Thompson+2018, Twicken+2018, Guerrero+2021 |
 | V-Shape | V05 | Seager&Mallen-Ornelas 2003, Prsa+2011, Thompson+2018 |
+
+## Pixel/WCS Reference Notes
+
+Pixel- and WCS-aware utilities in `bittr_tess_vetter.pixel.*` are derived from the
+Kepler DV / Robovetter diagnostic lineage (difference images, centroid offsets)
+and standard FITS WCS conventions (Greisen & Calabretta 2002; Calabretta & Greisen 2002),
+implemented via `astropy.wcs` (Astropy Collaboration 2013).
 
 ## Adaptation Notes
 

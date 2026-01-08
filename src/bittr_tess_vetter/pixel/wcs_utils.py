@@ -23,6 +23,11 @@ Usage:
 
     # Get sky coordinates for a pixel position
     ra, dec = pixel_to_world(wcs, row=5.5, col=5.5)
+
+References:
+    - Greisen & Calabretta 2002 (2002A&A...395.1061G): FITS WCS framework (Paper I)
+    - Calabretta & Greisen 2002 (2002A&A...395.1077C): celestial WCS conventions (Paper II)
+    - Astropy Collaboration 2013 (2013A&A...558A..33A): astropy.wcs implementation
 """
 
 from __future__ import annotations

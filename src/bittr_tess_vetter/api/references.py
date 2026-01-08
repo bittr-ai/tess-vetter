@@ -414,6 +414,40 @@ PRSA_2022 = Reference(
 # Pixel-level check references (pixel.py)
 # -----------------------------------------------------------------------------
 
+GREISEN_CALABRETTA_2002 = Reference(
+    id="greisen_calabretta_2002",
+    bibcode="2002A&A...395.1061G",
+    title="Representations of world coordinates in FITS",
+    authors=("Greisen, E.W.", "Calabretta, M.R."),
+    journal="A&A 395, 1061",
+    year=2002,
+    arxiv="astro-ph/0207407",
+    note="FITS WCS general framework (Paper I); basis for WCS transforms in pixel utilities",
+)
+
+CALABRETTA_GREISEN_2002 = Reference(
+    id="calabretta_greisen_2002",
+    bibcode="2002A&A...395.1077C",
+    title="Representations of celestial coordinates in FITS",
+    authors=("Calabretta, M.R.", "Greisen, E.W."),
+    journal="A&A 395, 1077",
+    year=2002,
+    arxiv="astro-ph/0207413",
+    note="FITS celestial WCS conventions (Paper II); projections and RA/Dec mappings",
+)
+
+ASTROPY_COLLAB_2013 = Reference(
+    id="astropy_collab_2013",
+    bibcode="2013A&A...558A..33A",
+    title="Astropy: A Community Python Package for Astronomy",
+    authors=("Astropy Collaboration",),
+    journal="A&A 558, A33",
+    year=2013,
+    doi="10.1051/0004-6361/201322068",
+    arxiv="1307.6212",
+    note="Software reference for astropy.wcs usage in WCS utilities",
+)
+
 BRYSON_2013 = Reference(
     id="bryson_2013",
     bibcode="2013PASP..125..889B",
@@ -1000,6 +1034,9 @@ _REGISTRY: dict[str, Reference] = {
     # Catalog
     "prsa_2022": PRSA_2022,
     # Pixel
+    "greisen_calabretta_2002": GREISEN_CALABRETTA_2002,
+    "calabretta_greisen_2002": CALABRETTA_GREISEN_2002,
+    "astropy_collab_2013": ASTROPY_COLLAB_2013,
     "bryson_2013": BRYSON_2013,
     "bryson_2010": BRYSON_2010,
     "batalha_2010": BATALHA_2010,
@@ -1300,6 +1337,9 @@ __all__ = [
     "SANTERNE_2013",
     "WANG_ESPINOZA_2023",
     "PRSA_2022",
+    "GREISEN_CALABRETTA_2002",
+    "CALABRETTA_GREISEN_2002",
+    "ASTROPY_COLLAB_2013",
     "BRYSON_2013",
     "BRYSON_2010",
     "BATALHA_2010",

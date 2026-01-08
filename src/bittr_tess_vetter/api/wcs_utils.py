@@ -1,6 +1,11 @@
 """WCS utility helpers for the public API.
 
 Delegates to `bittr_tess_vetter.pixel.wcs_utils`.
+
+References:
+    - Greisen & Calabretta 2002 (2002A&A...395.1061G): FITS WCS framework (Paper I)
+    - Calabretta & Greisen 2002 (2002A&A...395.1077C): celestial WCS conventions (Paper II)
+    - Astropy Collaboration 2013 (2013A&A...558A..33A): astropy.wcs implementation
 """
 
 from __future__ import annotations

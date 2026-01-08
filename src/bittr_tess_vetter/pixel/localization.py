@@ -6,6 +6,10 @@ reference-coordinate assumption (e.g., assuming the target is at the TPF center)
 
 It intentionally does not require WCS; it reports multiple reasonable reference
 points derived from the pixel data itself (OOT brightest pixel, OOT flux centroid).
+
+References:
+    - Twicken et al. 2018 (2018PASP..130f4502T): difference images and centroid-offset diagnostics
+    - Bryson et al. 2013 (2013PASP..125..889B): pixel-level localization diagnostics
 """
 
 from __future__ import annotations
@@ -193,4 +197,3 @@ def compute_localization_diagnostics(
         "difference_image": diff.astype(np.float32),
     }
     return res, images
-

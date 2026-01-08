@@ -2,12 +2,28 @@
 
 This facade exists to provide a stable import surface for host applications.
 It delegates computation to `bittr_tess_vetter.pixel.wcs_localization`.
+
+References:
+    - Twicken et al. 2018 (2018PASP..130f4502T): difference image centroid offsets (Kepler DV)
+    - Bryson et al. 2013 (2013PASP..125..889B): background false positive localization diagnostics
+    - Greisen & Calabretta 2002 (2002A&A...395.1061G), Calabretta & Greisen 2002 (2002A&A...395.1077C):
+      FITS WCS conventions used for sky↔pixel transforms (via astropy.wcs)
+    - Astropy Collaboration 2013 (2013A&A...558A..33A): astropy.wcs implementation
 """
 
 from __future__ import annotations
 
 from typing import Any, TypedDict
 
+from bittr_tess_vetter.api.references import (
+    ASTROPY_COLLAB_2013,
+    BRYSON_2013,
+    CALABRETTA_GREISEN_2002,
+    GREISEN_CALABRETTA_2002,
+    TWICKEN_2018,
+    cite,
+    cites,
+)
 from bittr_tess_vetter.pixel.wcs_localization import (
     LocalizationResult,
     LocalizationVerdict,
@@ -30,7 +46,25 @@ class ReferenceSource(TypedDict, total=False):
     dec: float
     meta: dict[str, Any]
 
+REFERENCES = [
+    ref.to_dict()
+    for ref in [
+        TWICKEN_2018,
+        BRYSON_2013,
+        GREISEN_CALABRETTA_2002,
+        CALABRETTA_GREISEN_2002,
+        ASTROPY_COLLAB_2013,
+    ]
+]
 
+
+@cites(
+    cite(TWICKEN_2018, "difference images and centroid offsets (Kepler DV)"),
+    cite(BRYSON_2013, "difference-image localization diagnostics"),
+    cite(GREISEN_CALABRETTA_2002, "FITS WCS framework (Paper I)"),
+    cite(CALABRETTA_GREISEN_2002, "celestial WCS conventions (Paper II)"),
+    cite(ASTROPY_COLLAB_2013, "astropy.wcs implementation"),
+)
 def localize_transit_source(
     *,
     tpf_fits: "TPFFitsData",

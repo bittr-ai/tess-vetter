@@ -24,6 +24,11 @@ Usage:
 
     if result.blend_indicator == "increasing":
         print("Potential blend detected!")
+
+References:
+    - Twicken et al. 2018 (2018PASP..130f4502T): pixel-level DV diagnostics and contamination context
+    - Bryson et al. 2013 (2013PASP..125..889B): pixel-level background false positive diagnostics
+    - Torres et al. 2011 (2011ApJ...727...24T): blend scenario interpretation
 """
 
 from __future__ import annotations

@@ -31,6 +31,13 @@ Example:
 
     print(result.verdict)  # LocalizationVerdict.ON_TARGET
     print(result.distances_to_sources)  # {"TIC 123456789": 1.2, "Gaia DR3 ...": 15.3}
+
+References:
+    - Twicken et al. 2018 (2018PASP..130f4502T): difference image centroid offsets (Kepler DV)
+    - Bryson et al. 2013 (2013PASP..125..889B): background false positive localization diagnostics
+    - Greisen & Calabretta 2002 (2002A&A...395.1061G), Calabretta & Greisen 2002 (2002A&A...395.1077C):
+      FITS WCS conventions used for sky↔pixel transforms (via astropy.wcs)
+    - Astropy Collaboration 2013 (2013A&A...558A..33A): astropy.wcs implementation
 """
 
 from __future__ import annotations
