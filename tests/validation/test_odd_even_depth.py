@@ -554,8 +554,8 @@ class TestOddEvenConfig:
 
         assert config.sigma_threshold == 3.0
         assert config.rel_diff_threshold == 0.5
-        assert config.suspicious_sigma_threshold == 2.5
-        assert config.suspicious_rel_diff_threshold == 0.1
+        assert config.suspicious_sigma_threshold == 3.0
+        assert config.suspicious_rel_diff_threshold == 0.15
         assert config.min_transits_per_parity == 2
         assert config.min_points_in_transit_per_epoch == 5
         assert config.min_points_in_transit_per_parity == 20

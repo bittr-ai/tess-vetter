@@ -38,8 +38,11 @@ class OddEvenConfig:
     Attributes:
         sigma_threshold: Significance threshold for delta_sigma to FAIL (default 3.0)
         rel_diff_threshold: Relative difference threshold to FAIL (default 0.5 = 50%)
-        suspicious_sigma_threshold: Significance threshold to flag as SUSPICIOUS (default 2.5)
-        suspicious_rel_diff_threshold: Relative diff threshold to flag SUSPICIOUS (default 0.1 = 10%)
+        suspicious_sigma_threshold: Significance threshold to flag as SUSPICIOUS (default 3.0)
+        suspicious_rel_diff_threshold: Relative diff threshold to flag SUSPICIOUS (default 0.15 = 15%)
+            Note: Uses AND logic (both criteria required). Thresholds empirically derived from
+            1,437 labeled TOIs achieving 9% FPR on planets, 52% TPR on FPs.
+            See working_docs/bittr_tess_vetter/tool_optimization/v01_threshold_analysis.md
         min_transits_per_parity: Minimum transits needed per odd/even group
         min_points_in_transit_per_epoch: Minimum in-transit points per epoch
         min_points_in_transit_per_parity: Minimum total in-transit points per parity
@@ -51,8 +54,8 @@ class OddEvenConfig:
 
     sigma_threshold: float = 3.0
     rel_diff_threshold: float = 0.5
-    suspicious_sigma_threshold: float = 2.5
-    suspicious_rel_diff_threshold: float = 0.1
+    suspicious_sigma_threshold: float = 3.0
+    suspicious_rel_diff_threshold: float = 0.15
     min_transits_per_parity: int = 2
     min_points_in_transit_per_epoch: int = 5
     min_points_in_transit_per_parity: int = 20
@@ -533,10 +536,12 @@ def check_odd_even_depth(
     # Decision rule: FAIL if BOTH thresholds exceeded
     passed = not (delta_sigma >= config.sigma_threshold and rel_diff >= config.rel_diff_threshold)
 
-    # Suspicious flag: lower threshold than fail, either criterion triggers
+    # Suspicious flag: requires BOTH criteria (AND logic)
+    # Empirically tuned on 1,437 labeled TOIs: 9% FPR on planets, 52% TPR on FPs
+    # OR logic tested but rejected due to 48% FPR - see v01_threshold_analysis.md
     suspicious = (
         delta_sigma >= config.suspicious_sigma_threshold
-        or rel_diff >= config.suspicious_rel_diff_threshold
+        and rel_diff >= config.suspicious_rel_diff_threshold
     )
 
     # Confidence
