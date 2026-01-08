@@ -22,6 +22,8 @@ References:
 
 from __future__ import annotations
 
+from typing import Any
+
 from bittr_tess_vetter.api.references import (
     COUGHLIN_2016,
     COUGHLIN_LOPEZ_MORALES_2012,
@@ -37,6 +39,10 @@ from bittr_tess_vetter.api.references import (
 )
 from bittr_tess_vetter.api.types import CheckResult, Ephemeris, LightCurve, StellarParams
 from bittr_tess_vetter.validation.lc_checks import (
+    DepthStabilityConfig,
+    OddEvenConfig,
+    SecondaryEclipseConfig,
+    VShapeConfig,
     check_depth_stability as _check_depth_stability,
 )
 from bittr_tess_vetter.validation.lc_checks import (
@@ -87,6 +93,22 @@ def _convert_result(result: object) -> CheckResult:
     )
 
 
+def _apply_policy_mode(check: CheckResult, *, policy_mode: str) -> CheckResult:
+    if policy_mode != "metrics_only":
+        raise ValueError(f"Unsupported policy_mode={policy_mode!r} (only 'metrics_only' is supported)")
+    if check.passed is None and check.details.get("_metrics_only") is True:
+        return check
+    details = dict(check.details)
+    details["_metrics_only"] = True
+    return CheckResult(
+        id=check.id,
+        name=check.name,
+        passed=None,
+        confidence=check.confidence,
+        details=details,
+    )
+
+
 @cites(
     cite(COUGHLIN_2016, "§4.2 odd/even depth test"),
     cite(THOMPSON_2018, "§3.3.1 DR25 odd/even comparison"),
@@ -95,7 +117,13 @@ def _convert_result(result: object) -> CheckResult:
         "§2–3 time-binning correlated noise; used here as OOT red-noise inflation heuristic",
     ),
 )
-def odd_even_depth(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
+def odd_even_depth(
+    lc: LightCurve,
+    ephemeris: Ephemeris,
+    *,
+    config: dict[str, Any] | None = None,
+    policy_mode: str = "metrics_only",
+) -> CheckResult:
     """V01: Compare depth of odd vs even transits.
 
     Detects eclipsing binaries masquerading as planets at 2x the true period.
@@ -119,13 +147,15 @@ def odd_even_depth(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
             Sections 2-3: Time-correlated (red) noise; binning-based inflation
     """
     internal_lc = lc.to_internal()
+    internal_config = OddEvenConfig(**config) if config else None
     result = _check_odd_even_depth(
         lightcurve=internal_lc,
         period=ephemeris.period_days,
         t0=ephemeris.t0_btjd,
         duration_hours=ephemeris.duration_hours,
+        config=internal_config,
     )
-    return _convert_result(result)
+    return _apply_policy_mode(_convert_result(result), policy_mode=policy_mode)
 
 
 @cites(
@@ -133,7 +163,13 @@ def odd_even_depth(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     cite(THOMPSON_2018, "§3.2 Significant Secondary test"),
     cite(FRESSIN_2013, "§3 FP scenarios incl. secondary eclipses"),
 )
-def secondary_eclipse(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
+def secondary_eclipse(
+    lc: LightCurve,
+    ephemeris: Ephemeris,
+    *,
+    config: dict[str, Any] | None = None,
+    policy_mode: str = "metrics_only",
+) -> CheckResult:
     """V02: Search for secondary eclipse at phase 0.5.
 
     Presence of secondary eclipse indicates hot planet (thermal emission)
@@ -157,12 +193,14 @@ def secondary_eclipse(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
             Section 3: False positive scenarios including secondary eclipses
     """
     internal_lc = lc.to_internal()
+    internal_config = SecondaryEclipseConfig(**config) if config else None
     result = _check_secondary_eclipse(
         lightcurve=internal_lc,
         period=ephemeris.period_days,
         t0=ephemeris.t0_btjd,
+        config=internal_config,
     )
-    return _convert_result(result)
+    return _apply_policy_mode(_convert_result(result), policy_mode=policy_mode)
 
 
 @cites(
@@ -173,6 +211,8 @@ def secondary_eclipse(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
 def duration_consistency(
     ephemeris: Ephemeris,
     stellar: StellarParams | None,
+    *,
+    policy_mode: str = "metrics_only",
 ) -> CheckResult:
     """V03: Check transit duration vs stellar density expectation.
 
@@ -203,7 +243,7 @@ def duration_consistency(
         duration_hours=ephemeris.duration_hours,
         stellar=stellar,
     )
-    return _convert_result(result)
+    return _apply_policy_mode(_convert_result(result), policy_mode=policy_mode)
 
 
 @cites(
@@ -211,7 +251,13 @@ def duration_consistency(
     cite(TWICKEN_2018, "§4.5 transit depth stability"),
     cite(GUERRERO_2021, "§3.2 TESS TOI depth consistency"),
 )
-def depth_stability(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
+def depth_stability(
+    lc: LightCurve,
+    ephemeris: Ephemeris,
+    *,
+    config: dict[str, Any] | None = None,
+    policy_mode: str = "metrics_only",
+) -> CheckResult:
     """V04: Check depth consistency across individual transits.
 
     Variable depth suggests blended eclipsing binary or systematic issues.
@@ -235,13 +281,15 @@ def depth_stability(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
             Section 3.2: TESS TOI vetting including depth consistency
     """
     internal_lc = lc.to_internal()
+    internal_config = DepthStabilityConfig(**config) if config else None
     result = _check_depth_stability(
         lightcurve=internal_lc,
         period=ephemeris.period_days,
         t0=ephemeris.t0_btjd,
         duration_hours=ephemeris.duration_hours,
+        config=internal_config,
     )
-    return _convert_result(result)
+    return _apply_policy_mode(_convert_result(result), policy_mode=policy_mode)
 
 
 @cites(
@@ -249,7 +297,13 @@ def depth_stability(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     cite(PRSA_2011, "§3.2 EB morphology classification"),
     cite(THOMPSON_2018, "§3.1 Not Transit-Like V-shape metric"),
 )
-def v_shape(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
+def v_shape(
+    lc: LightCurve,
+    ephemeris: Ephemeris,
+    *,
+    config: dict[str, Any] | None = None,
+    policy_mode: str = "metrics_only",
+) -> CheckResult:
     """V05: Distinguish U-shaped (planet) vs V-shaped (grazing EB) transits.
 
     Planets have flat-bottomed U-shaped transits. Grazing eclipsing binaries
@@ -273,13 +327,15 @@ def v_shape(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
             Section 3.1: Not Transit-Like (V-shape) metric in DR25 Robovetter
     """
     internal_lc = lc.to_internal()
+    internal_config = VShapeConfig(**config) if config else None
     result = _check_v_shape(
         lightcurve=internal_lc,
         period=ephemeris.period_days,
         t0=ephemeris.t0_btjd,
         duration_hours=ephemeris.duration_hours,
+        config=internal_config,
     )
-    return _convert_result(result)
+    return _apply_policy_mode(_convert_result(result), policy_mode=policy_mode)
 
 
 # Define the default enabled checks and their order
@@ -292,6 +348,8 @@ def vet_lc_only(
     *,
     stellar: StellarParams | None = None,
     enabled: set[str] | None = None,
+    config: dict[str, dict[str, Any]] | None = None,
+    policy_mode: str = "metrics_only",
 ) -> list[CheckResult]:
     """Run all LC-only vetting checks (V01-V05).
 
@@ -314,7 +372,7 @@ def vet_lc_only(
         >>> eph = Ephemeris(period_days=3.5, t0_btjd=1850.0, duration_hours=2.5)
         >>> results = vet_lc_only(lc, eph)
         >>> for r in results:
-        ...     print(f"{r.id} {r.name}: {'PASS' if r.passed else 'FAIL'}")
+        ...     print(f\"{r.id} {r.name}: {'UNKNOWN' if r.passed is None else ('PASS' if r.passed else 'FAIL')}\")
 
     Novelty: standard
 
@@ -330,17 +388,24 @@ def vet_lc_only(
     )
 
     results: list[CheckResult] = []
+    config = config or {}
 
     for check_id in checks_to_run:
         if check_id == "V01":
-            results.append(odd_even_depth(lc, ephemeris))
+            results.append(
+                odd_even_depth(lc, ephemeris, config=config.get("V01"), policy_mode=policy_mode)
+            )
         elif check_id == "V02":
-            results.append(secondary_eclipse(lc, ephemeris))
+            results.append(
+                secondary_eclipse(lc, ephemeris, config=config.get("V02"), policy_mode=policy_mode)
+            )
         elif check_id == "V03":
-            results.append(duration_consistency(ephemeris, stellar))
+            results.append(duration_consistency(ephemeris, stellar, policy_mode=policy_mode))
         elif check_id == "V04":
-            results.append(depth_stability(lc, ephemeris))
+            results.append(
+                depth_stability(lc, ephemeris, config=config.get("V04"), policy_mode=policy_mode)
+            )
         elif check_id == "V05":
-            results.append(v_shape(lc, ephemeris))
+            results.append(v_shape(lc, ephemeris, config=config.get("V05"), policy_mode=policy_mode))
 
     return results

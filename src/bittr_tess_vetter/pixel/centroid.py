@@ -66,9 +66,6 @@ class CentroidShiftConfig:
         pixel_scale_arcsec: TESS pixel scale. Default: 21.0.
         saturation_threshold: Flux threshold for saturation warning. Default: 150000.0.
         outlier_sigma: Sigma threshold for outlier rejection. Default: 3.0.
-        legacy_mode: If True, compute passed field as before. If False (default),
-            return passed=None and raw metrics only. Policy decisions are made
-            by astro-arc-tess guardrails.
     """
 
     fail_shift_pixels: float = 1.0
@@ -83,7 +80,6 @@ class CentroidShiftConfig:
     pixel_scale_arcsec: float = TESS_PIXEL_SCALE_ARCSEC
     saturation_threshold: float = TESS_SATURATION_THRESHOLD
     outlier_sigma: float = 3.0
-    legacy_mode: bool = False
 
 
 # =============================================================================

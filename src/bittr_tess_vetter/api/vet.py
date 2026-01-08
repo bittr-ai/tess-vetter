@@ -67,6 +67,7 @@ def vet_candidate(
     tpf: TPFStamp | None = None,
     enabled: set[str] | None = None,
     config: dict[str, dict[str, Any]] | None = None,
+    policy_mode: str = "metrics_only",
     network: bool = False,
     ra_deg: float | None = None,
     dec_deg: float | None = None,
@@ -152,6 +153,8 @@ def vet_candidate(
             candidate.ephemeris,
             stellar=stellar,
             enabled=lc_checks_to_run,
+            config={k: v for k, v in config.items() if k in _LC_ONLY_CHECKS},
+            policy_mode=policy_mode,
         )
         results.extend(lc_results)
 
@@ -204,6 +207,7 @@ def vet_candidate(
         "checks_requested": sorted(checks_to_run),
         "checks_executed": sorted(r.id for r in results),
         "config": config,
+        "policy_mode": policy_mode,
         "network_enabled": network,
         "tpf_provided": tpf is not None,
         "stellar_provided": stellar is not None,

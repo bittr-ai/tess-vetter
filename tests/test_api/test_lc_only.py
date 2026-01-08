@@ -109,7 +109,8 @@ class TestOddEvenDepth:
         assert isinstance(result, CheckResult)
         assert result.id == "V01"
         assert result.name == "odd_even_depth"
-        assert isinstance(result.passed, bool)
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
         assert 0.0 <= result.confidence <= 1.0
 
     def test_odd_even_depth_passes_for_planet(self) -> None:
@@ -120,8 +121,9 @@ class TestOddEvenDepth:
 
         result = odd_even_depth(lc, eph)
 
-        # Consistent depths should pass
-        assert result.passed
+        # Default is metrics-only; caller makes policy decision downstream.
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
 
 
 class TestSecondaryEclipse:
@@ -168,7 +170,8 @@ class TestDurationConsistency:
         assert isinstance(result, CheckResult)
         assert result.id == "V03"
         assert result.name == "duration_consistency"
-        assert isinstance(result.passed, bool)
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
         assert 0.0 <= result.confidence <= 1.0
 
     def test_duration_consistency_with_stellar_params(self) -> None:
@@ -191,7 +194,8 @@ class TestDurationConsistency:
 
         result = duration_consistency(eph, stellar=stellar)
 
-        assert result.passed
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
 
 
 class TestDepthStability:

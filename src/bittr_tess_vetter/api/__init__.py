@@ -195,6 +195,39 @@ from bittr_tess_vetter.api.types import (
 # Main orchestrator
 from bittr_tess_vetter.api.vet import vet_candidate
 
+# Aggregation + evidence helpers
+from bittr_tess_vetter.api.aggregation import AggregateResult, UnknownPolicy, aggregate_checks
+from bittr_tess_vetter.api.evidence import checks_to_evidence_items
+
+# WCS-aware pixel tools (v0.2 supported surface)
+from bittr_tess_vetter.api.aperture_family import (
+    ApertureFamilyResult,
+    DEFAULT_RADII_PX,
+    compute_aperture_family_depth_curve,
+)
+from bittr_tess_vetter.api.localization import (
+    LocalizationDiagnostics,
+    LocalizationImages,
+    TransitParams,
+    compute_localization_diagnostics,
+)
+from bittr_tess_vetter.api.report import PixelVetReport, generate_pixel_vet_report
+from bittr_tess_vetter.api.wcs_localization import (
+    LocalizationResult,
+    LocalizationVerdict,
+    ReferenceSource,
+    localize_transit_source,
+)
+from bittr_tess_vetter.api.wcs_utils import (
+    compute_pixel_scale,
+    extract_wcs_from_header,
+    pixel_to_world,
+    pixel_to_world_batch,
+    wcs_sanity_check,
+    world_to_pixel,
+    world_to_pixel_batch,
+)
+
 # Prefilters (PFxx)
 from bittr_tess_vetter.api.prefilter import (  # noqa: F401
     compute_depth_over_depth_err_snr,
@@ -246,6 +279,11 @@ __all__ = [
     "RecoveryResult",
     # Main orchestrator (v2)
     "vet_candidate",
+    # Aggregation / evidence helpers (v0.2)
+    "UnknownPolicy",
+    "AggregateResult",
+    "aggregate_checks",
+    "checks_to_evidence_items",
     # Prefilters (PFxx)
     "compute_depth_over_depth_err_snr",
     "compute_phase_coverage",
@@ -332,4 +370,25 @@ __all__ = [
     "TriceratopsFppPreset",
     "FAST_PRESET",
     "STANDARD_PRESET",
+    # WCS-aware / pixel report tools (v0.2)
+    "localize_transit_source",
+    "LocalizationVerdict",
+    "ReferenceSource",
+    "LocalizationResult",
+    "compute_aperture_family_depth_curve",
+    "ApertureFamilyResult",
+    "DEFAULT_RADII_PX",
+    "compute_pixel_scale",
+    "extract_wcs_from_header",
+    "wcs_sanity_check",
+    "pixel_to_world",
+    "pixel_to_world_batch",
+    "world_to_pixel",
+    "world_to_pixel_batch",
+    "compute_localization_diagnostics",
+    "LocalizationDiagnostics",
+    "LocalizationImages",
+    "TransitParams",
+    "generate_pixel_vet_report",
+    "PixelVetReport",
 ]

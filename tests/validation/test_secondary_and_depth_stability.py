@@ -10,18 +10,17 @@ Tests cover the improved implementations with:
 - Metrics-only mode (passed=None by default)
 
 V02 Secondary Eclipse Tests:
-- No secondary: planet-like scenario (PASS in legacy mode)
-- Significant secondary: EB-like scenario (FAIL in legacy mode)
-- Eccentric orbit secondary at offset phase (FAIL in legacy mode)
-- Insufficient data scenarios (PASS with low confidence in legacy mode)
+- No secondary: planet-like scenario (metrics-only)
+- Significant secondary: EB-like scenario (metrics-only)
+- Eccentric orbit secondary at offset phase (metrics-only)
+- Insufficient data scenarios (metrics-only, low confidence)
 - New output fields validation
 
 V04 Depth Stability Tests:
-- Consistent depths: planet-like scenario (PASS in legacy mode)
-- Variable depths: blended EB scenario (FAIL in legacy mode)
+- Consistent depths: planet-like scenario (metrics-only)
+- Variable depths: blended EB scenario (metrics-only)
 - Outlier epoch detection
 - Low N_transits graduated confidence
-- Legacy mode backward compatibility
 - New output fields validation
 """
 
@@ -37,10 +36,6 @@ from bittr_tess_vetter.validation.lc_checks import (
     check_depth_stability,
     check_secondary_eclipse,
 )
-
-# Default configs with legacy_mode=True for backward-compatible tests
-LEGACY_SECONDARY_CONFIG = SecondaryEclipseConfig(legacy_mode=True)
-LEGACY_DEPTH_CONFIG = DepthStabilityConfig(legacy_mode=True)
 
 # =============================================================================
 # Fixtures
@@ -178,22 +173,22 @@ class TestSecondaryEclipseBasic:
         assert "secondary_depth_sigma" in result.details
 
     def test_no_secondary_passes(self, make_synthetic_lc):
-        """Planet-like scenario: no secondary eclipse should pass (legacy mode)."""
+        """Planet-like scenario: no secondary eclipse should have significant_secondary=False."""
         lc = make_synthetic_lc(
             n_orbits=10,
             primary_depth_ppm=1000,
             secondary_depth_ppm=0,
             noise_ppm=100,
         )
-        result = check_secondary_eclipse(lc, period=5.0, t0=2.5, config=LEGACY_SECONDARY_CONFIG)
+        result = check_secondary_eclipse(lc, period=5.0, t0=2.5)
 
-        assert result.passed is True
+        assert result.passed is None
         assert result.id == "V02"
         assert result.name == "secondary_eclipse"
         assert bool(result.details["significant_secondary"]) is False
 
     def test_significant_secondary_fails(self, make_synthetic_lc):
-        """EB-like scenario: significant secondary should fail (legacy mode)."""
+        """EB-like scenario: significant secondary should be flagged in metrics."""
         # Note: secondary_depth_ppm needs to be > 5000 ppm (0.5%) to trigger failure
         # and have high enough SNR to be detected at > 3 sigma
         lc = make_synthetic_lc(
@@ -202,14 +197,14 @@ class TestSecondaryEclipseBasic:
             secondary_depth_ppm=8000,  # 0.8% = very significant secondary
             noise_ppm=50,
         )
-        result = check_secondary_eclipse(lc, period=5.0, t0=2.5, config=LEGACY_SECONDARY_CONFIG)
+        result = check_secondary_eclipse(lc, period=5.0, t0=2.5)
 
-        assert result.passed is False
+        assert result.passed is None
         assert bool(result.details["significant_secondary"]) is True
         assert result.details["secondary_depth_ppm"] > 5000  # > 0.5% threshold
 
     def test_eccentric_secondary_detected(self, make_synthetic_lc):
-        """Secondary at offset phase (eccentric orbit) should be detected (legacy mode)."""
+        """Secondary at offset phase (eccentric orbit) should be detected in metrics."""
         # Secondary at phase 0.55 is well within the search window (0.35-0.65)
         # Note: phase 0.6 would be at the edge and less likely to be detected
         lc = make_synthetic_lc(
@@ -219,10 +214,10 @@ class TestSecondaryEclipseBasic:
             secondary_phase=0.55,  # Eccentric orbit offset (within window center)
             noise_ppm=50,
         )
-        result = check_secondary_eclipse(lc, period=5.0, t0=2.5, config=LEGACY_SECONDARY_CONFIG)
+        result = check_secondary_eclipse(lc, period=5.0, t0=2.5)
 
         # Should detect within widened window (0.35-0.65)
-        assert result.passed is False
+        assert result.passed is None
         assert bool(result.details["significant_secondary"]) is True
 
 
@@ -271,7 +266,7 @@ class TestSecondaryEclipseConfig:
     """Test V02 configuration options."""
 
     def test_custom_sigma_threshold(self, make_synthetic_lc):
-        """Custom sigma threshold should affect detection (legacy mode)."""
+        """Custom sigma threshold should be accepted and reflected in metrics computation."""
         lc = make_synthetic_lc(
             n_orbits=10,
             primary_depth_ppm=1000,
@@ -279,17 +274,12 @@ class TestSecondaryEclipseConfig:
             noise_ppm=80,
         )
 
-        # Default threshold with legacy mode
-        result_default = check_secondary_eclipse(
-            lc, period=5.0, t0=2.5, config=LEGACY_SECONDARY_CONFIG
-        )
+        config = SecondaryEclipseConfig(sigma_threshold=5.0)
+        result = check_secondary_eclipse(lc, period=5.0, t0=2.5, config=config)
 
-        # Stricter threshold with legacy mode
-        config = SecondaryEclipseConfig(sigma_threshold=5.0, legacy_mode=True)
-        result_strict = check_secondary_eclipse(lc, period=5.0, t0=2.5, config=config)
-
-        # Stricter threshold should be more likely to pass
-        assert result_strict.passed or result_default.passed
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
+        assert isinstance(result.details.get("significant_secondary"), bool)
 
     def test_search_window_config(self, make_synthetic_lc):
         """Search window should be configurable."""
@@ -308,16 +298,16 @@ class TestSecondaryEclipseEdgeCases:
     """Edge case tests for V02."""
 
     def test_insufficient_data(self, make_synthetic_lc):
-        """Insufficient data should return low-confidence pass (legacy mode)."""
+        """Insufficient data should return metrics-only with low confidence."""
         lc = make_synthetic_lc(n_orbits=1, noise_ppm=100)  # Only 1 orbit
-        result = check_secondary_eclipse(lc, period=5.0, t0=2.5, config=LEGACY_SECONDARY_CONFIG)
+        result = check_secondary_eclipse(lc, period=5.0, t0=2.5)
 
-        assert result.passed is True
+        assert result.passed is None
         assert result.confidence <= 0.5
         assert "warnings" in result.details
 
     def test_sparse_coverage(self, make_synthetic_lc):
-        """Few orbits should produce lower confidence (legacy mode)."""
+        """Few orbits should produce lower confidence and/or warnings."""
         # Use only 2 orbits - should result in low event count warning
         lc = make_synthetic_lc(
             n_orbits=2,  # Very few orbits
@@ -325,9 +315,7 @@ class TestSecondaryEclipseEdgeCases:
             secondary_depth_ppm=0,
             noise_ppm=100,
         )
-        config = SecondaryEclipseConfig(
-            min_secondary_events=3, legacy_mode=True
-        )  # Require 3 events
+        config = SecondaryEclipseConfig(min_secondary_events=3)  # Require 3 events
         result = check_secondary_eclipse(lc, period=5.0, t0=2.5, config=config)
 
         # Should have warnings about insufficient events or low confidence
@@ -366,18 +354,16 @@ class TestDepthStabilityBasic:
         assert "rms_scatter" in result.details
 
     def test_consistent_depths_pass(self, make_synthetic_lc):
-        """Planet-like consistent depths should pass (legacy mode)."""
+        """Planet-like consistent depths should yield reasonable chi2 (metrics-only)."""
         lc = make_synthetic_lc(
             n_orbits=10,
             primary_depth_ppm=1000,
             depth_scatter_ppm=0,  # No scatter
             noise_ppm=100,
         )
-        result = check_depth_stability(
-            lc, period=5.0, t0=2.5, duration_hours=3.0, config=LEGACY_DEPTH_CONFIG
-        )
+        result = check_depth_stability(lc, period=5.0, t0=2.5, duration_hours=3.0)
 
-        assert result.passed is True
+        assert result.passed is None
         assert result.id == "V04"
         assert result.name == "depth_stability"
         # Chi2 should be reasonable
@@ -515,38 +501,24 @@ class TestDepthStabilityOutliers:
 class TestDepthStabilityConfig:
     """Test V04 configuration options."""
 
-    def test_legacy_mode(self, make_synthetic_lc):
-        """Legacy mode should use RMS scatter threshold."""
-        lc = make_synthetic_lc(n_orbits=10, noise_ppm=100)
-
-        result = check_depth_stability(
-            lc, period=5.0, t0=2.5, duration_hours=3.0, config=LEGACY_DEPTH_CONFIG
-        )
-
-        # Should still produce result
-        assert result.id == "V04"
-        assert "rms_scatter" in result.details
-        # Legacy mode should not have _metrics_only flag set
-        assert result.details.get("_metrics_only") is False
-
     def test_chi2_threshold_config(self, make_synthetic_lc):
-        """Chi-squared thresholds should be configurable (legacy mode)."""
+        """Chi-squared thresholds should be configurable (metrics-only)."""
         lc = make_synthetic_lc(n_orbits=15, noise_ppm=100)
 
         # Strict threshold
-        config_strict = DepthStabilityConfig(chi2_threshold_pass=1.0, legacy_mode=True)
+        config_strict = DepthStabilityConfig(chi2_threshold_pass=1.0)
         result_strict = check_depth_stability(
             lc, period=5.0, t0=2.5, duration_hours=3.0, config=config_strict
         )
 
         # Lenient threshold
-        config_lenient = DepthStabilityConfig(chi2_threshold_pass=5.0, legacy_mode=True)
+        config_lenient = DepthStabilityConfig(chi2_threshold_pass=5.0)
         result_lenient = check_depth_stability(
             lc, period=5.0, t0=2.5, duration_hours=3.0, config=config_lenient
         )
 
-        # Lenient should be more likely to pass
-        assert result_lenient.passed or not result_strict.passed
+        assert result_strict.passed is None
+        assert result_lenient.passed is None
 
 
 class TestDepthStabilityGraduatedConfidence:
@@ -573,13 +545,11 @@ class TestDepthStabilityEdgeCases:
     """Edge case tests for V04."""
 
     def test_insufficient_transits(self, make_synthetic_lc):
-        """< 2 transits should return low-confidence pass (legacy mode)."""
+        """< 2 transits should return metrics-only with low confidence."""
         lc = make_synthetic_lc(n_orbits=1, noise_ppm=100)
-        result = check_depth_stability(
-            lc, period=5.0, t0=2.5, duration_hours=3.0, config=LEGACY_DEPTH_CONFIG
-        )
+        result = check_depth_stability(lc, period=5.0, t0=2.5, duration_hours=3.0)
 
-        assert result.passed is True
+        assert result.passed is None
         assert result.confidence <= 0.5
         assert "note" in result.details
 

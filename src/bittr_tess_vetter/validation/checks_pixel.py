@@ -106,9 +106,8 @@ class CentroidShiftCheck(VetterCheck):
         """Return default configuration for V08 check.
 
         Note: Threshold fields are DEPRECATED. Threshold interpretation has been
-        moved to astro-arc-tess guardrails. By default, this check returns
-        passed=None (metrics-only mode). Set legacy_mode=True to compute
-        passed based on thresholds.
+        moved to astro-arc-tess guardrails. This check returns passed=None
+        (metrics-only mode); host applications make policy decisions.
         """
         return CheckConfig(
             enabled=True,
@@ -125,9 +124,6 @@ class CentroidShiftCheck(VetterCheck):
                 "outlier_sigma": 3.0,
                 "min_in_transit_cadences": 5,
                 "min_out_transit_cadences": 20,
-                # Metrics-only mode (default): passed=None
-                # Set legacy_mode=True to compute passed based on thresholds
-                "legacy_mode": False,
             },
         )
 
@@ -152,11 +148,12 @@ class CentroidShiftCheck(VetterCheck):
             logger.warning("V08 (Centroid Shift) requires TPF data. Returning low-confidence pass.")
             return make_result(
                 "V08",
-                passed=True,
+                passed=None,
                 confidence=0.1,
                 details={
                     "note": "TPF data not available for centroid shift analysis",
                     "deferred": True,
+                    "_metrics_only": True,
                 },
             )
 
@@ -164,23 +161,25 @@ class CentroidShiftCheck(VetterCheck):
         if self.tpf_data.ndim != 3:
             return make_result(
                 "V08",
-                passed=True,
+                passed=None,
                 confidence=0.0,
                 details={
                     "error": f"Invalid TPF shape: expected 3D, got {self.tpf_data.ndim}D",
+                    "_metrics_only": True,
                 },
             )
 
         if len(self.time) != self.tpf_data.shape[0]:
             return make_result(
                 "V08",
-                passed=True,
+                passed=None,
                 confidence=0.0,
                 details={
                     "error": (
                         f"Time/TPF mismatch: {len(self.time)} times, "
                         f"{self.tpf_data.shape[0]} frames"
                     ),
+                    "_metrics_only": True,
                 },
             )
 
@@ -222,11 +221,12 @@ class CentroidShiftCheck(VetterCheck):
         except ValueError as e:
             return make_result(
                 "V08",
-                passed=True,
+                passed=None,
                 confidence=0.1,
                 details={
                     "reason": "computation_error",
                     "message": str(e),
+                    "_metrics_only": True,
                 },
             )
 
@@ -234,22 +234,22 @@ class CentroidShiftCheck(VetterCheck):
         if np.isnan(result.centroid_shift_pixels) or np.isnan(result.significance_sigma):
             return make_result(
                 "V08",
-                passed=True,
+                passed=None,
                 confidence=0.2,
                 details={
                     "reason": "insufficient_data",
                     "message": "Could not compute centroid - insufficient in/out transit data",
                     "n_in_transit": result.n_in_transit_cadences,
                     "n_out_transit": result.n_out_transit_cadences,
+                    "_metrics_only": True,
                 },
             )
 
-        # Get thresholds from config (DEPRECATED - used only in legacy_mode)
+        # Get thresholds from config (DEPRECATED - provided for downstream policy)
         fail_shift = self.config.threshold if self.config.threshold is not None else 1.0
         fail_sigma = self.config.additional.get("fail_sigma_threshold", 5.0)
         warn_shift = self.config.additional.get("warn_shift_threshold", 0.5)
         warn_sigma = self.config.additional.get("warn_sigma_threshold", 3.0)
-        legacy_mode = self.config.additional.get("legacy_mode", False)
 
         # Extract metrics
         shift = result.centroid_shift_pixels
@@ -259,39 +259,20 @@ class CentroidShiftCheck(VetterCheck):
         is_fail = (shift >= fail_shift) and (sigma >= fail_sigma)
         is_warn = (shift >= warn_shift) or (sigma >= warn_sigma)
 
-        # Determine passed value based on mode
-        if legacy_mode:
-            # Legacy mode: compute passed based on thresholds
-            if is_fail:
-                passed: bool | None = False
-                confidence = 0.95  # High confidence in failure
-            elif is_warn:
-                passed = True  # Pass but with warning
-                confidence = 0.6  # Lower confidence
-            else:
-                passed = True
-                # Confidence based on number of cadences
-                base_confidence = 0.85
-                if result.n_in_transit_cadences >= 20 and result.n_out_transit_cadences >= 100:
-                    base_confidence = 0.95
-                elif result.n_in_transit_cadences < 5 or result.n_out_transit_cadences < 20:
-                    base_confidence = 0.6
-                confidence = base_confidence
-        else:
-            # Metrics-only mode: return passed=None, let caller make policy decisions
-            passed = None
-            # Confidence reflects data quality only, not policy decision
-            base_confidence = 0.85
-            if result.n_in_transit_cadences >= 20 and result.n_out_transit_cadences >= 100:
-                base_confidence = 0.95
-            elif result.n_in_transit_cadences < 5 or result.n_out_transit_cadences < 20:
-                base_confidence = 0.6
-            confidence = base_confidence
+        # Metrics-only: host applications decide policy based on returned metrics.
+        passed: bool | None = None
+        # Confidence reflects data quality only, not policy decision
+        base_confidence = 0.85
+        if result.n_in_transit_cadences >= 20 and result.n_out_transit_cadences >= 100:
+            base_confidence = 0.95
+        elif result.n_in_transit_cadences < 5 or result.n_out_transit_cadences < 20:
+            base_confidence = 0.6
+        confidence = base_confidence
 
         # Build details dict with all V08 v2 output fields
         details: dict[str, Any] = {
             # Metrics-only mode marker
-            "_metrics_only": not legacy_mode,
+            "_metrics_only": True,
             # Core results
             "centroid_shift_pixels": round(shift, 4),
             "centroid_shift_arcsec": round(result.centroid_shift_arcsec, 2),
@@ -375,16 +356,14 @@ def check_centroid_shift_with_tpf(
     n_bootstrap: int = 1000,
     bootstrap_seed: int | None = None,
     outlier_sigma: float = 3.0,
-    legacy_mode: bool = False,
 ) -> VetterCheckResult:
     """V08: Centroid shift check (functional interface).
 
     Convenience function for running V08 without creating a check instance.
     Uses robust centroid estimation with bootstrap uncertainties by default.
 
-    By default (legacy_mode=False), returns passed=None with raw metrics only.
-    Policy decisions are made by astro-arc-tess guardrails. Set legacy_mode=True
-    to compute passed based on thresholds.
+    This is metrics-only: returns passed=None with raw metrics only.
+    Policy decisions are made by downstream guardrails (e.g., astro-arc-tess).
 
     Args:
         tpf_data: TPF flux data with shape (time, rows, cols).
@@ -400,9 +379,6 @@ def check_centroid_shift_with_tpf(
         significance_method: Method for significance ("analytic", "bootstrap").
         n_bootstrap: Number of bootstrap iterations.
         outlier_sigma: Sigma threshold for outlier rejection.
-        legacy_mode: If True, compute passed based on thresholds. If False (default),
-            return passed=None and raw metrics only.
-
     Returns:
         VetterCheckResult with centroid shift analysis including:
         - centroid_shift_pixels, centroid_shift_arcsec
@@ -410,23 +386,29 @@ def check_centroid_shift_with_tpf(
         - shift_uncertainty_pixels, shift_ci_lower_pixels, shift_ci_upper_pixels
         - saturation_risk, n_outliers_rejected
         - centroid_warnings
-        - _metrics_only: True if legacy_mode=False
+        - _metrics_only: True
     """
     # Validate inputs
     if tpf_data.ndim != 3:
         return make_result(
             "V08",
-            passed=True,
+            passed=None,
             confidence=0.0,
-            details={"error": f"Expected 3D TPF data, got shape {tpf_data.shape}"},
+            details={
+                "error": f"Expected 3D TPF data, got shape {tpf_data.shape}",
+                "_metrics_only": True,
+            },
         )
 
     if len(time) != tpf_data.shape[0]:
         return make_result(
             "V08",
-            passed=True,
+            passed=None,
             confidence=0.0,
-            details={"error": f"Time length {len(time)} != TPF cadences {tpf_data.shape[0]}"},
+            details={
+                "error": f"Time length {len(time)} != TPF cadences {tpf_data.shape[0]}",
+                "_metrics_only": True,
+            },
         )
 
     # Create TransitParams for centroid module
@@ -451,16 +433,16 @@ def check_centroid_shift_with_tpf(
     except ValueError as e:
         return make_result(
             "V08",
-            passed=True,
+            passed=None,
             confidence=0.1,
-            details={"reason": "computation_error", "message": str(e)},
+            details={"reason": "computation_error", "message": str(e), "_metrics_only": True},
         )
 
     # Handle NaN results
     if np.isnan(result.centroid_shift_pixels) or np.isnan(result.significance_sigma):
         return make_result(
             "V08",
-            passed=True,
+            passed=None,
             confidence=0.2,
             details={
                 "reason": "insufficient_data",
@@ -468,6 +450,7 @@ def check_centroid_shift_with_tpf(
                 "n_in_transit": result.n_in_transit_cadences,
                 "n_out_of_transit": result.n_out_transit_cadences,
                 "centroid_warnings": list(result.warnings) if result.warnings else [],
+                "_metrics_only": True,
             },
         )
 
@@ -478,27 +461,13 @@ def check_centroid_shift_with_tpf(
     is_fail = (shift >= fail_shift_threshold) and (sigma >= fail_sigma_threshold)
     is_warn = (shift >= warn_shift_threshold) or (sigma >= warn_sigma_threshold)
 
-    # Determine passed value based on mode
-    if legacy_mode:
-        # Legacy mode: compute passed based on thresholds
-        if is_fail:
-            passed: bool | None = False
-            confidence = 0.95
-        elif is_warn:
-            passed = True
-            confidence = 0.6
-        else:
-            passed = True
-            confidence = 0.85 if result.n_in_transit_cadences >= 10 else 0.6
-    else:
-        # Metrics-only mode: return passed=None, let caller make policy decisions
-        passed = None
-        confidence = 0.85 if result.n_in_transit_cadences >= 10 else 0.6
+    passed: bool | None = None
+    confidence = 0.85 if result.n_in_transit_cadences >= 10 else 0.6
 
     # Build comprehensive details dict
     details: dict[str, Any] = {
         # Metrics-only mode marker
-        "_metrics_only": not legacy_mode,
+        "_metrics_only": True,
         # Core results
         "centroid_shift_pixels": round(shift, 4),
         "centroid_shift_arcsec": round(result.centroid_shift_arcsec, 2),
@@ -537,6 +506,9 @@ def check_centroid_shift_with_tpf(
         # Method metadata
         "centroid_method": result.centroid_method,
         "significance_method": result.significance_method,
+        # Threshold-based flags (for downstream policy/guardrails)
+        "is_fail": bool(is_fail),
+        "is_warn": bool(is_warn),
         "n_bootstrap": result.n_bootstrap,
         "n_outliers_rejected": result.n_outliers_rejected,
         # Warnings
@@ -548,6 +520,8 @@ def check_centroid_shift_with_tpf(
             "warn_shift": warn_shift_threshold,
             "warn_sigma": warn_sigma_threshold,
         },
+        "is_fail": bool(is_fail),
+        "is_warn": bool(is_warn),
     }
 
     if is_warn and not is_fail:

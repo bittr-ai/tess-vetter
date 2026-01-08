@@ -324,22 +324,32 @@ class VettingBundleResult:
     @property
     def n_passed(self) -> int:
         """Count of passed checks."""
-        return sum(1 for r in self.results if r.passed)
+        return sum(1 for r in self.results if r.passed is True)
 
     @property
     def n_failed(self) -> int:
         """Count of failed checks."""
-        return sum(1 for r in self.results if not r.passed)
+        return sum(1 for r in self.results if r.passed is False)
+
+    @property
+    def n_unknown(self) -> int:
+        """Count of checks with `passed=None` (metrics-only / unknown)."""
+        return sum(1 for r in self.results if r.passed is None)
 
     @property
     def all_passed(self) -> bool:
         """True if all checks passed."""
-        return all(r.passed for r in self.results)
+        return all(r.passed is True for r in self.results)
 
     @property
     def failed_check_ids(self) -> list[str]:
         """List of IDs for failed checks."""
-        return [r.id for r in self.results if not r.passed]
+        return [r.id for r in self.results if r.passed is False]
+
+    @property
+    def unknown_check_ids(self) -> list[str]:
+        """List of IDs for metrics-only/unknown checks."""
+        return [r.id for r in self.results if r.passed is None]
 
     def get_result(self, check_id: str) -> CheckResult | None:
         """Get result by check ID."""

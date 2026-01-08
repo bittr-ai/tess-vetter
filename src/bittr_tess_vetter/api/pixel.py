@@ -163,7 +163,6 @@ def centroid_shift(
                 "n_bootstrap": config.get("n_bootstrap", 1000),
                 "bootstrap_seed": config.get("bootstrap_seed"),
                 "outlier_sigma": config.get("outlier_sigma", 3.0),
-                "legacy_mode": config.get("legacy_mode", False),
             },
         )
 

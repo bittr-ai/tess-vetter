@@ -3,6 +3,7 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .venv/
+.astro-arc/
 dist/
 build/
 *.egg-info/

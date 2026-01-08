@@ -2,10 +2,10 @@
 
 Tests cover the improved per-epoch depth extraction implementation with:
 - Deterministic synthetic light curves
-- Planet-like equal depths (PASS in legacy mode)
-- EB-like different depths (FAIL in legacy mode)
-- Low-N scenarios (PASS + warning in legacy mode)
-- Sparse OOT scenarios (PASS + warning in legacy mode)
+- Planet-like equal depths (metrics-only)
+- EB-like different depths (metrics-only)
+- Low-N scenarios (metrics-only + warning)
+- Sparse OOT scenarios (metrics-only + warning)
 - Legacy key backward compatibility
 - Metrics-only mode (passed=None by default)
 """
@@ -17,9 +17,6 @@ import pytest
 
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.validation.lc_checks import OddEvenConfig, check_odd_even_depth
-
-# Default config with legacy_mode=True for backward-compatible tests
-LEGACY_CONFIG = OddEvenConfig(legacy_mode=True)
 
 
 @pytest.fixture
@@ -162,8 +159,8 @@ def make_synthetic_lc():
 class TestOddEvenDepth:
     """Test suite for check_odd_even_depth function."""
 
-    def test_default_returns_boolean_passed(self, make_synthetic_lc) -> None:
-        """Default mode should return passed as boolean (not None) with metrics_only flag."""
+    def test_default_returns_metrics_only(self, make_synthetic_lc) -> None:
+        """Default mode should return metrics-only (passed=None)."""
         lc, t0 = make_synthetic_lc(
             n_transits=20,
             depth_ppm=2000,
@@ -172,9 +169,7 @@ class TestOddEvenDepth:
         )
         result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
 
-        # passed must always be a boolean (never None) to satisfy VetterCheckResult model
-        assert isinstance(result.passed, bool)
-        assert result.passed is True  # Planet-like equal depths should pass
+        assert result.passed is None
         assert result.details.get("_metrics_only") is True
         # Metrics should still be computed
         assert "delta_sigma" in result.details
@@ -185,7 +180,7 @@ class TestOddEvenDepth:
         assert bool(suspicious) in (True, False)
 
     def test_planet_like_equal_depths_passes(self, make_synthetic_lc) -> None:
-        """Equal odd/even depths should pass with high confidence (legacy mode)."""
+        """Equal odd/even depths should yield small odd/even mismatch metrics."""
         # Use more transits and lower noise for cleaner detection
         lc, t0 = make_synthetic_lc(
             n_transits=20,
@@ -193,11 +188,9 @@ class TestOddEvenDepth:
             odd_even_ratio=1.0,
             noise_ppm=50,
         )
-        result = check_odd_even_depth(
-            lc, period=5.0, t0=t0, duration_hours=3.0, config=LEGACY_CONFIG
-        )
+        result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
 
-        assert result.passed is True
+        assert result.passed is None
         assert result.confidence >= 0.5
         # With equal depths and good S/N, delta_sigma should be modest
         # (relaxed threshold since per-epoch estimation has intrinsic scatter)
@@ -206,7 +199,7 @@ class TestOddEvenDepth:
         assert result.details["rel_diff"] < 0.3
 
     def test_eb_like_different_depths_fails(self, make_synthetic_lc) -> None:
-        """EB at 2x period (different odd/even depths) should fail (legacy mode)."""
+        """EB-like odd/even mismatch should yield large mismatch metrics."""
         # Odd depth = 20% of even depth (extreme EB case: primary much deeper than secondary)
         # More transits and lower noise for robust detection
         lc, t0 = make_synthetic_lc(
@@ -215,9 +208,7 @@ class TestOddEvenDepth:
             odd_even_ratio=0.2,  # Secondary is 20% of primary (2000 ppm)
             noise_ppm=50,
         )
-        result = check_odd_even_depth(
-            lc, period=5.0, t0=t0, duration_hours=3.0, config=LEGACY_CONFIG
-        )
+        result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
 
         # Check that we're measuring the expected depth difference
         # odd depths ~2000 ppm, even depths ~10000 ppm
@@ -229,14 +220,10 @@ class TestOddEvenDepth:
         )
         # delta_sigma should be high given the large depth difference
         assert result.details["delta_sigma"] >= 3.0, f"delta_sigma={result.details['delta_sigma']}"
-        # Should fail the dual threshold test
-        assert result.passed is False, (
-            f"Expected FAIL but got PASS: delta_sigma={result.details['delta_sigma']}, "
-            f"rel_diff={result.details['rel_diff']}"
-        )
+        assert bool(result.details.get("suspicious")) is True
 
     def test_marginal_eb_with_high_sigma_but_low_rel_diff_passes(self, make_synthetic_lc) -> None:
-        """High sigma but low relative difference should pass (dual threshold, legacy mode)."""
+        """High sigma but low relative difference should not necessarily be suspicious."""
         # Very shallow transits where statistical noise can create high sigma
         # but actual depth difference is small in absolute terms
         lc, t0 = make_synthetic_lc(
@@ -245,17 +232,13 @@ class TestOddEvenDepth:
             odd_even_ratio=0.9,  # 10% difference
             noise_ppm=50,
         )
-        result = check_odd_even_depth(
-            lc, period=5.0, t0=t0, duration_hours=3.0, config=LEGACY_CONFIG
-        )
+        result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
 
-        # Should pass because rel_diff is low even if sigma might be borderline
-        # The dual threshold protects against false flags on shallow transits
-        assert result.passed is True
+        assert result.passed is None
         assert result.details["rel_diff"] < 0.5
 
     def test_low_n_passes_with_warning(self, make_synthetic_lc) -> None:
-        """Few transits should pass with low confidence and warning (legacy mode)."""
+        """Few transits should return metrics-only with low confidence and warnings."""
         # Only 3 transits: 1 odd, 2 even (or 2 odd, 1 even)
         lc, t0 = make_synthetic_lc(
             n_transits=3,
@@ -263,18 +246,16 @@ class TestOddEvenDepth:
             odd_even_ratio=1.0,
             noise_ppm=100,
         )
-        result = check_odd_even_depth(
-            lc, period=5.0, t0=t0, duration_hours=3.0, config=LEGACY_CONFIG
-        )
+        result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
 
-        assert result.passed is True
+        assert result.passed is None
         # With only 3 transits, we have min(1, 2) = 1 transit per parity
         # This triggers the minimum data policy
         assert result.confidence <= 0.5
         assert len(result.details.get("warnings", [])) > 0
 
     def test_sparse_oot_emits_warning_but_passes(self, make_synthetic_lc) -> None:
-        """Sparse out-of-transit data should still work but may emit warning (legacy mode)."""
+        """Sparse out-of-transit data should still work but may emit warnings."""
         # Create a light curve with minimal OOT points by using very long transits
         # relative to the observation span
         lc, t0 = make_synthetic_lc(
@@ -285,11 +266,10 @@ class TestOddEvenDepth:
             odd_even_ratio=1.0,
         )
         # Use a tight baseline window that may trigger sparse OOT warning
-        config = OddEvenConfig(baseline_window_mult=2.0, legacy_mode=True)
+        config = OddEvenConfig(baseline_window_mult=2.0)
         result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=6.0, config=config)
 
-        # Should still pass (planet-like)
-        assert result.passed is True
+        assert result.passed is None
         # May have warnings about OOT data
         # (Warnings are informational, not necessarily blocking)
 
@@ -378,7 +358,7 @@ class TestOddEvenDepth:
         assert len(even_depths) <= 20
 
     def test_config_overrides_work(self, make_synthetic_lc) -> None:
-        """Custom config should override default thresholds (legacy mode)."""
+        """Custom config should be accepted and produce metrics-only output."""
         # EB-like signal that would fail with defaults
         lc, t0 = make_synthetic_lc(
             n_transits=10,
@@ -391,17 +371,17 @@ class TestOddEvenDepth:
         lenient_config = OddEvenConfig(
             sigma_threshold=10.0,  # Very lenient
             rel_diff_threshold=0.9,  # Very lenient
-            legacy_mode=True,
+            use_red_noise_inflation=True,
         )
         result = check_odd_even_depth(
             lc, period=5.0, t0=t0, duration_hours=3.0, config=lenient_config
         )
 
-        # Should pass with lenient config even though depths differ
-        assert result.passed is True
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
 
     def test_red_noise_inflation_increases_uncertainty(self, make_synthetic_lc) -> None:
-        """Red noise inflation should increase uncertainty estimates (legacy mode)."""
+        """Red noise inflation should increase uncertainty estimates."""
         # Create light curve with some baseline drift (red noise proxy)
         lc, t0 = make_synthetic_lc(
             n_transits=10,
@@ -412,8 +392,8 @@ class TestOddEvenDepth:
         )
 
         # Run with and without red noise inflation
-        config_no_rn = OddEvenConfig(use_red_noise_inflation=False, legacy_mode=True)
-        config_with_rn = OddEvenConfig(use_red_noise_inflation=True, legacy_mode=True)
+        config_no_rn = OddEvenConfig(use_red_noise_inflation=False)
+        config_with_rn = OddEvenConfig(use_red_noise_inflation=True)
 
         result_no_rn = check_odd_even_depth(
             lc, period=5.0, t0=t0, duration_hours=3.0, config=config_no_rn
@@ -422,55 +402,28 @@ class TestOddEvenDepth:
             lc, period=5.0, t0=t0, duration_hours=3.0, config=config_with_rn
         )
 
-        # Both should pass (planet-like)
-        assert result_no_rn.passed is True
-        assert result_with_rn.passed is True
-
         # With red noise, uncertainty should be equal or larger
         # (delta_sigma should be equal or smaller)
         # Note: with real red noise, we expect inflation; with white noise, ratio ~ 1
         assert result_with_rn.details["delta_sigma"] <= result_no_rn.details["delta_sigma"] * 1.5
 
     def test_confidence_increases_with_more_transits(self, make_synthetic_lc) -> None:
-        """Confidence should increase with more transits (legacy mode)."""
+        """Confidence should increase with more transits."""
         # Few transits
         lc_few, t0_few = make_synthetic_lc(n_transits=4, depth_ppm=1000)
-        result_few = check_odd_even_depth(
-            lc_few, period=5.0, t0=t0_few, duration_hours=3.0, config=LEGACY_CONFIG
-        )
+        result_few = check_odd_even_depth(lc_few, period=5.0, t0=t0_few, duration_hours=3.0)
 
         # Many transits
         lc_many, t0_many = make_synthetic_lc(n_transits=20, depth_ppm=1000)
         result_many = check_odd_even_depth(
-            lc_many, period=5.0, t0=t0_many, duration_hours=3.0, config=LEGACY_CONFIG
+            lc_many, period=5.0, t0=t0_many, duration_hours=3.0
         )
 
-        # More transits should give higher confidence (assuming both pass)
-        assert result_few.passed is True
-        assert result_many.passed is True
+        # More transits should give higher confidence (all else equal)
         assert result_many.confidence >= result_few.confidence
 
     def test_insufficient_data_returns_pass_with_warnings(self, make_synthetic_lc) -> None:
-        """Insufficient data should return pass with very low confidence and warnings (legacy mode)."""
-        # Single transit only
-        lc, t0 = make_synthetic_lc(
-            n_transits=1,
-            depth_ppm=1000,
-            odd_even_ratio=1.0,
-        )
-        result = check_odd_even_depth(
-            lc, period=5.0, t0=t0, duration_hours=3.0, config=LEGACY_CONFIG
-        )
-
-        # Must pass (cannot reject with no data)
-        assert result.passed is True
-        # Very low confidence
-        assert result.confidence <= 0.3
-        # Should have warnings explaining why
-        assert len(result.details["warnings"]) > 0
-
-    def test_insufficient_data_returns_true_in_default_mode(self, make_synthetic_lc) -> None:
-        """Insufficient data should return passed=True (cannot reject) in default mode."""
+        """Insufficient data should return metrics-only with very low confidence and warnings."""
         # Single transit only
         lc, t0 = make_synthetic_lc(
             n_transits=1,
@@ -479,9 +432,23 @@ class TestOddEvenDepth:
         )
         result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
 
-        # Must return boolean (True = cannot reject without evidence)
-        assert isinstance(result.passed, bool)
-        assert result.passed is True
+        assert result.passed is None
+        # Very low confidence
+        assert result.confidence <= 0.3
+        # Should have warnings explaining why
+        assert len(result.details["warnings"]) > 0
+
+    def test_insufficient_data_returns_true_in_default_mode(self, make_synthetic_lc) -> None:
+        """Insufficient data should return metrics-only in default mode."""
+        # Single transit only
+        lc, t0 = make_synthetic_lc(
+            n_transits=1,
+            depth_ppm=1000,
+            odd_even_ratio=1.0,
+        )
+        result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
+
+        assert result.passed is None
         assert result.details.get("_metrics_only") is True
         # Very low confidence
         assert result.confidence <= 0.3
@@ -498,7 +465,7 @@ class TestOddEvenDepth:
         assert result.name == "odd_even_depth"
 
     def test_suspicious_flag_true_for_eb_like_signal(self, make_synthetic_lc) -> None:
-        """Suspicious flag should be True for clear EB-like depth difference (legacy mode)."""
+        """Suspicious flag should be True for clear EB-like depth difference."""
         # Clear EB case: odd depth is 20% of even depth
         lc, t0 = make_synthetic_lc(
             n_transits=20,
@@ -506,52 +473,43 @@ class TestOddEvenDepth:
             odd_even_ratio=0.2,
             noise_ppm=50,
         )
-        result = check_odd_even_depth(
-            lc, period=5.0, t0=t0, duration_hours=3.0, config=LEGACY_CONFIG
-        )
+        result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
 
-        # Should fail AND be suspicious
-        assert result.passed is False
+        assert result.passed is None
         assert "suspicious" in result.details
         assert bool(result.details["suspicious"]) is True
 
     def test_suspicious_flag_false_for_planet_like_signal(self, make_synthetic_lc) -> None:
-        """Suspicious flag should be False for equal depths (planet-like, legacy mode)."""
+        """Suspicious flag should be False for equal depths (planet-like)."""
         lc, t0 = make_synthetic_lc(
             n_transits=20,
             depth_ppm=2000,
             odd_even_ratio=1.0,
             noise_ppm=50,
         )
-        result = check_odd_even_depth(
-            lc, period=5.0, t0=t0, duration_hours=3.0, config=LEGACY_CONFIG
-        )
+        result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
 
-        # Should pass AND not be suspicious
-        assert result.passed is True
+        assert result.passed is None
         assert "suspicious" in result.details
         assert bool(result.details["suspicious"]) is False
 
     def test_suspicious_flag_false_for_insufficient_data(self, make_synthetic_lc) -> None:
-        """Suspicious flag should be False when insufficient data (legacy mode)."""
+        """Suspicious flag should be False when insufficient data."""
         # Single transit only
         lc, t0 = make_synthetic_lc(
             n_transits=1,
             depth_ppm=1000,
             odd_even_ratio=1.0,
         )
-        result = check_odd_even_depth(
-            lc, period=5.0, t0=t0, duration_hours=3.0, config=LEGACY_CONFIG
-        )
+        result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
 
-        # Should pass with low confidence, suspicious = False
-        assert result.passed is True
+        assert result.passed is None
         assert result.confidence <= 0.3
         assert "suspicious" in result.details
         assert bool(result.details["suspicious"]) is False
 
     def test_short_period_baseline_cap_no_nans(self, make_synthetic_lc) -> None:
-        """Short-period candidates should not produce NaN/Inf with baseline cap (legacy mode)."""
+        """Short-period candidates should not produce NaN/Inf with baseline cap."""
         # Short period where baseline_window_mult * duration could exceed period/2
         # Period = 0.5 days, duration = 2 hours = 0.0833 days
         # Without cap: baseline_half_window = 6.0 * 0.0833 = 0.5 days = period!
@@ -561,7 +519,7 @@ class TestOddEvenDepth:
         duration_days = duration_hours / 24.0
 
         # Verify the cap would be triggered with default config
-        config = OddEvenConfig(legacy_mode=True)
+        config = OddEvenConfig()
         uncapped = config.baseline_window_mult * duration_days
         capped = config.baseline_window_max_fraction_of_period * period
         assert uncapped > capped, (
@@ -586,7 +544,7 @@ class TestOddEvenDepth:
         assert not np.isnan(result.details.get("rel_diff", 0))
         assert not np.isinf(result.details.get("rel_diff", 0))
         # Should still produce a valid result with good data
-        assert result.passed in (True, False)
+        assert result.passed is None
         assert 0.0 <= result.confidence <= 1.0
         # Should have processed epochs (not all skipped due to sparse data)
         assert result.details.get("n_odd_transits", 0) > 0
@@ -609,16 +567,16 @@ class TestOddEvenDepth:
 
         # Check if we got the fallback warning (may or may not trigger depending on data)
         # At minimum, the result should be valid
-        assert result.passed in (True, False)
+        assert result.passed is None
         # This test is informational - we just verify no crash and valid output
         assert "warnings" in result.details  # warnings key should always exist
 
 
 class TestPassedAlwaysBoolean:
-    """Tests ensuring passed is always a boolean (never None)."""
+    """Tests ensuring metrics-only default behavior is consistent."""
 
     def test_passed_is_boolean_sufficient_data_default_mode(self, make_synthetic_lc) -> None:
-        """With sufficient data, passed must be boolean even in default (non-legacy) mode."""
+        """With sufficient data, default mode should still be metrics-only (passed=None)."""
         lc, t0 = make_synthetic_lc(
             n_transits=10,
             depth_ppm=2000,
@@ -627,13 +585,12 @@ class TestPassedAlwaysBoolean:
         )
         result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
 
-        # passed must be boolean, not None
-        assert isinstance(result.passed, bool)
+        assert result.passed is None
         # _metrics_only flag indicates policy deferred to guardrails
         assert result.details.get("_metrics_only") is True
 
     def test_passed_is_boolean_insufficient_data_default_mode(self, make_synthetic_lc) -> None:
-        """With insufficient data, passed must be boolean (True = cannot reject)."""
+        """With insufficient data, default mode should still be metrics-only (passed=None)."""
         # Only 1 transit - insufficient for odd/even comparison
         lc, t0 = make_synthetic_lc(
             n_transits=1,
@@ -642,14 +599,12 @@ class TestPassedAlwaysBoolean:
         )
         result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
 
-        # passed must be boolean (True = cannot reject without evidence)
-        assert isinstance(result.passed, bool)
-        assert result.passed is True
+        assert result.passed is None
         # Should have warning about insufficient data
         assert "insufficient_data_for_odd_even_check" in result.details["warnings"]
 
     def test_passed_is_boolean_eb_like_signal_default_mode(self, make_synthetic_lc) -> None:
-        """EB-like signal should return passed=False even in default mode."""
+        """EB-like signal should be metrics-only with suspicious=True."""
         # Clear EB: odd depth is 20% of even depth
         lc, t0 = make_synthetic_lc(
             n_transits=20,
@@ -659,10 +614,7 @@ class TestPassedAlwaysBoolean:
         )
         result = check_odd_even_depth(lc, period=5.0, t0=t0, duration_hours=3.0)
 
-        # passed must be boolean
-        assert isinstance(result.passed, bool)
-        # Should fail (EB-like)
-        assert result.passed is False
+        assert result.passed is None
         # suspicious should also be boolean
         assert isinstance(result.details.get("suspicious"), bool)
         assert result.details["suspicious"] is True
@@ -691,8 +643,7 @@ class TestPassedAlwaysBoolean:
         # This should NOT raise ValidationError
         result = check_odd_even_depth(lc, period=9.6, t0=t0, duration_hours=2.9)
 
-        # passed must be boolean
-        assert isinstance(result.passed, bool)
+        assert result.passed is None
         # Result should be valid
         assert result.id == "V01"
         assert result.name == "odd_even_depth"

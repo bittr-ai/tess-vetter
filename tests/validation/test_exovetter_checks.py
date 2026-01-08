@@ -267,7 +267,7 @@ class TestModshiftCheck:
     def test_no_lightcurve_returns_pass(self, make_candidate) -> None:
         """Test that missing lightcurve returns pass with low confidence.
 
-        Note: In metrics-only mode (default), passed=None. In legacy_mode, passed=True.
+        Note: Exovetter checks in this library are metrics-only: passed=None.
         For skip cases, we still return passed=True for backward compatibility.
         """
         check = ModshiftCheck()
@@ -325,7 +325,7 @@ class TestModshiftCheck:
         mock_vetter = MagicMock()
         mock_vetter.run.return_value = {
             "pri": 100.0,
-            "sec": 10.0,  # 10% of primary - would pass threshold in legacy mode
+            "sec": 10.0,  # 10% of primary
             "ter": 5.0,
             "pos": 3.0,
             "Fred": 1.5,  # Standard regime
@@ -349,123 +349,6 @@ class TestModshiftCheck:
             assert result.details["passed_meaning"] == "no_strong_eb_evidence"
             assert "warnings" in result.details
             assert "inputs_summary" in result.details
-
-    @patch("bittr_tess_vetter.validation.exovetter_checks._create_lightkurve_like")
-    def test_successful_pass_legacy_mode(
-        self, mock_create_lk, make_lightcurve, make_candidate, mock_exovetter
-    ) -> None:
-        """Test successful ModShift pass in legacy_mode (no significant secondary)."""
-        mock_lk = MagicMock()
-        mock_create_lk.return_value = mock_lk
-
-        # Configure mock vetter
-        mock_vetter = MagicMock()
-        mock_vetter.run.return_value = {
-            "pri": 100.0,
-            "sec": 10.0,  # 10% of primary - passes threshold
-            "ter": 5.0,
-            "pos": 3.0,
-            "Fred": 1.5,  # Standard regime
-            "false_alarm_threshold": 20.0,
-        }
-        mock_exovetter["exovetter.vetters"].ModShift.return_value = mock_vetter
-
-        with patch.dict(sys.modules, mock_exovetter):
-            config = CheckConfig(
-                enabled=True,
-                threshold=0.5,
-                additional={"legacy_mode": True},
-            )
-            check = ModshiftCheck(config=config)
-            lc = make_lightcurve(baseline_days=50.0)
-            candidate = make_candidate(period=5.0)
-
-            result = check.run(candidate, lightcurve=lc)
-
-            assert result.passed is True
-            assert result.details["_metrics_only"] is False
-            assert result.confidence > 0.5
-            assert result.details["secondary_primary_ratio"] == 0.1
-            assert result.details["fred_regime"] == "standard"
-            assert result.details["passed_meaning"] == "no_strong_eb_evidence"
-            assert "warnings" in result.details
-            assert "inputs_summary" in result.details
-
-    @patch("bittr_tess_vetter.validation.exovetter_checks._create_lightkurve_like")
-    def test_successful_fail_eb_detected_legacy_mode(
-        self, mock_create_lk, make_lightcurve, make_candidate, mock_exovetter
-    ) -> None:
-        """Test ModShift fail in legacy_mode (significant secondary eclipse detected)."""
-        mock_lk = MagicMock()
-        mock_create_lk.return_value = mock_lk
-
-        # Configure mock vetter
-        mock_vetter = MagicMock()
-        mock_vetter.run.return_value = {
-            "pri": 100.0,
-            "sec": 60.0,  # 60% of primary - exceeds threshold
-            "ter": 5.0,
-            "pos": 3.0,
-            "Fred": 1.0,
-            "false_alarm_threshold": 20.0,
-        }
-        mock_exovetter["exovetter.vetters"].ModShift.return_value = mock_vetter
-
-        with patch.dict(sys.modules, mock_exovetter):
-            config = CheckConfig(
-                enabled=True,
-                threshold=0.5,
-                additional={"legacy_mode": True},
-            )
-            check = ModshiftCheck(config=config)
-            lc = make_lightcurve(baseline_days=50.0)
-            candidate = make_candidate(period=5.0)
-
-            result = check.run(candidate, lightcurve=lc)
-
-            assert result.passed is False
-            assert result.details["_metrics_only"] is False
-            assert result.confidence >= 0.85
-            assert result.details["secondary_primary_ratio"] == 0.6
-            assert result.details["significant_secondary"] is True
-
-    @patch("bittr_tess_vetter.validation.exovetter_checks._create_lightkurve_like")
-    def test_fred_critical_defaults_to_pass_legacy_mode(
-        self, mock_create_lk, make_lightcurve, make_candidate, mock_exovetter
-    ) -> None:
-        """Test that Fred > critical threshold defaults to pass with low confidence in legacy_mode."""
-        mock_lk = MagicMock()
-        mock_create_lk.return_value = mock_lk
-
-        mock_vetter = MagicMock()
-        mock_vetter.run.return_value = {
-            "pri": 100.0,
-            "sec": 60.0,  # Would fail normally
-            "ter": 5.0,
-            "pos": 3.0,
-            "Fred": 4.0,  # Critical regime
-            "false_alarm_threshold": 20.0,
-        }
-        mock_exovetter["exovetter.vetters"].ModShift.return_value = mock_vetter
-
-        with patch.dict(sys.modules, mock_exovetter):
-            config = CheckConfig(
-                enabled=True,
-                threshold=0.5,
-                additional={"legacy_mode": True, "fred_critical_threshold": 3.5},
-            )
-            check = ModshiftCheck(config=config)
-            lc = make_lightcurve(baseline_days=50.0)
-            candidate = make_candidate(period=5.0)
-
-            result = check.run(candidate, lightcurve=lc)
-
-            # Should pass because Fred is unreliable in legacy_mode
-            assert result.passed is True
-            assert result.details["_metrics_only"] is False
-            assert result.confidence == 0.35
-            assert result.details["fred_regime"] == "critical"
-            assert "FRED_UNRELIABLE" in result.details["warnings"]
 
     @patch("bittr_tess_vetter.validation.exovetter_checks._create_lightkurve_like")
     def test_warnings_list_populated(
@@ -588,122 +471,6 @@ class TestSWEETCheck:
             assert "inputs_summary" in result.details
             assert "harmonic_analysis" in result.details
             assert "aliasing_flags" in result.details
-
-    @patch("bittr_tess_vetter.validation.exovetter_checks._create_lightkurve_like")
-    def test_successful_pass_no_variability_legacy_mode(
-        self, mock_create_lk, make_lightcurve, make_candidate, mock_exovetter
-    ) -> None:
-        """Test SWEET pass in legacy_mode (no significant variability)."""
-        mock_lk = MagicMock()
-        mock_create_lk.return_value = mock_lk
-
-        mock_vetter = MagicMock()
-        mock_vetter.run.return_value = {
-            "amp": {
-                "half_period": (1e-6, 5e-7, 2.0),  # ratio = 2.0 < 3.5
-                "period": (5e-7, 5e-7, 1.0),  # ratio = 1.0 < 3.5
-                "double_period": (8e-7, 5e-7, 1.6),  # ratio = 1.6 < 4.0
-            },
-            "msg": "",
-        }
-        mock_exovetter["exovetter.vetters"].Sweet.return_value = mock_vetter
-
-        with patch.dict(sys.modules, mock_exovetter):
-            config = CheckConfig(
-                enabled=True,
-                threshold=3.5,
-                additional={"legacy_mode": True},
-            )
-            check = SWEETCheck(config=config)
-            lc = make_lightcurve(baseline_days=50.0)
-            candidate = make_candidate(period=5.0)
-
-            result = check.run(candidate, lightcurve=lc)
-
-            assert result.passed is True
-            assert result.details["_metrics_only"] is False
-            assert result.confidence > 0.5
-            assert result.details["period_amplitude_ratio"] == 1.0
-            assert "warnings" in result.details
-            assert "inputs_summary" in result.details
-            assert "harmonic_analysis" in result.details
-            assert "aliasing_flags" in result.details
-
-    @patch("bittr_tess_vetter.validation.exovetter_checks._create_lightkurve_like")
-    def test_fail_variability_at_period_legacy_mode(
-        self, mock_create_lk, make_lightcurve, make_candidate, mock_exovetter
-    ) -> None:
-        """Test SWEET fail in legacy_mode (significant variability at transit period)."""
-        mock_lk = MagicMock()
-        mock_create_lk.return_value = mock_lk
-
-        mock_vetter = MagicMock()
-        mock_vetter.run.return_value = {
-            "amp": {
-                "half_period": (1e-6, 5e-7, 2.0),
-                "period": (5e-6, 1e-6, 5.0),  # ratio = 5.0 > 3.5
-                "double_period": (8e-7, 5e-7, 1.6),
-            },
-            "msg": "",
-        }
-        mock_exovetter["exovetter.vetters"].Sweet.return_value = mock_vetter
-
-        with patch.dict(sys.modules, mock_exovetter):
-            config = CheckConfig(
-                enabled=True,
-                threshold=3.5,
-                additional={"legacy_mode": True},
-            )
-            check = SWEETCheck(config=config)
-            lc = make_lightcurve(baseline_days=50.0)
-            candidate = make_candidate(period=5.0, depth=0.001)
-
-            result = check.run(candidate, lightcurve=lc)
-
-            assert result.passed is False
-            assert result.details["_metrics_only"] is False
-            assert result.details["fails_at_period"] is True
-            assert result.details["period_amplitude_ratio"] == 5.0
-
-    @patch("bittr_tess_vetter.validation.exovetter_checks._create_lightkurve_like")
-    def test_harmonic_aliasing_at_half_period_legacy_mode(
-        self, mock_create_lk, make_lightcurve, make_candidate, mock_exovetter
-    ) -> None:
-        """Test harmonic aliasing detection at P/2 in legacy_mode."""
-        mock_lk = MagicMock()
-        mock_create_lk.return_value = mock_lk
-
-        # High amplitude at P/2 that can explain significant depth
-        mock_vetter = MagicMock()
-        mock_vetter.run.return_value = {
-            "amp": {
-                # Very high ratio, amplitude ~ 500 ppm
-                "half_period": (5e-4, 1e-5, 50.0),
-                "period": (1e-6, 1e-6, 1.0),  # Low at period
-                "double_period": (1e-6, 1e-6, 1.0),
-            },
-            "msg": "",
-        }
-        mock_exovetter["exovetter.vetters"].Sweet.return_value = mock_vetter
-
-        with patch.dict(sys.modules, mock_exovetter):
-            config = CheckConfig(
-                enabled=True,
-                threshold=3.5,
-                additional={"legacy_mode": True, "include_harmonic_analysis": True},
-            )
-            check = SWEETCheck(config=config)
-            lc = make_lightcurve(baseline_days=50.0)
-            # Transit depth of 1000 ppm; P/2 amplitude of 500 ppm creates 1000 ppm depth
-            candidate = make_candidate(period=5.0, depth=0.001)
-
-            result = check.run(candidate, lightcurve=lc)
-
-            # With include_harmonic_analysis=True, this should fail in legacy_mode
-            assert result.passed is False
-            assert result.details["_metrics_only"] is False
-            assert result.details["fails_at_half_period"] is True
-            assert result.details["harmonic_analysis"]["dominant_variability_period"] == "P/2"
 
     @patch("bittr_tess_vetter.validation.exovetter_checks._create_lightkurve_like")
     def test_inputs_summary_computed(

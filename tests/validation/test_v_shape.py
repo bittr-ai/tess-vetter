@@ -1,10 +1,10 @@
 """Tests for V05 V-shape transit check.
 
 Tests cover the improved trapezoid model fitting implementation with:
-- U-shaped transits (planets with flat bottom) - should PASS in legacy mode
-- V-shaped transits (grazing EBs with no flat bottom) - should FAIL in legacy mode
+- U-shaped transits (planets with flat bottom) - metrics-only classification
+- V-shaped transits (grazing EBs with no flat bottom) - metrics-only classification
 - Grazing geometry (intermediate) - classification depends on depth
-- Undersampled data - low confidence PASS in legacy mode
+- Undersampled data - low confidence metrics-only
 - Different cadences (2-min vs 30-min)
 - Bootstrap uncertainty estimation
 - Legacy key backward compatibility
@@ -18,9 +18,6 @@ import pytest
 
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.validation.lc_checks import VShapeConfig, check_v_shape
-
-# Default config with legacy_mode=True for backward-compatible tests
-LEGACY_CONFIG = VShapeConfig(legacy_mode=True)
 
 
 @pytest.fixture
@@ -138,7 +135,7 @@ class TestVShapeCheck:
         assert "classification" in result.details
 
     def test_u_shape_planet_passes(self, make_transit_lc) -> None:
-        """U-shaped transit (planet with flat bottom) should pass (legacy mode)."""
+        """U-shaped transit should classify as U_SHAPE (metrics-only)."""
         # tF/tT = 0.6 is clearly U-shaped (above grazing threshold of 0.3)
         lc, t0 = make_transit_lc(
             n_transits=10,
@@ -146,15 +143,15 @@ class TestVShapeCheck:
             tflat_ttotal_ratio=0.6,
             noise_ppm=50,
         )
-        result = check_v_shape(lc, period=5.0, t0=t0, duration_hours=3.0, config=LEGACY_CONFIG)
+        result = check_v_shape(lc, period=5.0, t0=t0, duration_hours=3.0)
 
-        assert result.passed is True
+        assert result.passed is None
         assert result.details["classification"] == "U_SHAPE"
         assert result.details["tflat_ttotal_ratio"] > 0.3
         assert result.confidence >= 0.5
 
     def test_v_shape_eb_fails(self, make_transit_lc) -> None:
-        """V-shaped transit (grazing EB) with deep depth should fail (legacy mode).
+        """Deep V-shaped/grazing-like transit should classify as V_SHAPE or GRAZING (metrics-only).
 
         Note: Due to grid search limitations and noise, a pure V-shape (tF/tT=0)
         may be fitted as GRAZING with a small but non-zero tF/tT. However, the
@@ -169,17 +166,15 @@ class TestVShapeCheck:
             tflat_ttotal_ratio=0.0,
             noise_ppm=50,  # Lower noise for cleaner fit
         )
-        # Use a config with lower grazing_depth_ppm to ensure the deep EB fails
-        config = VShapeConfig(grazing_depth_ppm=40000, legacy_mode=True)
+        config = VShapeConfig(grazing_depth_ppm=40000)
         result = check_v_shape(lc, period=5.0, t0=t0, duration_hours=3.0, config=config)
 
-        # Should fail because depth is too deep for a grazing planet
-        assert result.passed is False
+        assert result.passed is None
         # Classification could be V_SHAPE or GRAZING (but fails due to depth)
         assert result.details["classification"] in ("V_SHAPE", "GRAZING")
 
     def test_grazing_planet_passes(self, make_transit_lc) -> None:
-        """Grazing transit with shallow depth should pass (legacy mode)."""
+        """Grazing transit with shallow depth should classify as GRAZING (metrics-only)."""
         # tF/tT = 0.2 is in grazing range (0.15-0.3)
         # Shallow depth suggests planet, not EB
         lc, t0 = make_transit_lc(
@@ -188,15 +183,15 @@ class TestVShapeCheck:
             tflat_ttotal_ratio=0.2,
             noise_ppm=50,
         )
-        result = check_v_shape(lc, period=5.0, t0=t0, duration_hours=3.0, config=LEGACY_CONFIG)
+        result = check_v_shape(lc, period=5.0, t0=t0, duration_hours=3.0)
 
-        assert result.passed is True
+        assert result.passed is None
         assert result.details["classification"] == "GRAZING"
         # Depth should be below grazing_depth_ppm threshold (50000)
         assert result.details["depth_ppm"] < 50000
 
     def test_grazing_deep_fails(self, make_transit_lc) -> None:
-        """Grazing transit with deep eclipse should fail (likely EB, legacy mode)."""
+        """Grazing transit with deep eclipse should still classify as GRAZING (metrics-only)."""
         # tF/tT = 0.2 is grazing, but deep depth suggests EB
         lc, t0 = make_transit_lc(
             n_transits=10,
@@ -204,15 +199,14 @@ class TestVShapeCheck:
             tflat_ttotal_ratio=0.2,
             noise_ppm=100,
         )
-        config = VShapeConfig(grazing_depth_ppm=50000, legacy_mode=True)
+        config = VShapeConfig(grazing_depth_ppm=50000)
         result = check_v_shape(lc, period=5.0, t0=t0, duration_hours=3.0, config=config)
 
-        assert result.passed is False
+        assert result.passed is None
         assert result.details["classification"] == "GRAZING"
-        assert "Grazing geometry with deep transit" in str(result.details["warnings"])
 
     def test_undersampled_low_confidence_pass(self, make_transit_lc) -> None:
-        """Undersampled data should return low-confidence pass (legacy mode)."""
+        """Undersampled data should return low confidence metrics-only result."""
         # Very few points - use long cadence and short transit
         lc, t0 = make_transit_lc(
             n_transits=2,
@@ -221,10 +215,9 @@ class TestVShapeCheck:
             cadence_minutes=30.0,  # Long cadence
             tflat_ttotal_ratio=0.5,
         )
-        result = check_v_shape(lc, period=5.0, t0=t0, duration_hours=1.0, config=LEGACY_CONFIG)
+        result = check_v_shape(lc, period=5.0, t0=t0, duration_hours=1.0)
 
-        # Should pass with low confidence
-        assert result.passed is True
+        assert result.passed is None
         assert result.confidence <= 0.5
         # May have warnings about insufficient data
         assert (
@@ -233,7 +226,7 @@ class TestVShapeCheck:
         )
 
     def test_2min_cadence_vs_30min(self, make_transit_lc) -> None:
-        """2-minute cadence should give higher confidence than 30-minute (legacy mode)."""
+        """2-minute cadence should give higher confidence than 30-minute (metrics-only)."""
         # 2-minute cadence - well sampled
         lc_2min, t0 = make_transit_lc(
             n_transits=10,
@@ -242,9 +235,7 @@ class TestVShapeCheck:
             tflat_ttotal_ratio=0.6,
             cadence_minutes=2.0,
         )
-        result_2min = check_v_shape(
-            lc_2min, period=5.0, t0=t0, duration_hours=3.0, config=LEGACY_CONFIG
-        )
+        result_2min = check_v_shape(lc_2min, period=5.0, t0=t0, duration_hours=3.0)
 
         # 30-minute cadence - sparser
         lc_30min, t0 = make_transit_lc(
@@ -254,13 +245,10 @@ class TestVShapeCheck:
             tflat_ttotal_ratio=0.6,
             cadence_minutes=30.0,
         )
-        result_30min = check_v_shape(
-            lc_30min, period=5.0, t0=t0, duration_hours=3.0, config=LEGACY_CONFIG
-        )
+        result_30min = check_v_shape(lc_30min, period=5.0, t0=t0, duration_hours=3.0)
 
-        # Both should pass (same shape)
-        assert result_2min.passed is True
-        assert result_30min.passed is True
+        assert result_2min.passed is None
+        assert result_30min.passed is None
 
         # 2-min should have higher confidence (more data points)
         assert result_2min.confidence >= result_30min.confidence
@@ -335,8 +323,7 @@ class TestVShapeCheck:
         assert result.name == "v_shape"
 
     def test_config_overrides(self, make_transit_lc) -> None:
-        """Custom config should override default thresholds."""
-        # Create a deep V-shape signal that would fail based on depth
+        """Custom config should be accepted and reflected in classification boundaries."""
         lc, t0 = make_transit_lc(
             n_transits=10,
             depth_ppm=60000,  # Deep - would fail with default grazing_depth_ppm
@@ -344,23 +331,13 @@ class TestVShapeCheck:
             noise_ppm=50,
         )
 
-        # With default config (grazing_depth_ppm=50000), should fail in legacy mode
-        _ = check_v_shape(lc, period=5.0, t0=t0, duration_hours=3.0)
-
-        # With lenient config (higher depth threshold), should pass in legacy mode
-        lenient_config = VShapeConfig(grazing_depth_ppm=100000, legacy_mode=True)
+        lenient_config = VShapeConfig(grazing_depth_ppm=100000)
         result_lenient = check_v_shape(
             lc, period=5.0, t0=t0, duration_hours=3.0, config=lenient_config
         )
 
-        # Default config should fail (depth too high for grazing) in legacy mode
-        # Note: may still pass if classified as U_SHAPE with high tflat ratio
-        # So we verify the config is properly used
         assert lenient_config.grazing_depth_ppm == 100000
-
-        # With high enough depth threshold, GRAZING classification should pass in legacy mode
-        if result_lenient.details["classification"] == "GRAZING":
-            assert result_lenient.passed is True
+        assert result_lenient.passed is None
 
 
 class TestVShapeConfig:
@@ -488,7 +465,7 @@ class TestVShapeEdgeCases:
         assert result.id == "V05"
 
     def test_very_short_period(self, make_transit_lc) -> None:
-        """Very short period should work correctly (legacy mode)."""
+        """Very short period should work correctly."""
         lc, t0 = make_transit_lc(
             n_transits=20,
             depth_ppm=2000,
@@ -496,10 +473,10 @@ class TestVShapeEdgeCases:
             duration_hours=1.0,
             tflat_ttotal_ratio=0.6,
         )
-        result = check_v_shape(lc, period=0.5, t0=t0, duration_hours=1.0, config=LEGACY_CONFIG)
+        result = check_v_shape(lc, period=0.5, t0=t0, duration_hours=1.0)
 
         assert result is not None
-        assert result.passed is True
+        assert result.passed is None
 
     def test_very_long_period(self, make_transit_lc) -> None:
         """Very long period with single transit should handle gracefully."""
