@@ -19,6 +19,13 @@ from typing import Any, Literal
 import numpy as np
 from numpy.typing import NDArray
 
+from bittr_tess_vetter.api.references import (
+    GIACALONE_2021,
+    TRICERATOPS_PLUS,
+    TRICERATOPS_PLUS_MULTIBAND,
+    cite,
+    cites,
+)
 from bittr_tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
 
 # PersistentCache type comes from caller (e.g., astro-arc-tess)
@@ -27,6 +34,9 @@ PersistentCache = Any
 
 # Valid photometric filter designations for external light curves
 ExternalLCFilter = Literal["g", "r", "i", "z", "J", "H", "K"]
+
+# Module-level references for programmatic access (generated from central registry)
+REFERENCES = [ref.to_dict() for ref in [GIACALONE_2021, TRICERATOPS_PLUS, TRICERATOPS_PLUS_MULTIBAND]]
 
 
 @dataclass(frozen=True)
@@ -102,6 +112,11 @@ STANDARD_PRESET = TriceratopsFppPreset(
 )
 
 
+@cites(
+    cite(GIACALONE_2021, "TRICERATOPS transit false positive probability framework"),
+    cite(TRICERATOPS_PLUS, "TRICERATOPS+ multi-color / external light curves"),
+    cite(TRICERATOPS_PLUS_MULTIBAND, "TRICERATOPS+ multi-band photometry validation"),
+)
 def calculate_fpp(
     *,
     cache: PersistentCache,

@@ -29,6 +29,8 @@ from bittr_tess_vetter.api.references import (
     COUGHLIN_2016,
     GUERRERO_2021,
     THOMPSON_2018,
+    cite,
+    cites,
 )
 from bittr_tess_vetter.api.types import (
     Candidate,
@@ -59,6 +61,11 @@ def _get_package_version() -> str:
         return "unknown"
 
 
+@cites(
+    cite(COUGHLIN_2016, "tiered Robovetter methodology"),
+    cite(THOMPSON_2018, "DR25 vetting pipeline architecture"),
+    cite(GUERRERO_2021, "TESS TOI vetting procedures context"),
+)
 def vet_candidate(
     lc: LightCurve,
     candidate: Candidate,

@@ -10,6 +10,11 @@ References:
 
 from __future__ import annotations
 
+from bittr_tess_vetter.api.references import (
+    ASTROPY_COLLAB_2013,
+    CALABRETTA_GREISEN_2002,
+    GREISEN_CALABRETTA_2002,
+)
 from bittr_tess_vetter.pixel.wcs_utils import (
     compute_angular_distance,
     compute_pixel_scale,
@@ -27,6 +32,16 @@ from bittr_tess_vetter.pixel.wcs_utils import (
     world_to_pixel,
     world_to_pixel_batch,
 )
+
+# Module-level references for programmatic access (generated from central registry)
+REFERENCES = [
+    ref.to_dict()
+    for ref in [
+        GREISEN_CALABRETTA_2002,
+        CALABRETTA_GREISEN_2002,
+        ASTROPY_COLLAB_2013,
+    ]
+]
 
 __all__ = [
     "compute_angular_distance",
