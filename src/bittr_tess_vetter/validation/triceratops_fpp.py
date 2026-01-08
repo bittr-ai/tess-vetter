@@ -712,6 +712,9 @@ def calculate_fpp_handler(
         time_arr = np.array(lc_data["time"])
         flux_arr = np.array(lc_data["flux"])
         flux_err_arr = np.array(lc_data["flux_err"])
+        n_points_raw = int(len(time_arr))
+        n_points_windowed = n_points_raw
+        n_points_used = n_points_raw
         try:
             time_sorted = np.sort(time_arr)
             dt = np.diff(time_sorted)
@@ -733,6 +736,7 @@ def calculate_fpp_handler(
             time_folded = time_folded[window_mask]
             flux_arr = flux_arr[window_mask]
             flux_err_arr = flux_err_arr[window_mask]
+        n_points_windowed = int(len(time_folded))
 
         sort_idx = np.argsort(time_folded)
         time_folded = time_folded[sort_idx]
@@ -744,6 +748,7 @@ def calculate_fpp_handler(
             time_folded = time_folded[keep]
             flux_arr = flux_arr[keep]
             flux_err_arr = flux_err_arr[keep]
+        n_points_used = int(len(time_folded))
 
         # Calculate median flux uncertainty for scalar flux_err_0
         flux_err_scalar = float(np.median(flux_err_arr))
@@ -834,7 +839,42 @@ def calculate_fpp_handler(
     try:
         fpp = float(target.FPP)
         nfpp = float(target.NFPP)
-        probs = target.probs
+        probs_raw = getattr(target, "probs", None)
+
+        # Compute total posterior mass and per-scenario probability sums (TRICERATOPS stores a table).
+        posterior_sum_total: float | None = None
+        scenario_prob_sums: dict[str, float] = {}
+        scenario_prob_top: list[dict[str, Any]] = []
+        try:
+            if probs_raw is not None and hasattr(probs_raw, "__getitem__") and hasattr(probs_raw, "columns"):
+                # Likely a pandas DataFrame with columns: scenario, prob
+                if "scenario" in probs_raw.columns and "prob" in probs_raw.columns:
+                    scenarios = list(probs_raw["scenario"])
+                    prob_vals = [float(x) for x in list(probs_raw["prob"])]
+                    posterior_sum_total = float(sum(prob_vals))
+                    for sc, pv in zip(scenarios, prob_vals, strict=False):
+                        key = str(sc)
+                        scenario_prob_sums[key] = float(scenario_prob_sums.get(key, 0.0) + float(pv))
+                    scenario_prob_top = [
+                        {"scenario": k, "prob": v}
+                        for k, v in sorted(
+                            scenario_prob_sums.items(), key=lambda kv: kv[1], reverse=True
+                        )[:15]
+                    ]
+            elif isinstance(probs_raw, dict):
+                # Some wrappers may produce a dict already.
+                scenario_prob_sums = {str(k): float(v) for k, v in probs_raw.items()}
+                posterior_sum_total = float(sum(scenario_prob_sums.values()))
+                scenario_prob_top = [
+                    {"scenario": k, "prob": v}
+                    for k, v in sorted(
+                        scenario_prob_sums.items(), key=lambda kv: kv[1], reverse=True
+                    )[:15]
+                ]
+        except Exception:
+            posterior_sum_total = None
+            scenario_prob_sums = {}
+            scenario_prob_top = []
 
         # Get disposition
         disposition = _get_disposition(fpp, nfpp)
@@ -854,15 +894,21 @@ def calculate_fpp_handler(
 
         runtime = time.time() - start_time
 
+        prob_planet = float(scenario_prob_sums.get("TP", 0.0))
+        prob_eb = float(scenario_prob_sums.get("EB", 0.0))
+        prob_beb = float(scenario_prob_sums.get("BEB", 0.0))
+        prob_neb = float(scenario_prob_sums.get("NEB", 0.0))
+        prob_ntp = float(scenario_prob_sums.get("NTP", 0.0))
+
         result = FppResult(
             fpp=fpp,
             nfpp=nfpp,
             disposition=disposition,
-            prob_planet=probs.get("TP", 0.0),
-            prob_eb=probs.get("EB", 0.0),
-            prob_beb=probs.get("BEB", 0.0),
-            prob_neb=probs.get("NEB", 0.0),
-            prob_ntp=probs.get("NTP", 0.0),
+            prob_planet=prob_planet,
+            prob_eb=prob_eb,
+            prob_beb=prob_beb,
+            prob_neb=prob_neb,
+            prob_ntp=prob_ntp,
             n_nearby_sources=n_nearby,
             brightest_contaminant_dmag=brightest_dmag,
             target_in_crowded_field=n_nearby > 5,
@@ -874,12 +920,30 @@ def calculate_fpp_handler(
         )
 
         out = result.to_dict()
+        out["posterior_sum_total"] = posterior_sum_total
+        out["scenario_prob_top"] = scenario_prob_top
         out["triceratops_runtime"] = {
-            "n_points_used": int(len(time_folded)),
+            "n_points_raw": int(n_points_raw),
+            "n_points_windowed": int(n_points_windowed),
+            "n_points_used": int(n_points_used),
             "half_window_days": float(half_window_days),
+            "window_duration_mult": float(window_duration_mult),
+            "max_points": int(max_points),
             "mc_draws": int(draws),
             "exptime_days": float(exptime_days),
+            "flux_err_scalar_used": float(flux_err_scalar),
+            "empirical_sigma_used": float(empirical_sigma),
         }
+
+        # Provide a short reason string when TRICERATOPS returns unusable/degenerate outputs.
+        degenerate: list[str] = []
+        if not np.isfinite(float(out.get("fpp", float("nan")))):
+            degenerate.append("fpp_not_finite")
+        if posterior_sum_total is not None and posterior_sum_total <= 0:
+            degenerate.append("posterior_sum_total_zero")
+        if out.get("prob_planet", 0.0) == 0.0 and out.get("prob_eb", 0.0) == 0.0 and scenario_prob_sums:
+            degenerate.append("scenario_probs_missing_expected_keys")
+        out["degenerate_reason"] = ",".join(degenerate) if degenerate else None
         return out
 
     except Exception as e:
