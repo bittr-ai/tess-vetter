@@ -8,8 +8,8 @@ Exports:
               detrend_for_recovery, stack_transits, fit_trapezoid, count_transits
 - Results: StackedTransit, TrapezoidFit
 
-Note: Transit masking is now done via TLS transit_mask() - see
-transitleastsquares.transit_mask() for transit mask generation.
+Note: Transit masking is handled by the caller (e.g., via
+bittr_tess_vetter.compute.transit.get_transit_mask()).
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from bittr_tess_vetter.recovery.primitives import (
     remove_stellar_variability,
     stack_transits,
 )
+from bittr_tess_vetter.recovery.pipeline import recover_transit_timeseries
 from bittr_tess_vetter.recovery.result import StackedTransit, TrapezoidFit
 
 __all__ = [
@@ -32,6 +33,8 @@ __all__ = [
     "stack_transits",
     "fit_trapezoid",
     "count_transits",
+    # Pipeline
+    "recover_transit_timeseries",
     # Result types
     "StackedTransit",
     "TrapezoidFit",

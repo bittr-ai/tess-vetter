@@ -47,6 +47,7 @@ from bittr_tess_vetter.recovery.primitives import (
 from bittr_tess_vetter.recovery.primitives import (
     stack_transits as _stack_transits,
 )
+from bittr_tess_vetter.recovery.pipeline import recover_transit_timeseries
 
 if TYPE_CHECKING:
     from bittr_tess_vetter.activity.result import ActivityResult

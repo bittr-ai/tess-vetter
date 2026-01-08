@@ -162,6 +162,8 @@ def tls_search_per_sector(
     period_min: float = 0.5,
     period_max: float | None = None,
     tic_id: int | None = None,
+    stellar_radius_rsun: float | None = None,
+    stellar_mass_msun: float | None = None,
     use_threads: int | None = None,
     gap_threshold_days: float = 10.0,
     min_sector_points: int = 500,
@@ -181,7 +183,9 @@ def tls_search_per_sector(
         flux_err: Flux uncertainties (float64), or None for equal weights
         period_min: Minimum period to search, in days
         period_max: Maximum period, in days (default: shortest sector baseline / 2)
-        tic_id: TIC ID for stellar parameter lookup
+        tic_id: Deprecated legacy input (no longer triggers network lookups)
+        stellar_radius_rsun: Stellar radius in solar radii (optional)
+        stellar_mass_msun: Stellar mass in solar masses (optional)
         use_threads: Number of threads for TLS (default: cpu_count)
         gap_threshold_days: Gap size threshold for sector detection (default 10 days)
         min_sector_points: Minimum points required to search a sector (default 500)
@@ -204,6 +208,8 @@ def tls_search_per_sector(
             period_min=period_min,
             period_max=period_max,
             tic_id=tic_id,
+            stellar_radius_rsun=stellar_radius_rsun,
+            stellar_mass_msun=stellar_mass_msun,
             use_threads=use_threads,
             downsample_factor=downsample_factor,
         )
@@ -250,6 +256,8 @@ def tls_search_per_sector(
             period_min=period_min,
             period_max=sector_max_period,
             tic_id=tic_id,
+            stellar_radius_rsun=stellar_radius_rsun,
+            stellar_mass_msun=stellar_mass_msun,
             use_threads=use_threads,
             downsample_factor=downsample_factor,
         )
@@ -338,13 +346,16 @@ def tls_search(
     period_min: float = 0.5,
     period_max: float | None = None,
     tic_id: int | None = None,
+    stellar_radius_rsun: float | None = None,
+    stellar_mass_msun: float | None = None,
     use_threads: int | None = None,
     downsample_factor: int = 1,
 ) -> dict:
     """Single TLS search. Returns best period and diagnostics.
 
     Uses Transit Least Squares (Hippke & Heller 2019) for transit detection.
-    If tic_id provided, uses stellar params from TIC for better sensitivity.
+    If stellar params are provided, uses them for better sensitivity.
+    `tic_id` is accepted for backward compatibility but is not used for network lookups.
 
     Args:
         time: Time array, in BTJD (days)
@@ -352,7 +363,9 @@ def tls_search(
         flux_err: Flux uncertainties (float64), or None for equal weights
         period_min: Minimum period to search, in days
         period_max: Maximum period, in days (default: baseline/2)
-        tic_id: TIC ID for stellar parameter lookup
+        tic_id: Deprecated legacy input (no longer triggers network lookups)
+        stellar_radius_rsun: Stellar radius in solar radii (optional)
+        stellar_mass_msun: Stellar mass in solar masses (optional)
         use_threads: Number of threads for TLS (default: cpu_count)
         downsample_factor: Downsample data by this factor for faster search (default: 1)
 
@@ -360,8 +373,9 @@ def tls_search(
         Dictionary with detection results including period, t0, duration,
         depth, SDE, SNR, FAP, and transit mask.
     """
-    from transitleastsquares import catalog_info, transitleastsquares
     import warnings
+
+    from transitleastsquares import transitleastsquares
 
     # Downsample if requested (for faster coarse search)
     if downsample_factor > 1:
@@ -370,18 +384,12 @@ def tls_search(
         if flux_err is not None:
             flux_err = flux_err[::downsample_factor]
 
-    # Get stellar params if TIC ID provided
-    r_star, m_star = 1.0, 1.0
-    if tic_id:
-        try:
-            ab, mass, mass_min, mass_max, radius, radius_min, radius_max = catalog_info(
-                TIC_ID=tic_id
-            )
-            r_star = radius if radius else 1.0
-            m_star = mass if mass else 1.0
-            logger.debug(f"TIC {tic_id}: R*={r_star:.2f}, M*={m_star:.2f}")
-        except Exception as e:
-            logger.debug(f"Could not get TIC params for {tic_id}: {e}")
+    # Stellar params: do not perform any network lookups here.
+    # The host application should provide stellar params (from TIC/Gaia/etc) explicitly.
+    r_star = float(stellar_radius_rsun) if stellar_radius_rsun is not None else 1.0
+    m_star = float(stellar_mass_msun) if stellar_mass_msun is not None else 1.0
+    if tic_id is not None and (stellar_radius_rsun is None and stellar_mass_msun is None):
+        logger.debug("tls_search: ignoring tic_id (no catalog lookup in compute layer)")
 
     # Auto-calculate max period from baseline if not provided
     baseline = float(time.max() - time.min())
@@ -413,31 +421,31 @@ def tls_search(
     try:
         # IMPORTANT: TLS prints progress/version info to stdout by default, which will
         # corrupt stdio-based transports. Force TLS quiet mode.
+        # IMPORTANT: TLS prints progress/version info to stdout by default, which can
+        # corrupt stdio-based transports. Force TLS quiet mode.
         model = transitleastsquares(time, flux, flux_err, verbose=False)
-        # TLS defaults to multiprocessing and prints/progress output; both are
-        # risky in stdio-based environments. Default to single-threaded and
-        # explicitly disable progress output unless overridden by caller.
+
+        # Default to single-threaded unless caller explicitly requests threads.
         effective_threads = 1 if use_threads is None else use_threads
 
-        power_kwargs: dict = {
+        power_kwargs: dict[str, object] = {
             "period_min": period_min,
             "period_max": period_max,
             "R_star": r_star,
-            "R_star_min": r_star * 0.9,  # Allow 10% uncertainty
+            "R_star_min": r_star * 0.9,
             "R_star_max": r_star * 1.1,
             "M_star": m_star,
             "M_star_min": m_star * 0.9,
             "M_star_max": m_star * 1.1,
             # Disable tqdm progress bar (also writes to stdout by default).
             "show_progress_bar": False,
+            "use_threads": effective_threads,
         }
-        power_kwargs["use_threads"] = effective_threads
 
-        # TLS can emit benign warnings (e.g., grid fallback) which some stdio
-        # runtimes surface; keep the tool response clean/stable.
+        # TLS can emit benign warnings; keep tool responses stable/clean.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            results = model.power(**power_kwargs)
+            results = model.power(**power_kwargs)  # type: ignore[arg-type]
     except (ValueError, RuntimeError) as e:
         logger.warning(f"TLS search failed: {e}")
         return {
@@ -520,6 +528,8 @@ def search_planets(
     period_min: float = 0.5,
     period_max: float | None = None,
     tic_id: int | None = None,
+    stellar_radius_rsun: float | None = None,
+    stellar_mass_msun: float | None = None,
     use_threads: int | None = None,
     downsample_factor: int = 1,
     per_sector: bool = True,
@@ -540,7 +550,9 @@ def search_planets(
         min_sde: Minimum SDE to accept a detection
         period_min: Minimum period to search, in days
         period_max: Maximum period, in days (default: baseline/2)
-        tic_id: TIC ID for stellar parameter lookup
+        tic_id: Deprecated legacy input (no longer triggers network lookups)
+        stellar_radius_rsun: Stellar radius in solar radii (optional)
+        stellar_mass_msun: Stellar mass in solar masses (optional)
         use_threads: Number of threads for TLS (default: cpu_count)
         downsample_factor: Downsample data by this factor for faster search (default: 1)
         per_sector: If True, use per-sector search for multi-sector data (default True)
@@ -565,6 +577,8 @@ def search_planets(
                 period_min=period_min,
                 period_max=period_max,
                 tic_id=tic_id,
+                stellar_radius_rsun=stellar_radius_rsun,
+                stellar_mass_msun=stellar_mass_msun,
                 use_threads=use_threads,
                 downsample_factor=downsample_factor,
             )
@@ -576,6 +590,8 @@ def search_planets(
                 period_min=period_min,
                 period_max=period_max,
                 tic_id=tic_id,
+                stellar_radius_rsun=stellar_radius_rsun,
+                stellar_mass_msun=stellar_mass_msun,
                 use_threads=use_threads,
                 downsample_factor=downsample_factor,
             )
@@ -706,6 +722,8 @@ def auto_periodogram(
     fap_method: Literal["empirical", "analytic"] = "empirical",
     n_bootstrap: int = 100,
     tic_id: int | None = None,
+    stellar_radius_rsun: float | None = None,
+    stellar_mass_msun: float | None = None,
     max_planets: int = 1,
     use_threads: int | None = None,
     per_sector: bool = True,
@@ -733,7 +751,9 @@ def auto_periodogram(
         data_ref: Reference to source light curve data
         fap_method: FAP estimation method (TLS provides built-in FAP)
         n_bootstrap: Bootstrap iterations (ignored, TLS has built-in FAP)
-        tic_id: TIC ID for stellar parameter lookup
+        tic_id: Deprecated legacy input (no longer triggers network lookups)
+        stellar_radius_rsun: Stellar radius in solar radii (optional)
+        stellar_mass_msun: Stellar mass in solar masses (optional)
         max_planets: Number of planets to search for (>1 enables multi-planet)
         use_threads: Number of threads for TLS (default: cpu_count)
         per_sector: If True, use per-sector search for multi-sector data (default True)
@@ -768,6 +788,8 @@ def auto_periodogram(
                 period_min=min_period,
                 period_max=max_period,
                 tic_id=tic_id,
+                stellar_radius_rsun=stellar_radius_rsun,
+                stellar_mass_msun=stellar_mass_msun,
                 use_threads=use_threads,
                 downsample_factor=downsample_factor,
                 per_sector=per_sector,
@@ -782,6 +804,8 @@ def auto_periodogram(
                     period_min=min_period,
                     period_max=max_period,
                     tic_id=tic_id,
+                    stellar_radius_rsun=stellar_radius_rsun,
+                    stellar_mass_msun=stellar_mass_msun,
                     use_threads=use_threads,
                 )
             else:
@@ -792,6 +816,8 @@ def auto_periodogram(
                     period_min=min_period,
                     period_max=max_period,
                     tic_id=tic_id,
+                    stellar_radius_rsun=stellar_radius_rsun,
+                    stellar_mass_msun=stellar_mass_msun,
                     use_threads=use_threads,
                     downsample_factor=downsample_factor,
                 )
@@ -947,6 +973,8 @@ def refine_period(
     refine_factor: float = 0.1,
     n_refine: int = 100,
     tic_id: int | None = None,
+    stellar_radius_rsun: float | None = None,
+    stellar_mass_msun: float | None = None,
 ) -> tuple[float, float, float]:
     """Refine period estimate with higher resolution search.
 
@@ -960,7 +988,9 @@ def refine_period(
         initial_duration: Initial duration estimate, in hours (ignored by TLS)
         refine_factor: Fractional range around initial period to search
         n_refine: Number of points in refined search (ignored by TLS)
-        tic_id: TIC ID for stellar parameter lookup
+        tic_id: Deprecated legacy input (no longer triggers network lookups)
+        stellar_radius_rsun: Stellar radius in solar radii (optional)
+        stellar_mass_msun: Stellar mass in solar masses (optional)
 
     Returns:
         Tuple of (refined_period, refined_t0, refined_power) where
@@ -978,6 +1008,8 @@ def refine_period(
         period_min=min_period,
         period_max=max_period,
         tic_id=tic_id,
+        stellar_radius_rsun=stellar_radius_rsun,
+        stellar_mass_msun=stellar_mass_msun,
     )
 
     return result["period"], result["t0"], result["sde"]

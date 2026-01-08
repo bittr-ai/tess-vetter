@@ -138,7 +138,13 @@ from bittr_tess_vetter.api.pixel import (
 )
 
 # v3 transit recovery
-from bittr_tess_vetter.api.recovery import RecoveryResult, detrend, recover_transit, stack_transits
+from bittr_tess_vetter.api.recovery import (  # noqa: F401
+    RecoveryResult,
+    detrend,
+    recover_transit,
+    recover_transit_timeseries,
+    stack_transits,
+)
 
 # v3 timing analysis
 from bittr_tess_vetter.api.timing import analyze_ttvs, measure_transit_times
@@ -148,6 +154,23 @@ from bittr_tess_vetter.api.transit_fit import TransitFitResult, fit_transit, qui
 
 # Transit primitives
 from bittr_tess_vetter.api.transit_primitives import odd_even_result
+
+# Periodogram facade (host-facing)
+from bittr_tess_vetter.api.periodogram import (  # noqa: F401
+    PerformancePreset,
+    PeriodogramPeak,
+    PeriodogramResult,
+    auto_periodogram,
+    compute_bls_model,
+    detect_sector_gaps,
+    ls_periodogram,
+    merge_candidates,
+    refine_period,
+    search_planets,
+    split_by_sectors,
+    tls_search,
+    tls_search_per_sector,
+)
 
 # Low-level primitives (host-facing)
 from bittr_tess_vetter.api.ephemeris_specificity import (  # noqa: F401
@@ -311,6 +334,19 @@ __all__ = [
     # Transit primitives
     "odd_even_result",
     # Low-level primitives (host-facing)
+    "PerformancePreset",
+    "PeriodogramPeak",
+    "PeriodogramResult",
+    "auto_periodogram",
+    "ls_periodogram",
+    "tls_search",
+    "tls_search_per_sector",
+    "search_planets",
+    "refine_period",
+    "compute_bls_model",
+    "detect_sector_gaps",
+    "split_by_sectors",
+    "merge_candidates",
     "get_in_transit_mask",
     "get_out_of_transit_mask",
     "get_odd_even_transit_indices",
@@ -367,6 +403,7 @@ __all__ = [
     "mask_flares",
     # v3 transit recovery functions
     "recover_transit",
+    "recover_transit_timeseries",
     "detrend",
     "stack_transits",
     # FPP (TRICERATOPS)
@@ -402,8 +439,10 @@ __all__ = [
 if MLX_AVAILABLE:
     from bittr_tess_vetter.api.mlx import (  # noqa: F401
         MlxTopKScoreResult,
+        MlxT0RefinementResult,
         integrated_gradients,
         score_fixed_period,
+        score_fixed_period_refine_t0,
         score_top_k_periods,
         smooth_box_template,
     )
@@ -411,8 +450,10 @@ if MLX_AVAILABLE:
     __all__.extend(
         [
             "MlxTopKScoreResult",
+            "MlxT0RefinementResult",
             "smooth_box_template",
             "score_fixed_period",
+            "score_fixed_period_refine_t0",
             "score_top_k_periods",
             "integrated_gradients",
         ]
