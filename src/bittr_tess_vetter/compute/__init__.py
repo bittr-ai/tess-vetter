@@ -141,39 +141,30 @@ except ImportError:
 # =============================================================================
 # MLX Detection (Optional)
 # =============================================================================
-MlxTopKScoreResult: Any
-smooth_box_template: Any
-score_fixed_period: Any
-score_top_k_periods: Any
-integrated_gradients: Any
-MLX_AVAILABLE: Any
-try:
-    from .mlx_detection import (
-        MlxTopKScoreResult,
-        integrated_gradients,
-        score_fixed_period,
-        score_top_k_periods,
-        smooth_box_template,
-    )
+# Importing mlx_detection does not require MLX to be installed; only calling its
+# functions requires `mlx.core`. Expose MLX_AVAILABLE based on dependency presence.
+import importlib.util as _importlib_util
 
-    MLX_AVAILABLE = True
-    __all__.extend(
-        [
-            "MlxTopKScoreResult",
-            "smooth_box_template",
-            "score_fixed_period",
-            "score_top_k_periods",
-            "integrated_gradients",
-            "MLX_AVAILABLE",
-        ]
-    )
-except ImportError:
-    MlxTopKScoreResult = None
-    smooth_box_template = None
-    score_fixed_period = None
-    score_top_k_periods = None
-    integrated_gradients = None
-    MLX_AVAILABLE = False
+MLX_AVAILABLE = _importlib_util.find_spec("mlx") is not None
+
+from .mlx_detection import (  # noqa: E402
+    MlxTopKScoreResult,
+    integrated_gradients,
+    score_fixed_period,
+    score_top_k_periods,
+    smooth_box_template,
+)
+
+__all__.extend(
+    [
+        "MlxTopKScoreResult",
+        "smooth_box_template",
+        "score_fixed_period",
+        "score_top_k_periods",
+        "integrated_gradients",
+        "MLX_AVAILABLE",
+    ]
+)
 
 # =============================================================================
 # Primitives Catalog

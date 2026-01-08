@@ -57,6 +57,38 @@ for WCS extraction and coordinate transforms in `pixel/wcs_utils.py`.
 
 ---
 
+### Kovács, Zucker & Mazeh 2002 (BLS)
+
+**Bibcode:** `2002A&A...391..369K`
+
+> Kovács, G., Zucker, S., & Mazeh, T. 2002, "A box-fitting algorithm in the search for periodic transits,"
+> A&A, 391, 369
+>
+> DOI: [10.1051/0004-6361:20020802](https://doi.org/10.1051/0004-6361:20020802)
+>
+> arXiv: [astro-ph/0206099](https://arxiv.org/abs/astro-ph/0206099)
+>
+> ADS: [2002A&A...391..369K](https://ui.adsabs.harvard.edu/abs/2002A%26A...391..369K)
+
+**Relevance:** Foundational Box-fitting Least Squares (BLS) methodology for box-like
+transit detection statistics. Forms the methodological lineage for the smooth box
+template + weighted least-squares scoring used by MLX diagnostics.
+
+---
+
+### Sundararajan, Taly & Yan 2017 (Integrated Gradients)
+
+**arXiv:** `1703.01365`
+
+> Sundararajan, M., Taly, A., & Yan, Q. 2017, "Axiomatic Attribution for Deep Networks"
+>
+> arXiv: [1703.01365](https://arxiv.org/abs/1703.01365)
+
+**Relevance:** Defines the Integrated Gradients attribution method, used for MLX
+attribution diagnostics (feature importance over the light curve).
+
+---
+
 ### Seager & Mallen-Ornelas 2003
 
 **Bibcode:** `2003ApJ...585.1038S`

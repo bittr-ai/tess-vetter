@@ -6,6 +6,11 @@ Instead it provides smooth, differentiable scoring functions for:
 - attribution (gradients w.r.t. flux, integrated gradients)
 
 MLX is an optional dependency. Import errors are raised with an actionable message.
+
+Scientific lineage:
+    - The box-like template + least-squares depth fit is in the BLS / matched-filter family
+      (Kovács, Zucker & Mazeh 2002).
+    - Integrated Gradients attribution is from Sundararajan, Taly & Yan 2017.
 """
 
 from __future__ import annotations

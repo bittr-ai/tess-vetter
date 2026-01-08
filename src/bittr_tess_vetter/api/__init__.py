@@ -258,6 +258,10 @@ from bittr_tess_vetter.api.tolerances import (  # noqa: F401
     check_tolerance,
 )
 
+import importlib.util as _importlib_util
+
+MLX_AVAILABLE = _importlib_util.find_spec("mlx") is not None
+
 __all__ = [
     # Types (v2)
     "Ephemeris",
@@ -391,4 +395,25 @@ __all__ = [
     "TransitParams",
     "generate_pixel_vet_report",
     "PixelVetReport",
+    # Optional MLX (guarded)
+    "MLX_AVAILABLE",
 ]
+
+if MLX_AVAILABLE:
+    from bittr_tess_vetter.api.mlx import (  # noqa: F401
+        MlxTopKScoreResult,
+        integrated_gradients,
+        score_fixed_period,
+        score_top_k_periods,
+        smooth_box_template,
+    )
+
+    __all__.extend(
+        [
+            "MlxTopKScoreResult",
+            "smooth_box_template",
+            "score_fixed_period",
+            "score_top_k_periods",
+            "integrated_gradients",
+        ]
+    )

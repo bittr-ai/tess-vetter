@@ -962,6 +962,16 @@ KOVACS_2002 = Reference(
     note="Original BLS algorithm for transit detection",
 )
 
+SUNDARARAJAN_2017 = Reference(
+    id="sundararajan_2017",
+    title="Axiomatic Attribution for Deep Networks",
+    authors=("Sundararajan, M.", "Taly, A.", "Yan, Q."),
+    year=2017,
+    arxiv="1703.01365",
+    url="https://arxiv.org/abs/1703.01365",
+    note="Introduces Integrated Gradients attribution method",
+)
+
 MORVAN_2020 = Reference(
     id="morvan_2020",
     bibcode="2020AJ....159..166M",
@@ -1082,6 +1092,7 @@ _REGISTRY: dict[str, Reference] = {
     "petigura_2012": PETIGURA_2012,
     "luger_2016": LUGER_2016,
     "kovacs_2002": KOVACS_2002,
+    "sundararajan_2017": SUNDARARAJAN_2017,
     "morvan_2020": MORVAN_2020,
     # TRICERATOPS
     "giacalone_2021": GIACALONE_2021,
@@ -1324,7 +1335,7 @@ __all__ = [
     "cite",
     # Protocol
     "CitableCallable",
-    # All Reference constants (49 total)
+    # All Reference constants
     "THOMPSON_2018",
     "COUGHLIN_2016",
     "GUERRERO_2021",
@@ -1381,6 +1392,7 @@ __all__ = [
     "PETIGURA_2012",
     "LUGER_2016",
     "KOVACS_2002",
+    "SUNDARARAJAN_2017",
     "MORVAN_2020",
     "GIACALONE_2021",
     "TRICERATOPS_PLUS",
