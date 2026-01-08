@@ -13,9 +13,9 @@ Novelty: standard (all checks implement well-established techniques from literat
 References:
     [1] Bryson et al. 2013, PASP 125, 889 (2013PASP..125..889B) - Kepler pixel-level diagnostics
     [2] Twicken et al. 2018, PASP 130, 064502 (2018PASP..130f4502T) - Kepler Data Validation
-    [3] Batalha et al. 2010, ApJ 713, L109 (2010ApJ...713L.109B) - Centroid motion analysis
-    [4] Torres et al. 2011, ApJ 727, 24 (2011ApJ...727...24T) - Background blend detection
-    [5] Guerrero et al. 2021, ApJS 254, 39 (2021ApJS..254...39G) - TESS TOI catalog vetting
+    [3] Torres et al. 2011, ApJ 727, 24 (2011ApJ...727...24T) - Background blend detection
+    [4] Guerrero et al. 2021, ApJS 254, 39 (2021ApJS..254...39G) - TESS TOI catalog vetting
+    [5] Mullally et al. 2015, ApJS 217, 31 (2015ApJS..217...31M) - Kepler planet candidate vetting
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ REFERENCES: list[dict[str, str]] = [
         "authors": "Batalha, N.M.; Borucki, W.J.; Koch, D.G.; et al.",
         "journal": "ApJ 713, L109",
         "year": "2010",
-        "note": "Early Kepler centroid analysis methodology",
+        "note": "Kepler target star selection and stellar classification methodology",
     },
     {
         "id": "Torres2011",
@@ -88,14 +88,14 @@ REFERENCES: list[dict[str, str]] = [
         "note": "TESS TOI catalog pixel-level vetting procedures",
     },
     {
-        "id": "Mullally2016",
+        "id": "Mullally2015",
         "type": "ads",
-        "bibcode": "2016AJ....152..158M",
-        "title": "Planetary Candidates from K2 Campaign 1: 2014 Apr--Jun",
+        "bibcode": "2015ApJS..217...31M",
+        "title": "Planetary Candidates Observed by Kepler VI: Planet Sample from Q1-Q16 (47 Months)",
         "authors": "Mullally, F.; Coughlin, J.L.; Thompson, S.E.; et al.",
-        "journal": "AJ 152, 158",
-        "year": "2016",
-        "note": "Aperture dependence and contamination diagnostics for K2",
+        "journal": "ApJS 217, 31",
+        "year": "2015",
+        "note": "Kepler planet candidate catalog with vetting diagnostics and false alarm identification",
     },
 ]
 
@@ -182,8 +182,6 @@ def centroid_shift(
             Section 3.1: Centroid offset test for background false positives
         [2] Twicken et al. 2018, PASP 130, 064502 (2018PASP..130f4502T)
             Section 4.1: Difference image centroid offsets in Kepler DV
-        [3] Batalha et al. 2010, ApJ 713, L109 (2010ApJ...713L.109B)
-            Early Kepler centroid motion analysis
     """
     time_arr, flux_arr = _extract_arrays_from_tpf(tpf)
 
@@ -357,12 +355,12 @@ def aperture_dependence(
     Novelty: standard
 
     References:
-        [1] Mullally et al. 2016, AJ 152, 158 (2016AJ....152..158M)
-            Section 3.2: Aperture dependence for contamination detection
-        [2] Bryson et al. 2013, PASP 125, 889 (2013PASP..125..889B)
+        [1] Bryson et al. 2013, PASP 125, 889 (2013PASP..125..889B)
             Section 3.3: Contamination assessment via aperture photometry
-        [3] Guerrero et al. 2021, ApJS 254, 39 (2021ApJS..254...39G)
+        [2] Guerrero et al. 2021, ApJS 254, 39 (2021ApJS..254...39G)
             Section 3.4: TESS aperture family analysis
+        [3] Mullally et al. 2015, ApJS 217, 31 (2015ApJS..217...31M)
+            Kepler planet candidate vetting diagnostics
     """
     time_arr, flux_arr = _extract_arrays_from_tpf(tpf)
 

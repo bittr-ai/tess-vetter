@@ -10,8 +10,8 @@ Check Summary:
 Novelty: standard (both checks implement well-established Kepler techniques)
 
 References:
-    [1] Coughlin et al. 2014, AJ 147, 119 (2014AJ....147..119C) - ModShift technique
-    [2] Thompson et al. 2018, ApJS 235, 38 (2018ApJS..235...38T) - DR25 SWEET test
+    [1] Thompson et al. 2018, ApJS 235, 38 (2018ApJS..235...38T) - DR25 Robovetter ModShift/SWEET
+    [2] Coughlin et al. 2016, ApJS 224, 12 (2016ApJS..224...12C) - DR24 Robovetter
 """
 
 from __future__ import annotations
@@ -25,17 +25,6 @@ from bittr_tess_vetter.validation.exovetter_checks import ModshiftCheck, SWEETCh
 # Module-level references for programmatic access
 REFERENCES: list[dict[str, str]] = [
     {
-        "id": "Coughlin2014",
-        "type": "ads",
-        "bibcode": "2014AJ....147..119C",
-        "title": "Contamination in the Kepler Field. Identification of 685 KOIs as "
-        "False Positives via Ephemeris Matching Based on Q1-Q12 Data",
-        "authors": "Coughlin, J.L.; Thompson, S.E.; Bryson, S.T.; et al.",
-        "journal": "AJ 147, 119",
-        "year": "2014",
-        "note": "ModShift technique for detecting secondary eclipses at arbitrary phases",
-    },
-    {
         "id": "Thompson2018",
         "type": "ads",
         "bibcode": "2018ApJS..235...38T",
@@ -44,7 +33,18 @@ REFERENCES: list[dict[str, str]] = [
         "authors": "Thompson, S.E.; Coughlin, J.L.; Hoffman, K.; et al.",
         "journal": "ApJS 235, 38",
         "year": "2018",
-        "note": "SWEET test for stellar variability detection in DR25 Robovetter",
+        "note": "DR25 Robovetter: ModShift (Sec 3.2.3) and SWEET (Sec 3.2.4) tests",
+    },
+    {
+        "id": "Coughlin2016",
+        "type": "ads",
+        "bibcode": "2016ApJS..224...12C",
+        "title": "Planetary Candidates Observed by Kepler. VII. The First Fully Uniform "
+        "Catalog Based on the Entire 48-month Data Set (Q1-Q17 DR24)",
+        "authors": "Coughlin, J.L.; Mullally, F.; Thompson, S.E.; et al.",
+        "journal": "ApJS 224, 12",
+        "year": "2016",
+        "note": "DR24 Robovetter with automated vetting including ModShift and SWEET",
     },
 ]
 
@@ -145,10 +145,10 @@ def modshift(
     Novelty: standard
 
     References:
-        [1] Coughlin et al. 2014, AJ 147, 119 (2014AJ....147..119C)
-            Section 3: ModShift technique for detecting secondary eclipses
-        [2] Thompson et al. 2018, ApJS 235, 38 (2018ApJS..235...38T)
-            Section 3.2.3: ModShift implementation in DR25 Robovetter
+        [1] Thompson et al. 2018, ApJS 235, 38 (2018ApJS..235...38T)
+            Section 3.2.3: ModShift technique for detecting secondary eclipses
+        [2] Coughlin et al. 2016, ApJS 224, 12 (2016ApJS..224...12C)
+            DR24 Robovetter automated ModShift implementation
     """
     if not enabled:
         return _make_skipped_result("V11", "modshift", "Check disabled by caller")
@@ -174,9 +174,7 @@ def modshift(
         check_config = CheckConfig(
             enabled=True,
             threshold=config.get("threshold", 0.5),
-            additional={
-                k: v for k, v in config.items() if k != "threshold"
-            },
+            additional={k: v for k, v in config.items() if k != "threshold"},
         )
     check = ModshiftCheck(config=check_config)
     result = check.run(internal_candidate, internal_lc)
@@ -246,9 +244,7 @@ def sweet(
         check_config = CheckConfig(
             enabled=True,
             threshold=config.get("threshold", 3.0),
-            additional={
-                k: v for k, v in config.items() if k != "threshold"
-            },
+            additional={k: v for k, v in config.items() if k != "threshold"},
         )
     check = SWEETCheck(config=check_config)
     result = check.run(internal_candidate, internal_lc)
