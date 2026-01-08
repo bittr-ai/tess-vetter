@@ -514,9 +514,10 @@ def calculate_fpp_handler(
     tmag: float | None = None,
     timeout_seconds: float | None = None,
     mc_draws: int | None = None,
-    window_duration_mult: float = 3.0,
-    max_points: int = 3000,
+    window_duration_mult: float | None = 3.0,
+    max_points: int | None = 3000,
     min_flux_err: float = 5e-5,
+    use_empirical_noise_floor: bool = True,
     *,
     load_cached_target: Callable[..., Any] | None = None,
     save_cached_target: Callable[..., Any] | None = None,
@@ -731,12 +732,15 @@ def calculate_fpp_handler(
         # Use only a local window around transit to keep calc_probs tractable.
         # TRICERATOPS runtime scales strongly with the number of points and the MC draw count.
         dur_days = float(duration_hours) / 24.0
-        half_window_days = max(dur_days * float(window_duration_mult), 0.25)
-        window_mask = np.abs(time_folded) <= half_window_days
-        if np.any(window_mask):
-            time_folded = time_folded[window_mask]
-            flux_arr = flux_arr[window_mask]
-            flux_err_arr = flux_err_arr[window_mask]
+        if window_duration_mult is None:
+            half_window_days = float("inf")
+        else:
+            half_window_days = max(dur_days * float(window_duration_mult), 0.25)
+            window_mask = np.abs(time_folded) <= half_window_days
+            if np.any(window_mask):
+                time_folded = time_folded[window_mask]
+                flux_arr = flux_arr[window_mask]
+                flux_err_arr = flux_err_arr[window_mask]
         n_points_windowed = int(len(time_folded))
 
         sort_idx = np.argsort(time_folded)
@@ -744,7 +748,7 @@ def calculate_fpp_handler(
         flux_arr = flux_arr[sort_idx]
         flux_err_arr = flux_err_arr[sort_idx]
 
-        if max_points > 0 and len(time_folded) > max_points:
+        if max_points is not None and max_points > 0 and len(time_folded) > max_points:
             keep = np.unique(np.linspace(0, len(time_folded) - 1, max_points).astype(int))
             time_folded = time_folded[keep]
             flux_arr = flux_arr[keep]
@@ -757,17 +761,19 @@ def calculate_fpp_handler(
         # For very bright targets, formal pipeline uncertainties can be unrealistically small,
         # driving all scenario evidences (lnZ) toward -inf and yielding NaN probabilities.
         # Use an empirical noise floor from out-of-transit scatter to stabilize.
-        try:
-            oot_mask = np.abs(time_folded) > (dur_days / 2.0)
-            if np.any(oot_mask):
-                oot_flux = flux_arr[oot_mask]
-            else:
-                oot_flux = flux_arr
-            med = float(np.median(oot_flux))
-            mad = float(np.median(np.abs(oot_flux - med)))
-            empirical_sigma = 1.4826 * mad
-        except Exception:
-            empirical_sigma = 0.0
+        empirical_sigma = 0.0
+        if use_empirical_noise_floor:
+            try:
+                oot_mask = np.abs(time_folded) > (dur_days / 2.0)
+                if np.any(oot_mask):
+                    oot_flux = flux_arr[oot_mask]
+                else:
+                    oot_flux = flux_arr
+                med = float(np.median(oot_flux))
+                mad = float(np.median(np.abs(oot_flux - med)))
+                empirical_sigma = 1.4826 * mad
+            except Exception:
+                empirical_sigma = 0.0
 
         flux_err_scalar = float(max(flux_err_scalar, empirical_sigma, float(min_flux_err)))
 
@@ -937,13 +943,14 @@ def calculate_fpp_handler(
             "n_points_windowed": int(n_points_windowed),
             "n_points_used": int(n_points_used),
             "half_window_days": float(half_window_days),
-            "window_duration_mult": float(window_duration_mult),
-            "max_points": int(max_points),
+            "window_duration_mult": (float(window_duration_mult) if window_duration_mult is not None else None),
+            "max_points": int(max_points) if max_points is not None else None,
             "mc_draws": int(draws),
             "exptime_days": float(exptime_days),
             "flux_err_scalar_used": float(flux_err_scalar),
             "empirical_sigma_used": float(empirical_sigma),
             "min_flux_err": float(min_flux_err),
+            "use_empirical_noise_floor": bool(use_empirical_noise_floor),
         }
 
         # Provide a short reason string when TRICERATOPS returns unusable/degenerate outputs.

@@ -138,6 +138,9 @@ from bittr_tess_vetter.api.timing import analyze_ttvs, measure_transit_times
 # v3 transit fitting
 from bittr_tess_vetter.api.transit_fit import TransitFitResult, fit_transit, quick_estimate
 
+# FPP (TRICERATOPS) presets
+from bittr_tess_vetter.api.fpp import FAST_PRESET, STANDARD_PRESET, TriceratopsFppPreset, calculate_fpp
+
 # Transit primitives
 from bittr_tess_vetter.api.transit_primitives import odd_even_result
 
@@ -223,4 +226,9 @@ __all__ = [
     "recover_transit",
     "detrend",
     "stack_transits",
+    # FPP (TRICERATOPS)
+    "calculate_fpp",
+    "TriceratopsFppPreset",
+    "FAST_PRESET",
+    "STANDARD_PRESET",
 ]
