@@ -747,8 +747,23 @@ def calculate_fpp_handler(
 
         # Calculate median flux uncertainty for scalar flux_err_0
         flux_err_scalar = float(np.median(flux_err_arr))
-        # Avoid extreme/degenerate likelihoods that can drive lnZ -> -inf across scenarios.
-        flux_err_scalar = float(max(flux_err_scalar, 1e-5))
+        # TRICERATOPS assumes flux_err_0 is a representative per-point uncertainty.
+        # For very bright targets, formal pipeline uncertainties can be unrealistically small,
+        # driving all scenario evidences (lnZ) toward -inf and yielding NaN probabilities.
+        # Use an empirical noise floor from out-of-transit scatter to stabilize.
+        try:
+            oot_mask = np.abs(time_folded) > (dur_days / 2.0)
+            if np.any(oot_mask):
+                oot_flux = flux_arr[oot_mask]
+            else:
+                oot_flux = flux_arr
+            med = float(np.median(oot_flux))
+            mad = float(np.median(np.abs(oot_flux - med)))
+            empirical_sigma = 1.4826 * mad
+        except Exception:
+            empirical_sigma = 0.0
+
+        flux_err_scalar = float(max(flux_err_scalar, empirical_sigma, 5e-5))
 
         # Convert depth from ppm to fractional for TRICERATOPS
         depth_fractional = depth_ppm / 1e6
