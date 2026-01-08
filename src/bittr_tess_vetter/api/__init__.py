@@ -149,6 +149,31 @@ from bittr_tess_vetter.api.transit_fit import TransitFitResult, fit_transit, qui
 # Transit primitives
 from bittr_tess_vetter.api.transit_primitives import odd_even_result
 
+# Low-level primitives (host-facing)
+from bittr_tess_vetter.api.ephemeris_specificity import (  # noqa: F401
+    ConcentrationMetrics,
+    LocalT0SensitivityResult,
+    PhaseShiftNullResult,
+    SmoothTemplateConfig,
+    SmoothTemplateScoreResult,
+    compute_concentration_metrics,
+    compute_local_t0_sensitivity_numpy,
+    compute_phase_shift_null,
+    downsample_evenly,
+    phase_shift_t0s,
+    score_fixed_period_numpy,
+    scores_for_t0s_numpy,
+    smooth_box_template_numpy,
+)
+from bittr_tess_vetter.api.systematics import SystematicsProxyResult, compute_systematics_proxy
+from bittr_tess_vetter.api.transit_masks import (  # noqa: F401
+    count_transits,
+    get_in_transit_mask,
+    get_odd_even_transit_indices,
+    get_out_of_transit_mask,
+    measure_transit_depth,
+)
+
 # Types (v3) - re-exported from types.py
 from bittr_tess_vetter.api.types import (
     ActivityResult,
@@ -169,6 +194,36 @@ from bittr_tess_vetter.api.types import (
 
 # Main orchestrator
 from bittr_tess_vetter.api.vet import vet_candidate
+
+# Prefilters (PFxx)
+from bittr_tess_vetter.api.prefilter import (  # noqa: F401
+    compute_depth_over_depth_err_snr,
+    compute_phase_coverage,
+)
+
+# Utilities
+from bittr_tess_vetter.api.canonical import (  # noqa: F401
+    FLOAT_DECIMAL_PLACES,
+    CanonicalEncoder,
+    canonical_hash,
+    canonical_hash_prefix,
+    canonical_json,
+)
+from bittr_tess_vetter.api.caps import (  # noqa: F401
+    DEFAULT_NEIGHBORS_CAP,
+    DEFAULT_PLOTS_CAP,
+    DEFAULT_TOP_K_CAP,
+    DEFAULT_VARIANT_SUMMARIES_CAP,
+    cap_neighbors,
+    cap_plots,
+    cap_top_k,
+    cap_variant_summaries,
+)
+from bittr_tess_vetter.api.tolerances import (  # noqa: F401
+    HARMONIC_RATIOS,
+    ToleranceResult,
+    check_tolerance,
+)
 
 __all__ = [
     # Types (v2)
@@ -191,8 +246,49 @@ __all__ = [
     "RecoveryResult",
     # Main orchestrator (v2)
     "vet_candidate",
+    # Prefilters (PFxx)
+    "compute_depth_over_depth_err_snr",
+    "compute_phase_coverage",
+    # Utilities
+    "FLOAT_DECIMAL_PLACES",
+    "CanonicalEncoder",
+    "canonical_json",
+    "canonical_hash",
+    "canonical_hash_prefix",
+    "DEFAULT_TOP_K_CAP",
+    "DEFAULT_VARIANT_SUMMARIES_CAP",
+    "DEFAULT_NEIGHBORS_CAP",
+    "DEFAULT_PLOTS_CAP",
+    "cap_top_k",
+    "cap_neighbors",
+    "cap_plots",
+    "cap_variant_summaries",
+    "ToleranceResult",
+    "HARMONIC_RATIOS",
+    "check_tolerance",
     # Transit primitives
     "odd_even_result",
+    # Low-level primitives (host-facing)
+    "get_in_transit_mask",
+    "get_out_of_transit_mask",
+    "get_odd_even_transit_indices",
+    "measure_transit_depth",
+    "count_transits",
+    "SmoothTemplateConfig",
+    "SmoothTemplateScoreResult",
+    "PhaseShiftNullResult",
+    "ConcentrationMetrics",
+    "LocalT0SensitivityResult",
+    "downsample_evenly",
+    "smooth_box_template_numpy",
+    "score_fixed_period_numpy",
+    "phase_shift_t0s",
+    "scores_for_t0s_numpy",
+    "compute_phase_shift_null",
+    "compute_concentration_metrics",
+    "compute_local_t0_sensitivity_numpy",
+    "SystematicsProxyResult",
+    "compute_systematics_proxy",
     # LC-only checks (V01-V05)
     "odd_even_depth",
     "secondary_eclipse",
