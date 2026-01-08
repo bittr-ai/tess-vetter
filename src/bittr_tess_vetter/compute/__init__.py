@@ -149,8 +149,10 @@ MLX_AVAILABLE = _importlib_util.find_spec("mlx") is not None
 
 from .mlx_detection import (  # noqa: E402
     MlxTopKScoreResult,
+    MlxT0RefinementResult,
     integrated_gradients,
     score_fixed_period,
+    score_fixed_period_refine_t0,
     score_top_k_periods,
     smooth_box_template,
 )
@@ -158,8 +160,10 @@ from .mlx_detection import (  # noqa: E402
 __all__.extend(
     [
         "MlxTopKScoreResult",
+        "MlxT0RefinementResult",
         "smooth_box_template",
         "score_fixed_period",
+        "score_fixed_period_refine_t0",
         "score_top_k_periods",
         "integrated_gradients",
         "MLX_AVAILABLE",

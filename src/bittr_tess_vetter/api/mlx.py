@@ -21,6 +21,7 @@ from bittr_tess_vetter.api.references import KOVACS_2002, SUNDARARAJAN_2017, cit
 from bittr_tess_vetter.compute import mlx_detection as _mlx_detection
 from bittr_tess_vetter.compute.mlx_detection import (
     MlxTopKScoreResult,
+    MlxT0RefinementResult,
 )
 
 
@@ -85,6 +86,38 @@ def score_fixed_period(
 
 
 @cites(
+    cite(KOVACS_2002, "epoch/phase search and local refinement within a template-based detector"),
+)
+def score_fixed_period_refine_t0(
+    *,
+    time: object,
+    flux: object,
+    flux_err: object | None,
+    period_days: float,
+    t0_btjd: float,
+    duration_hours: float,
+    t0_scan_n: int = 81,
+    t0_scan_half_span_minutes: float | None = None,
+    ingress_egress_fraction: float = 0.2,
+    sharpness: float = 30.0,
+    eps: float = 1e-12,
+) -> MlxT0RefinementResult:
+    return _mlx_detection.score_fixed_period_refine_t0(
+        time=time,  # type: ignore[arg-type]
+        flux=flux,  # type: ignore[arg-type]
+        flux_err=flux_err,  # type: ignore[arg-type]
+        period_days=period_days,
+        t0_btjd=t0_btjd,
+        duration_hours=duration_hours,
+        t0_scan_n=t0_scan_n,
+        t0_scan_half_span_minutes=t0_scan_half_span_minutes,
+        ingress_egress_fraction=ingress_egress_fraction,
+        sharpness=sharpness,
+        eps=eps,
+    )
+
+
+@cites(
     cite(KOVACS_2002, "scoring candidate periods with box-like templates"),
 )
 def score_top_k_periods(
@@ -133,8 +166,10 @@ __all__ = [
     "MLX_AVAILABLE",
     "REFERENCES",
     "MlxTopKScoreResult",
+    "MlxT0RefinementResult",
     "smooth_box_template",
     "score_fixed_period",
+    "score_fixed_period_refine_t0",
     "score_top_k_periods",
     "integrated_gradients",
 ]
