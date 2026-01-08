@@ -514,7 +514,8 @@ def calculate_fpp_handler(
     tmag: float | None = None,
     timeout_seconds: float | None = None,
     mc_draws: int | None = None,
-    window_duration_mult: float = 10.0,
+    window_duration_mult: float = 3.0,
+    max_points: int = 3000,
     *,
     load_cached_target: Callable[..., Any] | None = None,
     save_cached_target: Callable[..., Any] | None = None,
@@ -711,6 +712,12 @@ def calculate_fpp_handler(
         time_arr = np.array(lc_data["time"])
         flux_arr = np.array(lc_data["flux"])
         flux_err_arr = np.array(lc_data["flux_err"])
+        try:
+            time_sorted = np.sort(time_arr)
+            dt = np.diff(time_sorted)
+            exptime_days = float(np.nanmedian(dt[np.isfinite(dt)]))
+        except Exception:
+            exptime_days = 0.00139
 
         # Fold time to be relative to nearest transit midpoint
         # (time should be in days from transit midpoint)
@@ -720,15 +727,28 @@ def calculate_fpp_handler(
         # Use only a local window around transit to keep calc_probs tractable.
         # TRICERATOPS runtime scales strongly with the number of points and the MC draw count.
         dur_days = float(duration_hours) / 24.0
-        half_window_days = max(dur_days * float(window_duration_mult), 0.5)
+        half_window_days = max(dur_days * float(window_duration_mult), 0.25)
         window_mask = np.abs(time_folded) <= half_window_days
         if np.any(window_mask):
             time_folded = time_folded[window_mask]
             flux_arr = flux_arr[window_mask]
             flux_err_arr = flux_err_arr[window_mask]
 
+        sort_idx = np.argsort(time_folded)
+        time_folded = time_folded[sort_idx]
+        flux_arr = flux_arr[sort_idx]
+        flux_err_arr = flux_err_arr[sort_idx]
+
+        if max_points > 0 and len(time_folded) > max_points:
+            keep = np.unique(np.linspace(0, len(time_folded) - 1, max_points).astype(int))
+            time_folded = time_folded[keep]
+            flux_arr = flux_arr[keep]
+            flux_err_arr = flux_err_arr[keep]
+
         # Calculate median flux uncertainty for scalar flux_err_0
         flux_err_scalar = float(np.median(flux_err_arr))
+        # Avoid extreme/degenerate likelihoods that can drive lnZ -> -inf across scenarios.
+        flux_err_scalar = float(max(flux_err_scalar, 1e-5))
 
         # Convert depth from ppm to fractional for TRICERATOPS
         depth_fractional = depth_ppm / 1e6
@@ -767,6 +787,7 @@ def calculate_fpp_handler(
                 flux_err_0=flux_err_scalar,
                 P_orb=period,
                 N=draws,
+                exptime=float(exptime_days) if np.isfinite(exptime_days) and exptime_days > 0 else 0.00139,
                 verbose=0,  # Suppress progress output
             )
     except NetworkTimeoutError as e:
@@ -842,6 +863,7 @@ def calculate_fpp_handler(
             "n_points_used": int(len(time_folded)),
             "half_window_days": float(half_window_days),
             "mc_draws": int(draws),
+            "exptime_days": float(exptime_days),
         }
         return out
 
