@@ -29,6 +29,7 @@ import math
 import pickle
 import time
 import contextlib
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
@@ -520,6 +521,7 @@ def calculate_fpp_handler(
         Dictionary with FPP results or error information
     """
     start_time = time.time()
+    cache_dir = getattr(cache, "cache_dir", None) or tempfile.gettempdir()
 
     def _err(
         message: str,
@@ -582,9 +584,7 @@ def calculate_fpp_handler(
         _save = save_cached_target or _save_cached_triceratops_target
         _prefetch = prefetch_trilegal_csv or _prefetch_trilegal_csv
 
-        target = _load(
-            cache_dir=cache.cache_dir, tic_id=tic_id, sectors_used=sectors_used
-        )
+        target = _load(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used)
         if target is None:
             init_timeout = TRICERATOPS_INIT_TIMEOUT_DEFAULT
             if timeout_seconds is not None and float(timeout_seconds) > 0:
@@ -597,7 +597,7 @@ def calculate_fpp_handler(
                 ):
                     target = tr.target(ID=tic_id, sectors=sectors_used, mission="TESS")
                 _save(
-                    cache_dir=cache.cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target
+                    cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target
                 )
             except NetworkTimeoutError:
                 # One retry: some upstream endpoints are bursty (MAST/TessCut/Gaia).
@@ -607,7 +607,7 @@ def calculate_fpp_handler(
                 ):
                     target = tr.target(ID=tic_id, sectors=sectors_used, mission="TESS")
                 _save(
-                    cache_dir=cache.cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target
+                    cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target
                 )
     except NetworkTimeoutError as e:
         return _err(
@@ -640,7 +640,7 @@ def calculate_fpp_handler(
                     operation=f"TRILEGAL prefetch for TIC {tic_id}",
                 ):
                     trilegal_csv = _prefetch(
-                        cache_dir=cache.cache_dir,
+                        cache_dir=cache_dir,
                         tic_id=tic_id,
                         trilegal_url=trilegal_url,
                     )
