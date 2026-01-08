@@ -42,6 +42,7 @@ from bittr_tess_vetter.api.references import (
     NIELSEN_2013,
     REINHOLD_2020,
     TOVAR_MENDOZA_2022,
+    cite,
     cites,
 )
 from bittr_tess_vetter.api.types import LightCurve
@@ -72,7 +73,11 @@ REFERENCES = [
 ]
 
 
-@cites(MCQUILLAN_2014, DAVENPORT_2016, BASRI_2013)
+@cites(
+    cite(MCQUILLAN_2014, "ACF rotation period measurement"),
+    cite(DAVENPORT_2016, "Kepler flare detection catalog"),
+    cite(BASRI_2013, "stellar variability activity indices"),
+)
 def characterize_activity(
     lc: LightCurve,
     *,

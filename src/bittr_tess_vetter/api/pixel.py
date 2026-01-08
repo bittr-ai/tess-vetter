@@ -29,6 +29,7 @@ from bittr_tess_vetter.api.references import (
     MULLALLY_2015,
     TORRES_2011,
     TWICKEN_2018,
+    cite,
     cites,
 )
 from bittr_tess_vetter.api.types import Candidate, CheckResult, TPFStamp
@@ -94,7 +95,10 @@ def _extract_arrays_from_tpf(
     return time_arr, flux_arr
 
 
-@cites(BRYSON_2013, TWICKEN_2018)
+@cites(
+    cite(BRYSON_2013, "§3.1 centroid offset test"),
+    cite(TWICKEN_2018, "§4.1 difference image centroid offsets"),
+)
 def centroid_shift(
     tpf: TPFStamp,
     candidate: Candidate,
@@ -177,7 +181,11 @@ def centroid_shift(
     return _convert_result(result)
 
 
-@cites(BRYSON_2013, TORRES_2011, TWICKEN_2018)
+@cites(
+    cite(BRYSON_2013, "§3.2 difference image analysis"),
+    cite(TORRES_2011, "§4 blend scenarios and centroid"),
+    cite(TWICKEN_2018, "§4.2 difference image PRF fitting"),
+)
 def difference_image_localization(
     tpf: TPFStamp,
     candidate: Candidate,
@@ -272,7 +280,11 @@ def difference_image_localization(
     return _convert_result(result)
 
 
-@cites(BRYSON_2013, GUERRERO_2021, MULLALLY_2015)
+@cites(
+    cite(BRYSON_2013, "§3.3 contamination via aperture photometry"),
+    cite(GUERRERO_2021, "§3.4 TESS aperture family analysis"),
+    cite(MULLALLY_2015, "Kepler vetting diagnostics"),
+)
 def aperture_dependence(
     tpf: TPFStamp,
     candidate: Candidate,

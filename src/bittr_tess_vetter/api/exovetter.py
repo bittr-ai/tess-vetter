@@ -21,6 +21,7 @@ from typing import Any
 from bittr_tess_vetter.api.references import (
     COUGHLIN_2016,
     THOMPSON_2018,
+    cite,
     cites,
 )
 from bittr_tess_vetter.api.types import Candidate, CheckResult, LightCurve
@@ -96,7 +97,10 @@ def _make_skipped_result(check_id: str, check_name: str, reason: str) -> CheckRe
     )
 
 
-@cites(THOMPSON_2018, COUGHLIN_2016)
+@cites(
+    cite(THOMPSON_2018, "§3.2.3 ModShift secondary eclipse detection"),
+    cite(COUGHLIN_2016, "DR24 Robovetter ModShift implementation"),
+)
 def modshift(
     lc: LightCurve,
     candidate: Candidate,
@@ -165,7 +169,10 @@ def modshift(
     return _convert_result(result)
 
 
-@cites(THOMPSON_2018, COUGHLIN_2016)
+@cites(
+    cite(THOMPSON_2018, "§3.2.4 SWEET stellar variability test"),
+    cite(COUGHLIN_2016, "§4.4 original SWEET implementation"),
+)
 def sweet(
     lc: LightCurve,
     candidate: Candidate,

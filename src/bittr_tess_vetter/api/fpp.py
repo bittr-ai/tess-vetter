@@ -49,7 +49,7 @@ STANDARD_PRESET = TriceratopsFppPreset(
 
 def calculate_fpp(
     *,
-    cache: "PersistentCache",
+    cache: PersistentCache,
     tic_id: int,
     period: float,
     t0: float,
@@ -82,10 +82,13 @@ def calculate_fpp(
         stellar_mass=stellar_mass,
         tmag=tmag,
         timeout_seconds=timeout_seconds,
-        mc_draws=int(extra.get("mc_draws", base.mc_draws)) if base.mc_draws is not None else extra.get("mc_draws"),
+        mc_draws=int(extra.get("mc_draws", base.mc_draws))
+        if base.mc_draws is not None
+        else extra.get("mc_draws"),
         window_duration_mult=extra.get("window_duration_mult", base.window_duration_mult),
         max_points=extra.get("max_points", base.max_points),
         min_flux_err=float(extra.get("min_flux_err", base.min_flux_err)),
-        use_empirical_noise_floor=bool(extra.get("use_empirical_noise_floor", base.use_empirical_noise_floor)),
+        use_empirical_noise_floor=bool(
+            extra.get("use_empirical_noise_floor", base.use_empirical_noise_floor)
+        ),
     )
-

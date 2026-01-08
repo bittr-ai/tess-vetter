@@ -31,6 +31,7 @@ from bittr_tess_vetter.api.references import (
     SEAGER_MALLEN_ORNELAS_2003,
     THOMPSON_2018,
     TWICKEN_2018,
+    cite,
     cites,
 )
 from bittr_tess_vetter.api.types import CheckResult, Ephemeris, LightCurve, StellarParams
@@ -85,7 +86,11 @@ def _convert_result(result: object) -> CheckResult:
     )
 
 
-@cites(COUGHLIN_2016, THOMPSON_2018, PRSA_2011)
+@cites(
+    cite(COUGHLIN_2016, "§4.2 odd/even depth test"),
+    cite(THOMPSON_2018, "§3.3.1 DR25 odd/even comparison"),
+    cite(PRSA_2011, "§3 EB morphology classification"),
+)
 def odd_even_depth(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     """V01: Compare depth of odd vs even transits.
 
@@ -119,7 +124,11 @@ def odd_even_depth(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     return _convert_result(result)
 
 
-@cites(COUGHLIN_LOPEZ_MORALES_2012, THOMPSON_2018, FRESSIN_2013)
+@cites(
+    cite(COUGHLIN_LOPEZ_MORALES_2012, "secondary eclipse search methodology"),
+    cite(THOMPSON_2018, "§3.2 Significant Secondary test"),
+    cite(FRESSIN_2013, "§3 FP scenarios incl. secondary eclipses"),
+)
 def secondary_eclipse(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     """V02: Search for secondary eclipse at phase 0.5.
 
@@ -152,7 +161,11 @@ def secondary_eclipse(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     return _convert_result(result)
 
 
-@cites(SEAGER_MALLEN_ORNELAS_2003, TWICKEN_2018, THOMPSON_2018)
+@cites(
+    cite(SEAGER_MALLEN_ORNELAS_2003, "Eq.3,9,19 duration-density relation"),
+    cite(TWICKEN_2018, "§4.3 duration consistency test"),
+    cite(THOMPSON_2018, "§3.4 Planet in Star metric"),
+)
 def duration_consistency(
     ephemeris: Ephemeris,
     stellar: StellarParams | None,
@@ -189,7 +202,11 @@ def duration_consistency(
     return _convert_result(result)
 
 
-@cites(THOMPSON_2018, TWICKEN_2018, GUERRERO_2021)
+@cites(
+    cite(THOMPSON_2018, "§3.5 individual transit metrics"),
+    cite(TWICKEN_2018, "§4.5 transit depth stability"),
+    cite(GUERRERO_2021, "§3.2 TESS TOI depth consistency"),
+)
 def depth_stability(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     """V04: Check depth consistency across individual transits.
 
@@ -223,7 +240,11 @@ def depth_stability(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     return _convert_result(result)
 
 
-@cites(SEAGER_MALLEN_ORNELAS_2003, PRSA_2011, THOMPSON_2018)
+@cites(
+    cite(SEAGER_MALLEN_ORNELAS_2003, "§3 transit shape parameters tF/tT"),
+    cite(PRSA_2011, "§3.2 EB morphology classification"),
+    cite(THOMPSON_2018, "§3.1 Not Transit-Like V-shape metric"),
+)
 def v_shape(lc: LightCurve, ephemeris: Ephemeris) -> CheckResult:
     """V05: Distinguish U-shaped (planet) vs V-shaped (grazing EB) transits.
 

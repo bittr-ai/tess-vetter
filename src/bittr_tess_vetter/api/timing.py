@@ -29,6 +29,7 @@ from bittr_tess_vetter.api.references import (
     LITHWICK_2012,
     RAGOZZINE_HOLMAN_2019,
     STEFFEN_AGOL_2006,
+    cite,
     cites,
 )
 from bittr_tess_vetter.api.types import Candidate, LightCurve
@@ -65,7 +66,12 @@ REFERENCES = [
 ]
 
 
-@cites(IVSHINA_WINN_2022, FORD_2012, HOLMAN_MURRAY_2005, AGOL_2005)
+@cites(
+    cite(IVSHINA_WINN_2022, "§3 transit time template fitting"),
+    cite(FORD_2012, "Kepler TTV detection methodology"),
+    cite(HOLMAN_MURRAY_2005, "foundational TTV theory"),
+    cite(AGOL_2005, "TTV detection methods"),
+)
 def measure_transit_times(
     lc: LightCurve,
     candidate: Candidate,
@@ -126,7 +132,11 @@ def measure_transit_times(
     )
 
 
-@cites(LITHWICK_2012, HADDEN_LITHWICK_2016, HADDEN_2019)
+@cites(
+    cite(LITHWICK_2012, "§2 analytic TTV formulae Eq.1-10"),
+    cite(HADDEN_LITHWICK_2016, "§2-3 practical TTV analysis"),
+    cite(HADDEN_2019, "§2 TESS TTV detection thresholds"),
+)
 def analyze_ttvs(
     transit_times: list[TransitTime],
     period_days: float,

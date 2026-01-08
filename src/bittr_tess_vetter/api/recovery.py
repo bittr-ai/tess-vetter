@@ -34,6 +34,7 @@ from bittr_tess_vetter.api.references import (
     LUGER_2016,
     MORVAN_2020,
     PETIGURA_2012,
+    cite,
     cites,
 )
 from bittr_tess_vetter.api.types import Candidate, LightCurve
@@ -100,7 +101,10 @@ class RecoveryResult:
     converged: bool
 
 
-@cites(HIPPKE_2019_WOTAN, HIPPKE_HELLER_2019_TLS)
+@cites(
+    cite(HIPPKE_2019_WOTAN, "§2-3 detrending methods benchmark"),
+    cite(HIPPKE_HELLER_2019_TLS, "§2,4 TLS for active stars"),
+)
 def recover_transit(
     lc: LightCurve,
     candidate: Candidate,
@@ -260,7 +264,9 @@ def recover_transit(
     )
 
 
-@cites(HIPPKE_2019_WOTAN)
+@cites(
+    cite(HIPPKE_2019_WOTAN, "wotan methods comparison"),
+)
 def detrend(
     lc: LightCurve,
     candidate: Candidate,

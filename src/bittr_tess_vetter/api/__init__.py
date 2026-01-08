@@ -111,6 +111,14 @@ from bittr_tess_vetter.api.exovetter import (
     vet_exovetter,
 )
 
+# FPP (TRICERATOPS) presets
+from bittr_tess_vetter.api.fpp import (
+    FAST_PRESET,
+    STANDARD_PRESET,
+    TriceratopsFppPreset,
+    calculate_fpp,
+)
+
 # LC-only checks (V01-V05)
 from bittr_tess_vetter.api.lc_only import (
     depth_stability,
@@ -137,9 +145,6 @@ from bittr_tess_vetter.api.timing import analyze_ttvs, measure_transit_times
 
 # v3 transit fitting
 from bittr_tess_vetter.api.transit_fit import TransitFitResult, fit_transit, quick_estimate
-
-# FPP (TRICERATOPS) presets
-from bittr_tess_vetter.api.fpp import FAST_PRESET, STANDARD_PRESET, TriceratopsFppPreset, calculate_fpp
 
 # Transit primitives
 from bittr_tess_vetter.api.transit_primitives import odd_even_result

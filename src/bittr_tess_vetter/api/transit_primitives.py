@@ -20,6 +20,7 @@ from bittr_tess_vetter.api.references import (
     COUGHLIN_2016,
     PRSA_2011,
     THOMPSON_2018,
+    cite,
     cites,
 )
 from bittr_tess_vetter.api.types import Ephemeris, LightCurve
@@ -32,7 +33,11 @@ from bittr_tess_vetter.transit.vetting import (
 REFERENCES = [ref.to_dict() for ref in [COUGHLIN_2016, THOMPSON_2018, PRSA_2011]]
 
 
-@cites(COUGHLIN_2016, THOMPSON_2018, PRSA_2011)
+@cites(
+    cite(COUGHLIN_2016, "§4.2 odd/even depth test"),
+    cite(THOMPSON_2018, "§3.3.1 DR25 odd/even comparison"),
+    cite(PRSA_2011, "§3 EB depth ratios 50-100%"),
+)
 def odd_even_result(
     lc: LightCurve,
     ephemeris: Ephemeris,

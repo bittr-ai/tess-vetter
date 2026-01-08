@@ -47,6 +47,7 @@ from bittr_tess_vetter.api.references import (
     PARVIAINEN_2015,
     SEAGER_MALLEN_ORNELAS_2003,
     SING_2010,
+    cite,
     cites,
 )
 from bittr_tess_vetter.api.types import Candidate, LightCurve, StellarParams
@@ -201,7 +202,9 @@ def _make_error_result(error_message: str) -> TransitFitResult:
 # =============================================================================
 
 
-@cites(SEAGER_MALLEN_ORNELAS_2003)
+@cites(
+    cite(SEAGER_MALLEN_ORNELAS_2003, "Eq.3,9,19 transit shape relations"),
+)
 def quick_estimate(
     depth_ppm: float,
     duration_hours: float,
@@ -249,7 +252,11 @@ def quick_estimate(
     }
 
 
-@cites(MANDEL_AGOL_2002, KREIDBERG_2015, CLARET_2018)
+@cites(
+    cite(MANDEL_AGOL_2002, "§2-3 analytic transit model with LD"),
+    cite(KREIDBERG_2015, "§2 batman algorithm, §3 performance"),
+    cite(CLARET_2018, "Tables 1-5 TESS LD coefficients"),
+)
 def fit_transit(
     lc: LightCurve,
     candidate: Candidate,

@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 from bittr_tess_vetter.api.references import (
     GUERRERO_2021,
     PRSA_2022,
+    cite,
     cites,
 )
 from bittr_tess_vetter.api.types import Candidate, CheckResult
@@ -100,7 +101,10 @@ def _candidate_to_internal(candidate: Candidate) -> TransitCandidate:
     )
 
 
-@cites(PRSA_2022, GUERRERO_2021)
+@cites(
+    cite(PRSA_2022, "TESS-EB catalog Sectors 1-26"),
+    cite(GUERRERO_2021, "§3.1 nearby EB contamination"),
+)
 def nearby_eb_search(
     candidate: Candidate,
     *,
@@ -161,7 +165,9 @@ def nearby_eb_search(
     return _convert_result(result)
 
 
-@cites(GUERRERO_2021)
+@cites(
+    cite(GUERRERO_2021, "§3.2 TFOPWG dispositions"),
+)
 def exofop_disposition(
     candidate: Candidate,
     *,
