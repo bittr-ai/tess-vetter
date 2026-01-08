@@ -1,0 +1,154 @@
+"""Pixel/PRF compute facade (host-facing).
+
+This module exposes a stable import surface for pixel-level PRF/PSF and host
+hypothesis compute routines. Host applications should import from here rather
+than `bittr_tess_vetter.compute.*` directly.
+
+All exports are pure compute (array-in/array-out). No I/O and no network.
+"""
+
+from __future__ import annotations
+
+# PRF-lite
+from bittr_tess_vetter.compute.pixel_prf_lite import (  # noqa: F401
+    build_prf_model,
+    build_prf_model_at_pixels,
+    evaluate_prf_weights,
+)
+
+# PRF schemas + PSF model
+from bittr_tess_vetter.compute.prf_schemas import (  # noqa: F401
+    BackgroundParams,
+    PRFFitResult,
+    PRFParams,
+    fit_result_from_dict,
+    fit_result_to_dict,
+    prf_params_from_json,
+    prf_params_from_dict,
+    prf_params_to_dict,
+    prf_params_to_json,
+)
+from bittr_tess_vetter.compute.prf_psf import (  # noqa: F401
+    AVAILABLE_BACKENDS,
+    PRFModel,
+    ParametricPSF,
+    get_prf_model,
+)
+
+# Hypothesis scoring
+from bittr_tess_vetter.compute.pixel_host_hypotheses import (  # noqa: F401
+    FLIP_RATE_FAIL_THRESHOLD,
+    FLIP_RATE_WARN_THRESHOLD,
+    MARGIN_RESOLVE_THRESHOLD,
+    ApertureHypothesisFit,
+    HypothesisScore,
+    MultiSectorConsensus,
+    aggregate_multi_sector,
+    fit_aperture_hypothesis,
+    score_hypotheses_prf_lite,
+)
+from bittr_tess_vetter.compute.pixel_hypothesis_prf import (  # noqa: F401
+    PRFBackend,
+    score_hypotheses_with_prf,
+)
+
+# Aperture prediction + conflict detection
+from bittr_tess_vetter.compute.aperture_prediction import (  # noqa: F401
+    ApertureConflict,
+    AperturePrediction,
+    compute_aperture_chi2,
+    detect_aperture_conflict,
+    predict_all_hypotheses,
+    predict_depth_vs_aperture,
+    propagate_aperture_uncertainty,
+)
+
+# Time-series inference on pixels
+from bittr_tess_vetter.compute.pixel_timeseries import (  # noqa: F401
+    DEFAULT_BASELINE_ORDER,
+    DEFAULT_MARGIN_THRESHOLD,
+    DEFAULT_MIN_IN_TRANSIT,
+    DEFAULT_WINDOW_MARGIN,
+    PixelTimeseriesFit,
+    TimeseriesDiagnostics,
+    TimeseriesEvidence,
+    TransitWindow,
+    aggregate_timeseries_evidence,
+    compute_timeseries_diagnostics,
+    extract_transit_windows,
+    fit_all_hypotheses_timeseries,
+    fit_transit_amplitude_wls,
+    select_best_hypothesis_timeseries,
+)
+
+# Joint likelihood (multi-sector inference)
+from bittr_tess_vetter.compute.joint_likelihood import (  # noqa: F401
+    assess_sector_quality,
+    compute_all_hypotheses_joint,
+    compute_joint_log_likelihood,
+    compute_sector_weights,
+    select_best_hypothesis_joint,
+)
+
+__all__ = [
+    # PRF-lite
+    "build_prf_model",
+    "build_prf_model_at_pixels",
+    "evaluate_prf_weights",
+    # PRF schemas + PSF model
+    "PRFParams",
+    "PRFFitResult",
+    "BackgroundParams",
+    "prf_params_to_dict",
+    "prf_params_from_dict",
+    "fit_result_to_dict",
+    "fit_result_from_dict",
+    "prf_params_to_json",
+    "prf_params_from_json",
+    "ParametricPSF",
+    "PRFModel",
+    "get_prf_model",
+    "AVAILABLE_BACKENDS",
+    # Hypothesis scoring
+    "HypothesisScore",
+    "MultiSectorConsensus",
+    "ApertureHypothesisFit",
+    "score_hypotheses_prf_lite",
+    "aggregate_multi_sector",
+    "fit_aperture_hypothesis",
+    "PRFBackend",
+    "score_hypotheses_with_prf",
+    # Thresholds
+    "MARGIN_RESOLVE_THRESHOLD",
+    "FLIP_RATE_WARN_THRESHOLD",
+    "FLIP_RATE_FAIL_THRESHOLD",
+    # Aperture prediction + conflicts
+    "AperturePrediction",
+    "ApertureConflict",
+    "predict_depth_vs_aperture",
+    "predict_all_hypotheses",
+    "propagate_aperture_uncertainty",
+    "detect_aperture_conflict",
+    "compute_aperture_chi2",
+    # Pixel time-series inference
+    "DEFAULT_WINDOW_MARGIN",
+    "DEFAULT_MIN_IN_TRANSIT",
+    "DEFAULT_BASELINE_ORDER",
+    "DEFAULT_MARGIN_THRESHOLD",
+    "TransitWindow",
+    "PixelTimeseriesFit",
+    "TimeseriesEvidence",
+    "TimeseriesDiagnostics",
+    "extract_transit_windows",
+    "fit_transit_amplitude_wls",
+    "fit_all_hypotheses_timeseries",
+    "aggregate_timeseries_evidence",
+    "select_best_hypothesis_timeseries",
+    "compute_timeseries_diagnostics",
+    # Joint likelihood
+    "assess_sector_quality",
+    "compute_sector_weights",
+    "compute_joint_log_likelihood",
+    "compute_all_hypotheses_joint",
+    "select_best_hypothesis_joint",
+]
