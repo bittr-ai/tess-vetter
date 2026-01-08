@@ -544,6 +544,14 @@ def calculate_fpp_handler(
     """
     start_time = time.time()
     cache_dir = getattr(cache, "cache_dir", None) or tempfile.gettempdir()
+    deadline = None
+    if timeout_seconds is not None and float(timeout_seconds) > 0:
+        deadline = start_time + float(timeout_seconds)
+
+    def _remaining_seconds() -> float | None:
+        if deadline is None:
+            return None
+        return float(deadline - time.time())
 
     def _err(
         message: str,
@@ -617,8 +625,16 @@ def calculate_fpp_handler(
         target = _load(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used)
         if target is None:
             init_timeout = TRICERATOPS_INIT_TIMEOUT_DEFAULT
-            if timeout_seconds is not None and float(timeout_seconds) > 0:
-                init_timeout = max(init_timeout, min(float(timeout_seconds), 1800.0))
+            rem = _remaining_seconds()
+            if rem is not None:
+                if rem <= 0:
+                    return _err(
+                        "FPP calculation timed out before TRICERATOPS initialization",
+                        error_type="timeout",
+                        stage="triceratops_init",
+                        sectors_used_value=sectors_used,
+                    )
+                init_timeout = min(init_timeout, rem)
 
             try:
                 with network_timeout(
@@ -631,8 +647,11 @@ def calculate_fpp_handler(
                 )
             except NetworkTimeoutError:
                 # One retry: some upstream endpoints are bursty (MAST/TessCut/Gaia).
+                rem_retry = _remaining_seconds()
+                if rem_retry is not None and rem_retry <= 0:
+                    raise
                 with network_timeout(
-                    float(init_timeout) * 1.5,
+                    float(min(float(init_timeout) * 1.5, rem_retry)) if rem_retry is not None else float(init_timeout) * 1.5,
                     operation=f"TRICERATOPS init (Gaia query) retry for TIC {tic_id}",
                 ):
                     target = tr.target(ID=tic_id, sectors=sectors_used, mission="TESS")
@@ -663,8 +682,16 @@ def calculate_fpp_handler(
             trilegal_url = getattr(target, "trilegal_url", None)
             if isinstance(trilegal_url, str) and trilegal_url:
                 prefetch_timeout = TRICERATOPS_INIT_TIMEOUT_DEFAULT
-                if timeout_seconds is not None and float(timeout_seconds) > 0:
-                    prefetch_timeout = max(120.0, min(float(timeout_seconds) * 0.5, float(timeout_seconds)))
+                rem = _remaining_seconds()
+                if rem is not None:
+                    if rem <= 0:
+                        return _err(
+                            "FPP calculation timed out before TRILEGAL prefetch",
+                            error_type="timeout",
+                            stage="triceratops_calc_probs",
+                            sectors_used_value=sectors_used,
+                        )
+                    prefetch_timeout = min(prefetch_timeout, rem)
                 with network_timeout(
                     float(prefetch_timeout),
                     operation=f"TRILEGAL prefetch for TIC {tic_id}",
@@ -699,8 +726,16 @@ def calculate_fpp_handler(
         target.calc_depths(tdepth=depth_fractional)
 
         calc_timeout = float(TRICERATOPS_CALC_TIMEOUT)
-        if timeout_seconds is not None and float(timeout_seconds) > 0:
-            calc_timeout = max(calc_timeout, min(float(timeout_seconds), 3600.0))
+        rem = _remaining_seconds()
+        if rem is not None:
+            if rem <= 0:
+                return _err(
+                    "FPP calculation timed out before TRICERATOPS calc_probs",
+                    error_type="timeout",
+                    stage="triceratops_calc_probs",
+                    sectors_used_value=sectors_used,
+                )
+            calc_timeout = min(calc_timeout, rem)
         with network_timeout(float(calc_timeout), operation=f"TRICERATOPS calc_probs for TIC {tic_id}"):
             target.calc_probs(
                 time=time_folded,
