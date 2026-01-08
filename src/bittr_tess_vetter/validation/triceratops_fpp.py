@@ -516,6 +516,7 @@ def calculate_fpp_handler(
     mc_draws: int | None = None,
     window_duration_mult: float = 3.0,
     max_points: int = 3000,
+    min_flux_err: float = 5e-5,
     *,
     load_cached_target: Callable[..., Any] | None = None,
     save_cached_target: Callable[..., Any] | None = None,
@@ -768,7 +769,7 @@ def calculate_fpp_handler(
         except Exception:
             empirical_sigma = 0.0
 
-        flux_err_scalar = float(max(flux_err_scalar, empirical_sigma, 5e-5))
+        flux_err_scalar = float(max(flux_err_scalar, empirical_sigma, float(min_flux_err)))
 
         # Convert depth from ppm to fractional for TRICERATOPS
         depth_fractional = depth_ppm / 1e6
@@ -942,6 +943,7 @@ def calculate_fpp_handler(
             "exptime_days": float(exptime_days),
             "flux_err_scalar_used": float(flux_err_scalar),
             "empirical_sigma_used": float(empirical_sigma),
+            "min_flux_err": float(min_flux_err),
         }
 
         # Provide a short reason string when TRICERATOPS returns unusable/degenerate outputs.
