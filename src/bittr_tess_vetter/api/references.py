@@ -9,9 +9,9 @@ Type Safety:
     This ensures pyright/mypy catch typos at static analysis time.
 
     # GOOD - type-safe, pyright catches typos at import time
-    from bittr_tess_vetter.api.references import THOMPSON_2018, cites
+    from bittr_tess_vetter.api.references import THOMPSON_2018, cites, cite
 
-    @cites(THOMPSON_2018)
+    @cites(cite(THOMPSON_2018, "§4.2 odd/even depth test"))
     def my_func(): ...
 
     # BAD - not type-safe, runtime failure on typo
@@ -30,37 +30,66 @@ Usage Examples:
     >>> bibtex = generate_bibtex([THOMPSON_2018, COUGHLIN_2016])
     >>> print(bibtex)
 
-    # Decorate functions with citations
-    >>> from bittr_tess_vetter.api.references import THOMPSON_2018, cites
-    >>> @cites(THOMPSON_2018)
+    # Decorate functions with citations (with context)
+    >>> from bittr_tess_vetter.api.references import THOMPSON_2018, cites, cite
+    >>> @cites(cite(THOMPSON_2018, "§4.2 odd/even depth test"))
     ... def odd_even_depth(lc, ephemeris):
     ...     '''V01: Compare depth of odd vs even transits.'''
+    ...     ...
+
+    # Decorate functions with citations (without context)
+    >>> @cites(cite(THOMPSON_2018))
+    ... def simple_check(lc):
     ...     ...
 
     # Introspect function citations
     >>> from bittr_tess_vetter.api.references import get_function_references
     >>> refs = get_function_references(odd_even_depth)
-    >>> for ref in refs:
-    ...     print(ref.first_author_short)
+    >>> for citation in refs:
+    ...     print(f"{citation.ref.first_author_short}: {citation.context}")
+
+    # Collect all citations from a module
+    >>> from bittr_tess_vetter.api.references import collect_module_citations
+    >>> import my_module
+    >>> citations = collect_module_citations(my_module)
+    >>> for func_name, cites in citations.items():
+    ...     print(f"{func_name}: {[c.ref.first_author_short for c in cites]}")
 """
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar
+from types import ModuleType
+from typing import Any, Literal, NotRequired, Protocol, TypedDict, TypeVar
 
-if TYPE_CHECKING:
-
-    class HasReferences(Protocol):
-        """Protocol for functions decorated with @cites."""
-
-        __references__: tuple[Reference, ...]
-
-        def __call__(self, *args: Any, **kwargs: Any) -> Any: ...
-
+# =============================================================================
+# Type Variables for Decorator
+# =============================================================================
 
 F = TypeVar("F", bound=Callable[..., Any])
+
+
+# =============================================================================
+# TypedDict for to_dict() return type
+# =============================================================================
+
+
+class ReferenceDict(TypedDict):
+    """TypedDict for Reference.to_dict() return type."""
+
+    id: str
+    type: str
+    title: str
+    authors: list[str]
+    year: int
+    bibcode: NotRequired[str]
+    journal: NotRequired[str]
+    doi: NotRequired[str]
+    arxiv: NotRequired[str]
+    url: NotRequired[str]
+    note: NotRequired[str]
 
 
 # =============================================================================
@@ -74,32 +103,36 @@ class Reference:
 
     Attributes:
         id: Unique identifier (e.g., "thompson_2018")
-        bibcode: ADS bibcode (e.g., "2018ApJS..235...38T")
         title: Full paper title
         authors: Tuple of author names in "Last, First" format
-        journal: Journal name with volume and page
         year: Publication year
         type: Reference type (article, book, software, dataset)
+        bibcode: ADS bibcode (e.g., "2018ApJS..235...38T") - optional
+        journal: Journal name with volume and page - optional
         doi: Digital Object Identifier (optional)
         arxiv: arXiv identifier (optional)
+        url: URL for software/dataset/web resources (optional)
         note: Brief note about relevance to this package (optional)
     """
 
     id: str
-    bibcode: str
     title: str
     authors: tuple[str, ...]
-    journal: str
     year: int
     type: Literal["article", "book", "software", "dataset"] = "article"
+    bibcode: str | None = None
+    journal: str | None = None
     doi: str | None = None
     arxiv: str | None = None
+    url: str | None = None
     note: str | None = None
 
     @property
-    def ads_url(self) -> str:
-        """URL to ADS abstract page."""
-        return f"https://ui.adsabs.harvard.edu/abs/{self.bibcode}"
+    def ads_url(self) -> str | None:
+        """URL to ADS abstract page, or None if no bibcode."""
+        if self.bibcode:
+            return f"https://ui.adsabs.harvard.edu/abs/{self.bibcode}"
+        return None
 
     @property
     def first_author_short(self) -> str:
@@ -109,41 +142,101 @@ class Reference:
         return f"{first}{suffix} {self.year}"
 
     def to_bibtex(self) -> str:
-        """Generate BibTeX entry for this reference."""
+        """Generate BibTeX entry with proper type mapping."""
+        # Map internal types to BibTeX types
+        bibtex_type = {
+            "article": "article",
+            "book": "book",
+            "software": "misc",
+            "dataset": "misc",
+        }.get(self.type, "misc")
+
         authors_str = " and ".join(self.authors)
-        lines = [
-            f"@{self.type}{{{self.id},",
-            f"    author = {{{authors_str}}},",
-            f"    title = {{{{{self.title}}}}},",
-            f"    journal = {{{self.journal}}},",
-            f"    year = {{{self.year}}},",
-        ]
+        lines = [f"@{bibtex_type}{{{self.id},"]
+        lines.append(f"    author = {{{authors_str}}},")
+        lines.append(f"    title = {{{{{self.title}}}}},")
+
+        if self.journal:
+            lines.append(f"    journal = {{{self.journal}}},")
+        lines.append(f"    year = {{{self.year}}},")
+
         if self.doi:
             lines.append(f"    doi = {{{self.doi}}},")
         if self.arxiv:
             lines.append(f"    eprint = {{{self.arxiv}}},")
             lines.append("    archiveprefix = {arXiv},")
+        if self.url and self.type in ("software", "dataset"):
+            lines.append(f"    howpublished = {{\\url{{{self.url}}}}},")
+
         lines.append("}")
         return "\n".join(lines)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> ReferenceDict:
         """Convert to dictionary for JSON serialization."""
-        result: dict[str, Any] = {
+        result: ReferenceDict = {
             "id": self.id,
             "type": self.type,
-            "bibcode": self.bibcode,
             "title": self.title,
             "authors": list(self.authors),
-            "journal": self.journal,
             "year": self.year,
         }
+        if self.bibcode:
+            result["bibcode"] = self.bibcode
+        if self.journal:
+            result["journal"] = self.journal
         if self.doi:
             result["doi"] = self.doi
         if self.arxiv:
             result["arxiv"] = self.arxiv
+        if self.url:
+            result["url"] = self.url
         if self.note:
             result["note"] = self.note
         return result
+
+
+# =============================================================================
+# Citation Wrapper (Reference + Context)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class Citation:
+    """A reference with optional context (section, page, reason)."""
+
+    ref: Reference
+    context: str | None = None  # e.g., "§4.2 odd/even depth test"
+
+
+def cite(ref: Reference, context: str | None = None) -> Citation:
+    """Helper to create a Citation with optional context.
+
+    Args:
+        ref: The Reference object to cite
+        context: Optional context (e.g., "§4.2 odd/even depth test")
+
+    Returns:
+        A Citation wrapping the reference with context
+    """
+    return Citation(ref=ref, context=context)
+
+
+# =============================================================================
+# Protocol for Decorated Functions
+# =============================================================================
+
+
+class CitableCallable(Protocol):
+    """Protocol for functions decorated with @cites.
+
+    This protocol describes the shape of a function that has been decorated
+    with @cites. The decorated function has a __references__ attribute
+    containing the Citation tuple.
+    """
+
+    __references__: tuple[Citation, ...]
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
 # =============================================================================
@@ -935,12 +1028,15 @@ def generate_bibliography_markdown() -> str:
                 "",
                 f"_{', '.join(ref.authors)}_",
                 "",
-                f"{ref.journal}",
-                "",
-                f"[ADS]({ref.ads_url})",
-                "",
             ]
         )
+        if ref.journal:
+            lines.append(ref.journal)
+            lines.append("")
+        ads_url = ref.ads_url
+        if ads_url:
+            lines.append(f"[ADS]({ads_url})")
+            lines.append("")
         if ref.note:
             lines.append(f"> {ref.note}")
         lines.append("")
@@ -953,19 +1049,25 @@ def generate_bibliography_markdown() -> str:
 # =============================================================================
 
 
-def cites(*refs: Reference) -> Callable[[F], F]:
-    """Decorator to attach Reference objects to a function (type-safe).
+def cites(*refs_or_citations: Reference | Citation) -> Callable[[F], F]:
+    """Decorator to attach citations to a function (fully type-safe).
 
     Usage:
-        from bittr_tess_vetter.api.references import THOMPSON_2018, COUGHLIN_2016, cites
+        from bittr_tess_vetter.api.references import THOMPSON_2018, COUGHLIN_2016, cites, cite
 
-        @cites(THOMPSON_2018, COUGHLIN_2016)  # Reference objects, not strings!
+        # With context (preferred for documentation)
+        @cites(cite(THOMPSON_2018, "§4.2 odd/even depth test"), cite(COUGHLIN_2016))
         def odd_even_depth(lc, ephemeris):
             '''V01: Compare depth of odd vs even transits.'''
             ...
 
+        # Without context (backward compatible)
+        @cites(THOMPSON_2018, COUGHLIN_2016)
+        def simple_check(lc):
+            ...
+
     The decorated function will have a __references__ attribute
-    containing the Reference objects as a tuple.
+    containing the Citation objects as a tuple.
 
     Type Safety:
         - pyright/mypy catch undefined reference names at static analysis time
@@ -973,32 +1075,38 @@ def cites(*refs: Reference) -> Callable[[F], F]:
         - No runtime KeyError from typos - errors caught before code runs
 
     Args:
-        *refs: One or more Reference objects to attach to the function
+        *refs_or_citations: One or more Reference or Citation objects to attach.
+            Reference objects are auto-wrapped in Citation(ref=..., context=None).
 
     Returns:
-        Decorator that attaches references to the function
+        Decorator that attaches citations to the function
 
     Raises:
-        TypeError: If any argument is not a Reference object
+        TypeError: If any argument is not a Reference or Citation object
     """
-    # Runtime validation (belt and suspenders - should never trigger if types correct)
-    for ref in refs:
-        if not isinstance(ref, Reference):
+    # Normalize all inputs to Citation objects
+    normalized: list[Citation] = []
+    for item in refs_or_citations:
+        if isinstance(item, Citation):
+            normalized.append(item)
+        elif isinstance(item, Reference):
+            normalized.append(Citation(ref=item, context=None))
+        else:
             raise TypeError(
-                f"cites() requires Reference objects, got {type(ref).__name__!r}. "
-                f"Import reference constants: "
-                f"from bittr_tess_vetter.api.references import THOMPSON_2018"
+                f"cites() requires Reference or Citation objects, got {type(item).__name__!r}. "
+                f"Use cite(ref, context) for context: @cites(cite(THOMPSON_2018, '§4.2'))"
             )
+    citations = tuple(normalized)
 
     def decorator(func: F) -> F:
-        func.__references__ = refs  # type: ignore[attr-defined]
+        func.__references__ = citations  # type: ignore[attr-defined]
         return func
 
     return decorator
 
 
-def get_function_references(func: Callable[..., Any]) -> list[Reference]:
-    """Get references attached to a function via @cites decorator.
+def get_function_references(func: Callable[..., object]) -> list[Citation]:
+    """Get citations attached to a function via @cites decorator.
 
     Type-safe: works with any callable decorated with @cites.
 
@@ -1006,17 +1114,57 @@ def get_function_references(func: Callable[..., Any]) -> list[Reference]:
         func: Function decorated with @cites
 
     Returns:
-        List of Reference objects attached to the function,
-        or empty list if function has no references
+        List of Citation objects attached to the function,
+        or empty list if function has no citations
 
     Example:
-        @cites(THOMPSON_2018, COUGHLIN_2016)
+        @cites(cite(THOMPSON_2018, "§4.2"), cite(COUGHLIN_2016))
         def my_function(): ...
 
-        refs = get_function_references(my_function)
-        # refs = [THOMPSON_2018, COUGHLIN_2016]
+        citations = get_function_references(my_function)
+        # citations = [Citation(THOMPSON_2018, "§4.2"), Citation(COUGHLIN_2016, None)]
     """
     return list(getattr(func, "__references__", ()))
+
+
+# =============================================================================
+# MODULE INTROSPECTION
+# =============================================================================
+
+
+def collect_module_citations(module: ModuleType) -> dict[str, tuple[Citation, ...]]:
+    """Collect citations from functions defined in this module (not imports).
+
+    Args:
+        module: The module to scan for @cites decorated functions
+
+    Returns:
+        Dictionary mapping function names to their Citation tuples.
+        Class methods are named as "ClassName.method_name".
+
+    Example:
+        >>> import my_module
+        >>> citations = collect_module_citations(my_module)
+        >>> for func_name, cites in citations.items():
+        ...     print(f"{func_name}: {[c.ref.first_author_short for c in cites]}")
+    """
+    result: dict[str, tuple[Citation, ...]] = {}
+
+    # Functions defined in this module
+    for name, obj in inspect.getmembers(module, inspect.isfunction):
+        if obj.__module__ == module.__name__ and hasattr(obj, "__references__"):
+            refs: tuple[Citation, ...] = obj.__references__  # pyright: ignore[reportFunctionMemberAccess]
+            result[name] = refs
+
+    # Methods from classes defined in this module
+    for class_name, cls in inspect.getmembers(module, inspect.isclass):
+        if cls.__module__ == module.__name__:
+            for method_name, method in inspect.getmembers(cls, inspect.isfunction):
+                if hasattr(method, "__references__"):
+                    method_refs: tuple[Citation, ...] = method.__references__  # pyright: ignore[reportFunctionMemberAccess]
+                    result[f"{class_name}.{method_name}"] = method_refs
+
+    return result
 
 
 # =============================================================================
@@ -1026,8 +1174,12 @@ def get_function_references(func: Callable[..., Any]) -> list[Reference]:
 __all__ = [
     # Dataclass
     "Reference",
-    # Protocol (for TYPE_CHECKING)
-    "HasReferences",
+    "ReferenceDict",
+    # Citation wrapper
+    "Citation",
+    "cite",
+    # Protocol
+    "CitableCallable",
     # All Reference constants (49 total)
     "THOMPSON_2018",
     "COUGHLIN_2016",
@@ -1083,7 +1235,8 @@ __all__ = [
     "get_all_references",
     "generate_bibtex",
     "generate_bibliography_markdown",
-    # Decorator
+    # Decorator and introspection
     "cites",
     "get_function_references",
+    "collect_module_citations",
 ]
