@@ -668,7 +668,8 @@ def ls_periodogram(
         normalize=True,
     )
 
-    return np.array(power, dtype=np.float64)
+    power_arr = np.array(power, dtype=np.float64)
+    return np.nan_to_num(power_arr, nan=0.0, posinf=0.0, neginf=0.0)
 
 
 # =============================================================================
