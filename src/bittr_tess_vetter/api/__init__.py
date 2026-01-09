@@ -130,6 +130,13 @@ from bittr_tess_vetter.api.triceratops_cache import (  # noqa: F401
     save_cached_triceratops_target,
 )
 
+# Light curve cache contract (host-facing)
+from bittr_tess_vetter.api.lightcurve import (  # noqa: F401
+    LightCurveData,
+    LightCurveRef,
+    make_data_ref,
+)
+
 # LC-only checks (V01-V05)
 from bittr_tess_vetter.api.lc_only import (
     depth_stability,
