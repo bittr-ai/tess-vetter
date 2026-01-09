@@ -266,6 +266,17 @@ from bittr_tess_vetter.api.transit_masks import (  # noqa: F401
     measure_transit_depth,
 )
 
+# Detrending (host-facing)
+from bittr_tess_vetter.api.detrend import (  # noqa: F401
+    WOTAN_AVAILABLE,
+    flatten,
+    flatten_with_wotan,
+    median_detrend,
+    normalize_flux,
+    sigma_clip,
+    wotan_flatten,
+)
+
 # Sandbox compute primitives (host-facing)
 from bittr_tess_vetter.api.sandbox_primitives import (  # noqa: F401
     AstroPrimitives,
