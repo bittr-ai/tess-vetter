@@ -158,3 +158,80 @@ def test_lightcurve_ref_from_data_populates_expected_fields() -> None:
     assert ref.n_points == n
     assert ref.n_valid == n
 
+
+def test_lightcurve_data_rejects_mismatched_lengths() -> None:
+    with np.testing.assert_raises(ValueError):
+        LightCurveData(
+            time=np.arange(10, dtype=np.float64),
+            flux=np.ones(5, dtype=np.float64),
+            flux_err=np.ones(10, dtype=np.float64),
+            quality=np.zeros(10, dtype=np.int32),
+            valid_mask=np.ones(10, dtype=np.bool_),
+            tic_id=1,
+            sector=1,
+            cadence_seconds=120.0,
+        )
+
+    with np.testing.assert_raises(ValueError):
+        LightCurveData(
+            time=np.arange(10, dtype=np.float64),
+            flux=np.ones(10, dtype=np.float64),
+            flux_err=np.ones(8, dtype=np.float64),
+            quality=np.zeros(10, dtype=np.int32),
+            valid_mask=np.ones(10, dtype=np.bool_),
+            tic_id=1,
+            sector=1,
+            cadence_seconds=120.0,
+        )
+
+    with np.testing.assert_raises(ValueError):
+        LightCurveData(
+            time=np.arange(10, dtype=np.float64),
+            flux=np.ones(10, dtype=np.float64),
+            flux_err=np.ones(10, dtype=np.float64),
+            quality=np.zeros(7, dtype=np.int32),
+            valid_mask=np.ones(10, dtype=np.bool_),
+            tic_id=1,
+            sector=1,
+            cadence_seconds=120.0,
+        )
+
+    with np.testing.assert_raises(ValueError):
+        LightCurveData(
+            time=np.arange(10, dtype=np.float64),
+            flux=np.ones(10, dtype=np.float64),
+            flux_err=np.ones(10, dtype=np.float64),
+            quality=np.zeros(10, dtype=np.int32),
+            valid_mask=np.ones(9, dtype=np.bool_),
+            tic_id=1,
+            sector=1,
+            cadence_seconds=120.0,
+        )
+
+
+def test_lightcurve_data_empty_and_all_invalid_edge_cases() -> None:
+    empty = LightCurveData(
+        time=np.array([], dtype=np.float64),
+        flux=np.array([], dtype=np.float64),
+        flux_err=np.array([], dtype=np.float64),
+        quality=np.array([], dtype=np.int32),
+        valid_mask=np.array([], dtype=np.bool_),
+        tic_id=1,
+        sector=1,
+        cadence_seconds=120.0,
+    )
+    assert empty.n_points == 0
+    assert empty.n_valid == 0
+
+    all_invalid = LightCurveData(
+        time=np.linspace(1000.0, 1010.0, 100, dtype=np.float64),
+        flux=np.ones(100, dtype=np.float64),
+        flux_err=np.full(100, 0.001, dtype=np.float64),
+        quality=np.zeros(100, dtype=np.int32),
+        valid_mask=np.zeros(100, dtype=np.bool_),
+        tic_id=1,
+        sector=1,
+        cadence_seconds=120.0,
+    )
+    assert all_invalid.n_points == 100
+    assert all_invalid.n_valid == 0
