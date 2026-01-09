@@ -212,6 +212,9 @@ from bittr_tess_vetter.api.periodogram import (  # noqa: F401
     tls_search_per_sector,
 )
 
+# Transit model facade (host-facing)
+from bittr_tess_vetter.api.transit_model import compute_transit_model  # noqa: F401
+
 # Light curve stitching (host-facing)
 from bittr_tess_vetter.api.stitch import (  # noqa: F401
     SectorDiagnostics,
