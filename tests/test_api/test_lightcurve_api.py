@@ -12,6 +12,93 @@ def test_make_data_ref_matches_expected_format() -> None:
     assert make_data_ref(141914082, 1, flux_type="sap") == "lc:141914082:1:sap"
 
 
+def test_lightcurve_data_validates_dtypes_and_is_immutable() -> None:
+    n = 10
+    lc = LightCurveData(
+        time=np.arange(n, dtype=np.float64),
+        flux=np.ones(n, dtype=np.float64),
+        flux_err=np.ones(n, dtype=np.float64),
+        quality=np.zeros(n, dtype=np.int32),
+        valid_mask=np.ones(n, dtype=np.bool_),
+        tic_id=1,
+        sector=2,
+        cadence_seconds=120.0,
+    )
+
+    assert lc.n_points == n
+    assert lc.n_valid == n
+    assert lc.duration_days == float(lc.time[-1] - lc.time[0])
+    assert lc.gap_fraction == 0.0
+    assert lc.quality_flags_present == [0]
+
+    with np.testing.assert_raises(ValueError):
+        LightCurveData(
+            time=np.arange(n, dtype=np.float32),  # wrong
+            flux=np.ones(n, dtype=np.float64),
+            flux_err=np.ones(n, dtype=np.float64),
+            quality=np.zeros(n, dtype=np.int32),
+            valid_mask=np.ones(n, dtype=np.bool_),
+            tic_id=1,
+            sector=2,
+            cadence_seconds=120.0,
+        )
+
+    with np.testing.assert_raises(ValueError):
+        LightCurveData(
+            time=np.arange(n, dtype=np.float64),
+            flux=np.ones(n, dtype=np.float32),  # wrong
+            flux_err=np.ones(n, dtype=np.float64),
+            quality=np.zeros(n, dtype=np.int32),
+            valid_mask=np.ones(n, dtype=np.bool_),
+            tic_id=1,
+            sector=2,
+            cadence_seconds=120.0,
+        )
+
+    with np.testing.assert_raises(ValueError):
+        LightCurveData(
+            time=np.arange(n, dtype=np.float64),
+            flux=np.ones(n, dtype=np.float64),
+            flux_err=np.ones(n, dtype=np.float32),  # wrong
+            quality=np.zeros(n, dtype=np.int32),
+            valid_mask=np.ones(n, dtype=np.bool_),
+            tic_id=1,
+            sector=2,
+            cadence_seconds=120.0,
+        )
+
+    with np.testing.assert_raises(ValueError):
+        LightCurveData(
+            time=np.arange(n, dtype=np.float64),
+            flux=np.ones(n, dtype=np.float64),
+            flux_err=np.ones(n, dtype=np.float64),
+            quality=np.zeros(n, dtype=np.int64),  # wrong
+            valid_mask=np.ones(n, dtype=np.bool_),
+            tic_id=1,
+            sector=2,
+            cadence_seconds=120.0,
+        )
+
+    with np.testing.assert_raises(ValueError):
+        LightCurveData(
+            time=np.arange(n, dtype=np.float64),
+            flux=np.ones(n, dtype=np.float64),
+            flux_err=np.ones(n, dtype=np.float64),
+            quality=np.zeros(n, dtype=np.int32),
+            valid_mask=np.ones(n, dtype=np.int8),  # wrong dtype
+            tic_id=1,
+            sector=2,
+            cadence_seconds=120.0,
+        )
+
+    # Arrays should be read-only
+    assert lc.time.flags.writeable is False
+    assert lc.flux.flags.writeable is False
+    assert lc.flux_err.flags.writeable is False
+    assert lc.quality.flags.writeable is False
+    assert lc.valid_mask.flags.writeable is False
+
+
 def test_lightcurve_ref_is_frozen_and_forbids_extra() -> None:
     n = 10
     data = LightCurveData(
