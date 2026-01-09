@@ -1,0 +1,34 @@
+{
+  "_comment": "Pi Mensae (TIC 261136679) - Well-characterized G0V star with known planet",
+  "_tic_id": 261136679,
+  "_gaia_dr3_source_id": 5290699119420871680,
+  "basic": {
+    "main_id": "* pi. Men",
+    "ra": 84.29122447,
+    "dec": -80.46911858,
+    "otype": "*"
+  },
+  "identifiers": [
+    "* pi. Men",
+    "HD 39091",
+    "HIP 26394",
+    "TIC 261136679",
+    "Gaia DR3 5290699119420871680",
+    "2MASS J05371389-8028087",
+    "TYC 9494-1396-1",
+    "CD-80 195",
+    "GJ 9189"
+  ],
+  "spectral_type": {
+    "sptype": "G0V",
+    "_source": "2006AJ....132..161G"
+  },
+  "expected_parsing": {
+    "is_star": true,
+    "is_binary": false,
+    "is_variable": false,
+    "is_early_type": false,
+    "is_giant": false,
+    "luminosity_class": "V"
+  }
+}

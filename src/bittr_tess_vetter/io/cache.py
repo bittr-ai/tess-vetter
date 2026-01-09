@@ -1,68 +1,326 @@
-"""Persistent cache for light curves and derived products."""
+"""Session-scoped and persistent caching for I/O-adjacent data products."""
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
+import json
+import os
 import pickle
+import time
+from collections import OrderedDict
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from threading import Lock
+from typing import Any, ClassVar, TypeVar
+
+from bittr_tess_vetter.api.lightcurve import LightCurveData
+
+T = TypeVar("T")
+
+
+def _default_cache_dir() -> Path:
+    """Choose a default on-disk cache directory.
+
+    Preference order:
+    1) `BITTR_TESS_VETTER_CACHE_DIR` (explicit override)
+    2) `BITTR_TESS_VETTER_CACHE_ROOT` (repo-local cache root)
+    3) `.bittr-tess-vetter/cache/persistent_cache` under current working directory
+    """
+    explicit = os.getenv("BITTR_TESS_VETTER_CACHE_DIR")
+    if explicit:
+        return Path(explicit).expanduser()
+
+    root = os.getenv("BITTR_TESS_VETTER_CACHE_ROOT")
+    if root:
+        return Path(root).expanduser() / "persistent_cache"
+
+    return Path.cwd() / ".bittr-tess-vetter" / "cache" / "persistent_cache"
+
+
+DEFAULT_CACHE_DIR = _default_cache_dir()
+
+
+class SessionCache:
+    """Process-global cache with session namespacing.
+
+    Provides LRU-evicting cache for LightCurveData objects keyed by data_ref.
+    Each session has its own namespace within the global cache.
+    """
+
+    _global: ClassVar[OrderedDict[str, LightCurveData]] = OrderedDict()
+    _computed: ClassVar[OrderedDict[str, Any]] = OrderedDict()
+    _lock: ClassVar[Lock] = Lock()
+
+    DEFAULT_MAX_ENTRIES: ClassVar[int] = 100
+    DEFAULT_MAX_COMPUTED: ClassVar[int] = 256
+
+    def __init__(
+        self,
+        session_id: str,
+        max_entries: int = DEFAULT_MAX_ENTRIES,
+        max_computed: int = DEFAULT_MAX_COMPUTED,
+    ) -> None:
+        self.session_id = session_id
+        self._max_entries = max_entries
+        self._max_computed = max_computed
+
+    def _key(self, data_ref: str) -> str:
+        return f"{self.session_id}:{data_ref}"
+
+    def _computed_key(self, product_ref: str) -> str:
+        return f"{self.session_id}:{product_ref}"
+
+    @classmethod
+    def _evict_lru(cls) -> None:
+        if cls._global:
+            cls._global.popitem(last=False)
+
+    @classmethod
+    def _evict_computed_lru(cls) -> None:
+        if cls._computed:
+            cls._computed.popitem(last=False)
+
+    def get(self, data_ref: str) -> LightCurveData | None:
+        key = self._key(data_ref)
+        with self._lock:
+            if key in self._global:
+                self._global.move_to_end(key)
+                return self._global[key]
+            return None
+
+    def put(self, data_ref: str, data: LightCurveData) -> None:
+        key = self._key(data_ref)
+        with self._lock:
+            if key in self._global:
+                self._global[key] = data
+                self._global.move_to_end(key)
+                return
+
+            while len(self._global) >= self._max_entries:
+                self._evict_lru()
+
+            self._global[key] = data
+
+    def get_or_load(self, data_ref: str, loader: Callable[[], LightCurveData]) -> LightCurveData:
+        data = self.get(data_ref)
+        if data is not None:
+            return data
+
+        loaded = loader()
+        self.put(data_ref, loaded)
+        return loaded
+
+    def has(self, data_ref: str) -> bool:
+        key = self._key(data_ref)
+        with self._lock:
+            return key in self._global
+
+    def keys(self) -> list[str]:
+        prefix = f"{self.session_id}:"
+        with self._lock:
+            return [k[len(prefix) :] for k in self._global if k.startswith(prefix)]
+
+    def clear(self) -> None:
+        prefix = f"{self.session_id}:"
+        with self._lock:
+            for k in [k for k in self._global if k.startswith(prefix)]:
+                del self._global[k]
+            for k in [k for k in self._computed if k.startswith(prefix)]:
+                del self._computed[k]
+
+    def get_computed(self, product_ref: str) -> Any | None:
+        key = self._computed_key(product_ref)
+        with self._lock:
+            if key in self._computed:
+                self._computed.move_to_end(key)
+                return self._computed[key]
+            return None
+
+    def put_computed(self, product_ref: str, product: Any) -> None:
+        key = self._computed_key(product_ref)
+        with self._lock:
+            if key in self._computed:
+                self._computed[key] = product
+                self._computed.move_to_end(key)
+                return
+
+            while len(self._computed) >= self._max_computed:
+                self._evict_computed_lru()
+
+            self._computed[key] = product
+
+    def get_or_compute(self, product_ref: str, compute: Callable[[], T]) -> T:
+        cached = self.get_computed(product_ref)
+        if cached is not None:
+            return cached  # type: ignore[return-value]
+
+        computed: T = compute()
+        self.put_computed(product_ref, computed)
+        return computed
+
+    def has_computed(self, product_ref: str) -> bool:
+        key = self._computed_key(product_ref)
+        with self._lock:
+            return key in self._computed
+
+    def computed_keys(self) -> list[str]:
+        prefix = f"{self.session_id}:"
+        with self._lock:
+            return [k[len(prefix) :] for k in self._computed if k.startswith(prefix)]
+
+    @classmethod
+    def clear_all(cls) -> None:
+        with cls._lock:
+            cls._global.clear()
+            cls._computed.clear()
+
+    @classmethod
+    def global_stats(cls) -> dict[str, int]:
+        with cls._lock:
+            return {"data_entries": len(cls._global), "computed_entries": len(cls._computed)}
 
 
 class PersistentCache:
-    """Simple file-based cache for light curve data.
+    """File-based cache that persists across process restarts.
 
-    Keys follow pattern: `lc:<tic_id>:<sector>`
-    Values are objects with .time, .flux, .flux_err, .valid_mask attributes.
+    API is intentionally a superset of the original bittr-tess-vetter cache:
+    - `get(key)` / `set(key, value)` / `has(key)` / `keys()`
+    - `put(key, value)` is an alias of `set()` (semantic clarity)
+    - `get_default()` returns a process-global singleton instance
     """
 
-    def __init__(self, cache_dir: str | Path) -> None:
-        self.cache_dir = Path(cache_dir)
+    _default_instance: ClassVar["PersistentCache" | None] = None
+    _instance_lock: ClassVar[Lock] = Lock()
+
+    DEFAULT_MAX_ENTRIES: ClassVar[int] = 100
+
+    def __init__(self, cache_dir: str | Path | None = None, max_entries: int = DEFAULT_MAX_ENTRIES):
+        self.cache_dir = Path(cache_dir) if cache_dir is not None else DEFAULT_CACHE_DIR
+        self.max_entries = max_entries
+        self._lock = Lock()
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self._index_file = self.cache_dir / "_index.pkl"
-        self._index: dict[str, str] = self._load_index()
+        (self.cache_dir / "data").mkdir(exist_ok=True)
+        (self.cache_dir / "meta").mkdir(exist_ok=True)
 
-    def _load_index(self) -> dict[str, str]:
-        if self._index_file.exists():
-            try:
-                with open(self._index_file, "rb") as f:
-                    return pickle.load(f)  # noqa: S301
-            except Exception:
-                return {}
-        return {}
+    @classmethod
+    def get_default(cls) -> "PersistentCache":
+        if cls._default_instance is None:
+            with cls._instance_lock:
+                if cls._default_instance is None:
+                    cls._default_instance = cls()
+        return cls._default_instance
 
-    def _save_index(self) -> None:
-        with open(self._index_file, "wb") as f:
-            pickle.dump(self._index, f)
+    def _hash_key(self, key: str) -> str:
+        return hashlib.sha256(key.encode()).hexdigest()
 
-    def _key_to_path(self, key: str) -> Path:
-        h = hashlib.sha256(key.encode()).hexdigest()[:16]
-        return self.cache_dir / f"{h}.pkl"
+    def _data_path(self, key: str) -> Path:
+        return self.cache_dir / "data" / f"{self._hash_key(key)}.pkl"
+
+    def _meta_path(self, key: str) -> Path:
+        return self.cache_dir / "meta" / f"{self._hash_key(key)}.json"
 
     def keys(self) -> list[str]:
-        """Return all cached keys."""
-        return list(self._index.keys())
+        meta_dir = self.cache_dir / "meta"
+        if not meta_dir.exists():
+            return []
+        out: list[str] = []
+        for path in meta_dir.glob("*.json"):
+            try:
+                meta = json.loads(path.read_text(encoding="utf-8"))
+                key = meta.get("key")
+                if isinstance(key, str):
+                    out.append(key)
+            except Exception:
+                continue
+        return sorted(set(out))
 
     def get(self, key: str) -> Any | None:
-        """Get cached value by key, or None if not found."""
-        if key not in self._index:
+        data_path = self._data_path(key)
+        if not data_path.exists():
             return None
-        path = self._key_to_path(key)
-        if not path.exists():
-            return None
-        try:
-            with open(path, "rb") as f:
-                return pickle.load(f)  # noqa: S301
-        except Exception:
-            return None
+
+        with self._lock:
+            try:
+                with open(data_path, "rb") as f:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+                    try:
+                        value = pickle.load(f)  # noqa: S301
+                    finally:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            except Exception:
+                self._remove_entry(key)
+                return None
+
+            self._update_access_time(key)
+            return value
 
     def set(self, key: str, value: Any) -> None:
-        """Store value under key."""
-        path = self._key_to_path(key)
-        with open(path, "wb") as f:
-            pickle.dump(value, f)
-        self._index[key] = str(path)
-        self._save_index()
+        self.put(key, value)
+
+    def put(self, key: str, value: Any) -> None:
+        with self._lock:
+            self._evict_if_needed()
+            data_path = self._data_path(key)
+            meta_path = self._meta_path(key)
+
+            with open(data_path, "wb") as f:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                try:
+                    pickle.dump(value, f)  # noqa: S301
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+            meta: dict[str, Any] = {"key": key, "created_at": time.time(), "accessed_at": time.time()}
+            tic_id = getattr(value, "tic_id", None)
+            if tic_id is not None:
+                meta["tic_id"] = int(tic_id)
+            sector = getattr(value, "sector", None)
+            if sector is not None:
+                meta["sector"] = int(sector)
+
+            try:
+                meta_path.write_text(json.dumps(meta), encoding="utf-8")
+            except Exception:
+                pass
 
     def has(self, key: str) -> bool:
-        """Check if key exists in cache."""
-        return key in self._index and self._key_to_path(key).exists()
+        return self._data_path(key).exists()
+
+    def _update_access_time(self, key: str) -> None:
+        meta_path = self._meta_path(key)
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {"key": key}
+            meta["accessed_at"] = time.time()
+            meta_path.write_text(json.dumps(meta), encoding="utf-8")
+        except Exception:
+            return
+
+    def _remove_entry(self, key: str) -> None:
+        for path in (self._data_path(key), self._meta_path(key)):
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+            except Exception:
+                pass
+
+    def _evict_if_needed(self) -> None:
+        keys = self.keys()
+        if len(keys) < self.max_entries:
+            return
+
+        entries: list[tuple[float, str]] = []
+        for key in keys:
+            meta_path = self._meta_path(key)
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                accessed_at = float(meta.get("accessed_at", 0.0))
+            except Exception:
+                accessed_at = 0.0
+            entries.append((accessed_at, key))
+
+        entries.sort(key=lambda x: x[0])
+        while len(entries) >= self.max_entries and entries:
+            _, key = entries.pop(0)
+            self._remove_entry(key)

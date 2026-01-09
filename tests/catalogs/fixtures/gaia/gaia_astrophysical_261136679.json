@@ -1,0 +1,16 @@
+{
+  "_comment": "Pi Mensae (TIC 261136679) - GSP-Phot and FLAME astrophysical parameters",
+  "_gaia_dr3_source_id": 5290699119420871680,
+  "source_id": 5290699119420871680,
+  "teff_gspphot": 5950.0,
+  "teff_gspphot_lower": 5900.0,
+  "teff_gspphot_upper": 6000.0,
+  "logg_gspphot": 4.35,
+  "logg_gspphot_lower": 4.30,
+  "logg_gspphot_upper": 4.40,
+  "radius_gspphot": 1.10,
+  "radius_gspphot_lower": 1.08,
+  "radius_gspphot_upper": 1.12,
+  "mass_flame": 1.07,
+  "lum_flame": 1.52
+}

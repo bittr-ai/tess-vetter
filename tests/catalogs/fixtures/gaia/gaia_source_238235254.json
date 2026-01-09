@@ -1,0 +1,21 @@
+{
+  "_comment": "PATHOS-39 host / HD 66006 A (TIC 238235254) - Close visual binary with nearby companion",
+  "_note": "This star has a companion ~8 arcsec away that is only ~0.8 mag fainter",
+  "_gaia_dr3_source_id": 5486768923498851584,
+  "source_id": 5486768923498851584,
+  "ra": 119.12345678,
+  "dec": -50.98765432,
+  "parallax": 15.234,
+  "parallax_error": 0.025,
+  "pmra": -25.678,
+  "pmdec": 12.345,
+  "phot_g_mean_mag": 8.12,
+  "phot_bp_mean_mag": 8.55,
+  "phot_rp_mean_mag": 7.52,
+  "bp_rp": 1.03,
+  "ruwe": 1.82,
+  "duplicated_source": false,
+  "non_single_star": 0,
+  "astrometric_excess_noise": 0.892,
+  "phot_bp_rp_excess_factor": 1.31
+}

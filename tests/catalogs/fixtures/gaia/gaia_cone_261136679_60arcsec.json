@@ -1,0 +1,36 @@
+{
+  "_comment": "Pi Mensae 60 arcsec cone search - mostly isolated, few faint neighbors",
+  "_center_ra": 84.29122447,
+  "_center_dec": -80.46911858,
+  "_radius_arcsec": 60.0,
+  "_primary_source_id": 5290699119420871680,
+  "sources": [
+    {
+      "_comment": "Primary target - Pi Mensae itself",
+      "source_id": 5290699119420871680,
+      "ra": 84.29122447,
+      "dec": -80.46911858,
+      "phot_g_mean_mag": 5.0876,
+      "ruwe": 1.017,
+      "separation_arcsec": 0.0
+    },
+    {
+      "_comment": "Faint background star ~45 arcsec away",
+      "source_id": 5290699119420871681,
+      "ra": 84.30,
+      "dec": -80.4815,
+      "phot_g_mean_mag": 18.5,
+      "ruwe": 1.02,
+      "separation_arcsec": 44.8
+    },
+    {
+      "_comment": "Another faint background star ~52 arcsec away",
+      "source_id": 5290699119420871682,
+      "ra": 84.32,
+      "dec": -80.455,
+      "phot_g_mean_mag": 19.2,
+      "ruwe": 1.05,
+      "separation_arcsec": 52.1
+    }
+  ]
+}

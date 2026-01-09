@@ -1,0 +1,46 @@
+{
+  "_comment": "PATHOS-39 / HD 66006 60 arcsec cone search - close binary system",
+  "_note": "Host ambiguity case: two bright stars within 1 TESS pixel (21 arcsec)",
+  "_center_ra": 119.12345678,
+  "_center_dec": -50.98765432,
+  "_radius_arcsec": 60.0,
+  "_primary_source_id": 5486768923498851584,
+  "sources": [
+    {
+      "_comment": "Primary target - HD 66006 A",
+      "source_id": 5486768923498851584,
+      "ra": 119.12345678,
+      "dec": -50.98765432,
+      "phot_g_mean_mag": 8.12,
+      "ruwe": 1.82,
+      "separation_arcsec": 0.0
+    },
+    {
+      "_comment": "Close companion - HD 66006 B, ~8 arcsec away, nearly equal brightness",
+      "source_id": 5486768923498851585,
+      "ra": 119.12567890,
+      "dec": -50.98543210,
+      "phot_g_mean_mag": 8.95,
+      "ruwe": 1.45,
+      "separation_arcsec": 8.2
+    },
+    {
+      "_comment": "Third source in field, further away",
+      "source_id": 5486768923498851586,
+      "ra": 119.135,
+      "dec": -50.975,
+      "phot_g_mean_mag": 12.8,
+      "ruwe": 1.05,
+      "separation_arcsec": 35.4
+    },
+    {
+      "_comment": "Faint background star",
+      "source_id": 5486768923498851587,
+      "ra": 119.11,
+      "dec": -51.002,
+      "phot_g_mean_mag": 17.2,
+      "ruwe": 1.01,
+      "separation_arcsec": 55.8
+    }
+  ]
+}

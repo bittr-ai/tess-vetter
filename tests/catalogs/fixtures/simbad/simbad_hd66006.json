@@ -1,0 +1,33 @@
+{
+  "_comment": "HD 66006 / PATHOS-39 host - Close binary system with host ambiguity",
+  "_tic_id": 238235254,
+  "_gaia_dr3_source_id": 5486768923498851584,
+  "_note": "This is a visual binary system; transit source is ambiguous",
+  "basic": {
+    "main_id": "HD 66006",
+    "ra": 119.12345678,
+    "dec": -50.98765432,
+    "otype": "**"
+  },
+  "identifiers": [
+    "HD 66006",
+    "TIC 238235254",
+    "Gaia DR3 5486768923498851584",
+    "2MASS J07563764-5059315",
+    "TYC 8142-1125-1",
+    "CD-50 2922",
+    "CPD-50 1508"
+  ],
+  "spectral_type": {
+    "sptype": "G5V",
+    "_source": "2006AJ....132..161G"
+  },
+  "expected_parsing": {
+    "is_star": true,
+    "is_binary": true,
+    "is_variable": false,
+    "is_early_type": false,
+    "is_giant": false,
+    "luminosity_class": "V"
+  }
+}

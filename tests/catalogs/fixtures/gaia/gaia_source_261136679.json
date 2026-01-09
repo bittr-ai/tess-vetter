@@ -1,0 +1,20 @@
+{
+  "_comment": "Pi Mensae (TIC 261136679) - Well-characterized single G0V star with known planet",
+  "_gaia_dr3_source_id": 5290699119420871680,
+  "source_id": 5290699119420871680,
+  "ra": 84.29122447,
+  "dec": -80.46911858,
+  "parallax": 54.7053,
+  "parallax_error": 0.0147,
+  "pmra": 311.276,
+  "pmdec": 1050.295,
+  "phot_g_mean_mag": 5.0876,
+  "phot_bp_mean_mag": 5.3861,
+  "phot_rp_mean_mag": 4.6285,
+  "bp_rp": 0.7576,
+  "ruwe": 1.017,
+  "duplicated_source": false,
+  "non_single_star": 0,
+  "astrometric_excess_noise": 0.058,
+  "phot_bp_rp_excess_factor": 1.252
+}
