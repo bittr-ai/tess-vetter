@@ -143,6 +143,18 @@ from bittr_tess_vetter.api.target import (  # noqa: F401
     Target,
 )
 
+# Detection/periodogram model contract (host-facing)
+from bittr_tess_vetter.api.detection import (  # noqa: F401
+    Detection,
+    Disposition,
+    PeriodogramPeak,
+    PeriodogramResult,
+    TransitCandidate,
+    ValidationResult,
+    Verdict,
+    VetterCheckResult,
+)
+
 # LC-only checks (V01-V05)
 from bittr_tess_vetter.api.lc_only import (
     depth_stability,
