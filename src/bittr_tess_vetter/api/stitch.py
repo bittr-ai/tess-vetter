@@ -19,6 +19,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from bittr_tess_vetter.domain.lightcurve import LightCurveData
 
 @dataclass(frozen=True)
 class SectorDiagnostics:
@@ -201,6 +202,59 @@ def stitch_lightcurves(
         normalization_policy_version=normalization_policy_version,
     )
 
+def stitch_lightcurve_data(
+    lightcurves: list[LightCurveData],
+    *,
+    tic_id: int,
+    normalization_policy_version: str = "v1",
+    sector: int = -1,
+) -> tuple[LightCurveData, StitchedLC]:
+    """Stitch cached `LightCurveData` objects into a single `LightCurveData`.
 
-__all__ = ["SectorDiagnostics", "StitchedLC", "stitch_lightcurves"]
+    This helper is host-facing: it converts `LightCurveData` -> dict inputs for
+    `stitch_lightcurves`, then converts the stitched output back into an immutable
+    `LightCurveData` with a conservative `valid_mask` and inferred cadence.
+    """
+    if tic_id <= 0:
+        raise ValueError(f"tic_id must be positive, got {tic_id}")
+    if len(lightcurves) < 2:
+        raise ValueError("stitch_lightcurve_data requires at least 2 input light curves")
 
+    lc_list: list[dict[str, Any]] = []
+    for lc in lightcurves:
+        lc_list.append(
+            {
+                "time": lc.time,
+                "flux": lc.flux,
+                "flux_err": lc.flux_err,
+                "sector": int(lc.sector),
+                "quality": lc.quality,
+            }
+        )
+
+    stitched = stitch_lightcurves(lc_list, normalization_policy_version=normalization_policy_version)
+
+    valid_mask = (stitched.quality == 0) & np.isfinite(stitched.flux)
+
+    if len(stitched.time) > 1:
+        time_diffs = np.diff(stitched.time)
+        short_diffs = time_diffs[time_diffs < 1.0]
+        cadence_seconds = float(np.median(short_diffs) * 86400) if len(short_diffs) > 0 else 120.0
+    else:
+        cadence_seconds = 120.0
+
+    stitched_lc_data = LightCurveData(
+        time=np.asarray(stitched.time, dtype=np.float64),
+        flux=np.asarray(stitched.flux, dtype=np.float64),
+        flux_err=np.asarray(stitched.flux_err, dtype=np.float64),
+        quality=np.asarray(stitched.quality, dtype=np.int32),
+        valid_mask=np.asarray(valid_mask, dtype=np.bool_),
+        tic_id=int(tic_id),
+        sector=int(sector),
+        cadence_seconds=float(cadence_seconds),
+    )
+
+    return stitched_lc_data, stitched
+
+
+__all__ = ["SectorDiagnostics", "StitchedLC", "stitch_lightcurves", "stitch_lightcurve_data"]
