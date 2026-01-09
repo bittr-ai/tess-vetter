@@ -17,12 +17,12 @@ from bittr_tess_vetter.compute.periodogram import (  # noqa: F401
     detect_sector_gaps,
     ls_periodogram,
     merge_candidates,
-    refine_period,
     search_planets,
     split_by_sectors,
     tls_search,
     tls_search_per_sector,
 )
+from bittr_tess_vetter.compute.periodogram import refine_period as _refine_period_compute
 from bittr_tess_vetter.domain.detection import PeriodogramPeak, PeriodogramResult  # noqa: F401
 from bittr_tess_vetter.api.references import (
     HIPPKE_HELLER_2019_TLS,
@@ -133,6 +133,39 @@ def compute_transit_model(
         "reduced_chi2": float(reduced_chi2),
         "n_in_transit": int(n_in_transit),
     }
+
+
+@cites(cite(HIPPKE_HELLER_2019_TLS, "TLS refinement around an initial period estimate"))
+def refine_period(
+    *,
+    time: np.ndarray,
+    flux: np.ndarray,
+    flux_err: np.ndarray | None,
+    initial_period: float,
+    initial_duration: float,
+    refine_factor: float = 0.1,
+    n_refine: int = 100,
+    tic_id: int | None = None,
+    stellar_radius_rsun: float | None = None,
+    stellar_mass_msun: float | None = None,
+) -> tuple[float, float, float]:
+    """Refine a period estimate with a constrained TLS search.
+
+    This wrapper exists so host applications can call refinement without
+    importing internal `compute.*` modules.
+    """
+    return _refine_period_compute(
+        np.asarray(time, dtype=np.float64),
+        np.asarray(flux, dtype=np.float64),
+        np.asarray(flux_err, dtype=np.float64) if flux_err is not None else None,
+        initial_period=float(initial_period),
+        initial_duration=float(initial_duration),
+        refine_factor=float(refine_factor),
+        n_refine=int(n_refine),
+        tic_id=tic_id,
+        stellar_radius_rsun=stellar_radius_rsun,
+        stellar_mass_msun=stellar_mass_msun,
+    )
 
 
 __all__ = [
