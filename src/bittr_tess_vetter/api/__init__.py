@@ -266,6 +266,16 @@ from bittr_tess_vetter.api.transit_masks import (  # noqa: F401
     measure_transit_depth,
 )
 
+# Sandbox compute primitives (host-facing)
+from bittr_tess_vetter.api.sandbox_primitives import (  # noqa: F401
+    AstroPrimitives,
+    astro,
+    box_model,
+    detrend,
+    fold,
+    periodogram,
+)
+
 # TPF cache facades (host-facing)
 from bittr_tess_vetter.api.tpf import (  # noqa: F401
     TPFCache,
