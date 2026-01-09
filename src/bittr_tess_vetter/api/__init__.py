@@ -185,6 +185,13 @@ from bittr_tess_vetter.api.periodogram import (  # noqa: F401
     tls_search_per_sector,
 )
 
+# Light curve stitching (host-facing)
+from bittr_tess_vetter.api.stitch import (  # noqa: F401
+    SectorDiagnostics,
+    StitchedLC,
+    stitch_lightcurves,
+)
+
 # Primitive catalog (host-facing)
 from bittr_tess_vetter.api.primitives import (  # noqa: F401
     PRIMITIVES_CATALOG,
