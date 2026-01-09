@@ -39,6 +39,8 @@ from bittr_tess_vetter.api.references import (
 )
 from bittr_tess_vetter.api.types import Candidate, LightCurve
 from bittr_tess_vetter.compute.detrend import WOTAN_AVAILABLE
+from bittr_tess_vetter.api.lightcurve import LightCurveData
+from bittr_tess_vetter.api.transit_masks import count_transits
 from bittr_tess_vetter.recovery.primitives import (
     compute_detection_snr,
     detrend_for_recovery,
@@ -100,6 +102,70 @@ class RecoveryResult:
     fitted_duration_hours: float
     detection_snr: float
     converged: bool
+
+
+@dataclass(frozen=True)
+class PreparedRecoveryInputs:
+    """Prepared numpy arrays for recovery.
+
+    This is a small host-facing helper to keep orchestration code (masking,
+    concatenation, basic transit-count sanity checks) out of MCP/application layers.
+    """
+
+    time: np.ndarray
+    flux: np.ndarray
+    flux_err: np.ndarray
+    sectors_used: list[int]
+    n_transits: int
+
+
+def prepare_recovery_inputs(
+    lightcurves: list[LightCurveData],
+    *,
+    period: float,
+    t0: float,
+    duration_hours: float,
+) -> PreparedRecoveryInputs:
+    """Concatenate valid points across sectors and estimate transit count.
+
+    Raises:
+        ValueError: If no valid points are available.
+    """
+    if not lightcurves:
+        raise ValueError("No light curves provided.")
+
+    sorted_lcs = sorted(lightcurves, key=lambda lc: int(lc.sector))
+
+    time_arrays: list[np.ndarray] = []
+    flux_arrays: list[np.ndarray] = []
+    flux_err_arrays: list[np.ndarray] = []
+    sectors_used: list[int] = []
+
+    for lc in sorted_lcs:
+        mask = lc.valid_mask
+        if int(np.sum(mask)) == 0:
+            continue
+        time_arrays.append(np.asarray(lc.time[mask], dtype=np.float64))
+        flux_arrays.append(np.asarray(lc.flux[mask], dtype=np.float64))
+        flux_err_arrays.append(np.asarray(lc.flux_err[mask], dtype=np.float64))
+        sectors_used.append(int(lc.sector))
+
+    if not time_arrays:
+        raise ValueError("No valid light curve points available after masking.")
+
+    time = np.concatenate(time_arrays)
+    flux = np.concatenate(flux_arrays)
+    flux_err = np.concatenate(flux_err_arrays)
+
+    n_transits = int(count_transits(time, float(period), float(t0), float(duration_hours)))
+
+    return PreparedRecoveryInputs(
+        time=np.asarray(time, dtype=np.float64),
+        flux=np.asarray(flux, dtype=np.float64),
+        flux_err=np.asarray(flux_err, dtype=np.float64),
+        sectors_used=sectors_used,
+        n_transits=n_transits,
+    )
 
 
 @cites(

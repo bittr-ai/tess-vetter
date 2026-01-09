@@ -175,9 +175,11 @@ from bittr_tess_vetter.api.pixel import (
 
 # v3 transit recovery
 from bittr_tess_vetter.api.recovery import (  # noqa: F401
+    PreparedRecoveryInputs,
     RecoveryResult,
     detrend,
     recover_transit,
+    prepare_recovery_inputs,
     recover_transit_timeseries,
     stack_transits,
 )
