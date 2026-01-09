@@ -56,7 +56,7 @@ from bittr_tess_vetter.catalogs import (  # noqa: F401
     determine_novelty_status,
     find_known_object_matches,
     generate_snapshot_id,
-    get_client as get_exoplanet_archive_client,
+    get_exoplanet_archive_client,
     get_known_planets,
     parse_snapshot_id,
     parse_spectral_type,
