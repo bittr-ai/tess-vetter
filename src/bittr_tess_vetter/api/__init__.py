@@ -255,6 +255,21 @@ from bittr_tess_vetter.api.transit_masks import (  # noqa: F401
     measure_transit_depth,
 )
 
+# TPF cache facades (host-facing)
+from bittr_tess_vetter.api.tpf import (  # noqa: F401
+    TPFCache,
+    TPFData,
+    TPFHandler,
+    TPFNotFoundError,
+    TPFRef,
+)
+from bittr_tess_vetter.api.tpf_fits import (  # noqa: F401
+    TPFFitsCache,
+    TPFFitsData,
+    TPFFitsNotFoundError,
+    TPFFitsRef,
+)
+
 # Types (v3) - re-exported from types.py
 from bittr_tess_vetter.api.types import (
     ActivityResult,

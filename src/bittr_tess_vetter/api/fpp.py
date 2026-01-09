@@ -26,7 +26,16 @@ from bittr_tess_vetter.api.references import (
     cite,
     cites,
 )
-from bittr_tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+from bittr_tess_vetter.validation.triceratops_fpp import (
+    CalculateFppInput,
+    FppResult,
+    _estimate_transit_duration,
+    _get_disposition,
+    _load_cached_triceratops_target,
+    _prefetch_trilegal_csv,
+    _save_cached_triceratops_target,
+    calculate_fpp_handler,
+)
 
 # PersistentCache type comes from caller (e.g., astro-arc-tess)
 # Using Any since bittr_tess_vetter.io doesn't exist in this package
