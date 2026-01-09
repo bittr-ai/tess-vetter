@@ -137,6 +137,12 @@ from bittr_tess_vetter.api.lightcurve import (  # noqa: F401
     make_data_ref,
 )
 
+# Target model contract (host-facing)
+from bittr_tess_vetter.api.target import (  # noqa: F401
+    StellarParameters,
+    Target,
+)
+
 # LC-only checks (V01-V05)
 from bittr_tess_vetter.api.lc_only import (
     depth_stability,
