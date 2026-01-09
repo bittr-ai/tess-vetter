@@ -296,6 +296,25 @@ class PersistentCache:
     def has(self, key: str) -> bool:
         return self._data_path(key).exists()
 
+    def clear(self) -> None:
+        """Remove all cached entries from disk.
+
+        Intended for test isolation and for hosts that want to reset state between runs.
+        """
+        data_dir = self.cache_dir / "data"
+        meta_dir = self.cache_dir / "meta"
+        with self._lock:
+            for dir_path in (data_dir, meta_dir):
+                if not dir_path.exists():
+                    continue
+                for path in dir_path.glob("*"):
+                    try:
+                        path.unlink()
+                    except FileNotFoundError:
+                        continue
+                    except Exception:
+                        continue
+
     def _update_access_time(self, key: str) -> None:
         meta_path = self._meta_path(key)
         try:
