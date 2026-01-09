@@ -119,6 +119,17 @@ from bittr_tess_vetter.api.fpp import (
     calculate_fpp,
 )
 
+# TRICERATOPS cache helpers (host-facing)
+from bittr_tess_vetter.api.triceratops_cache import (  # noqa: F401
+    CalculateFppInput,
+    FppResult,
+    estimate_transit_duration,
+    get_disposition,
+    load_cached_triceratops_target,
+    prefetch_trilegal_csv,
+    save_cached_triceratops_target,
+)
+
 # LC-only checks (V01-V05)
 from bittr_tess_vetter.api.lc_only import (
     depth_stability,
