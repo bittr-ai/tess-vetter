@@ -259,6 +259,64 @@ class TestOddEvenDepth:
         assert result.details["depth_odd_ppm"] > result.details["depth_even_ppm"]
 
 
+    def test_odd_even_depth_insufficient_data_for_few_transits(self) -> None:
+        time, flux, flux_err = _make_synthetic_transit_lc(
+            n_points=1200,
+            period_days=3.5,
+            t0_btjd=0.5,
+            duration_hours=2.5,
+            depth=0.01,
+            noise_level=2e-4,
+            n_periods=2,
+        )
+        lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+        eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+        result = odd_even_depth(lc, eph)
+
+        assert result.passed is None
+        assert "insufficient_data_for_odd_even_check" in result.details.get("warnings", [])
+
+    def test_odd_even_depth_handles_duration_too_long_relative_to_period(self) -> None:
+        time, flux, flux_err = _make_synthetic_transit_lc(
+            n_points=2000,
+            period_days=3.0,
+            t0_btjd=0.5,
+            duration_hours=40.0,
+            depth=0.01,
+            noise_level=2e-4,
+            n_periods=5,
+        )
+        lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+        eph = Ephemeris(period_days=3.0, t0_btjd=0.5, duration_hours=40.0)
+
+        result = odd_even_depth(lc, eph)
+
+        assert result.passed is None
+        assert "duration_too_long_relative_to_period" in result.details.get("warnings", [])
+
+    def test_odd_even_depth_ignores_nans_via_valid_mask(self) -> None:
+        time, flux, flux_err = _make_synthetic_transit_lc(
+            n_points=6000,
+            period_days=3.5,
+            t0_btjd=0.5,
+            duration_hours=2.5,
+            depth=0.01,
+            noise_level=2e-4,
+            n_periods=10,
+        )
+        flux[123] = np.nan
+        time[456] = np.nan
+        flux_err[789] = np.nan
+        lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+        eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+        result = odd_even_depth(lc, eph)
+
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
+
+
 class TestSecondaryEclipse:
     """Tests for V02 secondary_eclipse check."""
 
@@ -315,6 +373,24 @@ class TestSecondaryEclipse:
         assert result.details.get("significant_secondary") is True
         assert result.details["secondary_depth_ppm"] > 1000.0
         assert "secondary_depth" in result.details
+
+    def test_secondary_eclipse_insufficient_data_for_single_event(self) -> None:
+        time, flux, flux_err = _make_synthetic_transit_lc(
+            n_points=1500,
+            period_days=3.5,
+            t0_btjd=0.5,
+            duration_hours=2.5,
+            depth=0.01,
+            noise_level=2e-4,
+            n_periods=1,
+        )
+        lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+        eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+        result = secondary_eclipse(lc, eph)
+
+        assert result.passed is None
+        assert any("need 2" in str(w) for w in result.details.get("warnings", []))
 
 
 class TestDurationConsistency:
@@ -457,6 +533,24 @@ class TestDepthStability:
         warnings = result.details.get("warnings", [])
         assert any("Outlier epochs detected" in str(w) for w in warnings)
 
+    def test_depth_stability_handles_duration_too_long_relative_to_period(self) -> None:
+        time, flux, flux_err = _make_synthetic_transit_lc(
+            n_points=2000,
+            period_days=3.0,
+            t0_btjd=0.5,
+            duration_hours=40.0,
+            depth=0.01,
+            noise_level=2e-4,
+            n_periods=5,
+        )
+        lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+        eph = Ephemeris(period_days=3.0, t0_btjd=0.5, duration_hours=40.0)
+
+        result = depth_stability(lc, eph)
+
+        assert result.passed is None
+        assert "duration_too_long_relative_to_period" in result.details.get("warnings", [])
+
 
 class TestVShape:
     """Tests for V05 v_shape check."""
@@ -531,6 +625,25 @@ class TestVShape:
         assert result.details.get("_metrics_only") is True
         if result.details.get("classification") != "INSUFFICIENT_DATA":
             assert result.details.get("classification") == "V_SHAPE"
+
+    def test_v_shape_handles_duration_too_long_relative_to_period(self) -> None:
+        time, flux, flux_err = _make_synthetic_transit_lc(
+            n_points=2000,
+            period_days=3.0,
+            t0_btjd=0.5,
+            duration_hours=40.0,
+            depth=0.01,
+            noise_level=2e-4,
+            n_periods=5,
+        )
+        lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+        eph = Ephemeris(period_days=3.0, t0_btjd=0.5, duration_hours=40.0)
+
+        result = v_shape(lc, eph)
+
+        assert result.passed is None
+        assert result.details.get("classification") == "INVALID_DURATION"
+        assert "duration_too_long_relative_to_period" in result.details.get("warnings", [])
 
 
 class TestVetLcOnly:

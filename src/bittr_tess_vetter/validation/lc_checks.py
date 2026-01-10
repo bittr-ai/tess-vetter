@@ -358,6 +358,42 @@ def check_odd_even_depth(
     duration_days = duration_hours / 24.0
     warnings: list[str] = []
 
+    # Guardrail: if duration is a large fraction of the orbit, in/out-of-transit
+    # separation becomes ill-defined and per-epoch baselines will be unreliable.
+    if duration_days >= 0.5 * period:
+        warnings.append("duration_too_long_relative_to_period")
+        warnings.append("insufficient_data_for_odd_even_check")
+        return VetterCheckResult(
+            id="V01",
+            name="odd_even_depth",
+            passed=None,
+            confidence=0.2,
+            details={
+                # Back-compat keys
+                "odd_depth": 0.0,
+                "even_depth": 0.0,
+                "depth_diff_sigma": 0.0,
+                "n_odd_points": 0,
+                "n_even_points": 0,
+                # New keys
+                "n_odd_transits": 0,
+                "n_even_transits": 0,
+                "depth_odd_ppm": 0.0,
+                "depth_even_ppm": 0.0,
+                "depth_err_odd_ppm": 0.0,
+                "depth_err_even_ppm": 0.0,
+                "delta_ppm": 0.0,
+                "delta_sigma": 0.0,
+                "rel_diff": 0.0,
+                "suspicious": False,
+                "warnings": warnings,
+                "method": "per_epoch_median",
+                "epoch_depths_odd_ppm": [],
+                "epoch_depths_even_ppm": [],
+                "_metrics_only": True,
+            },
+        )
+
     # Calculate epoch index and parity for each point
     # Offset by half period so epoch boundaries fall BETWEEN transits, not AT transit centers.
     # This ensures each epoch fully contains exactly one transit.
@@ -984,6 +1020,27 @@ def check_depth_stability(
     duration_days = duration_hours / 24.0
     warnings: list[str] = []
 
+    # Guardrail: if duration is a large fraction of the orbit, in/out-of-transit
+    # separation becomes ill-defined, so depth stability is not meaningful.
+    if duration_days >= 0.5 * period:
+        warnings.append("duration_too_long_relative_to_period")
+        return VetterCheckResult(
+            id="V04",
+            name="depth_stability",
+            passed=None,
+            confidence=0.2,
+            details={
+                "n_transits_measured": 0,
+                "depths_ppm": [],
+                "depth_scatter_ppm": 0.0,
+                "expected_scatter_ppm": 0.0,
+                "chi2_reduced": 0.0,
+                "warnings": warnings,
+                "note": "Duration too long relative to period for depth stability check",
+                "_metrics_only": True,
+            },
+        )
+
     # Calculate epoch index for each point (same logic as odd/even)
     epoch = np.floor((time - t0 + period / 2) / period).astype(int)
 
@@ -1383,6 +1440,39 @@ def check_v_shape(
 
     duration_days = duration_hours / 24.0
     warnings: list[str] = []
+
+    # Guardrail: if duration is a large fraction of the orbit, the concept of a
+    # localized transit shape becomes ill-defined.
+    if duration_days >= 0.5 * period:
+        warnings.append("duration_too_long_relative_to_period")
+        return VetterCheckResult(
+            id="V05",
+            name="v_shape",
+            passed=None,
+            confidence=0.2,
+            details={
+                # Legacy keys
+                "depth_bottom": 0.0,
+                "depth_edge": 0.0,
+                "shape_ratio": 2.0,
+                "shape": "U-shaped",
+                "n_bottom_points": 0,
+                "n_edge_points": 0,
+                # New keys
+                "t_flat_hours": 0.0,
+                "t_total_hours": duration_hours,
+                "tflat_ttotal_ratio": 0.5,
+                "tflat_ttotal_ratio_err": 0.5,
+                "shape_metric_uncertainty": 0.5,
+                "classification": "INVALID_DURATION",
+                "transit_coverage": 0.0,
+                "n_in_transit": 0,
+                "n_baseline": 0,
+                "warnings": warnings,
+                "method": "trapezoid_grid_search",
+                "_metrics_only": True,
+            },
+        )
 
     # Calculate phase centered on transit (-0.5 to 0.5, transit at 0)
     phase = ((time - t0) / period + 0.5) % 1 - 0.5
