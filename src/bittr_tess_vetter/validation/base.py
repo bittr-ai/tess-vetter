@@ -722,9 +722,12 @@ def get_in_transit_mask(
     Returns:
         Boolean mask (True for in-transit points)
     """
+    time = np.asarray(time, dtype=np.float64)
+    finite_time = np.isfinite(time)
     phase, _ = phase_fold(time, time, period, t0)
     half_dur = (duration_hours / 24.0 / period) * buffer_factor / 2.0
-    result: np.ndarray[tuple[Any, ...], np.dtype[Any]] = np.abs(phase) < half_dur
+    # Keep strict inequality to preserve boundary behavior expected by existing tests.
+    result: np.ndarray[tuple[Any, ...], np.dtype[Any]] = finite_time & (np.abs(phase) < half_dur)
     return result
 
 
@@ -749,7 +752,10 @@ def get_out_of_transit_mask(
     Returns:
         Boolean mask (True for out-of-transit points)
     """
-    return ~get_in_transit_mask(time, period, t0, duration_hours, buffer_factor)
+    time = np.asarray(time, dtype=np.float64)
+    finite_time = np.isfinite(time)
+    in_mask = get_in_transit_mask(time, period, t0, duration_hours, buffer_factor)
+    return finite_time & (~in_mask)
 
 
 def bin_phase_curve(
@@ -839,10 +845,14 @@ def measure_transit_depth(
     Returns:
         Tuple of (depth, depth_uncertainty)
     """
-    in_flux = flux[in_transit_mask]
-    out_flux = flux[out_of_transit_mask]
+    flux = np.asarray(flux, dtype=np.float64)
+    in_flux = flux[np.asarray(in_transit_mask, dtype=bool)]
+    out_flux = flux[np.asarray(out_of_transit_mask, dtype=bool)]
 
-    if len(in_flux) == 0 or len(out_flux) == 0:
+    in_flux = in_flux[np.isfinite(in_flux)]
+    out_flux = out_flux[np.isfinite(out_flux)]
+
+    if in_flux.size == 0 or out_flux.size == 0:
         return 0.0, 1.0
 
     in_median = np.nanmedian(in_flux)
@@ -877,7 +887,9 @@ def count_transits(
     Returns:
         Number of transits with sufficient data coverage
     """
-    if len(time) == 0:
+    time = np.asarray(time, dtype=np.float64)
+    time = time[np.isfinite(time)]
+    if time.size == 0:
         return 0
 
     t_min, t_max = time.min(), time.max()
@@ -919,8 +931,11 @@ def get_odd_even_transit_indices(
         - orbit_numbers: Integer orbit number for each point
         - is_odd_mask: Boolean mask (True for odd orbit numbers)
     """
-    orbit_numbers = np.round((time - t0) / period).astype(int)
-    is_odd = orbit_numbers % 2 == 1
+    time = np.asarray(time, dtype=np.float64)
+    finite = np.isfinite(time)
+    orbit_numbers = np.zeros(time.shape, dtype=int)
+    orbit_numbers[finite] = np.round((time[finite] - t0) / period).astype(int)
+    is_odd = (orbit_numbers % 2 == 1) & finite
     return orbit_numbers, is_odd
 
 

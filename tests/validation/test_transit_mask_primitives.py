@@ -45,7 +45,23 @@ def test_out_of_transit_mask_is_complement_of_in_transit() -> None:
 
     in_mask = get_in_transit_mask(time, period, t0, duration_hours, buffer_factor=1.0)
     out_mask = get_out_of_transit_mask(time, period, t0, duration_hours, buffer_factor=1.0)
-    np.testing.assert_array_equal(out_mask, ~in_mask)
+    finite = np.isfinite(time)
+    np.testing.assert_array_equal(out_mask, finite & (~in_mask))
+
+
+def test_masks_exclude_non_finite_time_points() -> None:
+    time = np.array([0.4, 0.5, np.nan, 0.6, np.inf], dtype=np.float64)
+    period = 1.0
+    t0 = 0.5
+    duration_hours = 2.0
+
+    in_mask = get_in_transit_mask(time, period, t0, duration_hours)
+    out_mask = get_out_of_transit_mask(time, period, t0, duration_hours)
+
+    assert in_mask[2] is np.False_
+    assert out_mask[2] is np.False_
+    assert in_mask[4] is np.False_
+    assert out_mask[4] is np.False_
 
 
 def test_measure_transit_depth_recovers_known_depth() -> None:
@@ -90,4 +106,3 @@ def test_odd_even_transit_indices_parity_at_transit_centers() -> None:
     orbit_numbers, is_odd = get_odd_even_transit_indices(centers, period, t0)
     np.testing.assert_array_equal(orbit_numbers, np.arange(6))
     np.testing.assert_array_equal(is_odd, np.array([False, True, False, True, False, True]))
-
