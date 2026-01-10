@@ -270,9 +270,13 @@ def _prefetch_trilegal_csv(
 
     if last_error is not None:
         raise NetworkTimeoutError(
-            f"TRILEGAL prefetch timed out after {timeout_seconds}s: {last_error}"
+            operation=f"TRILEGAL prefetch (last_error={type(last_error).__name__}: {last_error})",
+            timeout_seconds=float(timeout_seconds),
         )
-    raise NetworkTimeoutError(f"TRILEGAL prefetch timed out after {timeout_seconds}s (no response)")
+    raise NetworkTimeoutError(
+        operation="TRILEGAL prefetch (no response)",
+        timeout_seconds=float(timeout_seconds),
+    )
 
 
 def _triceratops_target_cache_path(
