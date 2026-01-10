@@ -40,6 +40,8 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 from scipy import stats
 
+from bittr_tess_vetter.pixel.cadence_mask import default_cadence_mask
+
 if TYPE_CHECKING:
     from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData
 
@@ -207,24 +209,6 @@ def _extract_aperture_lightcurve(
     return summed.astype(np.float64)
 
 
-def _default_cadence_mask(
-    time: np.ndarray[Any, np.dtype[np.floating[Any]]],
-    flux: np.ndarray[Any, np.dtype[np.floating[Any]]],
-    quality: np.ndarray[Any, np.dtype[np.integer[Any]]],
-) -> np.ndarray[Any, np.dtype[np.bool_]]:
-    """Build a conservative cadence mask for pixel-level depth computations.
-
-    Filters out cadences that are known-bad or cannot support robust summary
-    statistics.
-    """
-    mask = (quality == 0) & np.isfinite(time)
-
-    # Require at least some finite pixels in the stamp for the cadence to be usable.
-    cadence_has_finite = np.any(np.isfinite(flux.reshape(flux.shape[0], -1)), axis=1)
-    mask &= cadence_has_finite
-    return mask
-
-
 def _measure_transit_depth(
     flux: np.ndarray[Any, np.dtype[np.floating[Any]]],
     in_transit_mask: np.ndarray[Any, np.dtype[np.bool_]],
@@ -374,7 +358,7 @@ def compute_aperture_family_depth_curve(
         except Exception:
             pass
 
-    cadence_mask = _default_cadence_mask(tpf_fits.time, tpf_fits.flux, tpf_fits.quality)
+    cadence_mask = default_cadence_mask(time=tpf_fits.time, flux=tpf_fits.flux, quality=tpf_fits.quality)
     if int(np.sum(cadence_mask)) < int(tpf_fits.time.shape[0]):
         n_dropped = int(tpf_fits.time.shape[0]) - int(np.sum(cadence_mask))
         warnings.append(f"Dropped {n_dropped} cadences (quality!=0 or non-finite)")

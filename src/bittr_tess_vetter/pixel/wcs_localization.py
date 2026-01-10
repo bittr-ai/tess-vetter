@@ -19,7 +19,7 @@ Example:
     result = localize_transit_source(
         tpf_fits=tpf_data,
         period=5.0,
-        t0=2458001.0,
+        t0=1345.0,
         duration_hours=4.0,
         reference_sources=[
             {"name": "TIC 123456789", "ra": 120.0, "dec": -50.0},
@@ -56,6 +56,7 @@ from bittr_tess_vetter.pixel.wcs_utils import (
     get_reference_source_pixel_positions,
     pixel_to_world,
 )
+from bittr_tess_vetter.pixel.cadence_mask import default_cadence_mask
 
 if TYPE_CHECKING:
     from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData
@@ -387,8 +388,9 @@ def compute_difference_image_centroid(
     Raises:
         ValueError: If insufficient in-transit or out-of-transit data.
     """
-    time = tpf_fits.time
-    flux = tpf_fits.flux
+    cadence_mask = default_cadence_mask(time=tpf_fits.time, flux=tpf_fits.flux, quality=tpf_fits.quality)
+    time = tpf_fits.time[cadence_mask]
+    flux = tpf_fits.flux[cadence_mask]
     duration_days = duration_hours / 24.0
 
     # Compute masks
@@ -412,9 +414,9 @@ def compute_difference_image_centroid(
             "Transit duration may be too long relative to period."
         )
 
-    # Compute median images
-    in_transit_image = np.median(flux[in_transit_mask], axis=0)
-    out_of_transit_image = np.median(flux[out_of_transit_mask], axis=0)
+    # Compute median images (NaN-robust)
+    in_transit_image = np.nanmedian(flux[in_transit_mask], axis=0)
+    out_of_transit_image = np.nanmedian(flux[out_of_transit_mask], axis=0)
 
     # Difference: out - in (transit causes dimming)
     difference_image = out_of_transit_image - in_transit_image
@@ -535,8 +537,9 @@ def bootstrap_centroid_uncertainty(
             - pa_deg: Position angle of ellipse (E of N)
     """
     rng = np.random.default_rng(seed)
-    time = tpf_fits.time
-    flux = tpf_fits.flux
+    cadence_mask = default_cadence_mask(time=tpf_fits.time, flux=tpf_fits.flux, quality=tpf_fits.quality)
+    time = tpf_fits.time[cadence_mask]
+    flux = tpf_fits.flux[cadence_mask]
     duration_days = duration_hours / 24.0
 
     # Get pixel scale for converting to arcseconds
@@ -561,7 +564,7 @@ def bootstrap_centroid_uncertainty(
         return (empty_centroids.astype(np.float64), float("nan"), float("nan"), float("nan"))
 
     # Fixed out-of-transit median (don't resample OOT)
-    out_of_transit_image = np.median(flux[out_of_transit_mask], axis=0)
+    out_of_transit_image = np.nanmedian(flux[out_of_transit_mask], axis=0)
 
     # Bootstrap resampling of in-transit cadences
     centroids = np.zeros((n_draws, 2), dtype=np.float64)
@@ -569,7 +572,7 @@ def bootstrap_centroid_uncertainty(
     for i in range(n_draws):
         # Resample in-transit indices with replacement
         resampled_indices = rng.choice(in_transit_indices, size=n_in, replace=True)
-        in_transit_image = np.median(flux[resampled_indices], axis=0)
+        in_transit_image = np.nanmedian(flux[resampled_indices], axis=0)
 
         # Compute difference image
         difference_image = out_of_transit_image - in_transit_image
@@ -921,7 +924,7 @@ def localize_transit_source(
         >>> result = localize_transit_source(
         ...     tpf_fits=tpf_data,
         ...     period=5.0,
-        ...     t0=2458001.0,
+        ...     t0=1345.0,
         ...     duration_hours=4.0,
         ...     reference_sources=[
         ...         {"name": "Target", "ra": 120.0, "dec": -50.0},
@@ -935,15 +938,42 @@ def localize_transit_source(
     warnings: list[str] = []
     extra: dict[str, Any] = {}
 
+    cadence_mask = default_cadence_mask(time=tpf_fits.time, flux=tpf_fits.flux, quality=tpf_fits.quality)
+    n_total = int(tpf_fits.time.shape[0])
+    n_used = int(np.sum(cadence_mask))
+    extra["n_cadences_total"] = n_total
+    extra["n_cadences_used"] = n_used
+    extra["n_cadences_dropped"] = n_total - n_used
+    if n_used < n_total:
+        warnings.append(f"dropped_bad_cadences:{n_total - n_used}")
+
+    # Use a cadence-filtered view for downstream computations.
+    tpf_used = tpf_fits
+    if n_used < n_total:
+        from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData
+
+        tpf_used = TPFFitsData(
+            ref=tpf_fits.ref,
+            time=tpf_fits.time[cadence_mask],
+            flux=tpf_fits.flux[cadence_mask],
+            flux_err=None if tpf_fits.flux_err is None else tpf_fits.flux_err[cadence_mask],
+            wcs=tpf_fits.wcs,
+            aperture_mask=tpf_fits.aperture_mask,
+            quality=tpf_fits.quality[cadence_mask],
+            camera=tpf_fits.camera,
+            ccd=tpf_fits.ccd,
+            meta=tpf_fits.meta,
+        )
+
     # Generate seed if not provided
     if bootstrap_seed is None:
         bootstrap_seed = int(np.random.default_rng().integers(0, 2**31))
 
     # Get pixel scale
-    pixel_scale_arcsec = compute_pixel_scale(tpf_fits.wcs)
+    pixel_scale_arcsec = compute_pixel_scale(tpf_used.wcs)
 
     # Check for saturation
-    saturation = _saturation_plateau_metrics(tpf_fits.flux)
+    saturation = _saturation_plateau_metrics(tpf_used.flux)
     extra["saturation"] = saturation
     if bool(saturation.get("suspected")):
         warnings.append("saturation_suspected")
@@ -951,7 +981,7 @@ def localize_transit_source(
     # Compute difference image and centroid
     try:
         centroid_pixel_rc, diff_image = compute_difference_image_centroid(
-            tpf_fits=tpf_fits,
+            tpf_fits=tpf_used,
             period=period,
             t0=t0,
             duration_hours=duration_hours,
@@ -981,7 +1011,7 @@ def localize_transit_source(
     # Convert centroid to sky coordinates
     try:
         centroid_sky_ra, centroid_sky_dec = pixel_to_world(
-            tpf_fits.wcs,
+            tpf_used.wcs,
             row=centroid_pixel_rc[0],
             col=centroid_pixel_rc[1],
             origin=0,
@@ -994,7 +1024,7 @@ def localize_transit_source(
     # Bootstrap uncertainty estimation
     if bootstrap_draws > 0:
         centroids_array, semimajor, semiminor, pa = bootstrap_centroid_uncertainty(
-            tpf_fits=tpf_fits,
+            tpf_fits=tpf_used,
             period=period,
             t0=t0,
             duration_hours=duration_hours,
@@ -1025,19 +1055,19 @@ def localize_transit_source(
 
     # Get pixel positions of reference sources
     wcs_source_positions = get_reference_source_pixel_positions(
-        tpf_fits.wcs,
+        tpf_used.wcs,
         reference_sources,
         origin=0,
     )
 
     # Record extra info
     extra["n_in_transit"] = int(
-        np.sum(_compute_transit_mask(tpf_fits.time, period, t0, duration_hours / 24.0))
+        np.sum(_compute_transit_mask(tpf_used.time, period, t0, duration_hours / 24.0))
     )
     extra["n_out_of_transit"] = int(
         np.sum(
             _compute_out_of_transit_mask(
-                tpf_fits.time,
+                tpf_used.time,
                 period,
                 t0,
                 duration_hours / 24.0,

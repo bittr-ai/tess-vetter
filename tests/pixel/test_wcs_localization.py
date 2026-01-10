@@ -136,6 +136,42 @@ def close_binary_tpf() -> TPFFitsData:
 class TestComputeDifferenceImageCentroid:
     """Tests for compute_difference_image_centroid function."""
 
+    def test_quality_flagged_cadences_are_ignored(self, single_star_tpf: TPFFitsData) -> None:
+        """Quality-flagged cadences should not poison the centroid computation."""
+        period = 5.0
+        t0 = 2458001.0
+        duration_days = 0.2
+        duration_hours = duration_days * 24.0
+
+        centroid_clean, _ = compute_difference_image_centroid(
+            tpf_fits=single_star_tpf,
+            period=period,
+            t0=t0,
+            duration_hours=duration_hours,
+        )
+
+        time = single_star_tpf.time
+        phase = ((time - t0) % period) / period
+        phase = np.where(phase > 0.5, phase - 1.0, phase)
+        in_transit = np.abs(phase) <= ((duration_days / 2.0) / period)
+        in_idx = np.where(in_transit)[0][:5]
+        out_idx = np.where(~in_transit)[0][:10]
+        bad_idx = np.unique(np.concatenate([in_idx, out_idx]))
+
+        single_star_tpf.quality[bad_idx] = 1
+        single_star_tpf.flux[bad_idx] = np.nan
+
+        centroid_bad, _ = compute_difference_image_centroid(
+            tpf_fits=single_star_tpf,
+            period=period,
+            t0=t0,
+            duration_hours=duration_hours,
+        )
+
+        assert np.all(np.isfinite(centroid_bad))
+        assert abs(centroid_bad[0] - centroid_clean[0]) < 0.5
+        assert abs(centroid_bad[1] - centroid_clean[1]) < 0.5
+
     def test_single_star_centroid_at_star_position(self, single_star_tpf: TPFFitsData) -> None:
         """Centroid should be at star position for single star with transit."""
         centroid, diff_image = compute_difference_image_centroid(
