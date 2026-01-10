@@ -1269,17 +1269,18 @@ def _fit_trapezoid_grid_search(
     for ratio in tflat_ttotal_ratios:
         t_flat_phase = ratio * t_total_phase
 
-        # Estimate depth analytically: median of central region
-        central_mask = np.abs(phase) < t_total_phase / 4
-        if np.sum(central_mask) < 3:
+        # Estimate depth by linear least squares for this shape:
+        # model = 1 - depth * shape(phase), with shape in [0, 1]
+        shape = 1.0 - _trapezoid_model(phase, t_flat_phase, t_total_phase, depth=1.0)
+        y = 1.0 - flux
+        denom = float(np.sum(shape**2))
+        if denom <= 0:
             continue
-
-        depth_estimate = 1 - float(np.median(flux[central_mask]))
-        if depth_estimate <= 0:
+        depth_estimate = float(np.sum(y * shape) / denom)
+        if not np.isfinite(depth_estimate) or depth_estimate <= 0:
             depth_estimate = 0.001
 
-        # Compute model and chi2
-        model = _trapezoid_model(phase, t_flat_phase, t_total_phase, depth_estimate)
+        model = 1.0 - depth_estimate * shape
         residuals = flux - model
         chi2 = float(np.sum(residuals**2))
 

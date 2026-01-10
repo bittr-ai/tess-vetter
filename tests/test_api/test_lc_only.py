@@ -121,6 +121,51 @@ def _inject_secondary_eclipse_window(
     return out
 
 
+def _inject_trapezoid_transit(
+    time: np.ndarray,
+    flux: np.ndarray,
+    *,
+    period_days: float,
+    t0_btjd: float,
+    duration_hours: float,
+    depth: float,
+    tflat_ttotal_ratio: float,
+) -> np.ndarray:
+    """Inject a trapezoid-shaped primary transit centered at phase 0.
+
+    This is tailored for `validation.lc_checks.check_v_shape`, which uses
+    phase in [-0.5, 0.5] with transit at 0.
+    """
+    out = flux.copy()
+    duration_days = duration_hours / 24.0
+    t_total_phase = duration_days / period_days
+    half_total = t_total_phase / 2.0
+    t_flat_phase = max(0.0, min(1.0, float(tflat_ttotal_ratio))) * t_total_phase
+    half_flat = t_flat_phase / 2.0
+    ingress = (t_total_phase - t_flat_phase) / 2.0
+
+    phase = ((time - t0_btjd) / period_days + 0.5) % 1.0 - 0.5
+    in_total = np.abs(phase) <= half_total
+
+    if ingress <= 0:
+        # Box-like (no ingress/egress)
+        out[in_total] *= 1.0 - depth
+        return out
+
+    abs_phase = np.abs(phase[in_total])
+    # Flat bottom region
+    flat = abs_phase <= half_flat
+    out_idx = np.where(in_total)[0]
+    out[out_idx[flat]] *= 1.0 - depth
+
+    # Ingress/egress regions: linear ramps from 0 depth at edge to full at flat boundary.
+    ramp = ~flat
+    ramp_dist = abs_phase[ramp] - half_flat
+    frac = 1.0 - np.clip(ramp_dist / ingress, 0.0, 1.0)
+    out[out_idx[ramp]] *= 1.0 - depth * frac
+    return out
+
+
 class TestOddEvenResult:
     """Tests for odd_even_result transit primitive."""
 
@@ -311,6 +356,36 @@ class TestDurationConsistency:
         assert result.passed is None
         assert result.details.get("_metrics_only") is True
 
+    def test_duration_consistency_density_scaling_shortens_for_dense_star(self) -> None:
+        eph = Ephemeris(period_days=10.0, t0_btjd=0.5, duration_hours=3.0)
+        # M-dwarf-like: high density in solar units (~11)
+        stellar_dense = StellarParams(radius=0.3, mass=0.3)
+
+        result = duration_consistency(eph, stellar=stellar_dense)
+
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
+        assert result.details.get("density_corrected") is True
+        assert result.details.get("stellar_density_solar") is not None
+        assert result.details["stellar_density_solar"] > 5.0
+        # Dense stars should have shorter expected durations than the solar fallback.
+        assert result.details["expected_duration_hours"] < result.details["expected_duration_solar"]
+
+    def test_duration_consistency_density_scaling_lengthens_for_giant(self) -> None:
+        eph = Ephemeris(period_days=10.0, t0_btjd=0.5, duration_hours=20.0)
+        # Giant-like: low density in solar units (~0.008)
+        stellar_giant = StellarParams(radius=5.0, mass=1.0)
+
+        result = duration_consistency(eph, stellar=stellar_giant)
+
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
+        assert result.details.get("density_corrected") is True
+        assert result.details.get("stellar_density_solar") is not None
+        assert result.details["stellar_density_solar"] < 0.05
+        # Giants should have longer expected durations than the solar fallback.
+        assert result.details["expected_duration_hours"] > result.details["expected_duration_solar"]
+
 
 class TestDepthStability:
     """Tests for V04 depth_stability check."""
@@ -343,6 +418,45 @@ class TestDepthStability:
         assert result.details.get("_metrics_only") is True
         assert "warnings" in result.details
 
+    def test_depth_stability_detects_outlier_epoch(self) -> None:
+        time, flux, flux_err = _make_synthetic_transit_lc(
+            n_points=12000,
+            period_days=3.5,
+            t0_btjd=0.5,
+            duration_hours=2.5,
+            depth=0.0,
+            noise_level=2e-4,
+            n_periods=14,
+        )
+        # Start with consistent depth, then make one epoch deeper.
+        flux = _inject_transits_by_epoch_parity(
+            time,
+            flux,
+            period_days=3.5,
+            t0_btjd=0.5,
+            duration_hours=2.5,
+            depth_odd=0.01,
+            depth_even=0.01,
+        )
+        # Make epoch 4 deeper by applying an extra multiplicative dip to those in-transit cadences.
+        period_days = 3.5
+        t0_btjd = 0.5
+        duration_days = 2.5 / 24.0
+        epoch = np.floor((time - t0_btjd + period_days / 2.0) / period_days).astype(int)
+        phase = ((time - t0_btjd) / period_days) % 1.0
+        phase_dist = np.minimum(phase, 1.0 - phase)
+        in_transit = phase_dist < 0.5 * (duration_days / period_days)
+        flux[(epoch == 4) & in_transit] *= 1.0 - 0.02
+
+        lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+        eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+        result = depth_stability(lc, eph)
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
+        warnings = result.details.get("warnings", [])
+        assert any("Outlier epochs detected" in str(w) for w in warnings)
+
 
 class TestVShape:
     """Tests for V05 v_shape check."""
@@ -361,6 +475,62 @@ class TestVShape:
         assert result.passed is None
         assert result.details.get("_metrics_only") is True
         assert 0.0 <= result.confidence <= 1.0
+
+    def test_v_shape_classifies_box_like_as_u_shape(self) -> None:
+        time, flux, flux_err = _make_synthetic_transit_lc(
+            n_points=12000,
+            period_days=3.5,
+            t0_btjd=0.5,
+            duration_hours=2.5,
+            depth=0.0,
+            noise_level=2e-4,
+            n_periods=12,
+        )
+        flux = _inject_trapezoid_transit(
+            time,
+            flux,
+            period_days=3.5,
+            t0_btjd=0.5,
+            duration_hours=2.5,
+            depth=0.01,
+            tflat_ttotal_ratio=0.9,
+        )
+        lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+        eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+        result = v_shape(lc, eph)
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
+        if result.details.get("classification") != "INSUFFICIENT_DATA":
+            assert result.details.get("classification") in ("U_SHAPE", "GRAZING")
+
+    def test_v_shape_classifies_triangle_like_as_v_shape(self) -> None:
+        time, flux, flux_err = _make_synthetic_transit_lc(
+            n_points=12000,
+            period_days=3.5,
+            t0_btjd=0.5,
+            duration_hours=2.5,
+            depth=0.0,
+            noise_level=0.0,
+            n_periods=12,
+        )
+        flux = _inject_trapezoid_transit(
+            time,
+            flux,
+            period_days=3.5,
+            t0_btjd=0.5,
+            duration_hours=2.5,
+            depth=0.03,
+            tflat_ttotal_ratio=0.0,
+        )
+        lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+        eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+        result = v_shape(lc, eph)
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
+        if result.details.get("classification") != "INSUFFICIENT_DATA":
+            assert result.details.get("classification") == "V_SHAPE"
 
 
 class TestVetLcOnly:
