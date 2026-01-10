@@ -27,7 +27,8 @@ def _inject_transit(
 
 def test_run_periodogram_ls_returns_finite_power() -> None:
     time = np.linspace(1500.0, 1527.0, 1000, dtype=np.float64)
-    flux = np.ones_like(time)
+    # Constant flux can yield NaNs/div0 in some normalized LS implementations.
+    flux = 1.0 + 1e-6 * np.sin(2 * np.pi * time / 2.5)
     flux_err = np.full_like(time, 1e-4)
 
     result = run_periodogram(
@@ -43,6 +44,31 @@ def test_run_periodogram_ls_returns_finite_power() -> None:
     assert result.method == "ls"
     assert len(result.peaks) == 1
     assert float(result.peaks[0].power) == float(result.peaks[0].power)  # not NaN
+
+
+def test_run_periodogram_ls_recovers_sinusoid_period() -> None:
+    time = np.linspace(1500.0, 1527.0, 4000, dtype=np.float64)
+    true_period = 5.0
+    amp = 2e-4
+    phase = 0.7
+    flux = 1.0 + amp * np.sin(2.0 * np.pi * time / true_period + phase)
+    flux_err = np.full_like(time, 1e-4)
+
+    result = run_periodogram(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        method="ls",
+        min_period=1.0,
+        max_period=10.0,
+        data_ref="lc:test:1:pdcsap",
+    )
+
+    assert result.method == "ls"
+    assert np.isfinite(result.best_period)
+    assert abs(result.best_period - true_period) / true_period < 0.05
+    assert result.best_t0 >= time.min()
+    assert result.best_t0 < time.min() + result.best_period
 
 
 def test_compute_transit_model_returns_metrics() -> None:

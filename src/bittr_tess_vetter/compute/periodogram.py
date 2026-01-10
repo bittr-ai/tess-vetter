@@ -703,6 +703,50 @@ def _estimate_snr(power: float, powers: NDArray[np.float64]) -> float:
     return min(999.0, max(0.0, float(snr)))
 
 
+def _ls_estimate_t0(
+    time: NDArray[np.float64],
+    flux: NDArray[np.float64],
+    period: float,
+) -> float:
+    """Estimate an epoch (t0) for an LS sinusoid peak.
+
+    We define `t0` as the epoch of maximum of the best-fit sinusoid at the
+    given period, returned in the same time basis as `time` (BTJD days).
+
+    Notes:
+    - For rotation/variability use cases, `t0` is mainly for phase-folding
+      visualization; absolute epoch is not physically meaningful.
+    - Uses a simple linear least-squares fit to `A*cos(wt) + B*sin(wt)`.
+    """
+    if len(time) < 2 or not np.isfinite(period) or period <= 0:
+        return float(time[0]) if len(time) else 0.0
+
+    w = 2.0 * np.pi / float(period)
+    x = np.column_stack([np.cos(w * time), np.sin(w * time)])
+    y = flux - np.nanmean(flux)
+
+    # Filter NaNs/infs conservatively (should be rare post-cleaning).
+    mask = np.isfinite(y) & np.all(np.isfinite(x), axis=1)
+    if np.sum(mask) < 3:
+        return float(time[0])
+
+    coef, *_ = np.linalg.lstsq(x[mask], y[mask], rcond=None)
+    a = float(coef[0])
+    b = float(coef[1])
+    amp = float(np.hypot(a, b))
+    if not np.isfinite(amp) or amp <= 0:
+        return float(time[0])
+
+    # y ≈ a*cos(wt) + b*sin(wt) = C*cos(wt + phi) with:
+    # a = C*cos(phi), b = -C*sin(phi)  => phi = atan2(-b, a)
+    phi = float(np.arctan2(-b, a))
+    t_max = -phi / w  # time of maximum for the cosine form
+
+    t_ref = float(np.min(time))
+    # Return t0 in [t_ref, t_ref + period) for stability/determinism.
+    return float(t_ref + ((t_max - t_ref) % period))
+
+
 # =============================================================================
 # Auto Periodogram (Updated to use TLS)
 # =============================================================================
@@ -890,10 +934,7 @@ def auto_periodogram(
         best_power = float(power[best_idx])
         best_snr = _estimate_snr(best_power, power)
 
-        # Estimate t0 from phase of best-fit sinusoid
-        angular_freq = 2.0 * np.pi / best_period
-        phase = np.angle(np.sum(flux * np.exp(-1j * angular_freq * time)))
-        best_t0 = float(time[0] + (phase / angular_freq) % best_period)
+        best_t0 = _ls_estimate_t0(time, flux, best_period)
 
         peaks = [
             PeriodogramPeak(
