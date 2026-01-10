@@ -265,7 +265,12 @@ def stitch_lightcurve_data(
 
     stitched = stitch_lightcurves(lc_list, normalization_policy_version=normalization_policy_version)
 
-    valid_mask = (stitched.quality == 0) & np.isfinite(stitched.flux)
+    valid_mask = (
+        (stitched.quality == 0)
+        & np.isfinite(stitched.time)
+        & np.isfinite(stitched.flux)
+        & np.isfinite(stitched.flux_err)
+    )
 
     cadence_seconds = _infer_cadence_seconds(stitched.time, stitched.sector, default_seconds=120.0)
 

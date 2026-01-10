@@ -119,21 +119,33 @@ class LightCurveData:
         """Total observation duration in days."""
         if self.n_points == 0:
             return 0.0
-        return float(self.time[-1] - self.time[0])
+        if self.n_valid == 0:
+            return 0.0
+        finite = self.valid_mask & np.isfinite(self.time)
+        if not np.any(finite):
+            return 0.0
+        t = self.time[finite]
+        return float(np.max(t) - np.min(t))
 
     @property
     def median_flux(self) -> float:
         """Median flux of valid data points."""
         if self.n_valid == 0:
             return float("nan")
-        return float(np.median(self.flux[self.valid_mask]))
+        finite = self.valid_mask & np.isfinite(self.flux)
+        if not np.any(finite):
+            return float("nan")
+        return float(np.median(self.flux[finite]))
 
     @property
     def flux_std(self) -> float:
         """Standard deviation of flux for valid data points."""
         if self.n_valid == 0:
             return float("nan")
-        return float(np.std(self.flux[self.valid_mask]))
+        finite = self.valid_mask & np.isfinite(self.flux)
+        if not np.any(finite):
+            return float("nan")
+        return float(np.std(self.flux[finite]))
 
     @property
     def gap_fraction(self) -> float:
@@ -146,4 +158,3 @@ class LightCurveData:
     def quality_flags_present(self) -> list[int]:
         """List of unique quality flag values present in data."""
         return sorted({int(q) for q in np.unique(self.quality)})
-

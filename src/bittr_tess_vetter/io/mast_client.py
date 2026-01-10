@@ -625,10 +625,12 @@ class MASTClient:
 
         # Determine cadence from time differences
         if len(time) > 1:
-            # Use median time difference to determine cadence
+            # Use median time difference to determine cadence.
+            # Prefer valid samples, but always drop non-finite dt values.
             dt = np.diff(time[valid_mask]) if np.any(valid_mask) else np.diff(time)
+            dt = dt[np.isfinite(dt) & (dt > 0)]
             cadence_days = float(np.median(dt)) if len(dt) > 0 else 0.0
-            cadence_seconds = cadence_days * 86400.0
+            cadence_seconds = cadence_days * 86400.0 if cadence_days > 0 else 120.0
         else:
             cadence_seconds = 120.0  # Default to 2-min cadence
 
