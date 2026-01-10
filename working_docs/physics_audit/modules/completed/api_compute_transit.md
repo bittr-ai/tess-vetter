@@ -28,7 +28,17 @@ Transit masking + simple depth metrics are used by almost every check (odd/even,
 ### Correctness
 
 - [x] Mask centers transit at phase 0 consistently (phase in [-0.5, 0.5])
-- [ ] Consistent definition of “in-transit” window across modules
+- [x] Consistent definition of “in-transit” window across modules (both use `abs(phase) < duration/(2*period)`)
+
+## Cross-module consistency note
+
+- There are two transit-mask entry points:
+  - `compute/transit.get_transit_mask(time, period, t0, duration_days)`
+  - `validation/base.get_in_transit_mask(time, period, t0, duration_hours, buffer_factor=1.0)`
+- They are consistent in geometry:
+  - `compute/transit`: `abs(phase) < duration_days/(2*period)`
+  - `validation/base`: `abs(phase) < (duration_hours/24)/(2*period)` when `buffer_factor=1.0`
+- The only difference is the **duration unit** (days vs hours), which is documented above as the main footgun.
 
 ### Tests
 

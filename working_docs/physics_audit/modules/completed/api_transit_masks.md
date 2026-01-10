@@ -12,12 +12,12 @@ Applies: `working_docs/physics_audit/REVIEW_TEMPLATE.md`
 
 ### Units + conventions
 
-- [ ] Phase definition explicit and consistent with `validation.base.get_in_transit_mask`
+- [x] Phase definition explicit and consistent with `validation.base.get_in_transit_mask` (phase in [-0.5, 0.5], transit at 0)
 
 ### Numerical stability / edge cases
 
-- [ ] Works with irregular cadence and large gaps
-- [ ] Correct behavior for very long/short durations
+- [x] Works with irregular cadence and large gaps (masking is phase-based; `count_transits` uses absolute time windows)
+- [x] Correct behavior for very long/short durations (validated by unit tests + min-points gates)
 
 ### Tests
 
