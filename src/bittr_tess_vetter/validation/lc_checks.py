@@ -804,8 +804,10 @@ def check_duration_consistency(
 ) -> VetterCheckResult:
     """V03: Check transit duration vs stellar density expectation.
 
-    Transit duration depends on stellar density. Unphysical durations
-    (too long or too short) indicate false positive.
+    Transit duration depends on stellar density. Large mismatches between the
+    observed duration and a simple expectation can indicate host/parameter
+    mismatch or a non-planet scenario, but this function is metrics-only and
+    does not apply policy.
 
     Expected: T_dur ∝ P^(1/3) / ρ_star^(1/3)
 
@@ -846,15 +848,10 @@ def check_duration_consistency(
     else:
         expected_duration_hours = expected_duration_solar
 
-    # Allow factor of 3 uncertainty in either direction
-    # (accounts for impact parameter, eccentricity, etc.)
     ratio = (
         duration_hours / expected_duration_hours if expected_duration_hours > 0 else float("inf")
     )
-    passed = 0.3 < ratio < 3.0
-
-    # Marginal if ratio is between 0.2-0.3 or 3-5
-    marginal = (0.2 < ratio < 0.3) or (3.0 < ratio < 5.0)
+    warnings: list[str] = []
 
     # Confidence depends on whether we have stellar parameters
     if density_corrected:
@@ -863,9 +860,6 @@ def check_duration_consistency(
         confidence = 0.5  # Moderate confidence with some stellar info
     else:
         confidence = 0.2  # Low confidence without stellar info
-
-    if marginal:
-        confidence *= 0.7
 
     # Build detailed result
     details = {
@@ -892,9 +886,9 @@ def check_duration_consistency(
     return VetterCheckResult(
         id="V03",
         name="duration_consistency",
-        passed=passed,
+        passed=None,
         confidence=round(confidence, 3),
-        details=details,
+        details={**details, "warnings": warnings, "_metrics_only": True},
     )
 
 
