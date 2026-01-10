@@ -66,6 +66,78 @@ class TestApertureFamilyResult:
 class TestComputeApertureFamilyDepthCurve:
     """Tests for compute_aperture_family_depth_curve function."""
 
+    def test_quality_flagged_cadences_are_ignored(self) -> None:
+        """Quality-flagged cadences should not corrupt the measured depth curve."""
+        period = 5.0
+        t0 = 2458001.0
+        duration_days = 0.2
+
+        tpf_clean = make_synthetic_tpf_fits(
+            shape=(600, 11, 11),
+            stars=[StarSpec(row=5.0, col=5.0, flux=10000.0)],
+            transit_spec=TransitSpec(
+                star_idx=0,
+                depth_frac=0.01,
+                period=period,
+                t0=t0,
+                duration_days=duration_days,
+            ),
+            noise_level=30.0,
+            seed=123,
+        )
+        clean = compute_aperture_family_depth_curve(
+            tpf_fits=tpf_clean,
+            period=period,
+            t0=t0,
+            duration_hours=duration_days * 24.0,
+        )
+
+        tpf_bad = make_synthetic_tpf_fits(
+            shape=(600, 11, 11),
+            stars=[StarSpec(row=5.0, col=5.0, flux=10000.0)],
+            transit_spec=TransitSpec(
+                star_idx=0,
+                depth_frac=0.01,
+                period=period,
+                t0=t0,
+                duration_days=duration_days,
+            ),
+            noise_level=30.0,
+            seed=123,
+        )
+
+        # Flag a mix of in-transit and out-of-transit cadences as "bad", and poison flux.
+        time = tpf_bad.time
+        phase = ((time - t0) % period) / period
+        phase = np.where(phase > 0.5, phase - 1.0, phase)
+        in_transit = np.abs(phase) <= ((duration_days / 2.0) / period)
+        in_idx = np.where(in_transit)[0][:5]
+        out_idx = np.where(~in_transit)[0][:15]
+        bad_idx = np.unique(np.concatenate([in_idx, out_idx]))
+
+        tpf_bad.quality[bad_idx] = 1
+        tpf_bad.flux[bad_idx] = np.nan
+
+        bad = compute_aperture_family_depth_curve(
+            tpf_fits=tpf_bad,
+            period=period,
+            t0=t0,
+            duration_hours=duration_days * 24.0,
+        )
+
+        assert any("Dropped" in w for w in bad.warnings)
+
+        # With the bad cadences removed, the curve should remain broadly consistent.
+        clean_depths = np.array([clean.depths_by_radius_ppm[r] for r in DEFAULT_RADII_PX])
+        bad_depths = np.array([bad.depths_by_radius_ppm[r] for r in DEFAULT_RADII_PX])
+        finite = np.isfinite(clean_depths) & np.isfinite(bad_depths)
+        assert int(np.sum(finite)) >= 3
+
+        # Allow for some drift due to fewer points, but reject gross corruption.
+        denom = np.maximum(np.abs(clean_depths[finite]), 1.0)
+        rel_diff = np.nanmedian(np.abs(clean_depths[finite] - bad_depths[finite]) / denom)
+        assert rel_diff < 0.25
+
     def test_single_star_depth_curve_structure(self) -> None:
         """Single star transit should produce valid depth curve structure."""
         # Create synthetic TPF with single star at center

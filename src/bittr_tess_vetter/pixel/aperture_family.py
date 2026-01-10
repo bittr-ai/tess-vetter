@@ -18,7 +18,7 @@ Usage:
     result = compute_aperture_family_depth_curve(
         tpf_fits=tpf_data,
         period=5.0,
-        t0=2458001.0,
+        t0=1345.0,
         duration_hours=4.0,
     )
 
@@ -202,8 +202,27 @@ def _extract_aperture_lightcurve(
     # Sum flux within aperture for each cadence
     # flux has shape (n_cadences, n_rows, n_cols)
     # aperture_mask has shape (n_rows, n_cols)
-    summed = np.sum(flux[:, aperture_mask], axis=1)
+    # Use nansum so a single NaN pixel does not poison the cadence sum.
+    summed = np.nansum(flux[:, aperture_mask], axis=1)
     return summed.astype(np.float64)
+
+
+def _default_cadence_mask(
+    time: np.ndarray[Any, np.dtype[np.floating[Any]]],
+    flux: np.ndarray[Any, np.dtype[np.floating[Any]]],
+    quality: np.ndarray[Any, np.dtype[np.integer[Any]]],
+) -> np.ndarray[Any, np.dtype[np.bool_]]:
+    """Build a conservative cadence mask for pixel-level depth computations.
+
+    Filters out cadences that are known-bad or cannot support robust summary
+    statistics.
+    """
+    mask = (quality == 0) & np.isfinite(time)
+
+    # Require at least some finite pixels in the stamp for the cadence to be usable.
+    cadence_has_finite = np.any(np.isfinite(flux.reshape(flux.shape[0], -1)), axis=1)
+    mask &= cadence_has_finite
+    return mask
 
 
 def _measure_transit_depth(
@@ -325,7 +344,7 @@ def compute_aperture_family_depth_curve(
         >>> result = compute_aperture_family_depth_curve(
         ...     tpf_fits=tpf_data,
         ...     period=5.0,
-        ...     t0=2458001.0,
+        ...     t0=1345.0,
         ...     duration_hours=4.0,
         ... )
         >>> print(result.blend_indicator)
@@ -355,8 +374,13 @@ def compute_aperture_family_depth_curve(
         except Exception:
             pass
 
-    time = tpf_fits.time
-    flux = tpf_fits.flux
+    cadence_mask = _default_cadence_mask(tpf_fits.time, tpf_fits.flux, tpf_fits.quality)
+    if int(np.sum(cadence_mask)) < int(tpf_fits.time.shape[0]):
+        n_dropped = int(tpf_fits.time.shape[0]) - int(np.sum(cadence_mask))
+        warnings.append(f"Dropped {n_dropped} cadences (quality!=0 or non-finite)")
+
+    time = tpf_fits.time[cadence_mask]
+    flux = tpf_fits.flux[cadence_mask]
     duration_days = duration_hours / 24.0
 
     # Compute transit masks
