@@ -60,6 +60,7 @@ def compute_systematics_proxy(
     *,
     time: np.ndarray,
     flux: np.ndarray,
+    valid_mask: np.ndarray | None = None,
     period_days: float,
     t0_btjd: float,
     duration_hours: float,
@@ -70,7 +71,21 @@ def compute_systematics_proxy(
     """
     time = np.asarray(time, dtype=np.float64)
     flux = np.asarray(flux, dtype=np.float64)
-    if time.size != flux.size or time.size < 200:
+    if time.size != flux.size:
+        return None
+
+    if valid_mask is None:
+        mask = np.isfinite(time) & np.isfinite(flux)
+    else:
+        vm = np.asarray(valid_mask, dtype=bool)
+        if vm.shape != time.shape:
+            return None
+        mask = vm & np.isfinite(time) & np.isfinite(flux)
+
+    time = time[mask]
+    flux = flux[mask]
+
+    if time.size < 200:
         return None
 
     in_mask = get_in_transit_mask(time, period_days, t0_btjd, duration_hours)
@@ -121,11 +136,30 @@ def compute_systematics_proxy(
     # Step/discontinuity proxy: max consecutive step in units of oot robust sigma.
     sigma = _robust_sigma(oot_flux)
     max_step_sigma: float | None = None
-    if np.isfinite(sigma) and sigma > 0 and flux.size >= 3:
-        diffs = np.abs(np.diff(flux.astype(np.float64)))
-        diffs = diffs[np.isfinite(diffs)]
-        if diffs.size:
-            max_step_sigma = float(np.max(diffs) / float(sigma))
+    if int(np.sum(out_mask)) >= 10:
+        # Step/discontinuity proxy should not be dominated by real transit edges.
+        # Compute max step on *out-of-transit* samples, and ignore large cadence gaps.
+        t_oot = time[out_mask]
+        f_oot = flux[out_mask]
+        if t_oot.size >= 3:
+            order = np.argsort(t_oot)
+            t_oot = t_oot[order]
+            f_oot = f_oot[order]
+            dt = np.diff(t_oot)
+            df_signed = np.diff(f_oot)
+
+            # Ignore diffs spanning large gaps (e.g., downlink gaps) that can inflate step metrics.
+            med_dt = float(np.median(dt)) if dt.size else float("nan")
+            if np.isfinite(med_dt) and med_dt > 0:
+                ok = dt <= (5.0 * med_dt)
+                df_signed = df_signed[ok]
+            df_signed = df_signed[np.isfinite(df_signed)]
+
+            # Use a *high-frequency* noise scale so large steps remain significant even if
+            # the OOT distribution is bimodal (step inflates oot MAD).
+            sigma_step = _robust_sigma(df_signed)
+            if np.isfinite(sigma_step) and sigma_step > 0:
+                max_step_sigma = float(np.max(np.abs(df_signed)) / float(sigma_step))
 
     # Phase-shift null (cheap): evaluate depth at a few off-phase offsets (in units of period).
     # A real transit should not persist at unrelated phases.
