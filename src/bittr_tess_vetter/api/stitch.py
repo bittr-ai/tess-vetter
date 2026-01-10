@@ -21,6 +21,37 @@ from numpy.typing import NDArray
 
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 
+
+def _infer_cadence_seconds(
+    time: NDArray[np.floating[Any]],
+    sector: NDArray[np.integer[Any]],
+    *,
+    default_seconds: float = 120.0,
+) -> float:
+    """Infer a representative cadence (seconds) for a stitched light curve.
+
+    Uses within-sector adjacent cadence deltas only (after chronological sort) to
+    avoid cross-sector boundary gaps contaminating the estimate.
+
+    Notes:
+    - If multiple sectors have different cadences (e.g., 20s vs 120s), this
+      returns the median of within-sector cadence deltas across the full series,
+      which approximates the dominant cadence.
+    - Callers should treat cadence_seconds as informational; stitched series can
+      be mixed-cadence.
+    """
+    if len(time) < 2:
+        return float(default_seconds)
+
+    dt = np.diff(time)
+    same_sector = sector[1:] == sector[:-1]
+    # Ignore large gaps (e.g., orbit downlinks) and cross-sector boundaries.
+    short = dt[(dt > 0) & (dt < 1.0) & same_sector]
+    if len(short) == 0:
+        return float(default_seconds)
+    return float(np.median(short) * 86400.0)
+
+
 @dataclass(frozen=True)
 class SectorDiagnostics:
     """Per-input diagnostics recorded during stitching."""
@@ -236,12 +267,7 @@ def stitch_lightcurve_data(
 
     valid_mask = (stitched.quality == 0) & np.isfinite(stitched.flux)
 
-    if len(stitched.time) > 1:
-        time_diffs = np.diff(stitched.time)
-        short_diffs = time_diffs[time_diffs < 1.0]
-        cadence_seconds = float(np.median(short_diffs) * 86400) if len(short_diffs) > 0 else 120.0
-    else:
-        cadence_seconds = 120.0
+    cadence_seconds = _infer_cadence_seconds(stitched.time, stitched.sector, default_seconds=120.0)
 
     stitched_lc_data = LightCurveData(
         time=np.asarray(stitched.time, dtype=np.float64),

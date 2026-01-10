@@ -78,3 +78,30 @@ def test_stitch_lightcurve_data_builds_valid_mask_and_cadence() -> None:
     # valid points: quality==0 AND finite flux
     assert stitched_lc.n_valid == 4
     assert stitched.normalization_policy_version == "v1"
+
+
+def test_stitch_lightcurve_data_cadence_ignores_cross_sector_gaps() -> None:
+    lc1 = LightCurveData(
+        time=np.array([1.0, 1.0 + 120 / 86400, 1.0 + 240 / 86400], dtype=np.float64),
+        flux=np.array([1.0, 1.0, 1.0], dtype=np.float64),
+        flux_err=np.array([0.001, 0.001, 0.001], dtype=np.float64),
+        quality=np.array([0, 0, 0], dtype=np.int32),
+        valid_mask=np.array([True, True, True], dtype=np.bool_),
+        tic_id=1,
+        sector=1,
+        cadence_seconds=120.0,
+    )
+    # Large gap between sectors, but within-sector cadence is still 120s.
+    lc2 = LightCurveData(
+        time=np.array([100.0, 100.0 + 120 / 86400, 100.0 + 240 / 86400], dtype=np.float64),
+        flux=np.array([1.0, 1.0, 1.0], dtype=np.float64),
+        flux_err=np.array([0.001, 0.001, 0.001], dtype=np.float64),
+        quality=np.array([0, 0, 0], dtype=np.int32),
+        valid_mask=np.array([True, True, True], dtype=np.bool_),
+        tic_id=1,
+        sector=2,
+        cadence_seconds=120.0,
+    )
+
+    stitched_lc, _ = stitch_lightcurve_data([lc1, lc2], tic_id=1)
+    assert np.isclose(stitched_lc.cadence_seconds, 120.0, atol=1e-3)
