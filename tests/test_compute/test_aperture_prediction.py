@@ -435,7 +435,6 @@ class TestDetectApertureConflict:
         assert conflict.localization_best == "target"
         assert conflict.aperture_best == "neighbor"
         assert conflict.conflict_type == "CONFLICT_APERTURE_LOCALIZATION"
-        assert conflict.recommended_verdict == "AMBIGUOUS"
 
     def test_returns_none_for_empty_predictions(self):
         """Empty predictions should return None."""

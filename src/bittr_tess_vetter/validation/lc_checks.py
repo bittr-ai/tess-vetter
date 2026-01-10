@@ -288,7 +288,7 @@ def check_odd_even_depth(
         config: Optional configuration overrides
 
     Returns:
-        VetterCheckResult with pass if depths are consistent
+        VetterCheckResult with odd/even depth metrics (metrics-only; no pass/fail)
 
     References:
         - Thompson et al. 2018, ApJS 235, 38 (Kepler Robovetter odd/even test)

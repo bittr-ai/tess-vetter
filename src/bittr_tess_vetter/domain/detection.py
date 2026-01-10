@@ -66,7 +66,7 @@ class TransitCandidate(FrozenModel):
 class VetterCheckResult(FrozenModel):
     """Result of a single vetting check.
 
-    Each check produces one of these with pass/fail status,
+    Each check produces one of these with metrics-only status,
     confidence, and check-specific details.
 
     Check IDs:

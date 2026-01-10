@@ -379,12 +379,12 @@ class TestEvidenceBlock:
         assert block["source"] == "joint_multi_sector_localization"
         assert block["version"] == "3.2.0"
         assert block["verdict"] == "ON_TARGET"
-        assert block["confidence_level"] in ["high", "moderate", "low"]
         assert "key_metrics" in block
-        assert "flags" in block
+        assert "warnings" in block
+        assert "details_ref" in block
 
     def test_evidence_block_high_confidence(self, sample_sector_evidence: SectorEvidence) -> None:
-        """High delta_log_likelihood produces 'high' confidence."""
+        """Evidence block does not add derived policy fields."""
         result = JointInferenceResult(
             joint_best_source_id="tic:123",
             verdict="ON_TARGET",
@@ -402,10 +402,11 @@ class TestEvidenceBlock:
         )
 
         block = to_evidence_block(result)
-        assert block["confidence_level"] == "high"
+        assert "confidence_level" not in block
+        assert "flags" not in block
 
     def test_evidence_block_low_confidence(self, sample_sector_evidence: SectorEvidence) -> None:
-        """Low delta_log_likelihood produces 'low' confidence."""
+        """Evidence block preserves raw verdict and metrics regardless of thresholds."""
         result = JointInferenceResult(
             joint_best_source_id="tic:123",
             verdict="AMBIGUOUS",
@@ -423,10 +424,11 @@ class TestEvidenceBlock:
         )
 
         block = to_evidence_block(result)
-        assert block["confidence_level"] == "low"
+        assert block["verdict"] == "AMBIGUOUS"
+        assert block["key_metrics"]["delta_log_likelihood"] == 1.0
 
     def test_evidence_block_flags_flipping(self, sample_sector_evidence: SectorEvidence) -> None:
-        """Flipping consistency produces LOCALIZATION_INCONSISTENT flag."""
+        """Evidence block does not add derived flags."""
         result = JointInferenceResult(
             joint_best_source_id="tic:123",
             verdict="AMBIGUOUS",
@@ -444,10 +446,11 @@ class TestEvidenceBlock:
         )
 
         block = to_evidence_block(result)
-        assert "LOCALIZATION_INCONSISTENT" in block["flags"]
+        assert "flags" not in block
+        assert block["verdict"] == "AMBIGUOUS"
 
     def test_evidence_block_flags_off_target(self, sample_sector_evidence: SectorEvidence) -> None:
-        """OFF_TARGET verdict produces OFF_TARGET_HOST flag."""
+        """OFF_TARGET verdict is preserved without adding derived flags."""
         result = JointInferenceResult(
             joint_best_source_id="gaia_dr3:999",
             verdict="OFF_TARGET",
@@ -465,7 +468,8 @@ class TestEvidenceBlock:
         )
 
         block = to_evidence_block(result)
-        assert "OFF_TARGET_HOST" in block["flags"]
+        assert "flags" not in block
+        assert block["verdict"] == "OFF_TARGET"
 
     def test_evidence_block_key_metrics(self, sample_joint_result: JointInferenceResult) -> None:
         """Evidence block includes expected key metrics."""

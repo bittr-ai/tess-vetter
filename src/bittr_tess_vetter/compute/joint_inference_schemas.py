@@ -26,8 +26,8 @@ from typing import Any, Literal
 import numpy as np
 
 from .pixel_host_hypotheses import (
-    FLIP_RATE_FAIL_THRESHOLD,
-    FLIP_RATE_WARN_THRESHOLD,
+    FLIP_RATE_MIXED_THRESHOLD,
+    FLIP_RATE_UNSTABLE_THRESHOLD,
     MARGIN_RESOLVE_THRESHOLD,
     HypothesisScore,
 )
@@ -368,38 +368,15 @@ def to_evidence_block(result: JointInferenceResult) -> dict[str, Any]:
     dict[str, Any]
         Evidence block with standardized keys:
         - "source": evidence source identifier
-        - "verdict": localization verdict
-        - "confidence_level": qualitative confidence
-        - "key_metrics": numeric metrics for decision
-        - "flags": list of guardrail/warning flags
+        - "verdict": localization verdict (categorical output of the inference)
+        - "key_metrics": numeric metrics from the inference
+        - "warnings": raw warnings emitted by the inference
         - "details_ref": blob reference for full details
     """
-    # Determine confidence level from delta_log_likelihood
-    if result.delta_log_likelihood >= 5.0:
-        confidence_level = "high"
-    elif result.delta_log_likelihood >= 2.0:
-        confidence_level = "moderate"
-    else:
-        confidence_level = "low"
-
-    # Collect flags
-    flags: list[str] = []
-    if result.consistency_verdict == "flipping":
-        flags.append("LOCALIZATION_INCONSISTENT")
-    elif result.consistency_verdict == "mixed":
-        flags.append("LOCALIZATION_MIXED")
-    if result.verdict == "AMBIGUOUS":
-        flags.append("HOST_AMBIGUOUS")
-    if result.verdict == "OFF_TARGET":
-        flags.append("OFF_TARGET_HOST")
-    if result.warnings:
-        flags.extend(result.warnings)
-
     return {
         "source": "joint_multi_sector_localization",
         "version": "3.2.0",
         "verdict": result.verdict,
-        "confidence_level": confidence_level,
         "key_metrics": {
             "joint_best_source_id": result.joint_best_source_id,
             "delta_log_likelihood": result.delta_log_likelihood,
@@ -408,7 +385,7 @@ def to_evidence_block(result: JointInferenceResult) -> dict[str, Any]:
             "resolved_probability": result.resolved_probability,
             "calibration_version": result.calibration_version,
         },
-        "flags": flags,
+        "warnings": list(result.warnings or []),
         "details_ref": result.blobs.get("per_sector_table"),
     }
 
@@ -502,7 +479,7 @@ def _create_joint_result_vote_mode(
     # Determine consistency verdict
     if flip_rate >= flip_rate_threshold:
         consistency_verdict = "flipping"
-    elif flip_rate >= FLIP_RATE_WARN_THRESHOLD:
+    elif flip_rate >= FLIP_RATE_MIXED_THRESHOLD:
         consistency_verdict = "mixed"
     else:
         consistency_verdict = "stable"
@@ -624,7 +601,7 @@ def _create_joint_result_joint_mode(
     # Determine consistency verdict
     if flip_rate >= flip_rate_threshold:
         consistency_verdict = "flipping"
-    elif flip_rate >= FLIP_RATE_WARN_THRESHOLD:
+    elif flip_rate >= FLIP_RATE_MIXED_THRESHOLD:
         consistency_verdict = "mixed"
     else:
         consistency_verdict = "stable"
@@ -667,7 +644,7 @@ def create_joint_result_from_sectors(
     hypotheses: list[str],
     *,
     margin_threshold: float = MARGIN_RESOLVE_THRESHOLD,
-    flip_rate_threshold: float = FLIP_RATE_FAIL_THRESHOLD,
+    flip_rate_threshold: float = FLIP_RATE_UNSTABLE_THRESHOLD,
     inference_mode: InferenceMode = "vote",
     downweight_high_residual: bool = True,
 ) -> JointInferenceResult:
@@ -691,7 +668,7 @@ def create_joint_result_from_sectors(
         Default is MARGIN_RESOLVE_THRESHOLD (2.0).
     flip_rate_threshold : float, optional
         Flip rate above which consistency is "flipping".
-        Default is FLIP_RATE_FAIL_THRESHOLD (0.5).
+        Default is FLIP_RATE_UNSTABLE_THRESHOLD (0.5).
     inference_mode : InferenceMode, optional
         Inference mode to use:
         - "vote": Phase 2 weighted voting (default, backward compatible)

@@ -127,7 +127,7 @@ def modshift(
         config: Optional configuration overrides (reserved)
 
     Returns:
-        CheckResult with ModShift metrics and pass/fail status
+        CheckResult with ModShift metrics (metrics-only; no pass/fail)
 
     Novelty: standard
 
@@ -191,7 +191,7 @@ def sweet(
         config: Optional configuration overrides (reserved)
 
     Returns:
-        CheckResult with SWEET metrics and pass/fail status
+        CheckResult with SWEET metrics (metrics-only; no pass/fail)
 
     Novelty: standard
 
@@ -241,7 +241,7 @@ def vet_exovetter(
         enabled: Set of check IDs to run (e.g., {"V11", "V12"}).
             If None, runs all checks.
         config: Per-check configuration override, keyed by check ID.
-            Example: {"V11": {"threshold": 0.3}, "V12": {"threshold": 4.0}}
+            (reserved for future use; interpretation thresholds belong in the host application)
 
     Returns:
         List of CheckResult objects for each enabled check

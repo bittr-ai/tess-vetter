@@ -134,7 +134,7 @@ def odd_even_depth(
         ephemeris: Transit ephemeris (period, t0, duration)
 
     Returns:
-        CheckResult with pass if depths are consistent
+        CheckResult with odd/even depth metrics (metrics-only; no pass/fail)
 
     Novelty: standard
 

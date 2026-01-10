@@ -90,7 +90,6 @@ class ApertureConflict:
         margin: How strong the disagreement is (chi2 difference or similar).
         significance: Statistical significance (p-value or similar).
         explanation: Human-readable explanation of the conflict.
-        recommended_verdict: Recommended verdict given the conflict.
     """
 
     localization_best: str
@@ -99,7 +98,6 @@ class ApertureConflict:
     margin: float = 0.0
     significance: float = 0.0
     explanation: str = ""
-    recommended_verdict: str = "AMBIGUOUS"
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -110,7 +108,6 @@ class ApertureConflict:
             "margin": self.margin,
             "significance": self.significance,
             "explanation": self.explanation,
-            "recommended_verdict": self.recommended_verdict,
         }
 
 
@@ -615,10 +612,6 @@ def detect_aperture_conflict(
         f"Aperture fit p-value for localization best: {significance:.4f}."
     )
 
-    # Recommended verdict: always AMBIGUOUS for Phase 3.4
-    # Future: could differentiate based on calibration (significance < chi2_threshold)
-    recommended_verdict = "AMBIGUOUS"
-
     return ApertureConflict(
         localization_best=localization_best,
         aperture_best=aperture_best,
@@ -626,5 +619,4 @@ def detect_aperture_conflict(
         margin=margin,
         significance=significance,
         explanation=explanation,
-        recommended_verdict=recommended_verdict,
     )

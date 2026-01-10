@@ -39,8 +39,8 @@ __all__ = [
     "ApertureHypothesisFit",
     # Thresholds
     "MARGIN_RESOLVE_THRESHOLD",
-    "FLIP_RATE_WARN_THRESHOLD",
-    "FLIP_RATE_FAIL_THRESHOLD",
+    "FLIP_RATE_MIXED_THRESHOLD",
+    "FLIP_RATE_UNSTABLE_THRESHOLD",
 ]
 
 # ==============================================================================
@@ -54,13 +54,13 @@ If the margin (best vs runner-up) is below this threshold, the result
 is considered 'ambiguous' and no host is preferred.
 """
 
-FLIP_RATE_WARN_THRESHOLD = 0.3
+FLIP_RATE_MIXED_THRESHOLD = 0.3
 """Flip rate above which multi-sector consistency is 'mixed'.
 
 Flip rate = fraction of sectors where best_source_id != consensus_best_source_id.
 """
 
-FLIP_RATE_FAIL_THRESHOLD = 0.5
+FLIP_RATE_UNSTABLE_THRESHOLD = 0.5
 """Flip rate above which multi-sector consistency is 'flipping'.
 
 This indicates the host preference is unstable across sectors.
@@ -129,7 +129,6 @@ class MultiSectorConsensus(TypedDict):
     flip_rate: float
     n_sectors_total: int
     n_sectors_supporting_best: int
-    localization_inconsistent: bool
 
 
 class ApertureHypothesisFit(TypedDict):
@@ -315,8 +314,8 @@ def aggregate_multi_sector(
     per_sector_results: list[dict[str, Any]],
     *,
     margin_threshold: float = MARGIN_RESOLVE_THRESHOLD,
-    flip_rate_warn: float = FLIP_RATE_WARN_THRESHOLD,
-    flip_rate_fail: float = FLIP_RATE_FAIL_THRESHOLD,
+    flip_rate_mixed: float = FLIP_RATE_MIXED_THRESHOLD,
+    flip_rate_unstable: float = FLIP_RATE_UNSTABLE_THRESHOLD,
 ) -> MultiSectorConsensus:
     """Aggregate per-sector hypothesis rankings into a multi-sector consensus.
 
@@ -335,12 +334,12 @@ def aggregate_multi_sector(
     margin_threshold : float, optional
         Minimum margin to consider a sector's preference "confident".
         Default is MARGIN_RESOLVE_THRESHOLD (2.0).
-    flip_rate_warn : float, optional
+    flip_rate_mixed : float, optional
         Flip rate above which disagreement_flag becomes "mixed".
-        Default is FLIP_RATE_WARN_THRESHOLD (0.3).
-    flip_rate_fail : float, optional
+        Default is FLIP_RATE_MIXED_THRESHOLD (0.3).
+    flip_rate_unstable : float, optional
         Flip rate above which disagreement_flag becomes "flipping".
-        Default is FLIP_RATE_FAIL_THRESHOLD (0.5).
+        Default is FLIP_RATE_UNSTABLE_THRESHOLD (0.5).
 
     Returns
     -------
@@ -352,7 +351,6 @@ def aggregate_multi_sector(
         - flip_rate: fraction of sectors disagreeing with consensus
         - n_sectors_total: total number of sectors provided
         - n_sectors_supporting_best: sectors agreeing with consensus
-        - localization_inconsistent: True if flagged for guardrails
 
     Notes
     -----
@@ -388,7 +386,6 @@ def aggregate_multi_sector(
             flip_rate=0.0,
             n_sectors_total=0,
             n_sectors_supporting_best=0,
-            localization_inconsistent=False,
         )
 
     # Filter to valid sectors only
@@ -404,7 +401,6 @@ def aggregate_multi_sector(
             flip_rate=0.0,
             n_sectors_total=n_sectors_total,
             n_sectors_supporting_best=0,
-            localization_inconsistent=False,
         )
 
     # Collect all unique source_ids and sum their delta_loss across sectors
@@ -450,17 +446,12 @@ def aggregate_multi_sector(
         flip_rate = flips / len(confident_sectors)
 
     # Determine disagreement flag
-    if flip_rate >= flip_rate_fail:
+    if flip_rate >= flip_rate_unstable:
         disagreement_flag = "flipping"
-    elif flip_rate >= flip_rate_warn:
+    elif flip_rate >= flip_rate_mixed:
         disagreement_flag = "mixed"
     else:
         disagreement_flag = "stable"
-
-    # Flag localization_inconsistent if flipping or if margin is too low
-    localization_inconsistent = disagreement_flag == "flipping" or (
-        consensus_margin_val < margin_threshold and len(valid_sectors) > 1
-    )
 
     return MultiSectorConsensus(
         consensus_best_source_id=consensus_best,
@@ -469,7 +460,6 @@ def aggregate_multi_sector(
         flip_rate=flip_rate,
         n_sectors_total=n_sectors_total,
         n_sectors_supporting_best=n_supporting,
-        localization_inconsistent=localization_inconsistent,
     )
 
 

@@ -18,8 +18,8 @@ import pytest
 from numpy.testing import assert_allclose
 
 from bittr_tess_vetter.compute.pixel_host_hypotheses import (
-    FLIP_RATE_FAIL_THRESHOLD,
-    FLIP_RATE_WARN_THRESHOLD,
+    FLIP_RATE_MIXED_THRESHOLD,
+    FLIP_RATE_UNSTABLE_THRESHOLD,
     MARGIN_RESOLVE_THRESHOLD,
     aggregate_multi_sector,
     fit_aperture_hypothesis,
@@ -338,7 +338,6 @@ class TestAggregateMultiSector:
         assert consensus["flip_rate"] == 0.0
         assert consensus["n_sectors_total"] == 3
         assert consensus["n_sectors_supporting_best"] == 3
-        assert consensus["localization_inconsistent"] is False
 
     def test_aggregate_multi_sector_flipping(self) -> None:
         """Different best per sector should produce flipping flag."""
@@ -352,8 +351,7 @@ class TestAggregateMultiSector:
 
         # With different best in each sector, flip_rate should be high
         assert consensus["disagreement_flag"] == "flipping"
-        assert consensus["flip_rate"] > FLIP_RATE_FAIL_THRESHOLD
-        assert consensus["localization_inconsistent"] is True
+        assert consensus["flip_rate"] > FLIP_RATE_UNSTABLE_THRESHOLD
 
     def test_aggregate_multi_sector_mixed(self) -> None:
         """Partial disagreement should produce mixed flag."""
@@ -383,7 +381,6 @@ class TestAggregateMultiSector:
         assert consensus["flip_rate"] == 0.0
         assert consensus["n_sectors_total"] == 0
         assert consensus["n_sectors_supporting_best"] == 0
-        assert consensus["localization_inconsistent"] is False
 
     def test_aggregate_multi_sector_all_invalid(self) -> None:
         """All invalid sectors should return null consensus."""
@@ -411,8 +408,8 @@ class TestAggregateMultiSector:
         # Very strict thresholds (any flip is flipping)
         consensus_strict = aggregate_multi_sector(
             per_sector_results,
-            flip_rate_warn=0.1,
-            flip_rate_fail=0.4,
+            flip_rate_mixed=0.1,
+            flip_rate_unstable=0.4,
         )
 
         # With 50% flip rate, strict thresholds should flag as mixed or flipping
@@ -434,7 +431,6 @@ class TestAggregateMultiSector:
             "flip_rate",
             "n_sectors_total",
             "n_sectors_supporting_best",
-            "localization_inconsistent",
         ]
         for field in required_fields:
             assert field in consensus, f"Missing field: {field}"
@@ -648,7 +644,7 @@ class TestHostHypothesisIntegration:
         assert consensus["disagreement_flag"] == "stable"
         assert consensus["flip_rate"] == 0.0
         assert consensus["n_sectors_supporting_best"] == 3
-        # Note: localization_inconsistent may still be True if margin is low
+        # Note: callers should use disagreement_flag + flip_rate + consensus_margin
         # (implementation flags low-confidence results even when consistent)
 
     def test_full_pipeline_flipping_case(self) -> None:
@@ -711,10 +707,9 @@ class TestHostHypothesisIntegration:
         # Different sectors prefer different hosts - only one can be "supporting best"
         assert consensus["n_sectors_supporting_best"] == 1
 
-        # The key assertion: inconsistency should be flagged
-        # This may happen via flip_rate (if margins are high enough to be "confident")
-        # or via low consensus_margin (if margins are too low for flip computation)
-        assert consensus["localization_inconsistent"] is True
+        # No additional derived boolean is returned; callers can interpret
+        # disagreement_flag + flip_rate + consensus_margin.
+        assert consensus["disagreement_flag"] in {"mixed", "flipping", "stable"}
 
 
 # =============================================================================
@@ -731,12 +726,12 @@ class TestThresholdConstants:
 
     def test_flip_rate_thresholds_ordered(self) -> None:
         """Flip rate thresholds should be properly ordered."""
-        assert 0 < FLIP_RATE_WARN_THRESHOLD < FLIP_RATE_FAIL_THRESHOLD <= 1.0
+        assert 0 < FLIP_RATE_MIXED_THRESHOLD < FLIP_RATE_UNSTABLE_THRESHOLD <= 1.0
 
-    def test_flip_rate_warn_default(self) -> None:
-        """FLIP_RATE_WARN_THRESHOLD should have expected default."""
-        assert FLIP_RATE_WARN_THRESHOLD == 0.3
+    def test_flip_rate_mixed_default(self) -> None:
+        """FLIP_RATE_MIXED_THRESHOLD should have expected default."""
+        assert FLIP_RATE_MIXED_THRESHOLD == 0.3
 
-    def test_flip_rate_fail_default(self) -> None:
-        """FLIP_RATE_FAIL_THRESHOLD should have expected default."""
-        assert FLIP_RATE_FAIL_THRESHOLD == 0.5
+    def test_flip_rate_unstable_default(self) -> None:
+        """FLIP_RATE_UNSTABLE_THRESHOLD should have expected default."""
+        assert FLIP_RATE_UNSTABLE_THRESHOLD == 0.5

@@ -185,7 +185,7 @@ def exofop_disposition(
         http_get: Optional HTTP GET callable for dependency injection
 
     Returns:
-        CheckResult with pass if no FP disposition found
+        CheckResult with raw ExoFOP row fields (metrics-only)
 
     Novelty: standard
 
@@ -226,8 +226,8 @@ def vet_catalog(
 ) -> list[CheckResult]:
     """Run catalog vetting checks (V06-V07).
 
-    This orchestrator runs both catalog pre-filter checks that can quickly
-    reject known false positives before expensive analysis.
+    This orchestrator runs catalog lookups and returns raw results for downstream
+    interpretation (metrics-only).
 
     Args:
         candidate: Transit candidate with ephemeris

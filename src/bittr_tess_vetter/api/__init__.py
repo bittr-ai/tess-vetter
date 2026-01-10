@@ -225,8 +225,8 @@ from bittr_tess_vetter.api.primitives import (  # noqa: F401
 
 # Pixel/PRF compute facade (host-facing)
 from bittr_tess_vetter.api.pixel_prf import (  # noqa: F401
-    FLIP_RATE_FAIL_THRESHOLD,
-    FLIP_RATE_WARN_THRESHOLD,
+    FLIP_RATE_MIXED_THRESHOLD,
+    FLIP_RATE_UNSTABLE_THRESHOLD,
     MARGIN_RESOLVE_THRESHOLD,
     ApertureConflict,
     ApertureHypothesisFit,
@@ -529,8 +529,8 @@ __all__ = [
     "compute_all_hypotheses_joint",
     "select_best_hypothesis_joint",
     "MARGIN_RESOLVE_THRESHOLD",
-    "FLIP_RATE_WARN_THRESHOLD",
-    "FLIP_RATE_FAIL_THRESHOLD",
+    "FLIP_RATE_MIXED_THRESHOLD",
+    "FLIP_RATE_UNSTABLE_THRESHOLD",
     "get_in_transit_mask",
     "get_out_of_transit_mask",
     "get_odd_even_transit_indices",

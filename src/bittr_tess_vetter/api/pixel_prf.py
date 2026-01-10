@@ -37,8 +37,8 @@ from bittr_tess_vetter.compute.prf_psf import (  # noqa: F401
 
 # Hypothesis scoring
 from bittr_tess_vetter.compute.pixel_host_hypotheses import (  # noqa: F401
-    FLIP_RATE_FAIL_THRESHOLD,
-    FLIP_RATE_WARN_THRESHOLD,
+    FLIP_RATE_MIXED_THRESHOLD,
+    FLIP_RATE_UNSTABLE_THRESHOLD,
     MARGIN_RESOLVE_THRESHOLD,
     ApertureHypothesisFit,
     HypothesisScore,
@@ -163,8 +163,8 @@ __all__ = [
     "score_hypotheses_with_prf",
     # Thresholds
     "MARGIN_RESOLVE_THRESHOLD",
-    "FLIP_RATE_WARN_THRESHOLD",
-    "FLIP_RATE_FAIL_THRESHOLD",
+    "FLIP_RATE_MIXED_THRESHOLD",
+    "FLIP_RATE_UNSTABLE_THRESHOLD",
     # Aperture prediction + conflicts
     "AperturePrediction",
     "ApertureConflict",
