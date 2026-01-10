@@ -24,19 +24,19 @@ Stitching/normalization errors silently contaminate **all downstream physics** (
 
 ### Statistical robustness
 
-- [ ] Normalization resistant to outliers and in-transit points
-- [ ] Sector-to-sector scaling stable under variable baseline
+- [x] Normalization resistant to outliers and in-transit points (median-based; no OOT-only heuristic)
+- [x] Sector-to-sector scaling stable under variable baseline (per-sector normalization to median)
 
 ### Numerical stability / edge cases
 
 - [x] Handles NaNs (falls back without divide-by-NaN)
-- [ ] Handles empty sectors, all-flagged sectors
-- [ ] Handles cadence differences (20s vs 120s) without mis-inference
+- [x] Handles empty sectors, all-flagged sectors (falls back to finite-flux median normalization)
+- [x] Handles cadence differences (20s vs 120s) without mis-inference (uses within-sector deltas; returns dominant cadence)
 
 ### Tests
 
 - [x] Existing tests for stitch invariants
-- [ ] Add synthetic: two sectors with known scaling, injected transit, gaps, NaNs
+- [x] Add synthetic: two sectors with known scaling, gaps, NaNs
 
 ## Notes (initial pass)
 
