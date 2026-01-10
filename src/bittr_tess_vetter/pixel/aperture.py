@@ -24,6 +24,8 @@ import numpy as np
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
+from bittr_tess_vetter.pixel.cadence_mask import default_cadence_mask
+
 
 # Default aperture radii to test (in pixels)
 DEFAULT_APERTURE_RADII: tuple[float, ...] = (1.0, 1.5, 2.0, 2.5, 3.0)
@@ -348,14 +350,30 @@ def compute_aperture_dependence(
         raise ValueError(f"tpf_data must be 3D, got shape {tpf_data.shape}")
 
     n_times, n_rows, n_cols = tpf_data.shape
+    if n_rows == 0 or n_cols == 0:
+        raise ValueError(f"tpf_data spatial dimensions must be non-zero, got shape {tpf_data.shape}")
 
     if len(time) != n_times:
         raise ValueError(
             f"time array length ({len(time)}) must match tpf_data first axis ({n_times})"
         )
 
+    cadence_mask = default_cadence_mask(
+        time=time,
+        flux=tpf_data,
+        quality=np.zeros(int(time.shape[0]), dtype=np.int32),
+        require_finite_pixels=True,
+    )
+    n_total = int(time.shape[0])
+    n_used = int(np.sum(cadence_mask))
+    n_dropped = n_total - n_used
+
+    tpf_data = tpf_data[cadence_mask]
+    time = time[cadence_mask]
+    n_times = int(time.size)
+
     if n_times < 10:
-        raise ValueError(f"Need at least 10 time points, got {n_times}")
+        raise ValueError(f"Need at least 10 valid time points, got {n_times}")
 
     # Set defaults
     if aperture_radii is None:
@@ -455,7 +473,7 @@ def compute_aperture_dependence(
         n_aperture_pixels = int(np.sum(aperture_mask))
 
         # Compute aperture photometry with background subtraction
-        raw_aperture_flux = np.sum(tpf_data * aperture_mask, axis=(1, 2))
+        raw_aperture_flux = np.nansum(tpf_data[:, aperture_mask], axis=1)
         aperture_flux = raw_aperture_flux - (bg_per_cadence * n_aperture_pixels)
 
         transit_depths = []
@@ -534,6 +552,8 @@ def compute_aperture_dependence(
     )
 
     flags: list[str] = []
+    if n_dropped > 0:
+        flags.append("dropped_invalid_cadences")
     if int(len(transit_epochs)) < 2:
         flags.append("low_n_transit_epochs")
     if int(n_in_transit) < 20:
@@ -568,6 +588,9 @@ def compute_aperture_dependence(
         flags=flags,
         notes={
             "center_policy": "tpf_center",
+            "n_cadences_total": int(n_total),
+            "n_cadences_used": int(n_used),
+            "n_cadences_dropped": int(n_dropped),
             "n_apertures_local_used": int(n_apertures_local_used),
             "n_apertures_sector_fallback": int(n_apertures_sector_fallback),
             "drift_fraction_by_aperture": {str(k): float(v) for k, v in drift_by_aperture.items()},

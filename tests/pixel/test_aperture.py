@@ -435,6 +435,46 @@ class TestComputeApertureDependenceStable:
 
         return tpf
 
+    def test_nan_cadences_are_ignored(
+        self, time_array: np.ndarray, basic_transit_params: TransitParams
+    ) -> None:
+        """All-NaN cadences should be dropped and not corrupt depth-vs-aperture."""
+        tpf = self._create_stable_tpf(
+            shape=(len(time_array), 11, 11),
+            time=time_array,
+            transit_params=basic_transit_params,
+            depth=0.01,
+        )
+
+        baseline = compute_aperture_dependence(
+            tpf_data=tpf,
+            time=time_array,
+            transit_params=basic_transit_params,
+        )
+
+        in_transit = _compute_transit_mask(time_array, basic_transit_params)
+        in_idx = np.where(in_transit)[0][:2]
+        out_idx = np.where(~in_transit)[0][:5]
+        bad_idx = np.unique(np.concatenate([in_idx, out_idx]))
+
+        tpf_bad = np.array(tpf, copy=True)
+        tpf_bad[bad_idx] = np.nan
+
+        bad = compute_aperture_dependence(
+            tpf_data=tpf_bad,
+            time=time_array,
+            transit_params=basic_transit_params,
+        )
+
+        assert "dropped_invalid_cadences" in bad.flags
+        assert abs(bad.stability_metric - baseline.stability_metric) < 0.1
+
+        # Depth curve should remain broadly consistent.
+        for r in baseline.depths_by_aperture:
+            if r in bad.depths_by_aperture:
+                denom = max(abs(baseline.depths_by_aperture[r]), 1.0)
+                assert abs(bad.depths_by_aperture[r] - baseline.depths_by_aperture[r]) / denom < 0.3
+
     def test_stable_signal_high_stability(
         self, time_array: np.ndarray, basic_transit_params: TransitParams
     ) -> None:
