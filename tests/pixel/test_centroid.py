@@ -437,6 +437,37 @@ class TestComputeCentroidShiftBasic:
 class TestComputeCentroidShiftDetection:
     """Tests for centroid shift detection."""
 
+    def test_nan_cadences_are_ignored(
+        self,
+        shifted_star_tpf: tuple[np.ndarray, np.ndarray, TransitParams],
+    ) -> None:
+        """All-NaN cadences should be dropped and not corrupt centroid metrics."""
+        tpf, time, params = shifted_star_tpf
+        baseline = compute_centroid_shift(tpf, time, params, significance_method="analytic")
+
+        # Identify in/out-of-transit cadences using the same windowing policy as the module.
+        k_in = WINDOW_POLICIES["v1"]["k_in"]
+        k_buffer = WINDOW_POLICIES["v1"]["k_buffer"]
+        in_mask, out_mask = _get_transit_masks(time, params, k_in, k_buffer)
+
+        # This synthetic setup has relatively few in-transit cadences; drop only a couple
+        # so we still meet the minimum cadence requirement.
+        in_idx = np.where(in_mask)[0][:1]
+        out_idx = np.where(out_mask)[0][:5]
+        bad_idx = np.unique(np.concatenate([in_idx, out_idx]))
+
+        tpf_bad = np.array(tpf, copy=True)
+        tpf_bad[bad_idx] = np.nan
+
+        bad = compute_centroid_shift(tpf_bad, time, params, significance_method="analytic")
+
+        assert np.isfinite(bad.centroid_shift_pixels)
+        assert np.isfinite(bad.significance_sigma)
+        assert any("dropped_invalid_cadences" in w for w in bad.warnings)
+
+        # Shift magnitude should remain broadly consistent after dropping a small number of cadences.
+        assert abs(bad.centroid_shift_pixels - baseline.centroid_shift_pixels) < 0.2
+
     def test_no_shift_uniform_data(
         self,
         centered_star_tpf: np.ndarray,

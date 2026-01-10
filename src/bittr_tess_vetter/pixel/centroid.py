@@ -17,9 +17,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+import warnings as _warnings
 import numpy as np
 from numpy.typing import NDArray
 from scipy.stats import norm
+
+from bittr_tess_vetter.pixel.cadence_mask import default_cadence_mask
 
 # =============================================================================
 # Constants
@@ -455,7 +458,13 @@ def _compute_flux_weighted_centroid(
 
     # Select cadences and compute mean flux per pixel
     selected_frames = tpf_data[mask]
-    mean_flux = np.nanmean(selected_frames, axis=0)
+    # nanmean warns when a pixel is all-NaN across selected frames, which is
+    # expected for some masked/flagged pixels; suppress and treat those pixels
+    # as 0-weight downstream.
+    with _warnings.catch_warnings():
+        _warnings.filterwarnings("ignore", message="Mean of empty slice", category=RuntimeWarning)
+        mean_flux = np.nanmean(selected_frames, axis=0)
+    mean_flux = np.where(np.isfinite(mean_flux), mean_flux, 0.0)
 
     return _compute_flux_weighted_centroid_single_frame(mean_flux)
 
@@ -1004,14 +1013,56 @@ def compute_centroid_shift(
             f"time length ({len(time)}) must match tpf_data first dimension ({tpf_data.shape[0]})"
         )
 
+    # Filter out cadences that cannot support centroiding (non-finite time or no finite pixels).
+    # Quality flags are not available at this layer (TPFData has only time+flux), so we apply
+    # a conservative, data-driven cadence mask.
+    cadence_mask = default_cadence_mask(
+        time=time,
+        flux=tpf_data,
+        quality=np.zeros(int(time.shape[0]), dtype=np.int32),
+        require_finite_pixels=True,
+    )
+    n_total = int(time.shape[0])
+    n_used = int(np.sum(cadence_mask))
+    if n_used < n_total:
+        warnings_dropped = n_total - n_used
+    else:
+        warnings_dropped = 0
+    if n_used < 3:
+        # Keep behavior consistent with the rest of the module: return NaNs with warnings rather than crash.
+        return CentroidResult(
+            centroid_shift_pixels=np.nan,
+            significance_sigma=np.nan,
+            in_transit_centroid=(np.nan, np.nan),
+            out_of_transit_centroid=(np.nan, np.nan),
+            n_in_transit_cadences=0,
+            n_out_transit_cadences=0,
+            centroid_shift_arcsec=np.nan,
+            pixel_scale_arcsec=pixel_scale,
+            shift_uncertainty_pixels=np.nan,
+            saturation_risk=False,
+            max_flux_fraction=0.0,
+            n_outliers_rejected=0,
+            warnings=(f"dropped_invalid_cadences ({warnings_dropped} of {n_total})",)
+            if warnings_dropped
+            else ("insufficient_valid_cadences",),
+        )
+
+    if warnings_dropped:
+        # Defer policy interpretation to downstream guardrails, but record the drop count.
+        # (Useful to explain centroid instability on real TESS data with flagged cadences / NaNs.)
+        warnings: list[str] = [f"dropped_invalid_cadences ({warnings_dropped} of {n_total})"]
+    else:
+        warnings = []
+
+    tpf_data = tpf_data[cadence_mask]
+    time = time[cadence_mask]
+
     if window_policy_version not in WINDOW_POLICIES:
         raise ValueError(
             f"Unknown window_policy_version: {window_policy_version}. "
             f"Available: {list(WINDOW_POLICIES.keys())}"
         )
-
-    # Initialize warnings list
-    warnings: list[str] = []
 
     # Detect saturation
     saturation_risk, max_flux_fraction = detect_saturation_risk(tpf_data, saturation_threshold)
