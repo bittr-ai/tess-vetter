@@ -31,7 +31,7 @@ def get_transit_mask(
     time: NDArray[np.float64],
     period: float,
     t0: float,
-    duration: float,
+    duration_hours: float,
 ) -> NDArray[np.bool_]:
     """Create boolean mask for points in transit.
 
@@ -42,21 +42,22 @@ def get_transit_mask(
         time: Time array in BTJD (float64)
         period: Orbital period in days
         t0: Reference epoch (mid-transit time) in BTJD
-        duration: Transit duration in days
+        duration_hours: Transit duration in hours
 
     Returns:
         Boolean array where True indicates in-transit points
 
     Example:
         >>> time = np.array([0.0, 0.5, 1.0, 1.5, 2.0])
-        >>> mask = get_transit_mask(time, period=1.0, t0=0.5, duration=0.2)
+        >>> mask = get_transit_mask(time, period=1.0, t0=0.5, duration_hours=4.8)
         >>> mask  # True at t=0.5 and t=1.5
     """
+    duration_days = float(duration_hours) / 24.0
     # Calculate phase relative to t0 (range -0.5 to 0.5)
     phase = ((time - t0) / period + 0.5) % 1.0 - 0.5
 
     # Transit occurs when |phase| < duration/(2*period)
-    half_duration_phase = duration / (2.0 * period)
+    half_duration_phase = duration_days / (2.0 * period)
 
     return np.abs(phase) < half_duration_phase
 
@@ -171,7 +172,7 @@ def detect_transit(
     flux_err: NDArray[np.float64],
     period: float,
     t0: float,
-    duration: float,
+    duration_hours: float,
 ) -> TransitCandidate:
     """Detect transit by fitting box model and measuring parameters.
 
@@ -184,7 +185,7 @@ def detect_transit(
         flux_err: Flux uncertainty array (float64)
         period: Orbital period in days (from BLS)
         t0: Reference epoch (mid-transit time) in BTJD (from BLS)
-        duration: Transit duration in days (from BLS)
+        duration_hours: Transit duration in hours
 
     Returns:
         TransitCandidate with measured parameters
@@ -197,20 +198,24 @@ def detect_transit(
         >>> flux = np.ones_like(time)
         >>> flux[490:510] = 0.99  # Inject transit
         >>> flux_err = np.ones_like(time) * 0.001
-        >>> candidate = detect_transit(time, flux, flux_err, period=5.0, t0=5.0, duration=0.1)
+        >>> candidate = detect_transit(time, flux, flux_err, period=5.0, t0=5.0, duration_hours=2.4)
     """
     # Validate inputs
     if len(time) < 10:
         raise ValueError("Insufficient data points for transit detection")
     if period <= 0:
         raise ValueError(f"Period must be positive, got {period}")
-    if duration <= 0:
-        raise ValueError(f"Duration must be positive, got {duration}")
-    if duration >= period:
-        raise ValueError(f"Duration ({duration}) must be less than period ({period})")
+    if duration_hours <= 0:
+        raise ValueError(f"Duration_hours must be positive, got {duration_hours}")
+
+    duration_days = float(duration_hours) / 24.0
+    if duration_days >= period:
+        raise ValueError(
+            f"Duration_days ({duration_days}) must be less than period ({period})"
+        )
 
     # Get transit mask
-    in_transit_mask = get_transit_mask(time, period, t0, duration)
+    in_transit_mask = get_transit_mask(time, period, t0, duration_hours)
 
     n_in_transit = np.sum(in_transit_mask)
     if n_in_transit < 3:
@@ -269,9 +274,6 @@ def detect_transit(
 
     # Ensure SNR is non-negative and capped to prevent downstream issues
     snr = max(0.0, min(snr, MAX_SNR))
-
-    # Convert duration to hours for TransitCandidate
-    duration_hours = duration * 24.0
 
     return TransitCandidate(
         period=period,

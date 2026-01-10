@@ -75,7 +75,7 @@ def transit_params() -> dict:
     return {
         "period": 3.5,  # days
         "t0": 1.5,  # BTJD epoch
-        "duration": 0.1,  # days (~2.4 hours)
+        "duration_hours": 2.4,  # hours
         "depth": 0.01,  # 1% depth (typical hot Jupiter)
     }
 
@@ -85,7 +85,7 @@ def inject_transit(
     flux: np.ndarray,
     period: float,
     t0: float,
-    duration: float,
+    duration_hours: float,
     depth: float,
 ) -> np.ndarray:
     """Inject box-shaped transit into light curve.
@@ -95,16 +95,17 @@ def inject_transit(
         flux: Flux array (will be modified)
         period: Orbital period in days
         t0: Reference epoch (mid-transit)
-        duration: Transit duration in days
+        duration_hours: Transit duration in hours
         depth: Transit depth (fractional)
 
     Returns:
         Modified flux array with transits injected
     """
     flux = flux.copy()
+    duration_days = float(duration_hours) / 24.0
     # Calculate phase
     phase = ((time - t0) / period + 0.5) % 1.0 - 0.5
-    half_dur = duration / (2.0 * period)
+    half_dur = duration_days / (2.0 * period)
 
     # Apply transit
     in_transit = np.abs(phase) < half_dur
@@ -168,8 +169,10 @@ class TestMedianDetrend:
     def test_preserves_transit_signals(self, time_array: np.ndarray, flat_flux: np.ndarray):
         """Verify that transit signals are preserved after detrending."""
         # Inject transit
-        period, t0, duration, depth = 3.5, 1.5, 0.1, 0.01
-        flux_with_transit = inject_transit(time_array, flat_flux, period, t0, duration, depth)
+        period, t0, duration_hours, depth = 3.5, 1.5, 2.4, 0.01
+        flux_with_transit = inject_transit(
+            time_array, flat_flux, period, t0, duration_hours, depth
+        )
 
         # Add slow trend
         flux_with_trend = flux_with_transit * (1.0 + 0.005 * time_array / 27.0)
@@ -180,7 +183,8 @@ class TestMedianDetrend:
 
         # Find in-transit points
         phase = ((time_array - t0) / period + 0.5) % 1.0 - 0.5
-        in_transit = np.abs(phase) < (duration / (2.0 * period))
+        duration_days = duration_hours / 24.0
+        in_transit = np.abs(phase) < (duration_days / (2.0 * period))
 
         # Check transit depth is preserved
         out_transit_median = np.median(detrended[~in_transit])
@@ -328,15 +332,18 @@ class TestFlatten:
     def test_preserves_transit(self, time_array: np.ndarray, flat_flux: np.ndarray):
         """Verify that transits are preserved with appropriate window."""
         # Inject transit
-        period, t0, duration, depth = 3.5, 1.5, 0.1, 0.01
-        flux_with_transit = inject_transit(time_array, flat_flux, period, t0, duration, depth)
+        period, t0, duration_hours, depth = 3.5, 1.5, 2.4, 0.01
+        flux_with_transit = inject_transit(
+            time_array, flat_flux, period, t0, duration_hours, depth
+        )
 
         # Flatten with window > transit duration (0.1 days = 2.4 hours)
         flat = flatten(time_array, flux_with_transit, window_length=0.5)  # 12 hours
 
         # Check transit depth is preserved
         phase = ((time_array - t0) / period + 0.5) % 1.0 - 0.5
-        in_transit = np.abs(phase) < (duration / (2.0 * period))
+        duration_days = duration_hours / 24.0
+        in_transit = np.abs(phase) < (duration_days / (2.0 * period))
 
         out_transit_median = np.median(flat[~in_transit])
         in_transit_median = np.median(flat[in_transit])
@@ -374,9 +381,9 @@ class TestGetTransitMask:
         time = np.array([0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0])
         period = 1.0
         t0 = 0.5
-        duration = 0.2  # Transit from phase -0.1 to +0.1
+        duration_hours = 4.8  # 0.2 days; transit from phase -0.1 to +0.1
 
-        mask = get_transit_mask(time, period, t0, duration)
+        mask = get_transit_mask(time, period, t0, duration_hours)
 
         # At t=0.5, phase=0 -> in transit
         # At t=1.5, phase=0 -> in transit
@@ -389,9 +396,9 @@ class TestGetTransitMask:
         """Verify that all periodic transits are captured."""
         period = 3.5
         t0 = 1.5
-        duration = 0.1
+        duration_hours = 2.4
 
-        mask = get_transit_mask(time_array, period, t0, duration)
+        mask = get_transit_mask(time_array, period, t0, duration_hours)
 
         # Calculate expected number of transit events
         n_transits = int(27.0 / period)  # ~7 transits in 27 days
@@ -408,9 +415,10 @@ class TestGetTransitMask:
         time = np.linspace(0, 10, 1000)
         period = 2.0
         t0 = 1.0
-        duration = 0.2
+        duration_hours = 4.8
+        duration_days = duration_hours / 24.0
 
-        mask = get_transit_mask(time, period, t0, duration)
+        mask = get_transit_mask(time, period, t0, duration_hours)
 
         # Transit should occur at t0 and t0 + period, t0 + 2*period, etc.
         transit_times = time[mask]
@@ -421,7 +429,7 @@ class TestGetTransitMask:
             if expected_center > 10:
                 break
             # Check that there are transit points near this time
-            near_center = np.abs(transit_times - expected_center) < duration
+            near_center = np.abs(transit_times - expected_center) < duration_days
             assert np.any(near_center), f"No transit points near t={expected_center}"
 
 
@@ -530,11 +538,11 @@ class TestDetectTransit:
     def test_returns_transit_candidate(self, time_array: np.ndarray, flat_flux: np.ndarray):
         """Verify that detect_transit returns TransitCandidate with correct depth."""
         # Inject transit
-        period, t0, duration, depth = 3.5, 1.5, 0.1, 0.01
-        flux = inject_transit(time_array, flat_flux, period, t0, duration, depth)
+        period, t0, duration_hours, depth = 3.5, 1.5, 2.4, 0.01
+        flux = inject_transit(time_array, flat_flux, period, t0, duration_hours, depth)
         flux_err = np.ones_like(flux) * 0.0001
 
-        candidate = detect_transit(time_array, flux, flux_err, period, t0, duration)
+        candidate = detect_transit(time_array, flux, flux_err, period, t0, duration_hours)
 
         assert isinstance(candidate, TransitCandidate)
         assert_allclose(candidate.period, period)
@@ -549,20 +557,20 @@ class TestDetectTransit:
         for expected_depth in [0.001, 0.005, 0.01, 0.02]:
             flux = np.ones_like(time) + np.random.default_rng(42).normal(0, 0.0001, len(time))
             flux = inject_transit(
-                time, flux, period=5.0, t0=2.5, duration=0.15, depth=expected_depth
+                time, flux, period=5.0, t0=2.5, duration_hours=3.6, depth=expected_depth
             )
 
-            candidate = detect_transit(time, flux, flux_err, period=5.0, t0=2.5, duration=0.15)
+            candidate = detect_transit(time, flux, flux_err, period=5.0, t0=2.5, duration_hours=3.6)
 
             assert_allclose(candidate.depth, expected_depth, rtol=0.2)
 
     def test_snr_positive(self, time_array: np.ndarray, flat_flux: np.ndarray):
         """Verify that SNR is positive for real transit."""
-        period, t0, duration, depth = 3.5, 1.5, 0.1, 0.01
-        flux = inject_transit(time_array, flat_flux, period, t0, duration, depth)
+        period, t0, duration_hours, depth = 3.5, 1.5, 2.4, 0.01
+        flux = inject_transit(time_array, flat_flux, period, t0, duration_hours, depth)
         flux_err = np.ones_like(flux) * 0.0001
 
-        candidate = detect_transit(time_array, flux, flux_err, period, t0, duration)
+        candidate = detect_transit(time_array, flux, flux_err, period, t0, duration_hours)
 
         assert candidate.snr > 0
 
@@ -573,24 +581,24 @@ class TestDetectTransit:
         flux_err = np.array([0.001, 0.001, 0.001])
 
         with pytest.raises(ValueError, match="Insufficient data points"):
-            detect_transit(time, flux, flux_err, period=1.0, t0=1.0, duration=0.1)
+            detect_transit(time, flux, flux_err, period=1.0, t0=1.0, duration_hours=2.4)
 
     def test_invalid_period_raises_error(self, time_array: np.ndarray, flat_flux: np.ndarray):
         """Verify that non-positive period raises ValueError."""
         flux_err = np.ones_like(flat_flux) * 0.0001
 
         with pytest.raises(ValueError, match="Period must be positive"):
-            detect_transit(time_array, flat_flux, flux_err, period=-1.0, t0=1.0, duration=0.1)
+            detect_transit(time_array, flat_flux, flux_err, period=-1.0, t0=1.0, duration_hours=2.4)
 
     def test_invalid_duration_raises_error(self, time_array: np.ndarray, flat_flux: np.ndarray):
         """Verify that invalid duration raises ValueError."""
         flux_err = np.ones_like(flat_flux) * 0.0001
 
-        with pytest.raises(ValueError, match="Duration must be positive"):
-            detect_transit(time_array, flat_flux, flux_err, period=3.5, t0=1.0, duration=0.0)
+        with pytest.raises(ValueError, match="Duration_hours must be positive"):
+            detect_transit(time_array, flat_flux, flux_err, period=3.5, t0=1.0, duration_hours=0.0)
 
         with pytest.raises(ValueError, match="Duration.*must be less than period"):
-            detect_transit(time_array, flat_flux, flux_err, period=3.5, t0=1.0, duration=5.0)
+            detect_transit(time_array, flat_flux, flux_err, period=3.5, t0=1.0, duration_hours=120.0)
 
 
 # =============================================================================
@@ -667,8 +675,8 @@ class TestAutoPeriodogram:
     def test_tls_method_selection(self, time_array: np.ndarray, flat_flux: np.ndarray):
         """Verify TLS method uses TLS for transit search."""
         # Use method="tls" explicitly
-        period, t0, duration, depth = 3.5, 1.5, 0.1, 0.01
-        flux = inject_transit(time_array, flat_flux, period, t0, duration, depth)
+        period, t0, duration_hours, depth = 3.5, 1.5, 2.4, 0.01
+        flux = inject_transit(time_array, flat_flux, period, t0, duration_hours, depth)
 
         result = auto_periodogram(
             time_array,
@@ -684,8 +692,8 @@ class TestAutoPeriodogram:
     def test_auto_method_selection(self, time_array: np.ndarray, flat_flux: np.ndarray):
         """Verify auto method selection uses TLS for transit search."""
         # For transit-like signals, auto should use TLS
-        period, t0, duration, depth = 3.5, 1.5, 0.1, 0.01
-        flux_transit = inject_transit(time_array, flat_flux, period, t0, duration, depth)
+        period, t0, duration_hours, depth = 3.5, 1.5, 2.4, 0.01
+        flux_transit = inject_transit(time_array, flat_flux, period, t0, duration_hours, depth)
 
         result = auto_periodogram(time_array, flux_transit, method="auto")
 
@@ -735,9 +743,9 @@ class TestRefinePeriod:
         # Inject transit
         true_period = 3.567  # Precise period
         t0 = 1.5
-        duration = 0.1
+        duration_hours = 2.4
         depth = 0.01
-        flux = inject_transit(time_array, flat_flux, true_period, t0, duration, depth)
+        flux = inject_transit(time_array, flat_flux, true_period, t0, duration_hours, depth)
 
         # Start with approximate period
         initial_period = 3.5
@@ -747,7 +755,7 @@ class TestRefinePeriod:
             flux,
             None,
             initial_period=initial_period,
-            initial_duration=duration * 24,  # hours
+            initial_duration=duration_hours,  # hours
             refine_factor=0.1,
             n_refine=100,
         )
@@ -770,8 +778,8 @@ class TestIntegration:
     def test_full_transit_detection_pipeline(self, time_array: np.ndarray, flat_flux: np.ndarray):
         """Test full pipeline: detrend -> periodogram -> detect -> fold."""
         # Inject transit with trend
-        period, t0, duration, depth = 4.0, 2.0, 0.12, 0.008
-        flux = inject_transit(time_array, flat_flux, period, t0, duration, depth)
+        period, t0, duration_hours, depth = 4.0, 2.0, 2.88, 0.008
+        flux = inject_transit(time_array, flat_flux, period, t0, duration_hours, depth)
 
         # Add trend
         flux_with_trend = flux * (1.0 + 0.003 * time_array / 27.0)
@@ -801,7 +809,7 @@ class TestIntegration:
             flux_err,
             period=result.best_period,
             t0=result.best_t0,
-            duration=result.best_duration_hours / 24.0 if result.best_duration_hours else duration,
+            duration_hours=result.best_duration_hours if result.best_duration_hours else duration_hours,
         )
 
         # Step 5: Fold transit
@@ -833,8 +841,8 @@ class TestIntegration:
         flat_flux = np.ones_like(time_array) + rng.normal(0, noise_level, len(time_array))
 
         # Inject shallow transit (100 ppm = 0.0001)
-        period, t0, duration, depth = 2.5, 1.0, 0.08, 0.001
-        flux = inject_transit(time_array, flat_flux, period, t0, duration, depth)
+        period, t0, duration_hours, depth = 2.5, 1.0, 1.92, 0.001
+        flux = inject_transit(time_array, flat_flux, period, t0, duration_hours, depth)
 
         # Normalize
         flux_err = np.ones_like(flux) * noise_level
@@ -945,8 +953,8 @@ class TestPerSectorSearch:
         flux = np.ones(n_points, dtype=np.float64) + rng.normal(0, 0.0001, n_points)
 
         # Inject transit
-        period, t0, duration, depth = 3.5, 1.5, 0.1, 0.01
-        flux = inject_transit(time, flux, period, t0, duration, depth)
+        period, t0, duration_hours, depth = 3.5, 1.5, 2.4, 0.01
+        flux = inject_transit(time, flux, period, t0, duration_hours, depth)
 
         result = tls_search_per_sector(
             time, flux, period_min=2.0, period_max=5.0
@@ -970,8 +978,8 @@ class TestPerSectorSearch:
         flux = np.ones(len(time), dtype=np.float64) + rng.normal(0, 0.0001, len(time))
 
         # Inject transit
-        period, t0, duration, depth = 3.5, 1.5, 0.1, 0.01
-        flux = inject_transit(time, flux, period, t0, duration, depth)
+        period, t0, duration_hours, depth = 3.5, 1.5, 2.4, 0.01
+        flux = inject_transit(time, flux, period, t0, duration_hours, depth)
 
         result = tls_search_per_sector(
             time, flux, period_min=2.0, period_max=10.0

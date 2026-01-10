@@ -64,8 +64,8 @@ def recover_transit_timeseries(
         rot_period = float(rotation_period)
 
     variability_amplitude_ppm = float(np.std(flux) * 1e6)
-    duration_days_wide = (float(duration_hours) * 1.5) / 24.0
-    transit_mask = get_transit_mask(time, float(period), float(t0), float(duration_days_wide))
+    duration_hours_wide = float(duration_hours) * 1.5
+    transit_mask = get_transit_mask(time, float(period), float(t0), float(duration_hours_wide))
 
     detrended_flux = detrend_for_recovery(
         time,
@@ -169,4 +169,3 @@ def recover_transit_timeseries(
         result["depth_upper_limit_ppm"] = round(3.0 * float(fit.depth_err) * 1e6, 1)
 
     return result
-

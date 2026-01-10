@@ -8,7 +8,7 @@ Transit masking + simple depth metrics are used by almost every check (odd/even,
 
 ## Scope (functions)
 
-- `get_transit_mask` (duration in **days**; used by BLS-style callers)
+- `get_transit_mask` (duration in **hours**; consistent with `Ephemeris.duration_hours`)
 - `measure_depth` (fractional depth from in/out mask)
 - `fold_transit` (phase in [-0.5, 0.5])
 - `detect_transit` (box model parameter measurement)
@@ -17,13 +17,12 @@ Transit masking + simple depth metrics are used by almost every check (odd/even,
 
 ### Units + conventions
 
-- [x] `period` (days), `t0` (days), `duration` (days)
+- [x] `period` (days), `t0` (days), `duration_hours` (hours)
 - [x] Depth is fractional (not ppm)
 
 ## Notes (initial pass)
 
-- `api/compute_transit.py` delegates to `compute/transit.py`, which uses `duration` in **days** (not hours). This is consistent with many BLS/TLS internal representations, but it is a footgun relative to the rest of the API which uses `duration_hours`.
-  - Action: document clearly and consider adding an hours-based wrapper later (without breaking existing call sites).
+`api/compute_transit.py` delegates to `compute/transit.py` and uses hours-based durations throughout for consistency with the rest of the API.
 
 ### Correctness
 
@@ -33,12 +32,11 @@ Transit masking + simple depth metrics are used by almost every check (odd/even,
 ## Cross-module consistency note
 
 - There are two transit-mask entry points:
-  - `compute/transit.get_transit_mask(time, period, t0, duration_days)`
+  - `compute/transit.get_transit_mask(time, period, t0, duration_hours)`
   - `validation/base.get_in_transit_mask(time, period, t0, duration_hours, buffer_factor=1.0)`
 - They are consistent in geometry:
-  - `compute/transit`: `abs(phase) < duration_days/(2*period)`
+  - `compute/transit`: `abs(phase) < (duration_hours/24)/(2*period)`
   - `validation/base`: `abs(phase) < (duration_hours/24)/(2*period)` when `buffer_factor=1.0`
-- The only difference is the **duration unit** (days vs hours), which is documented above as the main footgun.
 
 ### Tests
 
