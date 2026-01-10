@@ -67,6 +67,60 @@ def _make_synthetic_transit_lc(
     return time, flux, flux_err
 
 
+def _inject_transits_by_epoch_parity(
+    time: np.ndarray,
+    flux: np.ndarray,
+    *,
+    period_days: float,
+    t0_btjd: float,
+    duration_hours: float,
+    depth_odd: float,
+    depth_even: float,
+) -> np.ndarray:
+    """Inject transits with different depths on odd/even epochs.
+
+    Matches the epoch definition used by `validation.lc_checks.check_odd_even_depth`
+    (epoch boundaries between transits).
+    """
+    out = flux.copy()
+    duration_days = duration_hours / 24.0
+
+    epoch = np.floor((time - t0_btjd + period_days / 2.0) / period_days).astype(int)
+    phase = ((time - t0_btjd) / period_days) % 1.0
+    phase_dist = np.minimum(phase, 1.0 - phase)
+    half_dur_phase = 0.5 * (duration_days / period_days)
+    in_transit = phase_dist < half_dur_phase
+
+    odd = (epoch % 2) == 1
+    out[in_transit & odd] *= 1.0 - depth_odd
+    out[in_transit & ~odd] *= 1.0 - depth_even
+    return out
+
+
+def _inject_secondary_eclipse_window(
+    time: np.ndarray,
+    flux: np.ndarray,
+    *,
+    period_days: float,
+    t0_btjd: float,
+    depth: float,
+    center: float = 0.5,
+    half_width: float = 0.15,
+) -> np.ndarray:
+    """Inject a broad secondary eclipse dip across the default search window.
+
+    This is intentionally aligned with the check's search window so the window
+    median shifts and the metric becomes detectable (test stability).
+    """
+    out = flux.copy()
+    phase = ((time - t0_btjd) / period_days) % 1.0
+    lo = center - half_width
+    hi = center + half_width
+    sec = (phase > lo) & (phase < hi)
+    out[sec] *= 1.0 - depth
+    return out
+
+
 class TestOddEvenResult:
     """Tests for odd_even_result transit primitive."""
 
@@ -124,6 +178,40 @@ class TestOddEvenDepth:
         # Default is metrics-only; caller makes policy decision downstream.
         assert result.passed is None
         assert result.details.get("_metrics_only") is True
+        # With enough data, odd/even should not be suspicious for a clean injection.
+        # (If insufficient data, the check will return the metrics-only sentinel with 0 depths.)
+        if "insufficient_data_for_odd_even_check" not in result.details.get("warnings", []):
+            assert result.details.get("suspicious") in (False, None)
+
+    def test_odd_even_depth_flags_alternating_depths_as_suspicious(self) -> None:
+        time, flux, flux_err = _make_synthetic_transit_lc(
+            n_points=8000,
+            period_days=3.5,
+            t0_btjd=0.5,
+            duration_hours=2.5,
+            depth=0.0,  # inject via parity helper
+            noise_level=2e-4,
+            n_periods=12,
+        )
+        flux = _inject_transits_by_epoch_parity(
+            time,
+            flux,
+            period_days=3.5,
+            t0_btjd=0.5,
+            duration_hours=2.5,
+            depth_odd=0.02,
+            depth_even=0.01,
+        )
+        lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+        eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+        result = odd_even_depth(lc, eph)
+
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
+        assert "insufficient_data_for_odd_even_check" not in result.details.get("warnings", [])
+        assert result.details.get("suspicious") is True
+        assert result.details["depth_odd_ppm"] > result.details["depth_even_ppm"]
 
 
 class TestSecondaryEclipse:
@@ -155,6 +243,32 @@ class TestSecondaryEclipse:
         # Default is metrics-only; caller makes policy decision downstream.
         assert result.passed is None
         assert result.details.get("_metrics_only") is True
+        if result.details.get("note") != "Insufficient data for secondary eclipse search":
+            assert bool(result.details.get("significant_secondary")) is False
+
+    def test_secondary_eclipse_detects_injected_secondary(self) -> None:
+        time, flux, flux_err = _make_synthetic_transit_lc(
+            n_points=12000,
+            period_days=3.5,
+            t0_btjd=0.5,
+            duration_hours=2.5,
+            depth=0.01,
+            noise_level=2e-4,
+            n_periods=12,
+        )
+        flux = _inject_secondary_eclipse_window(
+            time, flux, period_days=3.5, t0_btjd=0.5, depth=0.01, center=0.5, half_width=0.15
+        )
+        lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+        eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+        result = secondary_eclipse(lc, eph)
+
+        assert result.passed is None
+        assert result.details.get("_metrics_only") is True
+        assert result.details.get("note") != "Insufficient data for secondary eclipse search"
+        assert result.details.get("significant_secondary") is True
+        assert result.details["secondary_depth_ppm"] > 1000.0
         assert "secondary_depth" in result.details
 
 
