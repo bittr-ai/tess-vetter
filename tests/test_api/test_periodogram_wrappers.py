@@ -71,6 +71,37 @@ def test_run_periodogram_ls_recovers_sinusoid_period() -> None:
     assert result.best_t0 < time.min() + result.best_period
 
 
+def test_run_periodogram_ls_ignores_nans_and_sorts_time() -> None:
+    time = np.linspace(1500.0, 1527.0, 3000, dtype=np.float64)
+    true_period = 4.2
+    flux = 1.0 + 2e-4 * np.sin(2.0 * np.pi * time / true_period + 0.1)
+    flux_err = np.full_like(time, 1e-4)
+
+    # Inject NaNs and reverse ordering.
+    time = time[::-1].copy()
+    flux = flux[::-1].copy()
+    flux_err = flux_err[::-1].copy()
+    flux[100] = np.nan
+    time[200] = np.nan
+    flux_err[300] = np.nan
+
+    result = run_periodogram(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        method="ls",
+        min_period=1.0,
+        max_period=10.0,
+        data_ref="lc:test:1:pdcsap",
+    )
+
+    assert result.method == "ls"
+    assert np.isfinite(result.best_period)
+    assert abs(result.best_period - true_period) / true_period < 0.05
+    assert result.best_t0 >= np.nanmin(time)
+    assert result.best_t0 < np.nanmin(time) + result.best_period
+
+
 def test_compute_transit_model_returns_metrics() -> None:
     time = np.linspace(1500.0, 1527.0, 1000, dtype=np.float64)
     flux = np.ones_like(time)
@@ -126,3 +157,44 @@ def test_refine_period_improves_precision() -> None:
     assert abs(refined_period - true_period) < abs(initial_period - true_period)
     assert float(refined_t0) == float(refined_t0)
     assert float(refined_power) == float(refined_power)
+
+
+@pytest.mark.skipif(not TLS_AVAILABLE, reason="transitleastsquares not available")
+def test_run_periodogram_tls_recovers_box_transit_period() -> None:
+    time = np.linspace(1500.0, 1527.0, 3000, dtype=np.float64)
+    flux = np.ones_like(time)
+    flux_err = np.full_like(time, 2e-4)
+
+    true_period = 3.2
+    t0 = 1501.3
+    duration_days = 0.10
+    depth = 0.01
+
+    flux = _inject_transit(
+        time,
+        flux,
+        period=true_period,
+        t0=t0,
+        duration_days=duration_days,
+        depth=depth,
+    )
+
+    result = run_periodogram(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        method="tls",
+        min_period=2.5,
+        max_period=4.0,
+        max_planets=1,
+        per_sector=False,
+        downsample_factor=2,
+        stellar_radius_rsun=1.0,
+        stellar_mass_msun=1.0,
+        data_ref="lc:test:1:pdcsap",
+    )
+
+    assert result.method == "tls"
+    assert result.peaks, "expected at least one TLS peak for injected transit"
+    assert abs(result.best_period - true_period) / true_period < 0.02
+    assert result.best_duration_hours is None or result.best_duration_hours > 0

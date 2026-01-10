@@ -32,23 +32,24 @@ If periodogram semantics are off (units, priors, SNR/FAP meanings), everything d
 
 ### Statistical semantics
 
-- [ ] LS `fap` is not computed (currently set to 1.0 sentinel); document as “unknown”
-- [ ] TLS `snr`/`fap` match TLS conventions (verify against TLS docs)
-- [ ] `detection_threshold` meaning is stable across methods
+- [x] LS `fap` is not computed (returned as `None` to mean “unknown / not computed”)
+- [x] TLS `snr`/`fap` follow TLS outputs (`results.snr`, `results.FAP` when available)
+- [x] No explicit `detection_threshold`; TLS significance is exposed via metrics (SDE/SNR/FAP) and downstream callers choose thresholds
 
 ### Numerical stability / edge cases
 
-- [ ] Works on short baselines (few periods)
-- [ ] Handles gapped cadence, NaNs, quality masks
-- [ ] Avoids pathological period grids (too fine, too coarse)
+- [x] Works on short baselines (few periods); TLS returns empty/low-SDE results when baseline is insufficient
+- [x] Handles gapped cadence, NaNs, quality masks (finite filtering + sort-by-time in `auto_periodogram`)
+- [x] Avoids pathological period grids (LS uses fixed log-spaced grid with enforced `min_period < max_period <= baseline/2`)
 
 ### Tests
 
 - [x] Existing: wrapper returns finite LS peak power (`tests/test_api/test_periodogram_wrappers.py`)
 - [x] Add: LS synthetic sinusoid recovery (`tests/test_api/test_periodogram_wrappers.py::test_run_periodogram_ls_recovers_sinusoid_period`)
-- [ ] Add: TLS synthetic transit recovery (lightweight, skip if TLS missing)
+- [x] Add: TLS synthetic transit recovery (lightweight, skip if TLS missing)
 
 ## Notes (initial pass)
 
 - LS `t0` is now estimated as the epoch of maximum of a best-fit sinusoid at `best_period`
   (primarily for phase-fold visualization; absolute epoch is not physically meaningful).
+- LS `fap` is `None` (not computed); TLS `fap` is `results.FAP` when provided by TLS, else `None`.

@@ -282,7 +282,7 @@ def tls_search_per_sector(
             "depth_ppm": 0.0,
             "sde": 0.0,
             "snr": 0.0,
-            "fap": 1.0,
+            "fap": None,
             "rp_rs": None,
             "odd_even_mismatch": 0.0,
             "transit_count": 0,
@@ -408,7 +408,7 @@ def tls_search(
             "depth_ppm": 0.0,
             "sde": 0.0,
             "snr": 0.0,
-            "fap": 1.0,
+            "fap": None,
             "rp_rs": None,
             "odd_even_mismatch": 0.0,
             "transit_count": 0,
@@ -455,7 +455,7 @@ def tls_search(
             "depth_ppm": 0.0,
             "sde": 0.0,
             "snr": 0.0,
-            "fap": 1.0,
+            "fap": None,
             "rp_rs": None,
             "odd_even_mismatch": 0.0,
             "transit_count": 0,
@@ -807,8 +807,46 @@ def auto_periodogram(
     Returns:
         PeriodogramResult with top peaks and metadata
     """
+    # Defensive cleaning: keep only finite samples and sort by time for stable baselines.
+    time = np.asarray(time, dtype=np.float64)
+    flux = np.asarray(flux, dtype=np.float64)
+    flux_err = np.asarray(flux_err, dtype=np.float64) if flux_err is not None else None
+
+    finite = np.isfinite(time) & np.isfinite(flux)
+    if flux_err is not None:
+        finite &= np.isfinite(flux_err)
+
+    time = time[finite]
+    flux = flux[finite]
+    if flux_err is not None:
+        flux_err = flux_err[finite]
+
+    if len(time) < 3:
+        selected_method: Literal["tls", "ls"] = "ls" if method == "ls" else "tls"
+        return PeriodogramResult(
+            data_ref=data_ref,
+            method="ls" if selected_method == "ls" else "tls",
+            peaks=[],
+            best_period=float(min_period),
+            best_t0=float(time[0]) if len(time) else 0.0,
+            best_duration_hours=None,
+            snr=None,
+            fap=None,
+            n_periods_searched=1 if selected_method == "ls" else 0,
+            period_range=(
+                float(min_period),
+                float(max_period) if max_period is not None else float(min_period),
+            ),
+        )
+
+    order = np.argsort(time)
+    time = time[order]
+    flux = flux[order]
+    if flux_err is not None:
+        flux_err = flux_err[order]
+
     # Calculate baseline
-    baseline_days = float(time[-1] - time[0]) if len(time) > 0 else 0.0
+    baseline_days = float(time[-1] - time[0])
 
     # Set max_period with Nyquist-like constraint
     max_period = baseline_days / 2.0 if max_period is None else min(max_period, baseline_days / 2.0)
@@ -875,6 +913,8 @@ def auto_periodogram(
         for result in results:
             # Only include duration if > 0 (valid TLS result)
             duration = result["duration_hours"]
+            if duration <= 0 or result.get("sde", 0.0) <= 0:
+                continue
             peaks.append(
                 PeriodogramPeak(
                     period=result["period"],
@@ -899,9 +939,9 @@ def auto_periodogram(
             # No detections
             best_period = min_period
             best_t0 = float(time[0])
-            best_duration_hours = 2.0
-            best_snr = 0.0
-            best_fap = 1.0
+            best_duration_hours = None
+            best_snr = None
+            best_fap = None
 
         return PeriodogramResult(
             data_ref=data_ref,
@@ -944,7 +984,7 @@ def auto_periodogram(
                 duration_hours=None,
                 depth_ppm=None,
                 snr=best_snr,
-                fap=1.0,  # LS doesn't provide FAP
+                fap=None,  # LS doesn't provide a calibrated FAP in this implementation
             )
         ]
 
@@ -956,7 +996,7 @@ def auto_periodogram(
             best_t0=best_t0,
             best_duration_hours=None,
             snr=best_snr,
-            fap=1.0,
+            fap=None,
             n_periods_searched=n_periods,
             period_range=(float(min_period), float(max_period)),
         )
