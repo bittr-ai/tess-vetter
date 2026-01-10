@@ -17,8 +17,8 @@ Transit masking + simple depth metrics are used by almost every check (odd/even,
 
 ### Units + conventions
 
-- [ ] `period_days`, `t0_btjd` (days), `duration_hours` (hours)
-- [ ] Depth ppm vs fractional depth clearly separated
+- [x] `period` (days), `t0` (days), `duration` (days)
+- [x] Depth is fractional (not ppm)
 
 ## Notes (initial pass)
 
@@ -27,9 +27,15 @@ Transit masking + simple depth metrics are used by almost every check (odd/even,
 
 ### Correctness
 
-- [ ] Mask centers transit at phase 0 consistently
+- [x] Mask centers transit at phase 0 consistently (phase in [-0.5, 0.5])
 - [ ] Consistent definition of “in-transit” window across modules
 
 ### Tests
 
-- [ ] Synthetic injection: recovered depth within tolerance
+- [x] Synthetic injection: recovered depth within tolerance
+
+## Evidence
+
+- Existing test coverage for `compute/transit.py`:
+  - `tests/test_compute/test_compute.py::TestGetTransitMask`
+  - `tests/test_compute/test_compute.py::TestMeasureDepth`

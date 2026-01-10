@@ -21,7 +21,7 @@ Applies: `working_docs/physics_audit/REVIEW_TEMPLATE.md`
 
 ### Tests
 
-- [ ] Counts expected number of transits on synthetic time arrays
+- [x] Counts expected number of transits on synthetic time arrays
 
 ## Notes (initial pass)
 

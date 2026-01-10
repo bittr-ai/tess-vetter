@@ -19,8 +19,8 @@ Stitching/normalization errors silently contaminate **all downstream physics** (
 
 ### Units + conventions
 
-- [ ] `time` is days; `cadence_seconds` is seconds; no implicit unit mixing
-- [ ] Flux normalization factor definition is explicit (median? robust median? OOT-only?)
+- [x] `time` is days; `cadence_seconds` is seconds; no implicit unit mixing
+- [x] Flux normalization factor definition is explicit (median of `quality==0` cadences when possible; else median of finite flux)
 
 ### Statistical robustness
 
@@ -29,12 +29,13 @@ Stitching/normalization errors silently contaminate **all downstream physics** (
 
 ### Numerical stability / edge cases
 
-- [ ] Handles NaNs, empty sectors, all-flagged sectors
+- [x] Handles NaNs (falls back without divide-by-NaN)
+- [ ] Handles empty sectors, all-flagged sectors
 - [ ] Handles cadence differences (20s vs 120s) without mis-inference
 
 ### Tests
 
-- [ ] Existing tests for stitch invariants
+- [x] Existing tests for stitch invariants
 - [ ] Add synthetic: two sectors with known scaling, injected transit, gaps, NaNs
 
 ## Notes (initial pass)
