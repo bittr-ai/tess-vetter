@@ -169,11 +169,31 @@ def detect_exposure_time(time: NDArray[np.float64]) -> float:
     Returns:
         Exposure time in days (for batman).
     """
-    if len(time) < 2:
+    time_arr = np.asarray(time, dtype=np.float64)
+    finite = np.isfinite(time_arr)
+    if np.sum(finite) < 2:
         # Default to 2-minute cadence
         return 2.0 / 60.0 / 24.0  # 2 minutes in days
 
-    cadence_days = float(np.median(np.diff(time)))
+    t = np.sort(time_arr[finite])
+    dt = np.diff(t)
+    dt = dt[np.isfinite(dt) & (dt > 0)]
+    if len(dt) == 0:
+        return 2.0 / 60.0 / 24.0
+
+    # Robustly reject large gaps (e.g., between sectors) using an IQR filter.
+    q25 = float(np.percentile(dt, 25))
+    q75 = float(np.percentile(dt, 75))
+    iqr = q75 - q25
+    if iqr > 0:
+        lo = q25 - 1.5 * iqr
+        hi = q75 + 1.5 * iqr
+        dt = dt[(dt >= lo) & (dt <= hi)]
+        if len(dt) == 0:
+            dt = np.diff(t)
+            dt = dt[np.isfinite(dt) & (dt > 0)]
+
+    cadence_days = float(np.median(dt))
     return cadence_days
 
 
