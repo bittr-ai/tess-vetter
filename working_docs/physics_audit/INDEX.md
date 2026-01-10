@@ -7,27 +7,28 @@ This is the ordered queue for the function-by-function audit.
 - `CONVENTIONS.md` (units, time bases, definitions)
 - `REVIEW_TEMPLATE.md` (what we check for each function)
 - `INVENTORY.md` (API → implementation map; entry points used by agents first)
+- Module notes live in `modules/in_progress/` while active and move to `modules/completed/` when all checkboxes are checked.
 
 ## 1) Early-agent entry points (review first)
 
 ### Types + contracts (prevents silent physics errors)
-- `src/bittr_tess_vetter/api/types.py`
+- `src/bittr_tess_vetter/api/types.py` → `working_docs/physics_audit/modules/in_progress/api_types.md`
 - `src/bittr_tess_vetter/api/lightcurve.py`
 
 ### Light curve assembly / normalization
-- `src/bittr_tess_vetter/api/stitch.py`
+- `src/bittr_tess_vetter/api/stitch.py` → `working_docs/physics_audit/modules/in_progress/api_stitch.md`
 
 ### Transit masking primitives (used everywhere)
-- `src/bittr_tess_vetter/api/compute_transit.py`
-- `src/bittr_tess_vetter/api/transit_masks.py`
+- `src/bittr_tess_vetter/api/compute_transit.py` → `working_docs/physics_audit/modules/in_progress/api_compute_transit.md`
+- `src/bittr_tess_vetter/api/transit_masks.py` → `working_docs/physics_audit/modules/in_progress/api_transit_masks.md`
 - `src/bittr_tess_vetter/validation/base.py` (mask helpers + depth measurement)
 
 ### Detection (periodogram) + minimal models
-- `src/bittr_tess_vetter/api/periodogram.py`
+- `src/bittr_tess_vetter/api/periodogram.py` → `working_docs/physics_audit/modules/in_progress/api_periodogram.md`
 - `src/bittr_tess_vetter/api/transit_model.py`
 
 ### LC-only vetting (fast triage)
-- `src/bittr_tess_vetter/api/lc_only.py`
+- `src/bittr_tess_vetter/api/lc_only.py` → `working_docs/physics_audit/modules/in_progress/api_lc_only.md`
 
 ## 2) Next layer (review after early-agent surface is solid)
 
@@ -49,4 +50,3 @@ This is the ordered queue for the function-by-function audit.
 - ◐ In progress
 - ✅ Done
 - ⚠️ Needs follow-up
-
