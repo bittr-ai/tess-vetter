@@ -4,7 +4,6 @@ This module provides:
 - PeriodogramPeak: Individual peak from periodogram analysis
 - TransitCandidate: Candidate transit parameters for vetting
 - VetterCheckResult: Result of a single vetting check
-- ValidationResult: Complete validation output with verdict
 - Detection: Wrapper combining candidate with metadata
 """
 
@@ -18,22 +17,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 class FrozenModel(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
-
-
-class Verdict(str, Enum):
-    """Aggregated vetting outcome."""
-
-    PASS = "PASS"  # All checks passed
-    WARN = "WARN"  # Some checks marginal
-    REJECT = "REJECT"  # One or more checks failed
-
-
-class Disposition(str, Enum):
-    """Final classification for a candidate."""
-
-    PLANET = "PLANET"
-    FALSE_POSITIVE = "FALSE_POSITIVE"
-    UNCERTAIN = "UNCERTAIN"
 
 
 # Type aliases with validation
@@ -60,15 +43,6 @@ class PeriodogramPeak(FrozenModel):
     )
     snr: SNR | None = None
     fap: FAP | None = None
-
-    @property
-    def is_significant(self) -> bool:
-        """Check if peak meets basic significance threshold."""
-        if self.fap is not None:
-            return self.fap < 0.01
-        if self.snr is not None:
-            return self.snr > 7.0
-        return self.power > 0  # Fallback
 
 
 class TransitCandidate(FrozenModel):
@@ -100,11 +74,7 @@ class VetterCheckResult(FrozenModel):
     - PF01-PF99: Pre-filter checks (optional, run before V01-V10)
 
     Passed field:
-    - True: Check passed (candidate is consistent with planet)
-    - False: Check failed (candidate shows signs of false positive)
-    - None: Metrics-only mode (policy decision deferred to caller)
-      When passed=None, the check returns raw metrics and the caller
-      (e.g., astro-arc-tess guardrails) makes the policy decision.
+    - Always None (metrics-only). Host applications may apply policy/guardrails.
     """
 
     id: str = Field(
@@ -112,7 +82,9 @@ class VetterCheckResult(FrozenModel):
         description="Check ID (V01-V10 for canonical, PF01-PF99 for pre-filters)",
     )
     name: str = Field(description="Human-readable check name")
-    passed: bool | None = Field(description="Pass/fail status. None indicates metrics-only mode.")
+    passed: bool | None = Field(
+        description="Metrics-only mode: always None. Host applications may apply policy/guardrails."
+    )
     confidence: float = Field(ge=0, le=1, description="Confidence in result")
     details: dict[str, Any] = Field(default_factory=dict)
 
@@ -122,66 +94,16 @@ class VetterCheckResult(FrozenModel):
         return self.confidence > 0.8
 
 
-class ValidationResult(FrozenModel):
-    """Complete validation output with aggregated verdict.
-
-    Contains results from all vetting checks and final disposition.
-    """
-
-    disposition: Disposition
-    verdict: Verdict
-    checks: list[VetterCheckResult]
-    summary: str = Field(description="Human-readable summary")
-
-    @property
-    def n_passed(self) -> int:
-        """Number of checks that passed."""
-        return sum(1 for c in self.checks if c.passed is True)
-
-    @property
-    def n_failed(self) -> int:
-        """Number of checks that failed."""
-        return sum(1 for c in self.checks if c.passed is False)
-
-    @property
-    def failed_checks(self) -> list[str]:
-        """IDs of failed checks."""
-        return [c.id for c in self.checks if c.passed is False]
-
-    @property
-    def n_unknown(self) -> int:
-        """Number of checks that returned metrics-only results (passed=None)."""
-        return sum(1 for c in self.checks if c.passed is None)
-
-    @property
-    def unknown_checks(self) -> list[str]:
-        """IDs of checks that returned metrics-only results (passed=None)."""
-        return [c.id for c in self.checks if c.passed is None]
-
-
 class Detection(FrozenModel):
     """Complete detection wrapper combining candidate with metadata.
 
-    This is the output of the detection pipeline before validation.
+    This is the output of the detection pipeline before host-side interpretation.
     """
 
     candidate: TransitCandidate
     data_ref: str = Field(description="Reference to source light curve")
     method: Literal["bls", "ls", "auto"] = "bls"
     rank: int = Field(ge=1, description="Rank among candidates (1 = best)")
-    validation: ValidationResult | None = None
-
-    @property
-    def is_validated(self) -> bool:
-        """Check if detection has been validated."""
-        return self.validation is not None
-
-    @property
-    def is_planet_candidate(self) -> bool:
-        """Check if validation passed as planet candidate."""
-        if self.validation is None:
-            return False
-        return self.validation.disposition == Disposition.PLANET
 
 
 class PeriodogramResult(FrozenModel):

@@ -28,8 +28,7 @@ from bittr_tess_vetter.api.references import (
 )
 from bittr_tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
 
-# PersistentCache type comes from caller (e.g., astro-arc-tess)
-# Using Any since bittr_tess_vetter.io doesn't exist in this package
+# PersistentCache type comes from the host application.
 PersistentCache = Any
 
 # Valid photometric filter designations for external light curves

@@ -119,7 +119,6 @@ class TestAggregateReplicateResults:
                 "nfpp": 0.001,
                 "posterior_sum_total": 1.0,
                 "posterior_prob_nan_count": 0,
-                "disposition": "VALIDATED",
             }
         ]
         out = _aggregate_replicate_results(
@@ -157,10 +156,6 @@ class TestAggregateReplicateResults:
         assert out["n_success"] == 3
         assert out["n_fail"] == 0
         assert out["runtime_seconds"] == 15.0
-
-        # Disposition should be based on median FPP
-        # FPP 0.02 < 0.05 but >= 0.01, so LIKELY_PLANET
-        assert out["disposition"] == "LIKELY_PLANET"
 
     def test_mixed_success_and_degenerate(self):
         """Mixed results should aggregate only successful ones."""

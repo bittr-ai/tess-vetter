@@ -26,7 +26,7 @@ from bittr_tess_vetter.api.references import (
 )
 from bittr_tess_vetter.api.types import Candidate, CheckResult, LightCurve
 from bittr_tess_vetter.domain.detection import TransitCandidate, VetterCheckResult
-from bittr_tess_vetter.validation.exovetter_checks import ModshiftCheck, SWEETCheck
+from bittr_tess_vetter.validation.exovetter_checks import run_modshift, run_sweet
 
 # Module-level references for programmatic access (generated from central registry)
 REFERENCES = [ref.to_dict() for ref in [THOMPSON_2018, COUGHLIN_2016]]
@@ -91,7 +91,7 @@ def _make_skipped_result(check_id: str, check_name: str, reason: str) -> CheckRe
     return CheckResult(
         id=check_id,
         name=check_name,
-        passed=True,  # Non-blocking
+        passed=None,
         confidence=0.0,  # No confidence - not run
         details={"status": "skipped", "reason": reason},
     )
@@ -124,7 +124,7 @@ def modshift(
         lc: Light curve data
         candidate: Transit candidate with ephemeris and depth
         enabled: If False, return skipped result without running check
-        config: Optional configuration override (threshold, fred_warning_threshold)
+        config: Optional configuration overrides (reserved)
 
     Returns:
         CheckResult with ModShift metrics and pass/fail status
@@ -148,23 +148,13 @@ def modshift(
         return CheckResult(
             id="V11",
             name="modshift",
-            passed=True,
+            passed=None,
             confidence=0.20,
             details={"status": "error", "reason": str(e)},
         )
 
-    # Run the internal check with optional config
-    check_config = None
-    if config:
-        from bittr_tess_vetter.validation.base import CheckConfig
-
-        check_config = CheckConfig(
-            enabled=True,
-            threshold=config.get("threshold", 0.5),
-            additional={k: v for k, v in config.items() if k != "threshold"},
-        )
-    check = ModshiftCheck(config=check_config)
-    result = check.run(internal_candidate, internal_lc)
+    del config
+    result = run_modshift(candidate=internal_candidate, lightcurve=internal_lc)
 
     return _convert_result(result)
 
@@ -198,7 +188,7 @@ def sweet(
         lc: Light curve data
         candidate: Transit candidate with ephemeris and depth
         enabled: If False, return skipped result without running check
-        config: Optional configuration override (threshold, half_period_threshold)
+        config: Optional configuration overrides (reserved)
 
     Returns:
         CheckResult with SWEET metrics and pass/fail status
@@ -222,23 +212,13 @@ def sweet(
         return CheckResult(
             id="V12",
             name="sweet",
-            passed=True,
+            passed=None,
             confidence=0.20,
             details={"status": "error", "reason": str(e)},
         )
 
-    # Run the internal check with optional config
-    check_config = None
-    if config:
-        from bittr_tess_vetter.validation.base import CheckConfig
-
-        check_config = CheckConfig(
-            enabled=True,
-            threshold=config.get("threshold", 3.0),
-            additional={k: v for k, v in config.items() if k != "threshold"},
-        )
-    check = SWEETCheck(config=check_config)
-    result = check.run(internal_candidate, internal_lc)
+    del config
+    result = run_sweet(candidate=internal_candidate, lightcurve=internal_lc)
 
     return _convert_result(result)
 
@@ -274,7 +254,7 @@ def vet_exovetter(
         >>> cand = Candidate(ephemeris=eph, depth_ppm=1000)
         >>> results = vet_exovetter(lc, cand)
         >>> for r in results:
-        ...     print(f"{r.id} {r.name}: {'PASS' if r.passed else 'FAIL'}")
+        ...     print(f\"{r.id} {r.name}: confidence={r.confidence:.2f}\")
 
     Novelty: standard
 

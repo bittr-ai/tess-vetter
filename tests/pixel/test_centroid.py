@@ -891,10 +891,6 @@ class TestCentroidShiftConfig:
     def test_config_defaults(self) -> None:
         """Config has expected default values."""
         config = CentroidShiftConfig()
-        assert config.fail_shift_pixels == 1.0
-        assert config.fail_sigma == 5.0
-        assert config.warn_shift_pixels == 0.5
-        assert config.warn_sigma == 3.0
         assert config.centroid_method == "median"
         assert config.significance_method == "bootstrap"
         assert config.n_bootstrap == 1000
@@ -906,12 +902,10 @@ class TestCentroidShiftConfig:
     def test_config_custom_values(self) -> None:
         """Config accepts custom values."""
         config = CentroidShiftConfig(
-            fail_shift_pixels=0.8,
             centroid_method="mean",
             significance_method="analytic",
             n_bootstrap=500,
         )
-        assert config.fail_shift_pixels == 0.8
         assert config.centroid_method == "mean"
         assert config.significance_method == "analytic"
         assert config.n_bootstrap == 500
@@ -920,7 +914,7 @@ class TestCentroidShiftConfig:
         """Config is immutable."""
         config = CentroidShiftConfig()
         with pytest.raises(Exception):
-            config.fail_shift_pixels = 2.0  # type: ignore
+            config.n_bootstrap = 500  # type: ignore[misc]
 
 
 # =============================================================================

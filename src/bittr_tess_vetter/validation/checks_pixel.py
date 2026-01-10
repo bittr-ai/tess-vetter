@@ -1,1350 +1,329 @@
-"""Pixel-level vetting checks for transit candidate validation (V08-V10).
+"""Pixel-level vetting computations (metrics-only).
 
-This module implements pixel-level checks that require TPF (Target Pixel File) data:
-- V08: Centroid Shift - Compare in-transit vs out-of-transit centroid positions
-- V09: Pixel-Level LC - Analyze light curves from individual pixels
-- V10: Aperture Dependence - Measure transit depth vs aperture size
+This module provides V08–V10 measurements that require TPF-like data:
+- V08: centroid shift metrics (in vs out of transit)
+- V09: per-pixel depth map + concentration metrics
+- V10: aperture dependence metrics (depth vs aperture radius)
 
-These checks are critical for detecting background eclipsing binaries that
-contaminate the photometric aperture.
-
-V08 and V10 wrap existing implementations in bittr_tess_vetter.pixel:
-- V08: Uses pixel.centroid.compute_centroid_shift()
-- V10: Uses pixel.aperture.compute_aperture_dependence()
-
-Thresholds (from spec):
-- V08: FAIL if centroid_shift >= 1.0 pixel AND significance >= 5.0 sigma
-       WARN if centroid_shift >= 0.5 pixel OR significance >= 3.0 sigma
-- V10: FAIL if stability_metric < 0.5 (depth varies >20% across apertures)
-       WARN if stability_metric < 0.7
+All results are metrics-only: `passed=None` and `details["_metrics_only"]=True`.
 """
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar, Literal
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
-from bittr_tess_vetter.domain.detection import VetterCheckResult
-from bittr_tess_vetter.pixel.aperture import (
-    ApertureDependenceResult,
-    compute_aperture_dependence,
-)
-from bittr_tess_vetter.pixel.aperture import (
-    TransitParams as ApertureTransitParams,
-)
-from bittr_tess_vetter.pixel.centroid import (
-    CentroidResult,
-    compute_centroid_shift,
-)
-from bittr_tess_vetter.pixel.centroid import (
-    TransitParams as CentroidTransitParams,
-)
+from bittr_tess_vetter.domain.detection import TransitCandidate, VetterCheckResult
+from bittr_tess_vetter.pixel.aperture import compute_aperture_dependence
+from bittr_tess_vetter.pixel.aperture import TransitParams as ApertureTransitParams
+from bittr_tess_vetter.pixel.centroid import compute_centroid_shift
+from bittr_tess_vetter.pixel.centroid import TransitParams as CentroidTransitParams
 from bittr_tess_vetter.validation.base import (
-    CheckConfig,
-    VetterCheck,
     get_in_transit_mask,
     get_out_of_transit_mask,
-    make_result,
 )
 
-if TYPE_CHECKING:
-    from bittr_tess_vetter.domain.detection import TransitCandidate
-    from bittr_tess_vetter.domain.lightcurve import LightCurveData
-    from bittr_tess_vetter.domain.target import StellarParameters
 
-logger = logging.getLogger(__name__)
-
-
-# =============================================================================
-# V08: Centroid Shift Check (wrapper around pixel.centroid)
-# =============================================================================
-
-
-class CentroidShiftCheck(VetterCheck):
-    """V08: Detect centroid motion during transit.
-
-    A significant centroid shift between in-transit and out-of-transit
-    cadences indicates that the signal source is not the target star,
-    but rather a background eclipsing binary or nearby contaminating source.
-
-    TESS pixel scale: 21 arcsec/pixel
-
-    Thresholds (from spec):
-    - FAIL: shift >= 1.0 pixel AND significance >= 5.0 sigma
-    - WARN: shift >= 0.5 pixel OR significance >= 3.0 sigma
-    - PASS: otherwise
-
-    This check wraps `bittr_tess_vetter.pixel.centroid.compute_centroid_shift()`.
-    """
-
-    id: ClassVar[str] = "V08"
-    name: ClassVar[str] = "centroid_shift"
-
-    def __init__(
-        self,
-        config: CheckConfig | None = None,
-        tpf_data: NDArray[np.floating[Any]] | None = None,
-        time: NDArray[np.floating[Any]] | None = None,
-    ) -> None:
-        """Initialize CentroidShiftCheck.
-
-        Args:
-            config: Check configuration (optional).
-            tpf_data: TPF flux data with shape (time, rows, cols).
-            time: Time array in BTJD.
-        """
-        super().__init__(config)
-        self.tpf_data = tpf_data
-        self.time = time
-
-    @classmethod
-    def _default_config(cls) -> CheckConfig:
-        """Return default configuration for V08 check.
-
-        Note: Threshold fields are DEPRECATED. Threshold interpretation has been
-        moved to astro-arc-tess guardrails. This check returns passed=None
-        (metrics-only mode); host applications make policy decisions.
-        """
-        return CheckConfig(
-            enabled=True,
-            threshold=1.0,  # fail_shift_threshold in pixels (DEPRECATED)
-            additional={
-                "fail_sigma_threshold": 5.0,  # DEPRECATED
-                "warn_shift_threshold": 0.5,  # DEPRECATED
-                "warn_sigma_threshold": 3.0,  # DEPRECATED
-                # New V08 v2 parameters
-                "centroid_method": "median",  # "mean", "median", "huber"
-                "significance_method": "bootstrap",  # "analytic", "bootstrap", "permutation"
-                "n_bootstrap": 1000,
-                "bootstrap_seed": None,
-                "outlier_sigma": 3.0,
-                "min_in_transit_cadences": 5,
-                "min_out_transit_cadences": 20,
-            },
-        )
-
-    def run(
-        self,
-        candidate: TransitCandidate,
-        lightcurve: LightCurveData | None = None,
-        stellar: StellarParameters | None = None,
-    ) -> VetterCheckResult:
-        """Execute the V08 centroid shift check.
-
-        Args:
-            candidate: Transit candidate with period, t0, duration_hours.
-            lightcurve: Light curve data (not used, TPF required).
-            stellar: Stellar parameters (not used).
-
-        Returns:
-            VetterCheckResult with centroid shift analysis.
-        """
-        # Check if TPF data is available
-        if self.tpf_data is None or self.time is None:
-            logger.warning("V08 (Centroid Shift) requires TPF data. Returning low-confidence pass.")
-            return make_result(
-                "V08",
-                passed=None,
-                confidence=0.1,
-                details={
-                    "note": "TPF data not available for centroid shift analysis",
-                    "deferred": True,
-                    "_metrics_only": True,
-                },
-            )
-
-        # Validate TPF data shape
-        if self.tpf_data.ndim != 3:
-            return make_result(
-                "V08",
-                passed=None,
-                confidence=0.0,
-                details={
-                    "error": f"Invalid TPF shape: expected 3D, got {self.tpf_data.ndim}D",
-                    "_metrics_only": True,
-                },
-            )
-
-        if len(self.time) != self.tpf_data.shape[0]:
-            return make_result(
-                "V08",
-                passed=None,
-                confidence=0.0,
-                details={
-                    "error": (
-                        f"Time/TPF mismatch: {len(self.time)} times, "
-                        f"{self.tpf_data.shape[0]} frames"
-                    ),
-                    "_metrics_only": True,
-                },
-            )
-
-        # Create TransitParams for centroid module
-        transit_params = CentroidTransitParams(
-            period=candidate.period,
-            t0=candidate.t0,
-            duration=candidate.duration_hours,  # hours
-        )
-
-        # Get config parameters for centroid computation
-        # Use type-safe literals with validation
-        centroid_method_raw = self.config.additional.get("centroid_method", "median")
-        centroid_method: Literal["mean", "median", "huber"] = (
-            centroid_method_raw if centroid_method_raw in ("mean", "median", "huber") else "median"
-        )
-        significance_method_raw = self.config.additional.get("significance_method", "bootstrap")
-        significance_method: Literal["analytic", "bootstrap", "permutation"] = (
-            significance_method_raw
-            if significance_method_raw in ("analytic", "bootstrap", "permutation")
-            else "bootstrap"
-        )
-        n_bootstrap = self.config.additional.get("n_bootstrap", 1000)
-        bootstrap_seed = self.config.additional.get("bootstrap_seed", None)
-        outlier_sigma = self.config.additional.get("outlier_sigma", 3.0)
-
-        # Run centroid shift computation with new robust methods
-        try:
-            result: CentroidResult = compute_centroid_shift(
-                tpf_data=self.tpf_data,
-                time=self.time,
-                transit_params=transit_params,
-                centroid_method=centroid_method,
-                significance_method=significance_method,
-                n_bootstrap=n_bootstrap,
-                bootstrap_seed=bootstrap_seed,
-                outlier_sigma=outlier_sigma,
-            )
-        except ValueError as e:
-            return make_result(
-                "V08",
-                passed=None,
-                confidence=0.1,
-                details={
-                    "reason": "computation_error",
-                    "message": str(e),
-                    "_metrics_only": True,
-                },
-            )
-
-        # Handle NaN results
-        if np.isnan(result.centroid_shift_pixels) or np.isnan(result.significance_sigma):
-            return make_result(
-                "V08",
-                passed=None,
-                confidence=0.2,
-                details={
-                    "reason": "insufficient_data",
-                    "message": "Could not compute centroid - insufficient in/out transit data",
-                    "n_in_transit": result.n_in_transit_cadences,
-                    "n_out_transit": result.n_out_transit_cadences,
-                    "_metrics_only": True,
-                },
-            )
-
-        # Get thresholds from config (DEPRECATED - provided for downstream policy)
-        fail_shift = self.config.threshold if self.config.threshold is not None else 1.0
-        fail_sigma = self.config.additional.get("fail_sigma_threshold", 5.0)
-        warn_shift = self.config.additional.get("warn_shift_threshold", 0.5)
-        warn_sigma = self.config.additional.get("warn_sigma_threshold", 3.0)
-
-        # Extract metrics
-        shift = result.centroid_shift_pixels
-        sigma = result.significance_sigma
-
-        # Compute threshold-based flags (for reference, even in metrics-only mode)
-        is_fail = (shift >= fail_shift) and (sigma >= fail_sigma)
-        is_warn = (shift >= warn_shift) or (sigma >= warn_sigma)
-
-        # Metrics-only: host applications decide policy based on returned metrics.
-        passed: bool | None = None
-        # Confidence reflects data quality only, not policy decision
-        base_confidence = 0.85
-        if result.n_in_transit_cadences >= 20 and result.n_out_transit_cadences >= 100:
-            base_confidence = 0.95
-        elif result.n_in_transit_cadences < 5 or result.n_out_transit_cadences < 20:
-            base_confidence = 0.6
-        confidence = base_confidence
-
-        # Build details dict with all V08 v2 output fields
-        details: dict[str, Any] = {
-            # Metrics-only mode marker
-            "_metrics_only": True,
-            # Core results
-            "centroid_shift_pixels": round(shift, 4),
-            "centroid_shift_arcsec": round(result.centroid_shift_arcsec, 2),
-            "significance_sigma": round(sigma, 2),
-            # Centroids
-            "in_transit_centroid": (
-                round(result.in_transit_centroid[0], 3),
-                round(result.in_transit_centroid[1], 3),
-            ),
-            "out_of_transit_centroid": (
-                round(result.out_of_transit_centroid[0], 3),
-                round(result.out_of_transit_centroid[1], 3),
-            ),
-            # Cadence counts
-            "n_in_transit": result.n_in_transit_cadences,
-            "n_out_of_transit": result.n_out_transit_cadences,
-            # Uncertainty estimates (new in v2)
-            "shift_uncertainty_pixels": (
-                round(result.shift_uncertainty_pixels, 4)
-                if np.isfinite(result.shift_uncertainty_pixels)
-                else None
-            ),
-            "shift_ci_lower_pixels": (
-                round(result.shift_ci_lower_pixels, 4)
-                if np.isfinite(result.shift_ci_lower_pixels)
-                else None
-            ),
-            "shift_ci_upper_pixels": (
-                round(result.shift_ci_upper_pixels, 4)
-                if np.isfinite(result.shift_ci_upper_pixels)
-                else None
-            ),
-            # Saturation risk (new in v2)
-            "saturation_risk": result.saturation_risk,
-            "max_flux_fraction": round(result.max_flux_fraction, 2),
-            # Method metadata (new in v2)
-            "centroid_method": result.centroid_method,
-            "significance_method": result.significance_method,
-            "n_bootstrap": result.n_bootstrap,
-            "n_outliers_rejected": result.n_outliers_rejected,
-            # Warnings from centroid module
-            "centroid_warnings": list(result.warnings) if result.warnings else [],
-            # Thresholds for reference (DEPRECATED - provided for downstream guardrails)
-            "thresholds": {
-                "fail_shift": fail_shift,
-                "fail_sigma": fail_sigma,
-                "warn_shift": warn_shift,
-                "warn_sigma": warn_sigma,
-            },
-        }
-
-        if is_warn and not is_fail:
-            details["warning"] = "Marginal centroid shift detected - recommend follow-up"
-
-        # Add saturation warning if detected
-        if result.saturation_risk:
-            details["saturation_warning"] = (
-                "Saturation detected - centroid may be biased toward bleed trails"
-            )
-
-        return make_result(
-            "V08",
-            passed=passed,
-            confidence=round(confidence, 3),
-            details=details,
-        )
-
-
-def check_centroid_shift_with_tpf(
-    tpf_data: NDArray[np.floating[Any]],
-    time: NDArray[np.floating[Any]],
-    period: float,
-    t0: float,
-    duration_hours: float,
-    fail_shift_threshold: float = 1.0,
-    fail_sigma_threshold: float = 5.0,
-    warn_shift_threshold: float = 0.5,
-    warn_sigma_threshold: float = 3.0,
-    centroid_method: Literal["mean", "median", "huber"] = "median",
-    significance_method: Literal["analytic", "bootstrap", "permutation"] = "bootstrap",
-    n_bootstrap: int = 1000,
-    bootstrap_seed: int | None = None,
-    outlier_sigma: float = 3.0,
+def _metrics_result(
+    *,
+    check_id: str,
+    name: str,
+    confidence: float,
+    details: dict[str, Any],
 ) -> VetterCheckResult:
-    """V08: Centroid shift check (functional interface).
-
-    Convenience function for running V08 without creating a check instance.
-    Uses robust centroid estimation with bootstrap uncertainties by default.
-
-    This is metrics-only: returns passed=None with raw metrics only.
-    Policy decisions are made by downstream guardrails (e.g., astro-arc-tess).
-
-    Args:
-        tpf_data: TPF flux data with shape (time, rows, cols).
-        time: Time array in BTJD.
-        period: Orbital period in days.
-        t0: Reference transit epoch in BTJD.
-        duration_hours: Transit duration in hours.
-        fail_shift_threshold: Shift threshold for failure (pixels). DEPRECATED.
-        fail_sigma_threshold: Significance threshold for failure (sigma). DEPRECATED.
-        warn_shift_threshold: Shift threshold for warning (pixels). DEPRECATED.
-        warn_sigma_threshold: Significance threshold for warning (sigma). DEPRECATED.
-        centroid_method: Centroid aggregation method ("mean", "median", "huber").
-        significance_method: Method for significance ("analytic", "bootstrap").
-        n_bootstrap: Number of bootstrap iterations.
-        outlier_sigma: Sigma threshold for outlier rejection.
-    Returns:
-        VetterCheckResult with centroid shift analysis including:
-        - centroid_shift_pixels, centroid_shift_arcsec
-        - significance_sigma
-        - shift_uncertainty_pixels, shift_ci_lower_pixels, shift_ci_upper_pixels
-        - saturation_risk, n_outliers_rejected
-        - centroid_warnings
-        - _metrics_only: True
-    """
-    # Validate inputs
-    if tpf_data.ndim != 3:
-        return make_result(
-            "V08",
-            passed=None,
-            confidence=0.0,
-            details={
-                "error": f"Expected 3D TPF data, got shape {tpf_data.shape}",
-                "_metrics_only": True,
-            },
-        )
-
-    if len(time) != tpf_data.shape[0]:
-        return make_result(
-            "V08",
-            passed=None,
-            confidence=0.0,
-            details={
-                "error": f"Time length {len(time)} != TPF cadences {tpf_data.shape[0]}",
-                "_metrics_only": True,
-            },
-        )
-
-    # Create TransitParams for centroid module
-    transit_params = CentroidTransitParams(
-        period=period,
-        t0=t0,
-        duration=duration_hours,  # hours
-    )
-
-    # Run centroid shift computation with robust methods
-    try:
-        result: CentroidResult = compute_centroid_shift(
-            tpf_data=tpf_data,
-            time=time,
-            transit_params=transit_params,
-            centroid_method=centroid_method,
-            significance_method=significance_method,
-            n_bootstrap=n_bootstrap,
-            bootstrap_seed=bootstrap_seed,
-            outlier_sigma=outlier_sigma,
-        )
-    except ValueError as e:
-        return make_result(
-            "V08",
-            passed=None,
-            confidence=0.1,
-            details={"reason": "computation_error", "message": str(e), "_metrics_only": True},
-        )
-
-    # Handle NaN results
-    if np.isnan(result.centroid_shift_pixels) or np.isnan(result.significance_sigma):
-        return make_result(
-            "V08",
-            passed=None,
-            confidence=0.2,
-            details={
-                "reason": "insufficient_data",
-                "message": "Could not compute centroid",
-                "n_in_transit": result.n_in_transit_cadences,
-                "n_out_of_transit": result.n_out_transit_cadences,
-                "centroid_warnings": list(result.warnings) if result.warnings else [],
-                "_metrics_only": True,
-            },
-        )
-
-    shift = result.centroid_shift_pixels
-    sigma = result.significance_sigma
-
-    # Compute threshold-based flags (for reference, even in metrics-only mode)
-    is_fail = (shift >= fail_shift_threshold) and (sigma >= fail_sigma_threshold)
-    is_warn = (shift >= warn_shift_threshold) or (sigma >= warn_sigma_threshold)
-
-    passed: bool | None = None
-    confidence = 0.85 if result.n_in_transit_cadences >= 10 else 0.6
-
-    # Build comprehensive details dict
-    details: dict[str, Any] = {
-        # Metrics-only mode marker
-        "_metrics_only": True,
-        # Core results
-        "centroid_shift_pixels": round(shift, 4),
-        "centroid_shift_arcsec": round(result.centroid_shift_arcsec, 2),
-        "significance_sigma": round(sigma, 2),
-        # Centroids
-        "in_transit_centroid": (
-            round(result.in_transit_centroid[0], 3),
-            round(result.in_transit_centroid[1], 3),
-        ),
-        "out_of_transit_centroid": (
-            round(result.out_of_transit_centroid[0], 3),
-            round(result.out_of_transit_centroid[1], 3),
-        ),
-        # Cadence counts
-        "n_in_transit": result.n_in_transit_cadences,
-        "n_out_of_transit": result.n_out_transit_cadences,
-        # Uncertainty estimates
-        "shift_uncertainty_pixels": (
-            round(result.shift_uncertainty_pixels, 4)
-            if np.isfinite(result.shift_uncertainty_pixels)
-            else None
-        ),
-        "shift_ci_lower_pixels": (
-            round(result.shift_ci_lower_pixels, 4)
-            if np.isfinite(result.shift_ci_lower_pixels)
-            else None
-        ),
-        "shift_ci_upper_pixels": (
-            round(result.shift_ci_upper_pixels, 4)
-            if np.isfinite(result.shift_ci_upper_pixels)
-            else None
-        ),
-        # Saturation risk
-        "saturation_risk": result.saturation_risk,
-        "max_flux_fraction": round(result.max_flux_fraction, 2),
-        # Method metadata
-        "centroid_method": result.centroid_method,
-        "significance_method": result.significance_method,
-        # Threshold-based flags (for downstream policy/guardrails)
-        "is_fail": bool(is_fail),
-        "is_warn": bool(is_warn),
-        "n_bootstrap": result.n_bootstrap,
-        "n_outliers_rejected": result.n_outliers_rejected,
-        # Warnings
-        "centroid_warnings": list(result.warnings) if result.warnings else [],
-        # Thresholds for reference (DEPRECATED - provided for downstream guardrails)
-        "thresholds": {
-            "fail_shift": fail_shift_threshold,
-            "fail_sigma": fail_sigma_threshold,
-            "warn_shift": warn_shift_threshold,
-            "warn_sigma": warn_sigma_threshold,
-        },
-        "is_fail": bool(is_fail),
-        "is_warn": bool(is_warn),
-    }
-
-    if is_warn and not is_fail:
-        details["warning"] = "Marginal centroid shift detected"
-
-    if result.saturation_risk:
-        details["saturation_warning"] = (
-            "Saturation detected - centroid may be biased toward bleed trails"
-        )
-
-    return make_result("V08", passed=passed, confidence=round(confidence, 3), details=details)
-
-
-# =============================================================================
-# V09: Pixel-Level Light Curve Check
-# =============================================================================
-
-
-@dataclass(frozen=True)
-class PixelLevelLCResult:
-    """Result of pixel-level light curve analysis.
-
-    Attributes:
-        passed: Whether the check passed (transit appears on target).
-        confidence: Confidence in the result (0-1).
-        depth_map_ppm: 2D array of transit depths per pixel in ppm.
-        max_depth_pixel: (row, col) of pixel with maximum transit depth.
-        max_depth_ppm: Maximum transit depth in ppm.
-        target_depth_ppm: Transit depth at target pixel in ppm.
-        concentration_ratio: target_depth / max_depth (1.0 = on target).
-        transit_on_target: True if max depth pixel is near target location.
-    """
-
-    passed: bool
-    confidence: float
-    depth_map_ppm: NDArray[np.floating[Any]]
-    max_depth_pixel: tuple[int, int]
-    max_depth_ppm: float
-    target_depth_ppm: float
-    concentration_ratio: float
-    transit_on_target: bool
-
-
-def compute_pixel_level_depths(
-    tpf_data: NDArray[np.floating[Any]],
-    time: NDArray[np.floating[Any]],
-    period: float,
-    t0: float,
-    duration_hours: float,
-) -> NDArray[np.floating[Any]]:
-    """Compute transit depth for each pixel in the TPF.
-
-    For each pixel, extracts its light curve and measures the transit depth
-    by comparing in-transit vs out-of-transit flux.
-
-    Args:
-        tpf_data: Target pixel file flux data with shape (time, rows, cols).
-        time: Time array in BTJD.
-        period: Orbital period in days.
-        t0: Reference transit epoch in BTJD.
-        duration_hours: Transit duration in hours.
-
-    Returns:
-        2D array of transit depths in ppm with shape (rows, cols).
-        Positive values indicate flux decrease (dip).
-    """
-    n_time, n_rows, n_cols = tpf_data.shape
-
-    # Get transit masks
-    in_transit_mask = get_in_transit_mask(time, period, t0, duration_hours)
-    out_of_transit_mask = get_out_of_transit_mask(
-        time, period, t0, duration_hours, buffer_factor=2.0
-    )
-
-    depth_map = np.zeros((n_rows, n_cols), dtype=np.float64)
-
-    for i in range(n_rows):
-        for j in range(n_cols):
-            # Extract single-pixel light curve
-            pixel_flux = tpf_data[:, i, j]
-
-            # Get valid (finite) data
-            valid_in = in_transit_mask & np.isfinite(pixel_flux)
-            valid_out = out_of_transit_mask & np.isfinite(pixel_flux)
-
-            if np.sum(valid_in) < 3 or np.sum(valid_out) < 3:
-                # Insufficient data for this pixel
-                depth_map[i, j] = np.nan
-                continue
-
-            in_flux = pixel_flux[valid_in]
-            out_flux = pixel_flux[valid_out]
-
-            # Compute depth: (out - in) / out
-            # Positive depth = flux decrease during transit
-            out_median = np.nanmedian(out_flux)
-            in_median = np.nanmedian(in_flux)
-
-            if out_median <= 0 or not np.isfinite(out_median):
-                depth_map[i, j] = np.nan
-                continue
-
-            depth = (out_median - in_median) / out_median
-            depth_map[i, j] = depth * 1e6  # Convert to ppm
-
-    return depth_map
-
-
-def find_target_pixel(
-    depth_map: NDArray[np.floating[Any]],
-    target_pixel: tuple[int, int] | None = None,
-) -> tuple[int, int]:
-    """Find the expected target pixel location.
-
-    If target_pixel is provided, returns it. Otherwise, assumes target is
-    at the center of the TPF (standard TESS convention).
-
-    Args:
-        depth_map: 2D array of depths (used for shape).
-        target_pixel: Optional explicit target pixel (row, col).
-
-    Returns:
-        Target pixel location as (row, col).
-    """
-    if target_pixel is not None:
-        return target_pixel
-
-    # Default: center of TPF
-    n_rows, n_cols = depth_map.shape
-    return (n_rows // 2, n_cols // 2)
-
-
-def compute_pixel_level_lc_check(
-    tpf_data: NDArray[np.floating[Any]],
-    time: NDArray[np.floating[Any]],
-    period: float,
-    t0: float,
-    duration_hours: float,
-    target_pixel: tuple[int, int] | None = None,
-    concentration_threshold: float = 0.7,
-    proximity_radius: int = 1,
-) -> PixelLevelLCResult:
-    """Analyze pixel-level light curves to locate transit source.
-
-    Extracts light curves from individual pixels, measures transit depth
-    in each, and determines if the signal is on-target.
-
-    Args:
-        tpf_data: TPF flux data with shape (time, rows, cols).
-        time: Time array in BTJD.
-        period: Orbital period in days.
-        t0: Reference transit epoch in BTJD.
-        duration_hours: Transit duration in hours.
-        target_pixel: Expected target location (row, col). If None, uses center.
-        concentration_threshold: Minimum concentration ratio to pass (default 0.7).
-        proximity_radius: Max distance from target for "on-target" (default 1 pixel).
-
-    Returns:
-        PixelLevelLCResult with depth map and pass/fail determination.
-    """
-    # Compute depth map
-    depth_map = compute_pixel_level_depths(tpf_data, time, period, t0, duration_hours)
-
-    # Find target pixel (default: center of TPF)
-    target_pix = find_target_pixel(depth_map, target_pixel)
-
-    # Find pixel with maximum depth (ignoring NaN)
-    valid_mask = np.isfinite(depth_map) & (depth_map > 0)
-
-    if not np.any(valid_mask):
-        # No valid transit signal found in any pixel
-        return PixelLevelLCResult(
-            passed=False,
-            confidence=0.3,
-            depth_map_ppm=depth_map,
-            max_depth_pixel=(0, 0),
-            max_depth_ppm=0.0,
-            target_depth_ppm=0.0,
-            concentration_ratio=0.0,
-            transit_on_target=False,
-        )
-
-    # Find max depth pixel
-    masked_depths = np.where(valid_mask, depth_map, -np.inf)
-    max_idx = np.unravel_index(np.argmax(masked_depths), depth_map.shape)
-    max_depth_pixel = (int(max_idx[0]), int(max_idx[1]))
-    max_depth_ppm = float(depth_map[max_depth_pixel])
-
-    # Get target pixel depth
-    target_row, target_col = target_pix
-    if (
-        0 <= target_row < depth_map.shape[0]
-        and 0 <= target_col < depth_map.shape[1]
-        and np.isfinite(depth_map[target_row, target_col])
-    ):
-        target_depth_ppm = float(depth_map[target_row, target_col])
-    else:
-        target_depth_ppm = 0.0
-
-    # Compute concentration ratio
-    concentration_ratio = target_depth_ppm / max_depth_ppm if max_depth_ppm > 0 else 0.0
-
-    # Check if max depth pixel is near target
-    distance = np.sqrt(
-        (max_depth_pixel[0] - target_row) ** 2 + (max_depth_pixel[1] - target_col) ** 2
-    )
-    transit_on_target = distance <= proximity_radius
-
-    # Determine pass/fail based on spec thresholds:
-    # PASS: concentration_ratio >= 0.7 AND transit_on_target == True
-    # WARN: concentration_ratio >= 0.5 AND transit_on_target == True
-    # FAIL: transit_on_target == False OR concentration_ratio < 0.5
-    passed = concentration_ratio >= concentration_threshold and transit_on_target
-
-    # Confidence based on depth significance and data quality
-    n_valid_pixels = int(np.sum(valid_mask))
-    total_pixels = depth_map.size
-
-    # Base confidence from valid pixel coverage
-    coverage_factor = n_valid_pixels / total_pixels if total_pixels > 0 else 0.0
-
-    # Higher confidence if depth is well-concentrated
-    if concentration_ratio >= 0.8:
-        concentration_factor = 0.95
-    elif concentration_ratio >= 0.6:
-        concentration_factor = 0.75
-    else:
-        concentration_factor = 0.5
-
-    confidence = min(0.95, coverage_factor * 0.3 + concentration_factor * 0.7)
-
-    # Lower confidence if transit is off-target
-    if not transit_on_target:
-        confidence *= 0.8
-
-    return PixelLevelLCResult(
-        passed=passed,
-        confidence=round(confidence, 3),
-        depth_map_ppm=depth_map,
-        max_depth_pixel=max_depth_pixel,
-        max_depth_ppm=round(max_depth_ppm, 2),
-        target_depth_ppm=round(target_depth_ppm, 2),
-        concentration_ratio=round(concentration_ratio, 3),
-        transit_on_target=transit_on_target,
-    )
-
-
-class PixelLevelLCCheck(VetterCheck):
-    """V09: Pixel-Level Light Curve vetting check.
-
-    Analyzes light curves from individual pixels to locate the source of
-    the transit signal. If the maximum depth pixel is not at the expected
-    target location, the signal may be from a background source.
-
-    Pass Criteria:
-        - concentration_ratio >= 0.7 (target depth / max depth)
-        - transit_on_target == True (max depth within 1 pixel of target)
-
-    Fail Criteria:
-        - transit_on_target == False (signal off-target)
-        - concentration_ratio < 0.5 (signal not concentrated on target)
-
-    Requires:
-        - TPF data (tpf_data parameter)
-        - Time array
-        - Transit ephemeris (period, t0, duration)
-    """
-
-    id: ClassVar[str] = "V09"
-    name: ClassVar[str] = "pixel_level_lc"
-
-    def __init__(
-        self,
-        config: CheckConfig | None = None,
-        tpf_data: NDArray[np.floating[Any]] | None = None,
-        time: NDArray[np.floating[Any]] | None = None,
-        target_pixel: tuple[int, int] | None = None,
-    ) -> None:
-        """Initialize PixelLevelLCCheck.
-
-        Args:
-            config: Check configuration (optional).
-            tpf_data: TPF flux data with shape (time, rows, cols).
-            time: Time array in BTJD.
-            target_pixel: Expected target pixel location (row, col).
-        """
-        super().__init__(config)
-        self.tpf_data = tpf_data
-        self.time = time
-        self.target_pixel = target_pixel
-
-    @classmethod
-    def _default_config(cls) -> CheckConfig:
-        """Return default configuration for V09 check."""
-        return CheckConfig(
-            enabled=True,
-            threshold=0.7,  # concentration_threshold
-            additional={
-                "proximity_radius": 1,  # pixels
-            },
-        )
-
-    def run(
-        self,
-        candidate: TransitCandidate,
-        lightcurve: LightCurveData | None = None,
-        stellar: StellarParameters | None = None,
-    ) -> VetterCheckResult:
-        """Execute the V09 pixel-level light curve check.
-
-        Args:
-            candidate: Transit candidate with period, t0, duration.
-            lightcurve: Light curve data (not used, TPF required).
-            stellar: Stellar parameters (not used).
-
-        Returns:
-            VetterCheckResult with pass/fail and depth map details.
-        """
-        # Check if TPF data is available
-        if self.tpf_data is None or self.time is None:
-            logger.warning("V09 (Pixel-Level LC) requires TPF data. Returning low-confidence pass.")
-            return make_result(
-                "V09",
-                passed=True,
-                confidence=0.1,
-                details={
-                    "note": "TPF data not available for pixel-level analysis",
-                    "deferred": True,
-                },
-            )
-
-        # Validate TPF data shape
-        if self.tpf_data.ndim != 3:
-            return make_result(
-                "V09",
-                passed=False,
-                confidence=0.3,
-                details={
-                    "error": f"Invalid TPF shape: expected 3D, got {self.tpf_data.ndim}D",
-                },
-            )
-
-        if len(self.time) != self.tpf_data.shape[0]:
-            return make_result(
-                "V09",
-                passed=False,
-                confidence=0.3,
-                details={
-                    "error": (
-                        f"Time/TPF mismatch: {len(self.time)} times, "
-                        f"{self.tpf_data.shape[0]} frames"
-                    ),
-                },
-            )
-
-        # Run pixel-level analysis
-        concentration_threshold = (
-            self.config.threshold if self.config.threshold is not None else 0.7
-        )
-        proximity_radius = self.config.additional.get("proximity_radius", 1)
-
-        result = compute_pixel_level_lc_check(
-            tpf_data=self.tpf_data,
-            time=self.time,
-            period=candidate.period,
-            t0=candidate.t0,
-            duration_hours=candidate.duration_hours,
-            target_pixel=self.target_pixel,
-            concentration_threshold=concentration_threshold,
-            proximity_radius=proximity_radius,
-        )
-
-        # Build details dict (without large depth_map)
-        details: dict[str, Any] = {
-            "max_depth_pixel": result.max_depth_pixel,
-            "max_depth_ppm": result.max_depth_ppm,
-            "target_depth_ppm": result.target_depth_ppm,
-            "concentration_ratio": result.concentration_ratio,
-            "transit_on_target": result.transit_on_target,
-            "tpf_shape": list(self.tpf_data.shape),
-            "n_cadences": len(self.time),
-        }
-
-        # Add target pixel info
-        if self.target_pixel is not None:
-            details["target_pixel"] = self.target_pixel
-        else:
-            details["target_pixel"] = find_target_pixel(result.depth_map_ppm, None)
-            details["target_pixel_source"] = "center"
-
-        return make_result(
-            "V09",
-            passed=result.passed,
-            confidence=result.confidence,
-            details=details,
-        )
-
-
-def check_pixel_level_lc_with_tpf(
-    tpf_data: NDArray[np.floating[Any]],
-    time: NDArray[np.floating[Any]],
-    period: float,
-    t0: float,
-    duration_hours: float,
-    target_pixel: tuple[int, int] | None = None,
-    concentration_threshold: float = 0.7,
-    proximity_radius: int = 1,
-) -> VetterCheckResult:
-    """V09: Pixel-level light curve check (functional interface).
-
-    Convenience function for running V09 without creating a check instance.
-
-    Args:
-        tpf_data: TPF flux data with shape (time, rows, cols).
-        time: Time array in BTJD.
-        period: Orbital period in days.
-        t0: Reference transit epoch in BTJD.
-        duration_hours: Transit duration in hours.
-        target_pixel: Expected target pixel (row, col). Default: center.
-        concentration_threshold: Min ratio for pass (default 0.7).
-        proximity_radius: Max pixel distance for on-target (default 1).
-
-    Returns:
-        VetterCheckResult with pass/fail and depth analysis details.
-    """
-    result = compute_pixel_level_lc_check(
-        tpf_data=tpf_data,
-        time=time,
-        period=period,
-        t0=t0,
-        duration_hours=duration_hours,
-        target_pixel=target_pixel,
-        concentration_threshold=concentration_threshold,
-        proximity_radius=proximity_radius,
-    )
-
-    # Determine target pixel for details
-    actual_target = target_pixel
-    target_source = "provided"
-    if actual_target is None:
-        actual_target = find_target_pixel(result.depth_map_ppm, None)
-        target_source = "center"
-
-    details: dict[str, Any] = {
-        "max_depth_pixel": result.max_depth_pixel,
-        "max_depth_ppm": result.max_depth_ppm,
-        "target_depth_ppm": result.target_depth_ppm,
-        "concentration_ratio": result.concentration_ratio,
-        "transit_on_target": result.transit_on_target,
-        "target_pixel": actual_target,
-        "target_pixel_source": target_source,
-        "tpf_shape": list(tpf_data.shape),
-        "n_cadences": len(time),
-    }
-
-    return make_result(
-        "V09",
-        passed=result.passed,
-        confidence=result.confidence,
+    details = dict(details)
+    details["_metrics_only"] = True
+    return VetterCheckResult(
+        id=check_id,
+        name=name,
+        passed=None,
+        confidence=float(max(0.0, min(1.0, confidence))),
         details=details,
     )
 
 
 # =============================================================================
-# V10: Aperture Dependence Check (wrapper around pixel.aperture)
+# V08: Centroid shift (wrapper around pixel.centroid)
 # =============================================================================
 
 
-class ApertureDependenceCheck(VetterCheck):
-    """V10: Check if transit depth varies with aperture size.
+def check_centroid_shift_with_tpf(
+    *,
+    tpf_data: NDArray[np.floating[Any]],
+    time: NDArray[np.floating[Any]],
+    candidate: TransitCandidate,
+    centroid_method: str = "median",
+    significance_method: str = "bootstrap",
+    n_bootstrap: int = 1000,
+    bootstrap_seed: int | None = None,
+    window_policy_version: str = "v1",
+    outlier_sigma: float = 3.0,
+) -> VetterCheckResult:
+    params = CentroidTransitParams(
+        period=float(candidate.period),
+        t0=float(candidate.t0),
+        duration=float(candidate.duration_hours),
+    )
+    result = compute_centroid_shift(
+        tpf_data=tpf_data,
+        time=time,
+        transit_params=params,
+        window_policy_version=window_policy_version,
+        significance_method=significance_method,  # type: ignore[arg-type]
+        n_bootstrap=int(n_bootstrap),
+        bootstrap_seed=bootstrap_seed,
+        centroid_method=centroid_method,  # type: ignore[arg-type]
+        outlier_sigma=float(outlier_sigma),
+    )
 
-    If the transit depth changes significantly with aperture size,
-    the signal may be from contaminating flux (background EB or
-    nearby variable star) rather than the target.
+    n_in = int(result.n_in_transit_cadences)
+    n_out = int(result.n_out_transit_cadences)
+    confidence = min(1.0, (n_in / 10.0)) * min(1.0, (n_out / 50.0))
 
-    Interpretation:
-    - Stable depth across apertures = on-target signal (PASS)
-    - Depth increases with aperture = contamination dilution (FAIL)
-    - Depth decreases with aperture = background source (FAIL)
+    return _metrics_result(
+        check_id="V08",
+        name="centroid_shift",
+        confidence=confidence,
+        details={
+            "centroid_shift_pixels": float(result.centroid_shift_pixels),
+            "centroid_shift_arcsec": float(result.centroid_shift_arcsec),
+            "significance_sigma": float(result.significance_sigma),
+            "shift_uncertainty_pixels": float(result.shift_uncertainty_pixels),
+            "shift_ci_lower_pixels": float(result.shift_ci_lower_pixels),
+            "shift_ci_upper_pixels": float(result.shift_ci_upper_pixels),
+            "in_transit_centroid": tuple(result.in_transit_centroid),
+            "out_of_transit_centroid": tuple(result.out_of_transit_centroid),
+            "in_transit_centroid_se": tuple(result.in_transit_centroid_se),
+            "out_of_transit_centroid_se": tuple(result.out_of_transit_centroid_se),
+            "n_in_transit_cadences": n_in,
+            "n_out_of_transit_cadences": n_out,
+            "centroid_method": result.centroid_method,
+            "significance_method": result.significance_method,
+            "n_bootstrap": int(result.n_bootstrap),
+            "saturation_risk": bool(result.saturation_risk),
+            "max_flux_fraction": float(result.max_flux_fraction),
+            "n_outliers_rejected": int(result.n_outliers_rejected),
+            "warnings": list(result.warnings),
+            "tpf_shape": list(tpf_data.shape),
+        },
+    )
 
-    Thresholds (from spec, stability_metric 0-1 scale):
-    - FAIL: stability_metric < 0.5
-    - WARN: stability_metric < 0.7
-    - PASS: stability_metric >= 0.7
 
-    This check wraps `bittr_tess_vetter.pixel.aperture.compute_aperture_dependence()`.
-    """
+# =============================================================================
+# V09: Pixel-level depth map + concentration metrics
+# =============================================================================
 
-    id: ClassVar[str] = "V10"
-    name: ClassVar[str] = "aperture_dependence"
 
-    def __init__(
-        self,
-        config: CheckConfig | None = None,
-        tpf_data: NDArray[np.floating[Any]] | None = None,
-        time: NDArray[np.floating[Any]] | None = None,
-        aperture_radii: list[float] | None = None,
-    ) -> None:
-        """Initialize ApertureDependenceCheck.
+@dataclass(frozen=True)
+class PixelDepthMapMetrics:
+    depth_map_ppm: NDArray[np.floating[Any]]
+    max_depth_pixel: tuple[int, int]
+    max_depth_ppm: float
+    target_pixel: tuple[int, int]
+    target_depth_ppm: float
+    concentration_ratio: float
+    distance_to_target_pixels: float
 
-        Args:
-            config: Check configuration (optional).
-            tpf_data: TPF flux data with shape (time, rows, cols).
-            time: Time array in BTJD.
-            aperture_radii: List of aperture radii to test (pixels).
-        """
-        super().__init__(config)
-        self.tpf_data = tpf_data
-        self.time = time
-        # Default starts at 1.5px to avoid fragile 1.0px behavior on small/synthetic stamps.
-        self.aperture_radii = aperture_radii or [1.5, 2.0, 2.5, 3.0, 3.5]
 
-    @classmethod
-    def _default_config(cls) -> CheckConfig:
-        """Return default configuration for V10 check."""
-        return CheckConfig(
-            enabled=True,
-            threshold=0.5,  # fail_stability_threshold
-            additional={
-                "warn_stability_threshold": 0.7,
-            },
+def compute_pixel_level_depths_ppm(
+    *,
+    tpf_data: NDArray[np.floating[Any]],
+    time: NDArray[np.floating[Any]],
+    period_days: float,
+    t0_btjd: float,
+    duration_hours: float,
+) -> NDArray[np.floating[Any]]:
+    """Compute per-pixel transit depths in ppm using simple in/out masks."""
+    in_mask = get_in_transit_mask(time, period_days, t0_btjd, duration_hours)
+    out_mask = get_out_of_transit_mask(time, period_days, t0_btjd, duration_hours, buffer_factor=3.0)
+
+    if tpf_data.ndim != 3:
+        raise ValueError(f"tpf_data must be 3D (time, rows, cols), got {tpf_data.shape}")
+    if time.shape[0] != tpf_data.shape[0]:
+        raise ValueError("time length must match tpf_data first axis")
+
+    in_flux = tpf_data[in_mask]
+    out_flux = tpf_data[out_mask]
+    if in_flux.size == 0 or out_flux.size == 0:
+        raise ValueError("insufficient in/out-of-transit cadences for pixel depth map")
+
+    out_median = np.nanmedian(out_flux, axis=0)
+    in_median = np.nanmedian(in_flux, axis=0)
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        depth_frac = (out_median - in_median) / out_median
+    depth_ppm = depth_frac * 1e6
+    depth_ppm[~np.isfinite(depth_ppm)] = np.nan
+    return depth_ppm
+
+
+def _default_target_pixel(depth_map_ppm: NDArray[np.floating[Any]]) -> tuple[int, int]:
+    n_rows, n_cols = depth_map_ppm.shape
+    return (n_rows // 2, n_cols // 2)
+
+
+def compute_pixel_depth_map_metrics(
+    *,
+    depth_map_ppm: NDArray[np.floating[Any]],
+    target_pixel: tuple[int, int] | None = None,
+) -> PixelDepthMapMetrics:
+    if depth_map_ppm.ndim != 2:
+        raise ValueError("depth_map_ppm must be 2D")
+
+    target = target_pixel or _default_target_pixel(depth_map_ppm)
+    target_row, target_col = target
+
+    valid = np.isfinite(depth_map_ppm) & (depth_map_ppm > 0)
+    if not np.any(valid):
+        return PixelDepthMapMetrics(
+            depth_map_ppm=depth_map_ppm,
+            max_depth_pixel=(0, 0),
+            max_depth_ppm=0.0,
+            target_pixel=target,
+            target_depth_ppm=0.0,
+            concentration_ratio=0.0,
+            distance_to_target_pixels=float("nan"),
         )
 
-    def run(
-        self,
-        candidate: TransitCandidate,
-        lightcurve: LightCurveData | None = None,
-        stellar: StellarParameters | None = None,
-    ) -> VetterCheckResult:
-        """Execute the V10 aperture dependence check.
+    masked = np.where(valid, depth_map_ppm, -np.inf)
+    max_idx = np.unravel_index(int(np.argmax(masked)), depth_map_ppm.shape)
+    max_pixel = (int(max_idx[0]), int(max_idx[1]))
+    max_depth_ppm = float(depth_map_ppm[max_pixel])
 
-        Args:
-            candidate: Transit candidate with period, t0, duration_hours, depth.
-            lightcurve: Light curve data (not used, TPF required).
-            stellar: Stellar parameters (not used).
+    if (
+        0 <= target_row < depth_map_ppm.shape[0]
+        and 0 <= target_col < depth_map_ppm.shape[1]
+        and np.isfinite(depth_map_ppm[target_row, target_col])
+    ):
+        target_depth_ppm = float(depth_map_ppm[target_row, target_col])
+    else:
+        target_depth_ppm = 0.0
 
-        Returns:
-            VetterCheckResult with aperture dependence analysis.
-        """
-        # Check if TPF data is available
-        if self.tpf_data is None or self.time is None:
-            logger.warning(
-                "V10 (Aperture Dependence) requires TPF data. Returning low-confidence pass."
-            )
-            return make_result(
-                "V10",
-                passed=True,
-                confidence=0.1,
-                details={
-                    "note": "TPF data not available for aperture dependence analysis",
-                    "deferred": True,
-                },
-            )
+    concentration_ratio = target_depth_ppm / max_depth_ppm if max_depth_ppm > 0 else 0.0
+    distance = float(np.hypot(max_pixel[0] - target_row, max_pixel[1] - target_col))
 
-        # Validate TPF data shape
-        if self.tpf_data.ndim != 3:
-            return make_result(
-                "V10",
-                passed=True,
-                confidence=0.0,
-                details={
-                    "error": f"Invalid TPF shape: expected 3D, got {self.tpf_data.ndim}D",
-                },
-            )
+    return PixelDepthMapMetrics(
+        depth_map_ppm=depth_map_ppm,
+        max_depth_pixel=max_pixel,
+        max_depth_ppm=max_depth_ppm,
+        target_pixel=target,
+        target_depth_ppm=target_depth_ppm,
+        concentration_ratio=float(concentration_ratio),
+        distance_to_target_pixels=distance,
+    )
 
-        if len(self.time) != self.tpf_data.shape[0]:
-            return make_result(
-                "V10",
-                passed=True,
-                confidence=0.0,
-                details={
-                    "error": (
-                        f"Time/TPF mismatch: {len(self.time)} times, "
-                        f"{self.tpf_data.shape[0]} frames"
-                    ),
-                },
-            )
 
-        # Create TransitParams for aperture module
-        # Note: aperture module expects duration in days, not hours
-        duration_days = candidate.duration_hours / 24.0
-        transit_params = ApertureTransitParams(
-            period=candidate.period,
-            t0=candidate.t0,
-            duration=duration_days,
-            depth=candidate.depth,
+def check_pixel_level_lc_with_tpf(
+    *,
+    tpf_data: NDArray[np.floating[Any]],
+    time: NDArray[np.floating[Any]],
+    candidate: TransitCandidate,
+    target_pixel: tuple[int, int] | None = None,
+) -> VetterCheckResult:
+    try:
+        depth_map = compute_pixel_level_depths_ppm(
+            tpf_data=tpf_data,
+            time=time,
+            period_days=float(candidate.period),
+            t0_btjd=float(candidate.t0),
+            duration_hours=float(candidate.duration_hours),
+        )
+        metrics = compute_pixel_depth_map_metrics(depth_map_ppm=depth_map, target_pixel=target_pixel)
+        confidence = 0.7
+        warnings: list[str] = []
+        if not np.isfinite(metrics.distance_to_target_pixels):
+            confidence = 0.2
+            warnings.append("NO_VALID_PIXEL_DEPTHS")
+    except Exception as e:
+        return _metrics_result(
+            check_id="V09",
+            name="pixel_level_lc",
+            confidence=0.0,
+            details={"status": "error", "error": str(e), "tpf_shape": list(tpf_data.shape)},
         )
 
-        # Run aperture dependence computation
-        try:
-            result: ApertureDependenceResult = compute_aperture_dependence(
-                tpf_data=self.tpf_data,
-                time=self.time,
-                transit_params=transit_params,
-                aperture_radii=self.aperture_radii,
-            )
-        except ValueError as e:
-            return make_result(
-                "V10",
-                passed=True,
-                confidence=0.1,
-                details={
-                    "reason": "computation_error",
-                    "message": str(e),
-                },
-            )
+    return _metrics_result(
+        check_id="V09",
+        name="pixel_level_lc",
+        confidence=confidence,
+        details={
+            "max_depth_pixel": metrics.max_depth_pixel,
+            "max_depth_ppm": metrics.max_depth_ppm,
+            "target_pixel": metrics.target_pixel,
+            "target_depth_ppm": metrics.target_depth_ppm,
+            "concentration_ratio": metrics.concentration_ratio,
+            "distance_to_target_pixels": metrics.distance_to_target_pixels,
+            "tpf_shape": list(tpf_data.shape),
+            "n_cadences": int(time.shape[0]),
+            "warnings": warnings,
+        },
+    )
 
-        # Get thresholds from config
-        fail_stability = self.config.threshold if self.config.threshold is not None else 0.5
-        warn_stability = self.config.additional.get("warn_stability_threshold", 0.7)
 
-        # Evaluate pass/fail based on stability metric
-        stability = result.stability_metric
-
-        if stability < fail_stability:
-            passed = False
-            confidence = 0.90  # High confidence in failure
-        elif stability < warn_stability:
-            passed = True  # Pass but with warning
-            confidence = 0.65  # Moderate confidence
-        else:
-            passed = True
-            # High confidence when stability is good
-            confidence = min(0.95, 0.7 + stability * 0.25)
-
-        # Round depths for display
-        depths_rounded = {
-            radius: round(depth, 1) for radius, depth in result.depths_by_aperture.items()
-        }
-
-        # Calculate depth variation metrics
-        depth_values = list(result.depths_by_aperture.values())
-        depth_range_ppm = max(depth_values) - min(depth_values) if depth_values else 0.0
-        mean_depth_ppm = float(np.mean(depth_values)) if depth_values else 0.0
-        relative_variation = depth_range_ppm / mean_depth_ppm if mean_depth_ppm > 0 else 0.0
-
-        # Build details dict
-        details: dict[str, Any] = {
-            "stability_metric": round(stability, 3),
-            "depths_by_aperture_ppm": depths_rounded,
-            "depth_variance_ppm2": round(result.depth_variance, 1),
-            "recommended_aperture_pixels": result.recommended_aperture,
-            "depth_range_ppm": round(depth_range_ppm, 1),
-            "mean_depth_ppm": round(mean_depth_ppm, 1),
-            "relative_variation": round(relative_variation, 3),
-            "n_apertures_tested": len(result.depths_by_aperture),
-            "n_in_transit_cadences": int(getattr(result, "n_in_transit_cadences", 0)),
-            "n_out_of_transit_cadences": int(getattr(result, "n_out_of_transit_cadences", 0)),
-            "n_transit_epochs": int(getattr(result, "n_transit_epochs", 0)),
-            "baseline_mode": str(getattr(result, "baseline_mode", "unknown")),
-            "local_baseline_window_days": float(
-                getattr(result, "local_baseline_window_days", float("nan"))
-            ),
-            "background_mode": str(getattr(result, "background_mode", "unknown")),
-            "background_annulus_radii_pixels": list(
-                getattr(result, "background_annulus_radii_pixels", []) or []
-            ),
-            "n_background_pixels": int(getattr(result, "n_background_pixels", 0)),
-            "drift_fraction_recommended": getattr(result, "drift_fraction_recommended", None),
-            "flags": list(getattr(result, "flags", []) or []),
-            "notes": getattr(result, "notes", {}),
-            "thresholds": {
-                "fail_stability": fail_stability,
-                "warn_stability": warn_stability,
-            },
-        }
-
-        if stability < warn_stability and passed:
-            details["warning"] = "Marginal depth variation across apertures - recommend follow-up"
-
-        if not passed and len(depth_values) >= 2:
-            # Add interpretation for failed check
-            radii = list(result.depths_by_aperture.keys())
-            depths = list(result.depths_by_aperture.values())
-            if len(radii) >= 2:
-                correlation = float(np.corrcoef(radii, depths)[0, 1])
-                if correlation > 0.5:
-                    details["interpretation"] = (
-                        "Depth increases with aperture - suggests contamination dilution"
-                    )
-                elif correlation < -0.5:
-                    details["interpretation"] = (
-                        "Depth decreases with aperture - suggests background source"
-                    )
-                else:
-                    details["interpretation"] = (
-                        "Irregular depth variation - possible complex contamination"
-                    )
-                details["depth_aperture_correlation"] = round(correlation, 3)
-
-        return make_result(
-            "V10",
-            passed=passed,
-            confidence=round(confidence, 3),
-            details=details,
-        )
+# =============================================================================
+# V10: Aperture dependence (wrapper around pixel.aperture)
+# =============================================================================
 
 
 def check_aperture_dependence_with_tpf(
+    *,
     tpf_data: NDArray[np.floating[Any]],
     time: NDArray[np.floating[Any]],
-    period: float,
-    t0: float,
-    duration_hours: float,
-    depth: float = 0.01,
-    aperture_radii: list[float] | None = None,
-    fail_stability_threshold: float = 0.5,
-    warn_stability_threshold: float = 0.7,
+    candidate: TransitCandidate,
+    aperture_radii_px: list[float] | None = None,
+    center_row_col: tuple[float, float] | None = None,
 ) -> VetterCheckResult:
-    """V10: Aperture dependence check (functional interface).
-
-    Convenience function for running V10 without creating a check instance.
-
-    Args:
-        tpf_data: TPF flux data with shape (time, rows, cols).
-        time: Time array in BTJD.
-        period: Orbital period in days.
-        t0: Reference transit epoch in BTJD.
-        duration_hours: Transit duration in hours.
-        depth: Expected transit depth (fraction).
-        aperture_radii: List of aperture radii to test (pixels).
-        fail_stability_threshold: Below this stability, check fails.
-        warn_stability_threshold: Below this (but above fail), check warns.
-
-    Returns:
-        VetterCheckResult with aperture dependence analysis.
-    """
-    # Validate inputs
-    if tpf_data.ndim != 3:
-        return make_result(
-            "V10",
-            passed=True,
-            confidence=0.0,
-            details={"error": f"Expected 3D TPF data, got shape {tpf_data.shape}"},
-        )
-
-    if len(time) != tpf_data.shape[0]:
-        return make_result(
-            "V10",
-            passed=True,
-            confidence=0.0,
-            details={"error": f"Time length {len(time)} != TPF cadences {tpf_data.shape[0]}"},
-        )
-
-    if aperture_radii is None:
-        aperture_radii = [1.5, 2.0, 2.5, 3.0, 3.5]
-
-    # Create TransitParams for aperture module
-    duration_days = duration_hours / 24.0
-    transit_params = ApertureTransitParams(
-        period=period,
-        t0=t0,
-        duration=duration_days,
-        depth=depth,
+    params = ApertureTransitParams(
+        period=float(candidate.period),
+        t0=float(candidate.t0),
+        duration=float(candidate.duration_hours),
+    )
+    result = compute_aperture_dependence(
+        tpf_data=tpf_data,
+        time=time,
+        transit_params=params,
+        aperture_radii=aperture_radii_px,
+        center=center_row_col,
     )
 
-    # Run aperture dependence computation
-    try:
-        result: ApertureDependenceResult = compute_aperture_dependence(
-            tpf_data=tpf_data,
-            time=time,
-            transit_params=transit_params,
-            aperture_radii=aperture_radii,
-        )
-    except ValueError as e:
-        return make_result(
-            "V10",
-            passed=True,
-            confidence=0.1,
-            details={"reason": "computation_error", "message": str(e)},
-        )
+    n_in = int(result.n_in_transit_cadences)
+    n_out = int(result.n_out_of_transit_cadences)
+    confidence = min(1.0, (n_in / 10.0)) * min(1.0, (n_out / 50.0))
 
-    # Evaluate pass/fail
-    stability = result.stability_metric
+    return _metrics_result(
+        check_id="V10",
+        name="aperture_dependence",
+        confidence=confidence,
+        details={
+            "stability_metric": float(result.stability_metric),
+            "depths_by_aperture_ppm": {str(k): float(v) for k, v in result.depths_by_aperture.items()},
+            "depth_variance_ppm2": float(result.depth_variance),
+            "recommended_aperture_pixels": float(result.recommended_aperture),
+            "n_in_transit_cadences": n_in,
+            "n_out_of_transit_cadences": n_out,
+            "n_transit_epochs": int(result.n_transit_epochs),
+            "baseline_mode": result.baseline_mode,
+            "local_baseline_window_days": float(result.local_baseline_window_days),
+            "background_mode": result.background_mode,
+            "background_annulus_radii_pixels": tuple(result.background_annulus_radii_pixels),
+            "n_background_pixels": int(result.n_background_pixels),
+            "drift_fraction_recommended": result.drift_fraction_recommended,
+            "flags": list(result.flags),
+            "notes": dict(result.notes),
+            "tpf_shape": list(tpf_data.shape),
+        },
+    )
 
-    if stability < fail_stability_threshold:
-        passed = False
-        confidence = 0.90
-    elif stability < warn_stability_threshold:
-        passed = True
-        confidence = 0.65
-    else:
-        passed = True
-        confidence = min(0.95, 0.7 + stability * 0.25)
-
-    # Round depths for display
-    depths_rounded = {radius: round(d, 1) for radius, d in result.depths_by_aperture.items()}
-
-    depth_values = list(result.depths_by_aperture.values())
-    depth_range_ppm = max(depth_values) - min(depth_values) if depth_values else 0.0
-    mean_depth_ppm = float(np.mean(depth_values)) if depth_values else 0.0
-
-    details: dict[str, Any] = {
-        "stability_metric": round(stability, 3),
-        "depths_by_aperture_ppm": depths_rounded,
-        "depth_variance_ppm2": round(result.depth_variance, 1),
-        "recommended_aperture_pixels": result.recommended_aperture,
-        "depth_range_ppm": round(depth_range_ppm, 1),
-        "mean_depth_ppm": round(mean_depth_ppm, 1),
-        "n_apertures_tested": len(result.depths_by_aperture),
-    }
-
-    if stability < warn_stability_threshold and passed:
-        details["warning"] = "Marginal depth variation across apertures"
-
-    return make_result("V10", passed=passed, confidence=round(confidence, 3), details=details)
-
-
-# =============================================================================
-# Exports
-# =============================================================================
 
 __all__ = [
-    # V08: Centroid Shift
-    "CentroidShiftCheck",
     "check_centroid_shift_with_tpf",
-    # V09: Pixel-Level LC
-    "PixelLevelLCCheck",
-    "PixelLevelLCResult",
-    "compute_pixel_level_lc_check",
-    "compute_pixel_level_depths",
     "check_pixel_level_lc_with_tpf",
-    # V10: Aperture Dependence
-    "ApertureDependenceCheck",
     "check_aperture_dependence_with_tpf",
+    "compute_pixel_level_depths_ppm",
+    "compute_pixel_depth_map_metrics",
+    "PixelDepthMapMetrics",
 ]
+

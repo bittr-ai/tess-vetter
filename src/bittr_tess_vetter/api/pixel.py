@@ -34,9 +34,9 @@ from bittr_tess_vetter.api.references import (
 )
 from bittr_tess_vetter.api.types import Candidate, CheckResult, TPFStamp
 from bittr_tess_vetter.validation.checks_pixel import (
-    ApertureDependenceCheck,
-    CentroidShiftCheck,
-    PixelLevelLCCheck,
+    check_aperture_dependence_with_tpf,
+    check_centroid_shift_with_tpf,
+    check_pixel_level_lc_with_tpf,
 )
 
 if TYPE_CHECKING:
@@ -113,19 +113,16 @@ def centroid_shift(
 
     TESS pixel scale: 21 arcsec/pixel
 
-    Thresholds (configurable):
-    - FAIL: shift >= 1.0 pixel AND significance >= 5.0 sigma
-    - WARN: shift >= 0.5 pixel OR significance >= 3.0 sigma
-    - PASS: otherwise
-
     Args:
         tpf: Target Pixel File data (TPFStamp)
         candidate: Transit candidate with ephemeris
-        config: Optional configuration overrides:
-            - fail_shift_threshold: pixels (default 1.0)
-            - fail_sigma_threshold: sigma (default 5.0)
-            - warn_shift_threshold: pixels (default 0.5)
-            - warn_sigma_threshold: sigma (default 3.0)
+        config: Optional algorithm configuration overrides:
+            - centroid_method: {"mean","median","huber"} (default "median")
+            - significance_method: {"analytic","bootstrap","permutation"} (default "bootstrap")
+            - n_bootstrap: int (default 1000)
+            - bootstrap_seed: int | None
+            - outlier_sigma: float (default 3.0)
+            - window_policy_version: str (default "v1")
 
     Returns:
         CheckResult with centroid shift analysis including:
@@ -145,35 +142,6 @@ def centroid_shift(
     """
     time_arr, flux_arr = _extract_arrays_from_tpf(tpf)
 
-    # Build check config from user-provided overrides
-    check_config = None
-    if config:
-        from bittr_tess_vetter.validation.base import CheckConfig
-
-        check_config = CheckConfig(
-            enabled=True,
-            threshold=config.get("fail_shift_threshold", 1.0),
-            additional={
-                "fail_sigma_threshold": config.get("fail_sigma_threshold", 5.0),
-                "warn_shift_threshold": config.get("warn_shift_threshold", 0.5),
-                "warn_sigma_threshold": config.get("warn_sigma_threshold", 3.0),
-                # Method/uncertainty knobs (optional)
-                "centroid_method": config.get("centroid_method", "median"),
-                "significance_method": config.get("significance_method", "bootstrap"),
-                "n_bootstrap": config.get("n_bootstrap", 1000),
-                "bootstrap_seed": config.get("bootstrap_seed"),
-                "outlier_sigma": config.get("outlier_sigma", 3.0),
-            },
-        )
-
-    # Create internal check instance
-    check = CentroidShiftCheck(
-        config=check_config,
-        tpf_data=flux_arr,
-        time=time_arr,
-    )
-
-    # Create a minimal TransitCandidate for the internal check
     from bittr_tess_vetter.domain.detection import TransitCandidate
 
     internal_candidate = TransitCandidate(
@@ -184,7 +152,18 @@ def centroid_shift(
         snr=0.0,  # Placeholder - not used by pixel checks
     )
 
-    result = check.run(internal_candidate)
+    config = config or {}
+    result = check_centroid_shift_with_tpf(
+        tpf_data=flux_arr,
+        time=time_arr,
+        candidate=internal_candidate,
+        centroid_method=config.get("centroid_method", "median"),
+        significance_method=config.get("significance_method", "bootstrap"),
+        n_bootstrap=int(config.get("n_bootstrap", 1000)),
+        bootstrap_seed=config.get("bootstrap_seed"),
+        outlier_sigma=float(config.get("outlier_sigma", 3.0)),
+        window_policy_version=config.get("window_policy_version", "v1"),
+    )
     return _convert_result(result)
 
 
@@ -207,22 +186,12 @@ def difference_image_localization(
     in each, and determines if the signal is on-target. This is a proxy
     for difference image localization when full WCS is not available.
 
-    Pass Criteria:
-    - concentration_ratio >= 0.7 (target depth / max depth)
-    - transit_on_target == True (max depth within proximity_radius of target)
-
-    Fail Criteria:
-    - transit_on_target == False (signal off-target)
-    - concentration_ratio < 0.5 (signal not concentrated on target)
-
     Args:
         tpf: Target Pixel File data (TPFStamp)
         candidate: Transit candidate with ephemeris
         target_rc: Expected target pixel (row, col). If None, uses TPF center.
         wcs_sources: List of reference sources with WCS coords (reserved for future use)
-        config: Optional configuration overrides:
-            - concentration_threshold: minimum ratio for pass (default 0.7)
-            - proximity_radius: max pixel distance for on-target (default 1)
+        config: Optional algorithm configuration overrides (currently unused).
 
     Returns:
         CheckResult with pixel-level localization including:
@@ -230,7 +199,7 @@ def difference_image_localization(
         - max_depth_ppm: maximum transit depth in ppm
         - target_depth_ppm: transit depth at target pixel
         - concentration_ratio: target_depth / max_depth
-        - transit_on_target: whether max depth is near target
+        - distance_to_target_pixels: distance between max-depth pixel and target pixel
 
     Novelty: standard
 
@@ -247,31 +216,10 @@ def difference_image_localization(
 
     time_arr, flux_arr = _extract_arrays_from_tpf(tpf)
 
-    # Build check config from user-provided overrides
-    check_config = None
-    if config:
-        from bittr_tess_vetter.validation.base import CheckConfig
-
-        check_config = CheckConfig(
-            enabled=True,
-            threshold=config.get("concentration_threshold", 0.7),
-            additional={
-                "proximity_radius": config.get("proximity_radius", 1),
-            },
-        )
-
     # Convert target_rc to (row, col) tuple if provided
     target_pixel: tuple[int, int] | None = None
     if target_rc is not None:
         target_pixel = (int(target_rc[0]), int(target_rc[1]))
-
-    # Create internal check instance
-    check = PixelLevelLCCheck(
-        config=check_config,
-        tpf_data=flux_arr,
-        time=time_arr,
-        target_pixel=target_pixel,
-    )
 
     # Create a minimal TransitCandidate for the internal check
     from bittr_tess_vetter.domain.detection import TransitCandidate
@@ -284,7 +232,12 @@ def difference_image_localization(
         snr=0.0,  # Placeholder - not used by pixel checks
     )
 
-    result = check.run(internal_candidate)
+    result = check_pixel_level_lc_with_tpf(
+        tpf_data=flux_arr,
+        time=time_arr,
+        candidate=internal_candidate,
+        target_pixel=target_pixel,
+    )
     return _convert_result(result)
 
 
@@ -303,24 +256,12 @@ def aperture_dependence(
     """V10: Check if transit depth varies with aperture size.
 
     Measures transit depth at multiple aperture radii centered on the target.
-    Significant variation indicates contamination:
-    - Stable depth = on-target signal (PASS)
-    - Depth increases with aperture = contamination dilution (FAIL)
-    - Depth decreases with aperture = background source (FAIL)
-
-    Thresholds (stability_metric 0-1 scale):
-    - FAIL: stability_metric < 0.5
-    - WARN: stability_metric < 0.7
-    - PASS: stability_metric >= 0.7
-
     Args:
         tpf: Target Pixel File data (TPFStamp)
         candidate: Transit candidate with ephemeris and depth
         radii_px: List of aperture radii to test (pixels).
             Default: [1.5, 2.0, 2.5, 3.0, 3.5] per v2 spec.
-        config: Optional configuration overrides:
-            - fail_stability_threshold: stability for failure (default 0.5)
-            - warn_stability_threshold: stability for warning (default 0.7)
+        config: Optional algorithm configuration overrides (currently unused).
 
     Returns:
         CheckResult with aperture dependence analysis including:
@@ -342,29 +283,8 @@ def aperture_dependence(
     """
     time_arr, flux_arr = _extract_arrays_from_tpf(tpf)
 
-    # Build check config from user-provided overrides
-    check_config = None
-    if config:
-        from bittr_tess_vetter.validation.base import CheckConfig
-
-        check_config = CheckConfig(
-            enabled=True,
-            threshold=config.get("fail_stability_threshold", 0.5),
-            additional={
-                "warn_stability_threshold": config.get("warn_stability_threshold", 0.7),
-            },
-        )
-
     # Default radii start at 1.5px per v2 spec (not 1.0px which is fragile)
     aperture_radii = radii_px if radii_px is not None else [1.5, 2.0, 2.5, 3.0, 3.5]
-
-    # Create internal check instance
-    check = ApertureDependenceCheck(
-        config=check_config,
-        tpf_data=flux_arr,
-        time=time_arr,
-        aperture_radii=aperture_radii,
-    )
 
     # Create a minimal TransitCandidate for the internal check
     from bittr_tess_vetter.domain.detection import TransitCandidate
@@ -377,7 +297,14 @@ def aperture_dependence(
         snr=0.0,  # Placeholder - not used by pixel checks
     )
 
-    result = check.run(internal_candidate)
+    del config
+    result = check_aperture_dependence_with_tpf(
+        tpf_data=flux_arr,
+        time=time_arr,
+        candidate=internal_candidate,
+        aperture_radii_px=aperture_radii,
+        center_row_col=None,
+    )
     return _convert_result(result)
 
 
@@ -415,7 +342,7 @@ def vet_pixel(
         >>> cand = Candidate(ephemeris=eph, depth_ppm=1000)
         >>> results = vet_pixel(tpf, cand)
         >>> for r in results:
-        ...     print(f"{r.id} {r.name}: {'PASS' if r.passed else 'FAIL'}")
+        ...     print(f\"{r.id} {r.name}: confidence={r.confidence:.2f}\")
 
     Novelty: standard
 

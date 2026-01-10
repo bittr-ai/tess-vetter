@@ -31,8 +31,8 @@ from bittr_tess_vetter.api.references import (
 from bittr_tess_vetter.api.types import Candidate, CheckResult
 from bittr_tess_vetter.domain.detection import TransitCandidate
 from bittr_tess_vetter.validation.checks_catalog import (
-    ExoFOPDispositionCheck,
-    NearbyEBCheck,
+    run_exofop_toi_lookup,
+    run_nearby_eb_search,
 )
 
 if TYPE_CHECKING:
@@ -73,7 +73,7 @@ def _make_skipped_result(check_id: str, name: str) -> CheckResult:
     return CheckResult(
         id=check_id,
         name=name,
-        passed=True,
+        passed=None,
         confidence=0.0,
         details={
             "status": "skipped",
@@ -113,7 +113,6 @@ def nearby_eb_search(
     network: bool = False,
     cache: Any | None = None,
     search_radius_arcsec: float = 42.0,
-    period_tolerance: float = 0.1,
     http_get: Callable[..., Any] | None = None,
 ) -> CheckResult:
     """V06: Search for known eclipsing binaries near target.
@@ -131,11 +130,10 @@ def nearby_eb_search(
         network: If False, return skipped result without querying catalog
         cache: Optional cache for dependency injection (reserved for future use)
         search_radius_arcsec: Cone search radius (default 42 = 2 TESS pixels)
-        period_tolerance: Fractional tolerance for period match (default 0.1 = 10%)
         http_get: Optional HTTP GET callable for dependency injection
 
     Returns:
-        CheckResult with pass if no matching EB found
+        CheckResult with raw nearby-EB matches (metrics-only)
 
     Novelty: standard
 
@@ -145,22 +143,18 @@ def nearby_eb_search(
         [2] Guerrero et al. 2021, ApJS 254, 39 (2021ApJS..254...39G)
             Section 3.1: Nearby EB contamination as false positive source
     """
-    _ = cache  # Reserved for future use
-
     if not network:
         return _make_skipped_result("V06", "nearby_eb_search")
 
     internal_candidate = _candidate_to_internal(candidate)
 
-    check = NearbyEBCheck(
+    _ = cache  # Reserved for future use
+    result = run_nearby_eb_search(
+        ra_deg=ra_deg,
+        dec_deg=dec_deg,
+        candidate_period_days=float(internal_candidate.period),
         search_radius_arcsec=search_radius_arcsec,
-        period_tolerance=period_tolerance,
         http_get=http_get,
-    )
-    result = check.run(
-        internal_candidate,
-        ra=ra_deg,
-        dec=dec_deg,
     )
     return _convert_result(result)
 
@@ -177,13 +171,10 @@ def exofop_disposition(
     toi: float | None = None,
     http_get: Callable[..., Any] | None = None,
 ) -> CheckResult:
-    """V07: Check ExoFOP-TESS for existing dispositions.
+    """V07: Look up the ExoFOP-TESS TOI table row for a TIC.
 
-    Queries ExoFOP-TESS API to check if the target already has a
-    TFOPWG disposition flagging it as a false positive.
-
-    False positive dispositions: FP, FA, EB, NEB, BEB, V, IS, O
-    Planet dispositions: CP, KP, PC, APC
+    Returns the raw row (if present). Interpretation of dispositions is
+    applied by the host.
 
     Args:
         candidate: Transit candidate with ephemeris
@@ -209,14 +200,10 @@ def exofop_disposition(
     if not network:
         return _make_skipped_result("V07", "exofop_disposition")
 
-    internal_candidate = _candidate_to_internal(candidate)
-
-    check = ExoFOPDispositionCheck(http_get=http_get)
-    result = check.run(
-        internal_candidate,
-        tic_id=tic_id,
-        toi=toi,
-    )
+    del candidate
+    del cache
+    del toi
+    result = run_exofop_toi_lookup(tic_id=tic_id, http_get=http_get)
     return _convert_result(result)
 
 
@@ -235,7 +222,6 @@ def vet_catalog(
     toi: float | None = None,
     enabled: set[str] | None = None,
     search_radius_arcsec: float = 42.0,
-    period_tolerance: float = 0.1,
     http_get: Callable[..., Any] | None = None,
 ) -> list[CheckResult]:
     """Run catalog vetting checks (V06-V07).
@@ -254,7 +240,6 @@ def vet_catalog(
         enabled: Set of check IDs to run (e.g., {"V06", "V07"}).
             If None, runs all checks.
         search_radius_arcsec: V06 search radius (default 42 arcsec)
-        period_tolerance: V06 period match tolerance (default 10%)
         http_get: Optional HTTP GET callable for dependency injection
 
     Returns:
@@ -272,7 +257,7 @@ def vet_catalog(
         ...     network=True,
         ... )
         >>> for r in results:
-        ...     print(f"{r.id} {r.name}: {'PASS' if r.passed else 'FAIL'}")
+        ...     print(f"{r.id} {r.name}: confidence={r.confidence:.2f}")
 
     Novelty: standard
 
@@ -297,7 +282,6 @@ def vet_catalog(
                     network=network,
                     cache=cache,
                     search_radius_arcsec=search_radius_arcsec,
-                    period_tolerance=period_tolerance,
                     http_get=http_get,
                 )
             )

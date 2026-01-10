@@ -16,16 +16,7 @@ from bittr_tess_vetter.validation.triceratops_fpp import (  # noqa: F401
     CalculateFppInput,
     FppResult,
     _estimate_transit_duration as estimate_transit_duration,
-    _get_disposition as get_disposition,
     _load_cached_triceratops_target as load_cached_triceratops_target,
     _prefetch_trilegal_csv as prefetch_trilegal_csv,
     _save_cached_triceratops_target as save_cached_triceratops_target,
 )
-
-# Back-compat aliases (explicitly exported so astro-arc-tess can keep stable names).
-_estimate_transit_duration = estimate_transit_duration
-_get_disposition = get_disposition
-_load_cached_triceratops_target = load_cached_triceratops_target
-_prefetch_trilegal_csv = prefetch_trilegal_csv
-_save_cached_triceratops_target = save_cached_triceratops_target
-

@@ -1,7 +1,7 @@
 """TPF cache API facade (host-facing).
 
 This module provides a stable public import path for the TPF cache types used by
-host applications (e.g. astro-arc-tess MCP server).
+host applications.
 """
 
 from __future__ import annotations
@@ -13,4 +13,3 @@ from bittr_tess_vetter.pixel.tpf import (  # noqa: F401
     TPFNotFoundError,
     TPFRef,
 )
-

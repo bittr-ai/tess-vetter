@@ -217,7 +217,6 @@ class TestComputeOddEvenResult:
         result = compute_odd_even_result(time, flux, flux_err, period, t0, duration_hours)
 
         assert isinstance(result, OddEvenResult)
-        assert result.is_suspicious is True
         # Relative difference should be ~100% for this EB-like signal
         assert result.relative_depth_diff_percent > 50.0  # Well above 10% threshold
 
@@ -246,7 +245,6 @@ class TestComputeOddEvenResult:
 
         result = compute_odd_even_result(time, flux, flux_err, period, t0, duration_hours)
 
-        assert result.is_suspicious is False
         # Relative difference should be small for planet-like signals
         assert result.relative_depth_diff_percent < 10.0
 
@@ -275,8 +273,6 @@ class TestComputeOddEvenResult:
         assert "depth_diff_ppm" in result_dict
         assert "relative_depth_diff_percent" in result_dict
         assert "significance_sigma" in result_dict
-        assert "is_suspicious" in result_dict
-        assert "interpretation" in result_dict
         assert "n_odd" in result_dict
         assert "n_even" in result_dict
 
@@ -343,9 +339,6 @@ class TestIntegration:
 
         result = compute_odd_even_result(time, flux, flux_err, period, t0, duration_hours)
 
-        # Should flag as suspicious
-        assert result.is_suspicious is True
-
         # Measured depths should roughly match injected values
         true_diff_ppm = abs(depth_odd - depth_even) * 1e6
         assert abs(result.depth_diff_ppm - true_diff_ppm) < true_diff_ppm * 0.5
@@ -371,9 +364,6 @@ class TestIntegration:
         assert isinstance(transit_depth, float)
 
         result = compute_odd_even_result(time, flux, flux_err, period, t0, duration_hours)
-
-        # Should not flag as suspicious
-        assert result.is_suspicious is False
 
         # Both depths should be similar to injected value
         true_depth_ppm = transit_depth * 1e6
@@ -421,4 +411,3 @@ class TestIntegration:
         # But should NOT be suspicious because relative difference is small
         assert result.significance_sigma > 3.0  # High sigma
         assert result.relative_depth_diff_percent < 10.0  # Low relative diff
-        assert result.is_suspicious is False  # NOT flagged as EB

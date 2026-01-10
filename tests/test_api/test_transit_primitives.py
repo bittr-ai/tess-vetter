@@ -51,10 +51,10 @@ def test_odd_even_result_clean_injection_not_suspicious() -> None:
     lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
     eph = Ephemeris(period_days=period_days, t0_btjd=t0_btjd, duration_hours=duration_hours)
 
-    result = odd_even_result(lc, eph, relative_threshold_percent=10.0)
-    assert result.is_suspicious is False
+    result = odd_even_result(lc, eph)
     assert result.n_odd > 0
     assert result.n_even > 0
+    assert result.relative_depth_diff_percent < 10.0
 
 
 def test_odd_even_result_alternating_depths_is_suspicious() -> None:
@@ -79,8 +79,7 @@ def test_odd_even_result_alternating_depths_is_suspicious() -> None:
     lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
     eph = Ephemeris(period_days=period_days, t0_btjd=t0_btjd, duration_hours=duration_hours)
 
-    result = odd_even_result(lc, eph, relative_threshold_percent=10.0)
-    assert result.is_suspicious is True
+    result = odd_even_result(lc, eph)
     assert result.depth_odd_ppm > result.depth_even_ppm
     assert result.relative_depth_diff_percent > 10.0
 
@@ -101,6 +100,5 @@ def test_odd_even_result_ignores_nans_via_valid_mask() -> None:
     lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
     eph = Ephemeris(period_days=period_days, t0_btjd=t0_btjd, duration_hours=duration_hours)
 
-    result = odd_even_result(lc, eph, relative_threshold_percent=10.0)
+    result = odd_even_result(lc, eph)
     assert result.relative_depth_diff_percent == float(result.relative_depth_diff_percent)
-

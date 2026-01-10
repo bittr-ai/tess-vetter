@@ -264,10 +264,10 @@ if __name__ == "__main__":
         def test(name: str, condition: bool, msg: str = "") -> None:
             nonlocal failed, passed
             if condition:
-                print(f"  PASS: {name}")
+                print(f"  OK: {name}")
                 passed += 1
             else:
-                print(f"  FAIL: {name} - {msg}")
+                print(f"  ERR: {name} - {msg}")
                 failed += 1
 
         print("\n=== canonical_json tests ===")

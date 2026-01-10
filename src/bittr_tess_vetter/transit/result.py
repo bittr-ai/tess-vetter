@@ -100,18 +100,12 @@ class OddEvenResult:
     diluted eclipsing binaries. A significant depth difference suggests
     the signal may not be a planet.
 
-    Real eclipsing binaries show 50-100% relative depth differences between
-    primary and secondary eclipses. Confirmed planets typically show <5%
-    relative difference (due to noise). We flag as suspicious only when
-    the relative depth difference exceeds 10%.
-
     Attributes:
         depth_odd_ppm: Mean transit depth for odd epochs (ppm)
         depth_even_ppm: Mean transit depth for even epochs (ppm)
         depth_diff_ppm: Absolute difference |odd - even| (ppm)
         relative_depth_diff_percent: Relative difference as percentage of mean depth
         significance_sigma: Statistical significance of the difference (sigma)
-        is_suspicious: True if relative depth difference > 10% (potential EB)
         n_odd: Number of odd-epoch transits measured
         n_even: Number of even-epoch transits measured
     """
@@ -121,7 +115,6 @@ class OddEvenResult:
     depth_diff_ppm: float
     relative_depth_diff_percent: float
     significance_sigma: float
-    is_suspicious: bool
     n_odd: int
     n_even: int
 
@@ -137,12 +130,6 @@ class OddEvenResult:
             "depth_diff_ppm": round(self.depth_diff_ppm, 1),
             "relative_depth_diff_percent": round(self.relative_depth_diff_percent, 2),
             "significance_sigma": round(self.significance_sigma, 2),
-            "is_suspicious": self.is_suspicious,
             "n_odd": self.n_odd,
             "n_even": self.n_even,
-            "interpretation": (
-                "SUSPICIOUS: Relative depth difference >10% may indicate eclipsing binary"
-                if self.is_suspicious
-                else "CONSISTENT: Odd/even depths are consistent with planetary transit"
-            ),
         }

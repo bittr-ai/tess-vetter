@@ -25,8 +25,7 @@ def _default_cache_dir() -> Path:
     Preference order:
     1) `BITTR_TESS_VETTER_CACHE_DIR` (explicit override)
     2) `BITTR_TESS_VETTER_CACHE_ROOT` (repo-local cache root)
-    3) `ASTRO_ARC_CACHE_DIR` / `ASTRO_ARC_CACHE_ROOT` (compat for callers migrating from astro-arc-tess)
-    4) `.bittr-tess-vetter/cache/persistent_cache` under current working directory
+    3) `.bittr-tess-vetter/cache/persistent_cache` under current working directory
     """
     explicit = os.getenv("BITTR_TESS_VETTER_CACHE_DIR")
     if explicit:
@@ -35,14 +34,6 @@ def _default_cache_dir() -> Path:
     root = os.getenv("BITTR_TESS_VETTER_CACHE_ROOT")
     if root:
         return Path(root).expanduser() / "persistent_cache"
-
-    astro_explicit = os.getenv("ASTRO_ARC_CACHE_DIR")
-    if astro_explicit:
-        return Path(astro_explicit).expanduser()
-
-    astro_root = os.getenv("ASTRO_ARC_CACHE_ROOT")
-    if astro_root:
-        return Path(astro_root).expanduser() / "persistent_cache"
 
     return Path.cwd() / ".bittr-tess-vetter" / "cache" / "persistent_cache"
 

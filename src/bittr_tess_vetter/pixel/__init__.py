@@ -34,9 +34,8 @@ Difference imaging tools:
 - compute_difference_image: Compute difference image for transit localization.
 
 Pixel vetting report:
-- PixelVetReport: Combined pixel vetting report with pass/fail determination.
+- PixelVetReport: Combined pixel vetting report (no policy).
 - generate_pixel_vet_report: Generate pixel vetting report from analysis results.
-- THRESHOLD_VERSIONS: Versioned threshold configurations.
 
 TPF Reference Formats:
     tpf:<tic_id>:<sector>:<camera>:<ccd>         (npz cache)
@@ -73,7 +72,6 @@ from bittr_tess_vetter.pixel.difference import (
     compute_difference_image,
 )
 from bittr_tess_vetter.pixel.report import (
-    THRESHOLD_VERSIONS,
     PixelVetReport,
     generate_pixel_vet_report,
 )
@@ -130,7 +128,6 @@ __all__ = [
     "compute_difference_image",
     # Pixel vetting report
     "PixelVetReport",
-    "THRESHOLD_VERSIONS",
     "generate_pixel_vet_report",
     # TPF handling (npz cache)
     "CachedTPFHandler",

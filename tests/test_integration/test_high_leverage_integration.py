@@ -183,9 +183,9 @@ def test_stitch_to_period_search_to_fold_to_lc_only_checks_two_sectors_with_gap(
 
     # Should not look like an obvious EB on this clean injection.
     if "insufficient_data_for_odd_even_check" not in by_id["V01"].details.get("warnings", []):
-        assert bool(by_id["V01"].details.get("suspicious")) is False
+        assert float(by_id["V01"].details.get("rel_diff", 0.0)) < 0.1
     if by_id["V02"].details.get("note") != "Insufficient data for secondary eclipse search":
-        assert bool(by_id["V02"].details.get("significant_secondary")) is False
+        assert float(by_id["V02"].details.get("secondary_depth_sigma", 0.0)) < 3.0
 
 
 def test_odd_even_and_secondary_combined_integration() -> None:
@@ -228,8 +228,9 @@ def test_odd_even_and_secondary_combined_integration() -> None:
     assert by_id["V01"].details.get("_metrics_only") is True
     assert by_id["V02"].details.get("_metrics_only") is True
     assert "insufficient_data_for_odd_even_check" not in by_id["V01"].details.get("warnings", [])
-    assert bool(by_id["V01"].details.get("suspicious")) is True
-    assert bool(by_id["V02"].details.get("significant_secondary")) is True
+    assert float(by_id["V01"].details.get("rel_diff", 0.0)) > 0.1
+    assert float(by_id["V01"].details.get("delta_sigma", 0.0)) > 2.0
+    assert float(by_id["V02"].details.get("secondary_depth_sigma", 0.0)) > 2.0
 
 
 def test_duration_scaling_changes_in_transit_points_and_snr() -> None:
@@ -281,4 +282,3 @@ def test_duration_scaling_changes_in_transit_points_and_snr() -> None:
     expected_ratio = float(np.sqrt(n_in_long / n_in_short))
     measured_ratio = float(cand_long.snr / cand_short.snr) if cand_short.snr > 0 else 0.0
     assert measured_ratio == pytest.approx(expected_ratio, rel=0.35)
-

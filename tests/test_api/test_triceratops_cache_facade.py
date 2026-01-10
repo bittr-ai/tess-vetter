@@ -8,5 +8,3 @@ def test_triceratops_cache_facade_exports() -> None:
     assert callable(triceratops_cache.load_cached_triceratops_target)
     assert callable(triceratops_cache.save_cached_triceratops_target)
     assert callable(triceratops_cache.estimate_transit_duration)
-    assert callable(triceratops_cache.get_disposition)
-

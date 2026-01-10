@@ -6,7 +6,6 @@ Delegates to `bittr_tess_vetter.pixel.report`.
 from __future__ import annotations
 
 from bittr_tess_vetter.pixel.report import (
-    THRESHOLD_VERSIONS,
     PixelVetReport,
     generate_pixel_vet_report,
 )
@@ -19,4 +18,4 @@ generate_pixel_vet_report = cites(
     cite(HIGGINS_BELL_2022, "TESS-specific localization considerations in crowded photometry"),
 )(generate_pixel_vet_report)
 
-__all__ = ["THRESHOLD_VERSIONS", "PixelVetReport", "generate_pixel_vet_report"]
+__all__ = ["PixelVetReport", "generate_pixel_vet_report"]

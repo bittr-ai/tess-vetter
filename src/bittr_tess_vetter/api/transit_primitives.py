@@ -41,38 +41,20 @@ REFERENCES = [ref.to_dict() for ref in [COUGHLIN_2016, THOMPSON_2018, PRSA_2011]
 def odd_even_result(
     lc: LightCurve,
     ephemeris: Ephemeris,
-    *,
-    relative_threshold_percent: float = 10.0,
 ) -> OddEvenResult:
     """Compute odd/even depth comparison for eclipsing binary detection.
 
     Splits transits by epoch parity (odd vs even), measures depths, and computes
     the significance of any difference. Uses relative depth difference to
-    determine if the signal is suspicious (potential eclipsing binary).
-
-    Real eclipsing binaries show 50-100% relative depth differences between
-    primary and secondary eclipses. Confirmed planets typically show <5%
-    relative difference. We flag as suspicious only when the relative
-    depth difference exceeds the threshold (default 10%).
+    compute the significance of any difference.
 
     Args:
         lc: Light curve data
         ephemeris: Transit ephemeris (period, t0, duration)
-        relative_threshold_percent: Relative depth difference threshold in percent
-            for flagging as suspicious (default 10.0%). Real EBs show 50-100%,
-            planets show <5%.
-
     Returns:
         OddEvenResult with depth comparison and significance
 
-    Novelty: adapted
-
-    Adaptation: Uses 10% relative depth difference threshold instead of the
-        3-sigma absolute threshold from the original Kepler Robovetter method.
-        This reduces false positives on shallow transits where photometric noise
-        dominates the absolute depth uncertainty. The relative threshold is
-        motivated by the empirical observation that real EBs show 50-100%
-        depth differences (Prsa et al. 2011), while planets show <5%.
+    Novelty: standard
 
     References:
         [1] Coughlin et al. 2016, ApJS 224, 12 (2016ApJS..224...12C)
@@ -99,5 +81,4 @@ def odd_even_result(
         period=ephemeris.period_days,
         t0=ephemeris.t0_btjd,
         duration_hours=ephemeris.duration_hours,
-        relative_threshold_percent=relative_threshold_percent,
     )

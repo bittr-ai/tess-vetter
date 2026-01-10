@@ -220,7 +220,6 @@ def compute_odd_even_result(
     period: float,
     t0: float,
     duration_hours: float,
-    relative_threshold_percent: float = 10.0,
 ) -> OddEvenResult:
     """Perform full odd/even depth comparison analysis.
 
@@ -240,10 +239,6 @@ def compute_odd_even_result(
         period: Orbital period, in days
         t0: Reference transit epoch, in days (e.g., BTJD)
         duration_hours: Transit duration, in hours
-        relative_threshold_percent: Relative depth difference threshold in percent
-            for flagging as suspicious (default 10.0%). Real EBs show 50-100%,
-            planets show <5%.
-
     Returns:
         OddEvenResult with depth comparison and significance
     """
@@ -267,7 +262,6 @@ def compute_odd_even_result(
             depth_diff_ppm=0.0,
             relative_depth_diff_percent=0.0,
             significance_sigma=0.0,
-            is_suspicious=False,
             n_odd=n_odd,
             n_even=n_even,
         )
@@ -289,18 +283,12 @@ def compute_odd_even_result(
     else:
         relative_depth_diff_percent = 0.0
 
-    # Flag as suspicious if RELATIVE difference exceeds threshold
-    # Real EBs have 50-100% relative differences, planets have <5%
-    # Using 10% threshold avoids false positives on confirmed planets
-    is_suspicious = bool(relative_depth_diff_percent > relative_threshold_percent)
-
     return OddEvenResult(
         depth_odd_ppm=depth_odd_ppm,
         depth_even_ppm=depth_even_ppm,
         depth_diff_ppm=depth_diff_ppm,
         relative_depth_diff_percent=relative_depth_diff_percent,
         significance_sigma=significance,
-        is_suspicious=is_suspicious,
         n_odd=n_odd,
         n_even=n_even,
     )

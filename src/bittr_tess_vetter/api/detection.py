@@ -8,23 +8,16 @@ from __future__ import annotations
 
 from bittr_tess_vetter.domain.detection import (  # noqa: F401
     Detection,
-    Disposition,
     PeriodogramPeak,
     PeriodogramResult,
     TransitCandidate,
-    ValidationResult,
-    Verdict,
     VetterCheckResult,
 )
 
 __all__ = [
     "Detection",
-    "Disposition",
     "PeriodogramPeak",
     "PeriodogramResult",
     "TransitCandidate",
-    "ValidationResult",
-    "Verdict",
     "VetterCheckResult",
 ]
-

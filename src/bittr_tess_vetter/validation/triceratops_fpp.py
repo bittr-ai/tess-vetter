@@ -18,8 +18,8 @@ Example:
     ...     t0=1411.38,
     ...     depth_ppm=780,
     ... )
-    >>> print(result["fpp"], result["disposition"])
-    0.003 VALIDATED
+    >>> print(result["fpp"], result["nfpp"])
+    0.003 0.002
 """
 
 from __future__ import annotations
@@ -105,9 +105,6 @@ class FppResult:
     nfpp: float
     """Nearby false positive probability (0-1)."""
 
-    disposition: str
-    """Human-readable verdict based on FPP thresholds."""
-
     # Scenario probabilities
     prob_planet: float
     """P(transiting planet on target)."""
@@ -156,7 +153,6 @@ class FppResult:
         return {
             "fpp": round(self.fpp, 6),
             "nfpp": round(self.nfpp, 6),
-            "disposition": self.disposition,
             "prob_planet": round(self.prob_planet, 6),
             "prob_eb": round(self.prob_eb, 6),
             "prob_beb": round(self.prob_beb, 6),
@@ -332,44 +328,6 @@ def _save_cached_triceratops_target(
         with contextlib.suppress(OSError):
             tmp.unlink()  # type: ignore[has-type]
         return
-
-
-# =============================================================================
-# Disposition Logic
-# =============================================================================
-
-
-def _get_disposition(fpp: float, nfpp: float) -> str:
-    """Map FPP/NFPP to human-readable disposition.
-
-    Thresholds follow community practice (Giacalone et al. 2021, TFOP guidelines):
-    - FPP < 0.01 AND NFPP < 0.001: VALIDATED
-    - FPP < 0.01: LIKELY_PLANET_NEARBY_UNCERTAIN
-    - FPP < 0.05: LIKELY_PLANET
-    - FPP < 0.5: INCONCLUSIVE
-    - FPP < 0.9: LIKELY_FP
-    - FPP >= 0.9: FALSE_POSITIVE
-
-    Args:
-        fpp: False positive probability (0-1)
-        nfpp: Nearby false positive probability (0-1)
-
-    Returns:
-        Disposition string
-    """
-    if fpp < 0.01:
-        if nfpp < 0.001:
-            return "VALIDATED"
-        else:
-            return "LIKELY_PLANET_NEARBY_UNCERTAIN"
-    elif fpp < 0.05:
-        return "LIKELY_PLANET"
-    elif fpp < 0.5:
-        return "INCONCLUSIVE"
-    elif fpp < 0.9:
-        return "LIKELY_FP"
-    else:
-        return "FALSE_POSITIVE"
 
 
 # =============================================================================
@@ -656,10 +614,8 @@ def _aggregate_replicate_results(
     out["n_fail"] = n_fail
     out["runtime_seconds"] = round(total_runtime, 1)
 
-    # Use median FPP for disposition
     out["fpp"] = round(fpp_median, 6)
     out["nfpp"] = round(nfpp_median, 6)
-    out["disposition"] = _get_disposition(fpp_median, nfpp_median)
 
     return out
 
@@ -741,7 +697,6 @@ def _extract_single_run_result(
         scenario_prob_sums = {}
         scenario_prob_top = []
 
-    disposition = _get_disposition(fpp, nfpp)
     n_nearby = len(target.stars) - 1 if hasattr(target, "stars") else 0
 
     brightest_dmag: float | None = None
@@ -764,7 +719,6 @@ def _extract_single_run_result(
     result = FppResult(
         fpp=fpp,
         nfpp=nfpp,
-        disposition=disposition,
         prob_planet=prob_planet,
         prob_eb=prob_eb,
         prob_beb=prob_beb,
@@ -860,7 +814,7 @@ def calculate_fpp_handler(
     2. Checks target isn't saturated (Tmag < 4)
     3. Estimates duration if not provided
     4. Calls TRICERATOPS+ target.calc_probs() with optional external LCs
-    5. Returns FPP, NFPP, disposition, scenario probabilities
+    5. Returns FPP, NFPP, scenario probabilities
 
     Args:
         cache: Persistent cache containing light curve data

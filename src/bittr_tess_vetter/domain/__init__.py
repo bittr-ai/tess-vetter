@@ -6,12 +6,9 @@ like manifests, stores, tool frameworks, etc.
 
 from bittr_tess_vetter.domain.detection import (
     Detection,
-    Disposition,
     PeriodogramPeak,
     PeriodogramResult,
     TransitCandidate,
-    ValidationResult,
-    Verdict,
     VetterCheckResult,
 )
 from bittr_tess_vetter.domain.lightcurve import LightCurveData, make_data_ref
@@ -23,11 +20,8 @@ __all__ = [
     "StellarParameters",
     "Target",
     "Detection",
-    "Disposition",
     "PeriodogramPeak",
     "PeriodogramResult",
     "TransitCandidate",
-    "ValidationResult",
-    "Verdict",
     "VetterCheckResult",
 ]

@@ -84,10 +84,8 @@ Example:
     >>>
     >>> # Run complete vetting pipeline
     >>> result = vet_candidate(lc, candidate)
-    >>> print(f"Passed: {result.n_passed}/{len(result.results)}")
     >>> for r in result.results:
-    ...     status = "PASS" if r.passed else "FAIL"
-    ...     print(f"{r.id} {r.name}: {status} (confidence={r.confidence:.2f})")
+    ...     print(f"{r.id} {r.name}: passed={r.passed} (confidence={r.confidence:.2f})")
 """
 
 # Types (v2)
@@ -124,7 +122,6 @@ from bittr_tess_vetter.api.triceratops_cache import (  # noqa: F401
     CalculateFppInput,
     FppResult,
     estimate_transit_duration,
-    get_disposition,
     load_cached_triceratops_target,
     prefetch_trilegal_csv,
     save_cached_triceratops_target,
@@ -146,12 +143,9 @@ from bittr_tess_vetter.api.target import (  # noqa: F401
 # Detection/periodogram model contract (host-facing)
 from bittr_tess_vetter.api.detection import (  # noqa: F401
     Detection,
-    Disposition,
     PeriodogramPeak,
     PeriodogramResult,
     TransitCandidate,
-    ValidationResult,
-    Verdict,
     VetterCheckResult,
 )
 
@@ -360,8 +354,7 @@ from bittr_tess_vetter.api.types import (
 # Main orchestrator
 from bittr_tess_vetter.api.vet import vet_candidate
 
-# Aggregation + evidence helpers
-from bittr_tess_vetter.api.aggregation import AggregateResult, UnknownPolicy, aggregate_checks
+# Evidence helpers
 from bittr_tess_vetter.api.evidence import checks_to_evidence_items
 
 # WCS-aware pixel tools (v0.2 supported surface)
@@ -448,10 +441,7 @@ __all__ = [
     "RecoveryResult",
     # Main orchestrator (v2)
     "vet_candidate",
-    # Aggregation / evidence helpers (v0.2)
-    "UnknownPolicy",
-    "AggregateResult",
-    "aggregate_checks",
+    # Evidence helpers
     "checks_to_evidence_items",
     # Prefilters (PFxx)
     "compute_depth_over_depth_err_snr",

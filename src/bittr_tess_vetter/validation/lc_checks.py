@@ -8,7 +8,7 @@ This module implements the 10 vetting checks (V01-V10) organized by tier:
 Each check returns a VetterCheckResult with metrics, confidence, and details.
 
 Many checks run in metrics-only mode (`passed=None`) so host applications can
-apply policy/guardrails externally (e.g., astro-arc-tess).
+apply policy/guardrails externally.
 """
 
 from __future__ import annotations
@@ -39,17 +39,6 @@ class OddEvenConfig:
     """Configuration for V01 odd/even depth check.
 
     Attributes:
-        sigma_threshold: [DEPRECATED] Significance threshold for delta_sigma to FAIL (default 3.0)
-            Threshold interpretation moved to astro-arc-tess guardrails.
-        rel_diff_threshold: [DEPRECATED] Relative difference threshold to FAIL (default 0.5 = 50%)
-            Threshold interpretation moved to astro-arc-tess guardrails.
-        suspicious_sigma_threshold: [DEPRECATED] Significance threshold to flag as SUSPICIOUS (default 3.0)
-            Threshold interpretation moved to astro-arc-tess guardrails.
-        suspicious_rel_diff_threshold: [DEPRECATED] Relative diff threshold to flag SUSPICIOUS (default 0.15 = 15%)
-            Note: Uses AND logic (both criteria required). Thresholds empirically derived from
-            1,437 labeled TOIs achieving 9% FPR on planets, 52% TPR on FPs.
-            See working_docs/bittr_tess_vetter/tool_optimization/v01_threshold_analysis.md
-            Threshold interpretation moved to astro-arc-tess guardrails.
         min_transits_per_parity: Minimum transits needed per odd/even group
         min_points_in_transit_per_epoch: Minimum in-transit points per epoch
         min_points_in_transit_per_parity: Minimum total in-transit points per parity
@@ -59,10 +48,6 @@ class OddEvenConfig:
         use_red_noise_inflation: Whether to apply red noise inflation to uncertainties
     """
 
-    sigma_threshold: float = 3.0
-    rel_diff_threshold: float = 0.5
-    suspicious_sigma_threshold: float = 3.0
-    suspicious_rel_diff_threshold: float = 0.15
     min_transits_per_parity: int = 2
     min_points_in_transit_per_epoch: int = 5
     min_points_in_transit_per_parity: int = 20
@@ -79,30 +64,16 @@ class VShapeConfig:
     duration), the standard shape discriminant in the literature.
 
     Attributes:
-        tflat_ttotal_threshold: [DEPRECATED] Below this, flag as V-shaped (default 0.15)
-            Threshold interpretation moved to astro-arc-tess guardrails.
-        grazing_threshold: [DEPRECATED] Below this but above tflat_ttotal_threshold,
-            classify as grazing (default 0.3)
-            Threshold interpretation moved to astro-arc-tess guardrails.
-        grazing_depth_ppm: [DEPRECATED] Maximum depth (ppm) for grazing planet classification
-            (deeper signals are more likely EBs) (default 50000)
-            Threshold interpretation moved to astro-arc-tess guardrails.
         min_points_in_transit: Minimum total in-transit points (default 10)
         min_transit_coverage: Minimum fraction of transit phases with data (default 0.6)
         n_bootstrap: Number of bootstrap iterations for uncertainty (default 100)
         bootstrap_ci: Confidence interval for bootstrap (default 0.68 = 1-sigma)
-        shape_ratio_threshold: [DEPRECATED] Legacy threshold for shape_ratio (default 1.3)
-            Threshold interpretation moved to astro-arc-tess guardrails.
     """
 
-    tflat_ttotal_threshold: float = 0.15
-    grazing_threshold: float = 0.3
-    grazing_depth_ppm: float = 50000.0
     min_points_in_transit: int = 10
     min_transit_coverage: float = 0.6
     n_bootstrap: int = 100
     bootstrap_ci: float = 0.68
-    shape_ratio_threshold: float = 1.3
 
 
 @dataclass
@@ -114,10 +85,6 @@ class SecondaryEclipseConfig:
         secondary_half_width: Half-width of search window in phase units (default 0.15)
             This covers phase 0.35-0.65, widened from 0.10 to catch eccentric orbit EBs.
         baseline_half_width: Half-width of adjacent baseline windows (default 0.15)
-        sigma_threshold: [DEPRECATED] Significance threshold for detection (default 3.0)
-            Threshold interpretation moved to astro-arc-tess guardrails.
-        depth_threshold: [DEPRECATED] Minimum depth for flagging as significant (default 0.005 = 0.5%)
-            Threshold interpretation moved to astro-arc-tess guardrails.
         min_secondary_points: Minimum points in secondary window (default 10)
         min_baseline_points: Minimum points in baseline windows (default 10)
         min_secondary_events: Minimum distinct orbital cycles with secondary data (default 2)
@@ -136,8 +103,6 @@ class SecondaryEclipseConfig:
     secondary_center: float = 0.5
     secondary_half_width: float = 0.15
     baseline_half_width: float = 0.15
-    sigma_threshold: float = 3.0
-    depth_threshold: float = 0.005
     min_secondary_points: int = 10
     min_baseline_points: int = 10
     min_secondary_events: int = 2
@@ -155,15 +120,8 @@ class DepthStabilityConfig:
         min_transits_for_confidence: Minimum transits for meaningful scatter (default 3)
         min_points_per_epoch: Minimum in-transit points per epoch (default 5)
         baseline_window_mult: Local baseline window as multiple of duration (default 6.0)
-        chi2_threshold_pass: [DEPRECATED] Chi-squared threshold for definite pass (default 2.0)
-            Threshold interpretation moved to astro-arc-tess guardrails.
-        chi2_threshold_fail: [DEPRECATED] Chi-squared threshold for definite fail (default 4.0)
-            Threshold interpretation moved to astro-arc-tess guardrails.
-        outlier_sigma: [DEPRECATED] MAD-based outlier flagging threshold (default 4.0)
-            Threshold interpretation moved to astro-arc-tess guardrails.
+        outlier_sigma: MAD-based outlier flagging threshold (default 4.0)
         use_red_noise_inflation: Whether to apply red noise inflation (default True)
-        rms_scatter_threshold: [DEPRECATED] Legacy threshold for backward compatibility (default 0.3)
-            Threshold interpretation moved to astro-arc-tess guardrails.
 
     References:
         - Thompson et al. 2018, ApJS 235, 38 (depth consistency tests)
@@ -174,11 +132,8 @@ class DepthStabilityConfig:
     min_transits_for_confidence: int = 3
     min_points_per_epoch: int = 5
     baseline_window_mult: float = 6.0
-    chi2_threshold_pass: float = 2.0
-    chi2_threshold_fail: float = 4.0
     outlier_sigma: float = 4.0
     use_red_noise_inflation: bool = True
-    rms_scatter_threshold: float = 0.3
 
 
 # =============================================================================
@@ -273,7 +228,6 @@ def _compute_confidence(
     n_odd_transits: int,
     n_even_transits: int,
     delta_sigma: float,
-    sigma_threshold: float,
     has_warnings: bool,
 ) -> float:
     """Compute confidence score for odd/even check.
@@ -282,7 +236,6 @@ def _compute_confidence(
         n_odd_transits: Number of odd transits with sufficient data
         n_even_transits: Number of even transits with sufficient data
         delta_sigma: Significance of depth difference
-        sigma_threshold: Threshold for failing
         has_warnings: Whether warnings were issued (degrades confidence)
 
     Returns:
@@ -300,13 +253,9 @@ def _compute_confidence(
     else:
         base = 0.85
 
-    # Adjust for proximity to threshold
-    if delta_sigma > 0.8 * sigma_threshold:
-        # Near threshold - reduce confidence
-        base *= 0.85
-    elif delta_sigma < 1.0 and n_min >= 4:
-        # Strong pass with good N - boost slightly
-        base = min(0.95, base * 1.1)
+    # Mild boost for strong N when delta_sigma is small (typically consistent odd/even).
+    if delta_sigma < 1.0 and n_min >= 4:
+        base = min(0.95, base * 1.05)
 
     # Degrade if warnings present
     if has_warnings:
@@ -330,10 +279,6 @@ def check_odd_even_depth(
     This implementation uses per-epoch depth estimates with local baselines,
     which is more robust to baseline drift and correlated noise than pooling
     all in-transit points.
-
-    Decision rule (dual threshold):
-        FAIL if delta_sigma >= sigma_threshold AND rel_diff >= rel_diff_threshold
-        PASS otherwise
 
     Args:
         lightcurve: Light curve data
@@ -385,7 +330,6 @@ def check_odd_even_depth(
                 "delta_ppm": 0.0,
                 "delta_sigma": 0.0,
                 "rel_diff": 0.0,
-                "suspicious": False,
                 "warnings": warnings,
                 "method": "per_epoch_median",
                 "epoch_depths_odd_ppm": [],
@@ -554,7 +498,6 @@ def check_odd_even_depth(
                 "delta_ppm": 0.0,
                 "delta_sigma": 0.0,
                 "rel_diff": 0.0,
-                "suspicious": False,  # Cannot determine with insufficient data
                 "warnings": warnings,
                 "method": "per_epoch_median",
                 "epoch_depths_odd_ppm": [],
@@ -586,22 +529,11 @@ def check_odd_even_depth(
     max_depth = max(abs(median_odd), abs(median_even), eps)
     rel_diff = abs(delta) / max_depth
 
-    # Metrics-only: compute threshold comparisons for downstream guardrails,
-    # but do not make a pass/fail policy decision here.
+    # Metrics-only: host applications decide policy based on returned metrics.
     passed: bool | None = None
 
-    # Suspicious flag computation (kept for metrics, not policy)
-    # Empirically tuned on 1,437 labeled TOIs: 9% FPR on planets, 52% TPR on FPs
-    # OR logic tested but rejected due to 48% FPR - see v01_threshold_analysis.md
-    suspicious = (
-        delta_sigma >= config.suspicious_sigma_threshold
-        and rel_diff >= config.suspicious_rel_diff_threshold
-    )
-
     # Confidence
-    confidence = _compute_confidence(
-        n_odd_transits, n_even_transits, delta_sigma, config.sigma_threshold, len(warnings) > 0
-    )
+    confidence = _compute_confidence(n_odd_transits, n_even_transits, delta_sigma, len(warnings) > 0)
 
     # Convert to ppm for output
     depth_odd_ppm = median_odd * 1e6
@@ -636,7 +568,6 @@ def check_odd_even_depth(
             "delta_ppm": round(delta_ppm, 1),
             "delta_sigma": round(delta_sigma, 2),
             "rel_diff": round(rel_diff, 3),
-            "suspicious": suspicious,
             "warnings": warnings,
             "method": "per_epoch_median",
             "epoch_depths_odd_ppm": epoch_depths_odd_ppm,
@@ -808,12 +739,6 @@ def check_secondary_eclipse(
     secondary_err = secondary_err_base * inflation
     secondary_depth_sigma = abs(secondary_depth) / secondary_err if secondary_err > 0 else 0.0
 
-    # Significant secondary computation (kept for metrics, not policy)
-    significant_secondary = (
-        secondary_depth_sigma >= config.sigma_threshold
-        and secondary_depth >= config.depth_threshold
-    )
-
     # Metrics-only: host applications decide policy based on returned metrics.
     passed: bool | None = None
 
@@ -831,14 +756,11 @@ def check_secondary_eclipse(
     else:
         base_confidence = 0.4
 
-    # Adjust for proximity to threshold (confidence is informational; no policy applied here)
-    if significant_secondary:
-        # Confidence in failure scales with sigma excess
-        sigma_margin = secondary_depth_sigma - config.sigma_threshold
-        base_confidence = min(0.9, base_confidence + 0.05 * sigma_margin)
-    elif secondary_depth_sigma > 0.7 * config.sigma_threshold:
-        # Near threshold - reduce confidence
-        base_confidence *= 0.85
+    # If significance is high, confidence increases (still metrics-only; no policy applied here).
+    if secondary_depth_sigma >= 5.0:
+        base_confidence = min(0.9, base_confidence + 0.1)
+    elif secondary_depth_sigma >= 3.0:
+        base_confidence = min(0.85, base_confidence + 0.05)
 
     # Degrade if warnings
     if warnings:
@@ -861,7 +783,6 @@ def check_secondary_eclipse(
             "secondary_depth_sigma": round(secondary_depth_sigma, 2),
             "baseline_flux": round(baseline_median, 6),
             "n_secondary_points": n_secondary_points,
-            "significant_secondary": significant_secondary,
             # New keys
             "secondary_depth_ppm": round(secondary_depth_ppm, 1),
             "secondary_depth_err_ppm": round(secondary_err_ppm, 2),
@@ -1158,7 +1079,6 @@ def check_depth_stability(
     median_depth = float(np.median(depths_arr))
     std_depth = float(np.std(depths_arr))
 
-    # RMS scatter (back-compat metric field)
     rms_scatter = std_depth / mean_depth if mean_depth > 0 else 0.0
 
     # Compute expected scatter from individual uncertainties
@@ -1353,7 +1273,6 @@ def _compute_v_shape_confidence(
     n_in_transit: int,
     transit_coverage: float,
     has_warnings: bool,
-    near_threshold: bool,
 ) -> float:
     """Compute confidence score for V-shape check.
 
@@ -1361,8 +1280,6 @@ def _compute_v_shape_confidence(
         n_in_transit: Number of in-transit points
         transit_coverage: Fraction of transit phases with data
         has_warnings: Whether warnings were issued
-        near_threshold: Whether result is near decision threshold
-
     Returns:
         Confidence score in [0, 1]
     """
@@ -1382,9 +1299,7 @@ def _compute_v_shape_confidence(
     elif transit_coverage < 0.6:
         base *= 0.8
 
-    # Degrade if near threshold or warnings
-    if near_threshold:
-        base *= 0.85
+    # Degrade if warnings
     if has_warnings:
         base *= 0.9
 
@@ -1402,15 +1317,6 @@ def check_v_shape(
 
     Uses trapezoid model fitting to extract tF/tT ratio (flat-bottom to total
     duration), the standard shape discriminant in the literature.
-
-    **Classification (3-tier):**
-    - U_SHAPE: tF/tT > grazing_threshold (normal planet transit)
-    - GRAZING: tflat_ttotal_threshold < tF/tT <= grazing_threshold (grazing geometry)
-    - V_SHAPE: tF/tT <= tflat_ttotal_threshold (likely eclipsing binary)
-
-    **Decision rule:**
-    - PASS if classification is U_SHAPE or GRAZING with depth < grazing_depth_ppm
-    - FAIL if classification is V_SHAPE or GRAZING with depth >= grazing_depth_ppm
 
     Args:
         lightcurve: Light curve data
@@ -1455,16 +1361,15 @@ def check_v_shape(
                 "depth_bottom": 0.0,
                 "depth_edge": 0.0,
                 "shape_ratio": 2.0,
-                "shape": "U-shaped",
                 "n_bottom_points": 0,
                 "n_edge_points": 0,
                 # New keys
+                "status": "invalid_duration",
                 "t_flat_hours": 0.0,
                 "t_total_hours": duration_hours,
                 "tflat_ttotal_ratio": 0.5,
                 "tflat_ttotal_ratio_err": 0.5,
                 "shape_metric_uncertainty": 0.5,
-                "classification": "INVALID_DURATION",
                 "transit_coverage": 0.0,
                 "n_in_transit": 0,
                 "n_baseline": 0,
@@ -1526,16 +1431,15 @@ def check_v_shape(
                 "depth_bottom": 0.0,
                 "depth_edge": 0.0,
                 "shape_ratio": 2.0,
-                "shape": "U-shaped",
                 "n_bottom_points": 0,
                 "n_edge_points": 0,
                 # New keys
+                "status": "insufficient_data",
                 "t_flat_hours": 0.0,
                 "t_total_hours": duration_hours,
                 "tflat_ttotal_ratio": 0.5,
                 "tflat_ttotal_ratio_err": 0.5,
                 "shape_metric_uncertainty": 0.5,
-                "classification": "INSUFFICIENT_DATA",
                 "transit_coverage": round(transit_coverage, 3),
                 "n_in_transit": n_in_transit,
                 "n_baseline": n_baseline,
@@ -1590,26 +1494,9 @@ def check_v_shape(
     # Compute depth in ppm
     depth_ppm = depth * 1e6
 
-    # Classification (3-tier) - kept for metrics
-    if tflat_ttotal_ratio > config.grazing_threshold:
-        classification = "U_SHAPE"
-    elif tflat_ttotal_ratio > config.tflat_ttotal_threshold:
-        classification = "GRAZING"
-    else:
-        classification = "V_SHAPE"
-
-    # Metrics-only: host applications decide policy based on returned metrics.
-    passed: bool | None = None
-
-    # Check if near threshold
-    near_threshold = abs(tflat_ttotal_ratio - config.tflat_ttotal_threshold) < 0.1
-
     # Compute confidence
-    confidence = _compute_v_shape_confidence(
-        n_in_transit, transit_coverage, len(warnings) > 0, near_threshold
-    )
+    confidence = _compute_v_shape_confidence(n_in_transit, transit_coverage, len(warnings) > 0)
 
-    # Compute back-compat output metrics (retain original definitions for output compatibility)
     half_dur = duration_days / period / 2
     ingress_mask = (phase > -half_dur) & (phase < -half_dur / 2)
     bottom_mask = (phase > -half_dur / 4) & (phase < half_dur / 4)
@@ -1619,7 +1506,6 @@ def check_v_shape(
     ingress_flux = flux[ingress_mask]
     egress_flux = flux[egress_mask]
 
-    # Back-compat depth calculations
     if len(bottom_flux) > 0:
         depth_bottom = 1.0 - float(np.median(bottom_flux)) / baseline_median
     else:
@@ -1636,12 +1522,10 @@ def check_v_shape(
     else:
         depth_edge = depth_bottom * 0.5
 
-    # Legacy shape_ratio (kept for backward compatibility)
+    # Legacy shape_ratio (retained for stable outputs)
     shape_ratio = depth_bottom / depth_edge if depth_edge > 0 and depth_bottom > 0 else 2.0
 
-    # Legacy shape label based on new classification
-    legacy_shape = "V-shaped" if classification == "V_SHAPE" else "U-shaped"
-
+    passed: bool | None = None
     return VetterCheckResult(
         id="V05",
         name="v_shape",
@@ -1652,16 +1536,15 @@ def check_v_shape(
             "depth_bottom": round(depth_bottom, 6),
             "depth_edge": round(depth_edge, 6),
             "shape_ratio": round(shape_ratio, 3),
-            "shape": legacy_shape,
             "n_bottom_points": len(bottom_flux),
             "n_edge_points": len(edge_flux_arr),
             # New keys
+            "status": "ok",
             "t_flat_hours": round(t_flat_hours, 4),
             "t_total_hours": round(t_total_hours, 4),
             "tflat_ttotal_ratio": round(tflat_ttotal_ratio, 4),
             "tflat_ttotal_ratio_err": round(tflat_ttotal_ratio_err, 4),
             "shape_metric_uncertainty": round(tflat_ttotal_ratio_err, 4),
-            "classification": classification,
             "depth_ppm": round(depth_ppm, 1),
             "transit_coverage": round(transit_coverage, 3),
             "n_in_transit": n_in_transit,
@@ -1683,58 +1566,48 @@ def check_nearby_eb_search(
 ) -> VetterCheckResult:
     """V06: Search for nearby eclipsing binaries in catalogs.
 
-    STUB IMPLEMENTATION (v0/v1):
-    This check is currently stubbed and always returns a low-confidence pass.
-    Full implementation requires local catalog cache with Gaia DR3 and TIC
-    cross-matching capabilities, which is planned for a future release.
-
-    When fully implemented, this check will:
-    - Query Gaia DR3 and TIC catalogs for known EBs within 2 arcmin
-    - Check if any contaminating EB could produce the observed signal
-    - Account for flux dilution from nearby bright sources
-
-    Current behavior:
-    - Returns passed=True with confidence=0.2 (low confidence)
-    - Logs a warning to alert users the check is not performing validation
-    - Sets deferred=True in details to indicate stub status
+    This check is currently deferred: it requires a catalog integration
+    (local cache and cross-matching logic). The host application may choose
+    to run a catalog-backed implementation elsewhere.
 
     Args:
         target: Target with position and catalog info
 
     Returns:
-        VetterCheckResult with nearby EB search results (stub: always passes)
+        VetterCheckResult with status/deferred metadata (metrics-only)
     """
     logger.warning(
-        "V06 (Nearby EB Search) is stubbed: returning low-confidence pass. "
-        "Full catalog cross-matching not yet implemented."
+        "V06 (Nearby EB Search) is deferred: no catalog cache implementation available."
     )
 
     if target is None or not target.has_position():
         return VetterCheckResult(
             id="V06",
             name="nearby_eb_search",
-            passed=True,
-            confidence=0.2,
+            passed=None,
+            confidence=0.0,
             details={
-                "note": "Target position unavailable for nearby EB search",
+                "status": "deferred",
+                "reason": "missing_target_position",
                 "deferred": True,
                 "stub": True,
+                "_metrics_only": True,
             },
         )
 
-    # In v0/v1, catalog checks are deferred (no network queries)
-    # Return a placeholder result indicating check was not performed
     return VetterCheckResult(
         id="V06",
         name="nearby_eb_search",
-        passed=True,
-        confidence=0.2,
+        passed=None,
+        confidence=0.0,
         details={
             "ra": target.ra,
             "dec": target.dec,
-            "note": "Catalog check deferred (no local cache available)",
+            "status": "deferred",
+            "reason": "no_catalog_cache",
             "deferred": True,
             "stub": True,
+            "_metrics_only": True,
         },
     )
 
@@ -1744,56 +1617,46 @@ def check_known_fp_match(
 ) -> VetterCheckResult:
     """V07: Check against known false positive catalog.
 
-    STUB IMPLEMENTATION (v0/v1):
-    This check is currently stubbed and always returns a low-confidence pass.
-    Full implementation requires local catalog cache with TESS FP catalog
-    and ExoFOP cross-matching capabilities, planned for a future release.
-
-    When fully implemented, this check will:
-    - Cross-reference target TIC ID against TESS Community FP catalog
-    - Check ExoFOP disposition history for known false positives
-    - Flag targets with previous FP classifications
-
-    Current behavior:
-    - Returns passed=True with confidence=0.2 (low confidence)
-    - Logs a warning to alert users the check is not performing validation
-    - Sets deferred=True in details to indicate stub status
+    This check is currently deferred: it requires a catalog integration.
+    The host application may choose to run a catalog-backed implementation.
 
     Args:
         target: Target with TIC ID
 
     Returns:
-        VetterCheckResult with FP match results (stub: always passes)
+        VetterCheckResult with status/deferred metadata (metrics-only)
     """
     logger.warning(
-        "V07 (Known FP Match) is stubbed: returning low-confidence pass. "
-        "FP catalog cross-matching not yet implemented."
+        "V07 (Known FP Match) is deferred: no known-FP catalog integration available."
     )
 
     if target is None:
         return VetterCheckResult(
             id="V07",
             name="known_fp_match",
-            passed=True,
-            confidence=0.2,
+            passed=None,
+            confidence=0.0,
             details={
-                "note": "Target info unavailable for FP catalog check",
+                "status": "deferred",
+                "reason": "missing_target",
                 "deferred": True,
                 "stub": True,
+                "_metrics_only": True,
             },
         )
 
-    # In v0/v1, catalog checks are deferred
     return VetterCheckResult(
         id="V07",
         name="known_fp_match",
-        passed=True,
-        confidence=0.2,
+        passed=None,
+        confidence=0.0,
         details={
             "tic_id": target.tic_id,
-            "note": "Catalog check deferred (no local cache available)",
+            "status": "deferred",
+            "reason": "no_catalog_cache",
             "deferred": True,
             "stub": True,
+            "_metrics_only": True,
         },
     )
 
@@ -1803,55 +1666,43 @@ def check_known_fp_match(
 # =============================================================================
 
 
-def check_centroid_shift() -> VetterCheckResult:
+def check_centroid_shift(
+    *,
+    tpf_data: np.ndarray | None = None,
+    time: np.ndarray | None = None,
+    candidate: TransitCandidate | None = None,
+) -> VetterCheckResult:
     """V08: Compare in-transit vs out-of-transit centroid position.
 
-    DEFERRED TO v2:
-    This check requires Target Pixel File (TPF) data which is not yet
-    supported. Full implementation is planned for v2.
-
-    When fully implemented, this check will:
-    - Extract MOM_CENTR1/MOM_CENTR2 columns from TPF
-    - Compare in-transit vs out-of-transit centroid positions
-    - Flag significant centroid shifts indicating background EB
-    - Use PRF fitting for sub-pixel centroid determination
-
-    Current behavior:
-    - Returns passed=True with confidence=0.1 (very low confidence)
-    - Logs a warning to alert users the check is not performing validation
-    - Sets deferred=True in details to indicate stub status
-
-    Significant centroid shift indicates background eclipsing binary
-    contaminating the photometric aperture.
+    Requires TPF-like data (time, flux cube) and a candidate ephemeris.
 
     Returns:
-        VetterCheckResult (stub: always passes with very low confidence)
+        VetterCheckResult with centroid shift metrics (metrics-only)
     """
-    logger.warning(
-        "V08 (Centroid Shift) is deferred to v2: returning low-confidence pass. "
-        "Requires TPF data not yet supported."
-    )
-    return VetterCheckResult(
-        id="V08",
-        name="centroid_shift",
-        passed=True,
-        confidence=0.1,
-        details={
-            "note": "Pixel-level check deferred to v2 (requires TPF)",
-            "deferred": True,
-        },
-    )
+    if tpf_data is None or time is None or candidate is None:
+        return VetterCheckResult(
+            id="V08",
+            name="centroid_shift",
+            passed=None,
+            confidence=0.0,
+            details={
+                "status": "deferred",
+                "reason": "tpf_required",
+                "deferred": True,
+                "_metrics_only": True,
+            },
+        )
+
+    from bittr_tess_vetter.validation.checks_pixel import check_centroid_shift_with_tpf
+
+    return check_centroid_shift_with_tpf(tpf_data=tpf_data, time=time, candidate=candidate)
 
 
 def check_pixel_level_lc(
     tpf_data: np.ndarray | None = None,
     time: np.ndarray | None = None,
-    period: float | None = None,
-    t0: float | None = None,
-    duration_hours: float | None = None,
+    candidate: TransitCandidate | None = None,
     target_pixel: tuple[int, int] | None = None,
-    concentration_threshold: float = 0.7,
-    proximity_radius: int = 1,
 ) -> VetterCheckResult:
     """V09: Extract and analyze light curves from individual pixels.
 
@@ -1864,107 +1715,67 @@ def check_pixel_level_lc(
     - Create a depth map to locate the transit source
     - Flag if maximum depth pixel is NOT at the target star location
 
-    When TPF data is NOT provided:
-    - Returns passed=True with confidence=0.1 (very low confidence)
-    - Logs a warning to alert users the check is not performing validation
-    - Sets deferred=True in details to indicate stub status
-
     Args:
         tpf_data: TPF flux data with shape (time, rows, cols). Optional.
         time: Time array in BTJD. Required if tpf_data provided.
-        period: Orbital period in days. Required if tpf_data provided.
-        t0: Reference transit epoch in BTJD. Required if tpf_data provided.
-        duration_hours: Transit duration in hours. Required if tpf_data provided.
+        candidate: Transit ephemeris parameters. Required if tpf_data provided.
         target_pixel: Expected target pixel (row, col). Default: TPF center.
-        concentration_threshold: Min target/max depth ratio to pass (default 0.7).
-        proximity_radius: Max pixel distance for on-target (default 1).
 
     Returns:
         VetterCheckResult with pixel-level analysis results.
     """
-    # If no TPF data, return stub result
-    if tpf_data is None:
-        logger.warning("V09 (Pixel-Level LC): No TPF data provided. Returning low-confidence pass.")
+    if tpf_data is None or time is None or candidate is None:
         return VetterCheckResult(
             id="V09",
             name="pixel_level_lc",
-            passed=True,
-            confidence=0.1,
+            passed=None,
+            confidence=0.0,
             details={
-                "note": "Pixel-level check requires TPF data",
+                "status": "deferred",
+                "reason": "tpf_required",
                 "deferred": True,
+                "_metrics_only": True,
             },
         )
 
-    # Validate required parameters when TPF is provided
-    if time is None or period is None or t0 is None or duration_hours is None:
-        logger.warning(
-            "V09 (Pixel-Level LC): TPF data provided but missing ephemeris. "
-            "Returning low-confidence pass."
-        )
-        return VetterCheckResult(
-            id="V09",
-            name="pixel_level_lc",
-            passed=True,
-            confidence=0.1,
-            details={
-                "note": "TPF provided but missing time/period/t0/duration_hours",
-                "deferred": True,
-            },
-        )
-
-    # Import here to avoid circular imports
     from bittr_tess_vetter.validation.checks_pixel import check_pixel_level_lc_with_tpf
 
-    return check_pixel_level_lc_with_tpf(
-        tpf_data=tpf_data,
-        time=time,
-        period=period,
-        t0=t0,
-        duration_hours=duration_hours,
-        target_pixel=target_pixel,
-        concentration_threshold=concentration_threshold,
-        proximity_radius=proximity_radius,
-    )
+    return check_pixel_level_lc_with_tpf(tpf_data=tpf_data, time=time, candidate=candidate, target_pixel=target_pixel)
 
 
-def check_aperture_dependence() -> VetterCheckResult:
+def check_aperture_dependence(
+    *,
+    tpf_data: np.ndarray | None = None,
+    time: np.ndarray | None = None,
+    candidate: TransitCandidate | None = None,
+    aperture_radii_px: list[float] | None = None,
+) -> VetterCheckResult:
     """V10: Measure transit depth vs aperture size.
 
-    DEFERRED TO v2:
-    This check requires Target Pixel File (TPF) data which is not yet
-    supported. Full implementation is planned for v2.
-
-    When fully implemented, this check will:
-    - Extract light curves using multiple aperture sizes
-    - Measure transit depth as a function of aperture radius
-    - Flag if depth varies significantly with aperture
-    - Detect flux contamination from nearby sources
-
-    Current behavior:
-    - Returns passed=True with confidence=0.1 (very low confidence)
-    - Logs a warning to alert users the check is not performing validation
-    - Sets deferred=True in details to indicate stub status
-
-    Depth that varies with aperture size indicates contamination from
-    nearby sources that are included in larger apertures.
-
     Returns:
-        VetterCheckResult (stub: always passes with very low confidence)
+        VetterCheckResult with aperture-dependence metrics (metrics-only)
     """
-    logger.warning(
-        "V10 (Aperture Dependence) is deferred to v2: returning low-confidence pass. "
-        "Requires TPF data not yet supported."
-    )
-    return VetterCheckResult(
-        id="V10",
-        name="aperture_dependence",
-        passed=True,
-        confidence=0.1,
-        details={
-            "note": "Pixel-level check deferred to v2 (requires TPF)",
-            "deferred": True,
-        },
+    if tpf_data is None or time is None or candidate is None:
+        return VetterCheckResult(
+            id="V10",
+            name="aperture_dependence",
+            passed=None,
+            confidence=0.0,
+            details={
+                "status": "deferred",
+                "reason": "tpf_required",
+                "deferred": True,
+                "_metrics_only": True,
+            },
+        )
+
+    from bittr_tess_vetter.validation.checks_pixel import check_aperture_dependence_with_tpf
+
+    return check_aperture_dependence_with_tpf(
+        tpf_data=tpf_data,
+        time=time,
+        candidate=candidate,
+        aperture_radii_px=aperture_radii_px,
     )
 
 
@@ -2019,17 +1830,15 @@ def run_all_checks(
     results.append(check_known_fp_match(target))
 
     # V08-V10: Pixel checks
-    results.append(check_centroid_shift())
+    results.append(check_centroid_shift(tpf_data=tpf_data, time=tpf_time, candidate=candidate))
     results.append(
         check_pixel_level_lc(
             tpf_data=tpf_data,
             time=tpf_time,
-            period=candidate.period,
-            t0=candidate.t0,
-            duration_hours=candidate.duration_hours,
+            candidate=candidate,
             target_pixel=target_pixel,
         )
     )
-    results.append(check_aperture_dependence())
+    results.append(check_aperture_dependence(tpf_data=tpf_data, time=tpf_time, candidate=candidate))
 
     return results

@@ -51,14 +51,6 @@ class CentroidShiftConfig:
     """Configuration for V08 centroid shift check.
 
     Attributes:
-        fail_shift_pixels: Shift threshold for failure (pixels). Default: 1.0.
-            DEPRECATED: Threshold interpretation moved to astro-arc-tess guardrails.
-        fail_sigma: Significance threshold for failure (sigma). Default: 5.0.
-            DEPRECATED: Threshold interpretation moved to astro-arc-tess guardrails.
-        warn_shift_pixels: Shift threshold for warning (pixels). Default: 0.5.
-            DEPRECATED: Threshold interpretation moved to astro-arc-tess guardrails.
-        warn_sigma: Significance threshold for warning (sigma). Default: 3.0.
-            DEPRECATED: Threshold interpretation moved to astro-arc-tess guardrails.
         centroid_method: Centroid aggregation method ("mean", "median", "huber").
             Default: "median" for robustness to outliers.
         significance_method: Method for computing significance ("analytic", "bootstrap", "permutation").
@@ -71,10 +63,6 @@ class CentroidShiftConfig:
         outlier_sigma: Sigma threshold for outlier rejection. Default: 3.0.
     """
 
-    fail_shift_pixels: float = 1.0
-    fail_sigma: float = 5.0
-    warn_shift_pixels: float = 0.5
-    warn_sigma: float = 3.0
     centroid_method: Literal["mean", "median", "huber"] = "median"
     significance_method: Literal["analytic", "bootstrap", "permutation"] = "bootstrap"
     n_bootstrap: int = 1000

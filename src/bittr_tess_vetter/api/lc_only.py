@@ -372,7 +372,7 @@ def vet_lc_only(
         >>> eph = Ephemeris(period_days=3.5, t0_btjd=1850.0, duration_hours=2.5)
         >>> results = vet_lc_only(lc, eph)
         >>> for r in results:
-        ...     print(f\"{r.id} {r.name}: {'UNKNOWN' if r.passed is None else ('PASS' if r.passed else 'FAIL')}\")
+        ...     print(f\"{r.id} {r.name}: passed={r.passed} confidence={r.confidence:.2f}\")
 
     Novelty: standard
 
