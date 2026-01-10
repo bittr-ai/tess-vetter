@@ -49,7 +49,9 @@ def compute_transit_model(
     residuals = flux_arr[finite_mask] - model[finite_mask]
     rms = float(np.sqrt(np.mean(residuals**2)))
     chi2 = float(np.sum((residuals / flux_err_arr[finite_mask]) ** 2))
-    reduced_chi2 = float(chi2 / (n_finite - 4))
+    # This helper does not fit parameters; it evaluates a fixed model.
+    # Use chi2 per finite point as a stable reduced-chi2-like diagnostic.
+    reduced_chi2 = float(chi2 / n_finite)
 
     in_transit = model < (1.0 - depth_fractional / 2)
     n_in_transit = int(np.sum(in_transit & finite_mask))
@@ -67,4 +69,3 @@ def compute_transit_model(
 
 
 __all__ = ["compute_transit_model"]
-
