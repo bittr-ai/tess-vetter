@@ -127,31 +127,53 @@ class LightCurve:
         Returns:
             LightCurveData instance with normalized dtypes
         """
-        n = len(self.time)
-
-        # Normalize time to float64
+        # Normalize time/flux to float64 (no unit conversion is performed).
         time_arr = np.asarray(self.time, dtype=np.float64)
-
-        # Normalize flux to float64
         flux_arr = np.asarray(self.flux, dtype=np.float64)
+
+        if time_arr.shape != flux_arr.shape:
+            raise ValueError(
+                f"time and flux must have the same length, got {len(time_arr)} and {len(flux_arr)}"
+            )
+
+        n = len(time_arr)
 
         # Normalize flux_err to float64, default to zeros
         if self.flux_err is not None:
             flux_err_arr = np.asarray(self.flux_err, dtype=np.float64)
+            if flux_err_arr.shape != time_arr.shape:
+                raise ValueError(
+                    "flux_err must have the same length as time/flux, "
+                    f"got {len(flux_err_arr)} vs {len(time_arr)}"
+                )
         else:
             flux_err_arr = np.zeros(n, dtype=np.float64)
 
         # Normalize quality to int32, default to zeros
         if self.quality is not None:
             quality_arr = np.asarray(self.quality, dtype=np.int32)
+            if quality_arr.shape != time_arr.shape:
+                raise ValueError(
+                    "quality must have the same length as time/flux, "
+                    f"got {len(quality_arr)} vs {len(time_arr)}"
+                )
         else:
             quality_arr = np.zeros(n, dtype=np.int32)
 
-        # Normalize valid_mask to bool_, default to all True
+        # Normalize valid_mask to bool_, default to all True, and always exclude non-finite
+        # samples (NaNs/Infs) in time/flux/flux_err.
         if self.valid_mask is not None:
             valid_mask_arr = np.asarray(self.valid_mask, dtype=np.bool_)
+            if valid_mask_arr.shape != time_arr.shape:
+                raise ValueError(
+                    "valid_mask must have the same length as time/flux, "
+                    f"got {len(valid_mask_arr)} vs {len(time_arr)}"
+                )
         else:
             valid_mask_arr = np.ones(n, dtype=np.bool_)
+
+        finite_mask = np.isfinite(time_arr) & np.isfinite(flux_arr) & np.isfinite(flux_err_arr)
+        valid_mask_arr = valid_mask_arr & finite_mask
 
         return LightCurveData(
             time=time_arr,

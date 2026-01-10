@@ -74,6 +74,37 @@ class TestLightCurve:
         assert lc.flux_err is not None
         assert len(lc.flux_err) == n
 
+    def test_to_internal_rejects_mismatched_lengths(self) -> None:
+        time = np.linspace(0, 10, 10)
+        flux = np.ones(9)
+        lc = LightCurve(time=time, flux=flux)
+        with pytest.raises(ValueError, match="time and flux must have the same length"):
+            lc.to_internal()
+
+    def test_to_internal_requires_matching_optional_lengths(self) -> None:
+        time = np.linspace(0, 10, 10)
+        flux = np.ones(10)
+        flux_err = np.ones(9) * 0.001
+        lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+        with pytest.raises(ValueError, match="flux_err must have the same length"):
+            lc.to_internal()
+
+    def test_to_internal_combines_valid_mask_with_finite_mask(self) -> None:
+        time = np.linspace(0, 10, 10)
+        flux = np.ones(10)
+        flux_err = np.ones(10) * 0.001
+        valid_mask = np.ones(10, dtype=bool)
+        time[3] = np.nan
+        flux[4] = np.nan
+        flux_err[5] = np.nan
+
+        lc = LightCurve(time=time, flux=flux, flux_err=flux_err, valid_mask=valid_mask)
+        internal = lc.to_internal()
+
+        assert not bool(internal.valid_mask[3])
+        assert not bool(internal.valid_mask[4])
+        assert not bool(internal.valid_mask[5])
+
     def test_to_internal_dtype_normalization(self) -> None:
         """Test that to_internal() normalizes dtypes correctly."""
         n = 50
