@@ -210,6 +210,34 @@ class TestDifferenceImageResult:
 class TestComputeDifferenceImageBasic:
     """Basic tests for compute_difference_image function."""
 
+    def test_nan_cadences_are_ignored(self) -> None:
+        """All-NaN cadences should be dropped and not corrupt localization."""
+        n_times, n_rows, n_cols = 200, 11, 11
+        time = np.linspace(0, 30, n_times)
+        transit_params = TransitParams(period=3.0, t0=1.5, duration=0.2)
+
+        tpf = make_simple_tpf(n_times=n_times, n_rows=n_rows, n_cols=n_cols)
+        tpf = inject_transit(tpf, time, transit_params, transit_depth=0.02)
+
+        baseline = compute_difference_image(tpf, time, transit_params)
+
+        # Poison a small number of in- and out-of-transit cadences.
+        phase = ((time - transit_params.t0) % transit_params.period) / transit_params.period
+        phase = np.where(phase > 0.5, phase - 1.0, phase)
+        in_transit = np.abs(phase) <= (transit_params.duration / 2) / transit_params.period
+
+        in_idx = np.where(in_transit)[0][:2]
+        out_idx = np.where(~in_transit)[0][:5]
+        bad_idx = np.unique(np.concatenate([in_idx, out_idx]))
+
+        tpf_bad = np.array(tpf, copy=True)
+        tpf_bad[bad_idx] = np.nan
+
+        bad = compute_difference_image(tpf_bad, time, transit_params)
+
+        assert bad.brightest_pixel_coords == baseline.brightest_pixel_coords
+        assert abs(bad.localization_score - baseline.localization_score) < 0.05
+
     def test_transit_at_target_gives_high_localization(self) -> None:
         """Transit at target star produces high localization score."""
         # Create TPF with target at center

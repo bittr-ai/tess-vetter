@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from bittr_tess_vetter.pixel.aperture import TransitParams
+from bittr_tess_vetter.pixel.cadence_mask import default_cadence_mask
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -119,6 +120,19 @@ def compute_difference_image(
     if n_rows == 0 or n_cols == 0:
         raise ValueError(f"tpf_data spatial dimensions must be non-zero, got {tpf_data.shape}")
 
+    cadence_mask = default_cadence_mask(
+        time=time,
+        flux=tpf_data,
+        quality=np.zeros(int(time.shape[0]), dtype=np.int32),
+        require_finite_pixels=True,
+    )
+    tpf_data = tpf_data[cadence_mask]
+    time = time[cadence_mask]
+
+    n_times = tpf_data.shape[0]
+    if n_times < 3:
+        raise ValueError("Insufficient valid cadences after masking.")
+
     # Compute transit mask
     in_transit_mask = _compute_transit_mask(time, transit_params)
     out_of_transit_mask = ~in_transit_mask
@@ -136,8 +150,8 @@ def compute_difference_image(
         raise ValueError("No out-of-transit data points found. Transit duration may be too long.")
 
     # Compute median images
-    in_transit_image = np.median(tpf_data[in_transit_mask], axis=0)
-    out_of_transit_image = np.median(tpf_data[out_of_transit_mask], axis=0)
+    in_transit_image = np.nanmedian(tpf_data[in_transit_mask], axis=0)
+    out_of_transit_image = np.nanmedian(tpf_data[out_of_transit_mask], axis=0)
 
     # Difference: out - in (transit causes dimming, so diff is positive where transit occurs)
     difference_image = out_of_transit_image - in_transit_image

@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from bittr_tess_vetter.pixel.aperture import TransitParams
+from bittr_tess_vetter.pixel.cadence_mask import default_cadence_mask
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -136,6 +137,18 @@ def compute_localization_diagnostics(
     if n_rows == 0 or n_cols == 0:
         raise ValueError("tpf_data has invalid spatial dimensions")
 
+    cadence_mask = default_cadence_mask(
+        time=time,
+        flux=tpf_data,
+        quality=np.zeros(int(time.shape[0]), dtype=np.int32),
+        require_finite_pixels=True,
+    )
+    tpf_data = tpf_data[cadence_mask]
+    time = time[cadence_mask]
+    n_times = int(time.size)
+    if n_times < 3:
+        raise ValueError("Insufficient valid cadences after masking.")
+
     in_mask = _compute_transit_mask(time, transit_params)
     out_mask = ~in_mask
     n_in = int(np.sum(in_mask))
@@ -145,8 +158,8 @@ def compute_localization_diagnostics(
             f"Need both in- and out-of-transit cadences (n_in={n_in}, n_out={n_out})."
         )
 
-    in_img = np.median(tpf_data[in_mask], axis=0)
-    out_img = np.median(tpf_data[out_mask], axis=0)
+    in_img = np.nanmedian(tpf_data[in_mask], axis=0)
+    out_img = np.nanmedian(tpf_data[out_mask], axis=0)
     diff = out_img - in_img
 
     diff_flat = int(np.argmax(diff))
