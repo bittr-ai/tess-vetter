@@ -157,6 +157,11 @@ def prepare_recovery_inputs(
     flux = np.concatenate(flux_arrays)
     flux_err = np.concatenate(flux_err_arrays)
 
+    sort_idx = np.argsort(time)
+    time = time[sort_idx]
+    flux = flux[sort_idx]
+    flux_err = flux_err[sort_idx]
+
     n_transits = int(count_transits(time, float(period), float(t0), float(duration_hours)))
 
     return PreparedRecoveryInputs(
