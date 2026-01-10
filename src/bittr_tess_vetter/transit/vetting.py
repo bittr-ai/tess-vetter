@@ -37,7 +37,10 @@ def split_odd_even(
     """Separate transit data by epoch parity (odd vs even).
 
     Extracts in-transit data points and separates them into odd and even
-    epoch groups based on floor((t - t0) / period).
+    epoch groups based on an epoch definition whose boundaries fall between
+    transits (matching `validation.lc_checks.check_odd_even_depth`):
+
+        epoch = floor((t - t0 + period/2) / period)
 
     Args:
         time: Time array, in days
@@ -53,6 +56,12 @@ def split_odd_even(
                   n_odd_transits, n_even_transits)
     """
     duration_days = duration_hours / 24.0
+    if duration_days >= 0.5 * period:
+        # If the transit duration is a large fraction of the orbit, in/out-of-transit
+        # separation is ill-defined, so odd/even splitting is not meaningful.
+        empty = (time[:0], flux[:0], flux_err[:0])
+        return empty, empty, 0, 0
+
     half_width = duration_days * 0.75  # Slightly wider to capture full transit
 
     # Calculate phase (0 to 1, with transit at phase 0)
@@ -61,9 +70,9 @@ def split_odd_even(
     # In-transit mask (near phase 0 or 1)
     in_transit = (phase < half_width / period) | (phase > 1.0 - half_width / period)
 
-    # Calculate epoch number for each point using round (since we're near transit center)
-    # This correctly assigns points to the epoch whose transit they belong to
-    epochs = np.round((time - t0) / period).astype(np.int64)
+    # Calculate epoch number for each point with boundaries between transits.
+    # epoch 0 is centered at t0, epoch 1 at t0+period, etc.
+    epochs = np.floor((time - t0 + period / 2.0) / period).astype(np.int64)
 
     # Separate by parity
     is_odd = (epochs % 2) != 0
