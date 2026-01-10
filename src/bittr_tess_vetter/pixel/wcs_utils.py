@@ -267,6 +267,8 @@ def compute_angular_distance(
     ddec = dec2 - dec1
 
     a = np.sin(ddec / 2) ** 2 + np.cos(dec1) * np.cos(dec2) * np.sin(dra / 2) ** 2
+    # Guard against small floating-point drift pushing `a` marginally outside [0, 1].
+    a = np.clip(a, 0.0, 1.0)
     c = 2 * np.arcsin(np.sqrt(a))
 
     # Convert radians to arcseconds
