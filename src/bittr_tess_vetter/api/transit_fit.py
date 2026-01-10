@@ -317,14 +317,16 @@ def fit_transit(
             logger.warning("emcee not installed, falling back to optimize method")
             actual_method = "optimize"
 
-    # Extract arrays from LightCurve
-    time = np.asarray(lc.time, dtype=np.float64)
-    flux = np.asarray(lc.flux, dtype=np.float64)
-    flux_err = (
-        np.asarray(lc.flux_err, dtype=np.float64)
-        if lc.flux_err is not None
-        else np.ones_like(flux) * 0.001
-    )
+    # Normalize + apply valid_mask/finite filtering.
+    internal_lc = lc.to_internal()
+    time = internal_lc.time[internal_lc.valid_mask]
+    flux = internal_lc.flux[internal_lc.valid_mask]
+    flux_err = internal_lc.flux_err[internal_lc.valid_mask]
+
+    if len(time) < 20:
+        return _make_error_result(
+            f"Insufficient usable points for transit fit (need >=20, got {len(time)})"
+        )
 
     # Extract ephemeris
     period = candidate.ephemeris.period_days
