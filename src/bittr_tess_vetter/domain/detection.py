@@ -192,6 +192,9 @@ class PeriodogramResult(FrozenModel):
 
     data_ref: str
     method: Literal["bls", "tls", "ls"]
+    signal_type: Literal["transit", "sinusoidal"] = Field(
+        description="Semantic type of the detected signal; LS is for sinusoidal rotation/variability, TLS is for transits."
+    )
     peaks: list[PeriodogramPeak]
     best_period: PeriodDays
     best_t0: float

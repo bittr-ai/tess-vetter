@@ -61,6 +61,12 @@ def run_periodogram(
 
     This is a convenience wrapper around `auto_periodogram` matching the
     host/MCP style naming.
+
+    Notes:
+    - `method="tls"` is for transit detection.
+    - `method="ls"` is for rotation/variability (sinusoidal) detection and is
+      not a transit-search algorithm. Its result will have `signal_type="sinusoidal"`
+      and no meaningful transit duration/depth.
     """
     return auto_periodogram(
         time=np.asarray(time, dtype=np.float64),

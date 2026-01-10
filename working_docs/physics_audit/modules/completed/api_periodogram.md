@@ -6,7 +6,7 @@ Applies: `working_docs/physics_audit/REVIEW_TEMPLATE.md`
 
 This is the first “real science” step agents will run to detect periodicity:
 - transit discovery (TLS) and/or
-- rotation/variability (Lomb–Scargle).
+- rotation/variability (Lomb–Scargle; not a transit search).
 
 If periodogram semantics are off (units, priors, SNR/FAP meanings), everything downstream is miscalibrated.
 

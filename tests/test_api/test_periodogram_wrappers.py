@@ -42,6 +42,7 @@ def test_run_periodogram_ls_returns_finite_power() -> None:
     )
 
     assert result.method == "ls"
+    assert result.signal_type == "sinusoidal"
     assert len(result.peaks) == 1
     assert float(result.peaks[0].power) == float(result.peaks[0].power)  # not NaN
 
@@ -65,6 +66,7 @@ def test_run_periodogram_ls_recovers_sinusoid_period() -> None:
     )
 
     assert result.method == "ls"
+    assert result.signal_type == "sinusoidal"
     assert np.isfinite(result.best_period)
     assert abs(result.best_period - true_period) / true_period < 0.05
     assert result.best_t0 >= time.min()
@@ -96,6 +98,7 @@ def test_run_periodogram_ls_ignores_nans_and_sorts_time() -> None:
     )
 
     assert result.method == "ls"
+    assert result.signal_type == "sinusoidal"
     assert np.isfinite(result.best_period)
     assert abs(result.best_period - true_period) / true_period < 0.05
     assert result.best_t0 >= np.nanmin(time)
@@ -195,6 +198,7 @@ def test_run_periodogram_tls_recovers_box_transit_period() -> None:
     )
 
     assert result.method == "tls"
+    assert result.signal_type == "transit"
     assert result.peaks, "expected at least one TLS peak for injected transit"
     assert abs(result.best_period - true_period) / true_period < 0.02
     assert result.best_duration_hours is None or result.best_duration_hours > 0

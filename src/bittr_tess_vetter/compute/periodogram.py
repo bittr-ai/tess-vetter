@@ -777,7 +777,7 @@ def auto_periodogram(
     """Automatically compute periodogram with optimal settings.
 
     Uses TLS for transit detection (replaces BLS) and Lomb-Scargle for
-    sinusoidal variations like stellar rotation.
+    sinusoidal variations like stellar rotation/variability (not transit detection).
 
     For multi-sector stitched data, uses per-sector search strategy by default
     to avoid period aliases from inter-sector gaps masking short-period planets.
@@ -789,7 +789,7 @@ def auto_periodogram(
         min_period: Minimum period to search, in days (default 0.5)
         max_period: Maximum period, in days (default: baseline/2)
         preset: Performance preset (ignored for TLS, TLS auto-optimizes)
-        method: Periodogram method ("bls"/"tls" for transit, "ls" for rotation)
+        method: Periodogram method ("bls"/"tls" for transit, "ls" for rotation/variability)
         min_duration_hours: Minimum transit duration (ignored for TLS)
         max_duration_hours: Maximum transit duration (ignored for TLS)
         n_peaks: Number of top peaks to return (TLS returns 1 per search)
@@ -826,6 +826,7 @@ def auto_periodogram(
         return PeriodogramResult(
             data_ref=data_ref,
             method="ls" if selected_method == "ls" else "tls",
+            signal_type="sinusoidal" if selected_method == "ls" else "transit",
             peaks=[],
             best_period=float(min_period),
             best_t0=float(time[0]) if len(time) else 0.0,
@@ -946,6 +947,7 @@ def auto_periodogram(
         return PeriodogramResult(
             data_ref=data_ref,
             method="tls",
+            signal_type="transit",
             peaks=peaks,
             best_period=best_period,
             best_t0=best_t0,
@@ -991,6 +993,7 @@ def auto_periodogram(
         return PeriodogramResult(
             data_ref=data_ref,
             method="ls",
+            signal_type="sinusoidal",
             peaks=peaks,
             best_period=best_period,
             best_t0=best_t0,
