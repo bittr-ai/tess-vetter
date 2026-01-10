@@ -116,15 +116,19 @@ def measure_transit_times(
     """
     # Convert to internal representation
     internal_lc = lc.to_internal()
+    mask = internal_lc.valid_mask
+    time = internal_lc.time[mask]
+    flux = internal_lc.flux[mask]
+    flux_err = internal_lc.flux_err[mask]
 
     # Extract ephemeris from candidate
     eph = candidate.ephemeris
 
     # Call internal implementation
     return measure_all_transit_times(
-        time=internal_lc.time,
-        flux=internal_lc.flux,
-        flux_err=internal_lc.flux_err,
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
         period=eph.period_days,
         t0=eph.t0_btjd,
         duration_hours=eph.duration_hours,
