@@ -47,8 +47,22 @@ def detect_flares(
     Returns:
         List of detected Flare objects, sorted by peak time.
     """
+    time = np.asarray(time, dtype=np.float64)
+    flux = np.asarray(flux, dtype=np.float64)
+    flux_err = np.asarray(flux_err, dtype=np.float64)
+
+    finite = np.isfinite(time) & np.isfinite(flux) & np.isfinite(flux_err)
+    time = time[finite]
+    flux = flux[finite]
+    flux_err = flux_err[finite]
+
     if len(time) < 100:
         return []
+
+    order = np.argsort(time)
+    time = time[order]
+    flux = flux[order]
+    flux_err = flux_err[order]
 
     # Estimate cadence from median time differences
     time_diffs = np.diff(time)
@@ -284,11 +298,22 @@ def measure_rotation_period(
         - period_err: Uncertainty on period, in days
         - snr: Detection signal-to-noise ratio
     """
+    time = np.asarray(time, dtype=np.float64)
+    flux = np.asarray(flux, dtype=np.float64)
+
+    finite = np.isfinite(time) & np.isfinite(flux)
+    time = time[finite]
+    flux = flux[finite]
+
     if len(time) < 100:
         return 1.0, 1.0, 0.0
 
-    # Limit max_period to half the baseline
-    baseline = float(time[-1] - time[0])
+    order = np.argsort(time)
+    time = time[order]
+    flux = flux[order]
+
+    # Limit max_period to half the baseline (do not assume sorted input).
+    baseline = float(time[-1] - time[0]) if len(time) > 1 else 0.0
     max_period = min(max_period, baseline / 2.0)
 
     if max_period <= min_period:

@@ -112,9 +112,10 @@ def characterize_activity(
     """
     # Convert to internal arrays (float64)
     internal_lc = lc.to_internal()
-    time = internal_lc.time
-    flux = internal_lc.flux
-    flux_err = internal_lc.flux_err
+    mask = internal_lc.valid_mask
+    time = internal_lc.time[mask]
+    flux = internal_lc.flux[mask]
+    flux_err = internal_lc.flux_err[mask]
 
     # Measure rotation period
     rotation_period, rotation_err, rotation_snr = measure_rotation_period(
@@ -214,14 +215,18 @@ def mask_flares(
     internal_lc = lc.to_internal()
     time = internal_lc.time
     flux = internal_lc.flux
+    mask = internal_lc.valid_mask
 
-    # Apply flare masking
-    masked_flux = _mask_flares(
-        time=time,
-        flux=flux,
-        flares=flares,
-        buffer_minutes=buffer_minutes,
-    )
+    # Apply flare masking only to valid points, then re-insert to preserve shape.
+    masked_flux = np.array(flux, copy=True)
+    if int(np.sum(mask)) > 0:
+        masked_valid = _mask_flares(
+            time=time[mask],
+            flux=flux[mask],
+            flares=flares,
+            buffer_minutes=buffer_minutes,
+        )
+        masked_flux[mask] = masked_valid
 
     # Return new LightCurve with masked flux
     return LightCurve(
