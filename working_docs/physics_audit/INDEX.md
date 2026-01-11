@@ -94,7 +94,7 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 ### 4.2) Compute layer (physics + numerics implementations)
 
 - ✅ `src/bittr_tess_vetter/compute/aperture_prediction.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
-- ☐ `src/bittr_tess_vetter/compute/bls_like_search.py`
+- ✅ `src/bittr_tess_vetter/compute/bls_like_search.py` → `working_docs/physics_audit/modules/completed/compute_bls_like_search.md`
 - ✅ `src/bittr_tess_vetter/compute/detrend.py` → `working_docs/physics_audit/modules/completed/compute_detrend.md`
 - ✅ `src/bittr_tess_vetter/compute/joint_inference_schemas.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/compute/joint_likelihood.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
