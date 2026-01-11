@@ -192,6 +192,20 @@ from bittr_tess_vetter.api.ttv_track_search import (  # noqa: F401
     should_run_ttv_search,
 )
 
+# Stellar dilution / implied-size physics (metrics-only)
+from bittr_tess_vetter.api.stellar_dilution import (  # noqa: F401
+    DilutionScenario,
+    HostHypothesis,
+    PhysicsFlags,
+    build_host_hypotheses_from_profile,
+    compute_depth_correction_factor_from_flux_fraction,
+    compute_dilution_scenarios,
+    compute_flux_fraction_from_mag_list,
+    compute_implied_radius,
+    compute_target_flux_fraction_from_neighbor_mags,
+    evaluate_physics_flags,
+)
+
 # v3 transit fitting
 from bittr_tess_vetter.api.transit_fit import TransitFitResult, fit_transit, quick_estimate
 
