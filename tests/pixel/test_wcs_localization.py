@@ -507,6 +507,12 @@ class TestLocalizeTransitSource:
         assert "centroid_sky_ra" in d
         assert "centroid_sky_dec" in d
         assert "verdict" in d
+        assert "extra" in d
+        extra = d["extra"]
+        assert "diff_peak_snr" in extra
+        assert "peak_pixel_depth_sigma" in extra
+        assert "baseline_mode" in extra
+        assert extra["baseline_mode"] in ("local", "global")
         assert "distances_to_sources" in d
         assert isinstance(d["verdict"], str)
 

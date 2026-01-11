@@ -1008,6 +1008,81 @@ def localize_transit_source(
             extra={"error": str(e)},
         )
 
+    # -------------------------------------------------------------------------
+    # Difference-image quality / significance metrics (metrics-only)
+    # -------------------------------------------------------------------------
+    duration_days = duration_hours / 24.0
+    in_transit_mask = _compute_transit_mask(tpf_used.time, period, t0, duration_days)
+    out_of_transit_mask = _compute_out_of_transit_mask(
+        tpf_used.time, period, t0, duration_days, oot_margin_mult, oot_window_mult
+    )
+
+    n_in_transit = int(np.sum(in_transit_mask))
+    n_out_of_transit = int(np.sum(out_of_transit_mask))
+    extra["n_in_transit"] = n_in_transit
+    extra["n_out_of_transit"] = n_out_of_transit
+    extra["baseline_mode"] = "global" if oot_window_mult is None else "local"
+
+    try:
+        diff_median = float(np.nanmedian(diff_image))
+        diff_abs = np.abs(diff_image - diff_median)
+        diff_mad = float(np.nanmedian(diff_abs))
+        diff_sigma_robust = 1.4826 * diff_mad
+    except Exception:
+        diff_median = float("nan")
+        diff_sigma_robust = float("nan")
+
+    extra["diff_image_median"] = diff_median
+    extra["diff_image_robust_sigma"] = diff_sigma_robust
+
+    try:
+        peak_flat_index = int(np.nanargmax(diff_image))
+        peak_row, peak_col = np.unravel_index(peak_flat_index, diff_image.shape)
+        peak_value = float(diff_image[peak_row, peak_col])
+    except Exception:
+        peak_row, peak_col = -1, -1
+        peak_value = float("nan")
+
+    extra["diff_peak_pixel_rc"] = [int(peak_row), int(peak_col)]
+    extra["diff_peak_value"] = peak_value
+    if np.isfinite(peak_value) and np.isfinite(diff_median) and np.isfinite(diff_sigma_robust) and diff_sigma_robust > 0:
+        extra["diff_peak_snr"] = float((peak_value - diff_median) / diff_sigma_robust)
+    else:
+        extra["diff_peak_snr"] = float("nan")
+
+    # Pixel-level depth significance at the peak difference pixel.
+    if peak_row >= 0 and peak_col >= 0 and n_in_transit >= 3 and n_out_of_transit >= 3:
+        in_pix = tpf_used.flux[in_transit_mask, peak_row, peak_col]
+        out_pix = tpf_used.flux[out_of_transit_mask, peak_row, peak_col]
+        in_pix = in_pix[np.isfinite(in_pix)]
+        out_pix = out_pix[np.isfinite(out_pix)]
+        if in_pix.size >= 3 and out_pix.size >= 3:
+            in_med = float(np.nanmedian(in_pix))
+            out_med = float(np.nanmedian(out_pix))
+            depth = out_med - in_med
+
+            def _robust_std(x: np.ndarray) -> float:
+                m = float(np.nanmedian(x))
+                mad = float(np.nanmedian(np.abs(x - m)))
+                return 1.4826 * mad
+
+            in_std = _robust_std(in_pix)
+            out_std = _robust_std(out_pix)
+            depth_err = float(
+                np.sqrt((in_std / np.sqrt(max(1, in_pix.size))) ** 2 + (out_std / np.sqrt(max(1, out_pix.size))) ** 2)
+            )
+            extra["peak_pixel_depth"] = float(depth)
+            extra["peak_pixel_depth_err"] = float(depth_err)
+            extra["peak_pixel_depth_sigma"] = float(depth / depth_err) if depth_err > 0 else float("nan")
+        else:
+            extra["peak_pixel_depth"] = float("nan")
+            extra["peak_pixel_depth_err"] = float("nan")
+            extra["peak_pixel_depth_sigma"] = float("nan")
+    else:
+        extra["peak_pixel_depth"] = float("nan")
+        extra["peak_pixel_depth_err"] = float("nan")
+        extra["peak_pixel_depth_sigma"] = float("nan")
+
     # Convert centroid to sky coordinates
     try:
         centroid_sky_ra, centroid_sky_dec = pixel_to_world(
@@ -1061,21 +1136,6 @@ def localize_transit_source(
     )
 
     # Record extra info
-    extra["n_in_transit"] = int(
-        np.sum(_compute_transit_mask(tpf_used.time, period, t0, duration_hours / 24.0))
-    )
-    extra["n_out_of_transit"] = int(
-        np.sum(
-            _compute_out_of_transit_mask(
-                tpf_used.time,
-                period,
-                t0,
-                duration_hours / 24.0,
-                oot_margin_mult,
-                oot_window_mult,
-            )
-        )
-    )
     extra["pixel_scale_arcsec"] = pixel_scale_arcsec
     extra["method"] = method
 
