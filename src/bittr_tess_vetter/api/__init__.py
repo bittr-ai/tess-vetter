@@ -181,6 +181,17 @@ from bittr_tess_vetter.api.recovery import (  # noqa: F401
 # v3 timing analysis
 from bittr_tess_vetter.api.timing import analyze_ttvs, measure_transit_times
 
+# v3 TTV track search (detection aid)
+from bittr_tess_vetter.api.ttv_track_search import (  # noqa: F401
+    TTVSearchBudget,
+    TTVTrackSearchResult,
+    estimate_search_cost,
+    identify_observing_windows,
+    run_ttv_track_search,
+    run_ttv_track_search_for_candidate,
+    should_run_ttv_search,
+)
+
 # v3 transit fitting
 from bittr_tess_vetter.api.transit_fit import TransitFitResult, fit_transit, quick_estimate
 
@@ -664,6 +675,14 @@ __all__ = [
     # v3 timing analysis functions
     "measure_transit_times",
     "analyze_ttvs",
+    # v3 TTV track search
+    "TTVSearchBudget",
+    "TTVTrackSearchResult",
+    "estimate_search_cost",
+    "identify_observing_windows",
+    "run_ttv_track_search",
+    "run_ttv_track_search_for_candidate",
+    "should_run_ttv_search",
     # v3 activity characterization functions
     "characterize_activity",
     "mask_flares",

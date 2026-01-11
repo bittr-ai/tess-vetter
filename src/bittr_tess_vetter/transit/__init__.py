@@ -41,6 +41,18 @@ from bittr_tess_vetter.transit.vetting import (
     compute_odd_even_result,
     split_odd_even,
 )
+from bittr_tess_vetter.transit.ttv_track_search import (
+    TTVSearchBudget,
+    TTVTrackCandidate,
+    TTVTrackHypothesis,
+    TTVTrackSearchResult,
+    estimate_search_cost,
+    identify_observing_windows,
+    run_ttv_track_search,
+    score_periodic_model,
+    score_track_hypothesis,
+    should_run_ttv_search,
+)
 
 __all__ = [
     # Timing primitives
@@ -63,4 +75,15 @@ __all__ = [
     "OddEvenResult",
     "TransitFitResult",
     "ParameterEstimate",
+    # TTV track search (experimental detection aid)
+    "TTVSearchBudget",
+    "TTVTrackCandidate",
+    "TTVTrackHypothesis",
+    "TTVTrackSearchResult",
+    "estimate_search_cost",
+    "identify_observing_windows",
+    "run_ttv_track_search",
+    "score_periodic_model",
+    "score_track_hypothesis",
+    "should_run_ttv_search",
 ]
