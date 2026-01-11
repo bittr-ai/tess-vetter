@@ -379,9 +379,3 @@ class VettingBundleResult:
             if r.id == check_id:
                 return r
         return None
-
-    def apply_policy(self, *, config: Any | None = None) -> Any:
-        """Apply the default policy layer to this metrics-only bundle."""
-        from bittr_tess_vetter.api.policy import apply_policy as _apply_policy
-
-        return _apply_policy(self, config=config)
