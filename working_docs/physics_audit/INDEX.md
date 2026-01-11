@@ -54,7 +54,7 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 
 - ✅ `src/bittr_tess_vetter/api/aperture.py` → `working_docs/physics_audit/modules/completed/api_aperture_dependence.md`
 - ✅ `src/bittr_tess_vetter/api/aperture_family.py` → `working_docs/physics_audit/modules/completed/api_aperture_family.md`
-- ☐ `src/bittr_tess_vetter/api/bls_like_search.py`
+- ✅ `src/bittr_tess_vetter/api/bls_like_search.py` → `working_docs/physics_audit/modules/completed/api_bls_like_search.md`
 - ☐ `src/bittr_tess_vetter/api/canonical.py`
 - ☐ `src/bittr_tess_vetter/api/caps.py`
 - ✅ `src/bittr_tess_vetter/api/catalog.py` → `working_docs/physics_audit/modules/completed/api_catalog_and_catalogs.md`
