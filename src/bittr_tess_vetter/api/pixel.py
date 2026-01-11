@@ -66,12 +66,14 @@ def _convert_result(result: object) -> CheckResult:
         Facade CheckResult dataclass
     """
     # VetterCheckResult is a pydantic model with these attributes
+    details = dict(result.details)  # type: ignore[attr-defined]
+    details["_metrics_only"] = True
     return CheckResult(
         id=result.id,  # type: ignore[attr-defined]
         name=result.name,  # type: ignore[attr-defined]
-        passed=result.passed,  # type: ignore[attr-defined]
+        passed=None,
         confidence=result.confidence,  # type: ignore[attr-defined]
-        details=dict(result.details),  # type: ignore[attr-defined]
+        details=details,
     )
 
 

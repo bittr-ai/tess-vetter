@@ -41,12 +41,14 @@ def _convert_result(result: VetterCheckResult) -> CheckResult:
     Returns:
         Facade CheckResult dataclass
     """
+    details = dict(result.details)
+    details["_metrics_only"] = True
     return CheckResult(
         id=result.id,
         name=result.name,
-        passed=result.passed,
+        passed=None,
         confidence=result.confidence,
-        details=dict(result.details),
+        details=details,
     )
 
 
@@ -93,7 +95,7 @@ def _make_skipped_result(check_id: str, check_name: str, reason: str) -> CheckRe
         name=check_name,
         passed=None,
         confidence=0.0,  # No confidence - not run
-        details={"status": "skipped", "reason": reason},
+        details={"status": "skipped", "reason": reason, "_metrics_only": True},
     )
 
 

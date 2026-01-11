@@ -110,3 +110,20 @@ def test_apply_policy_bundle_includes_policy_provenance() -> None:
     assert out.provenance["policy"]["name"] == "default"
     assert out.results[0].disposition is Disposition.PASS
 
+
+def test_vetting_bundle_apply_policy_helper() -> None:
+    bundle = VettingBundleResult(
+        results=[
+            CheckResult(
+                id="V02",
+                name="secondary_eclipse",
+                passed=None,
+                confidence=0.8,
+                details={"secondary_depth_sigma": 2.0, "_metrics_only": True},
+            )
+        ],
+        provenance={"package_version": "test"},
+        warnings=[],
+    )
+    out = bundle.apply_policy(config=PolicyConfig(secondary_warn_sigma=10.0))
+    assert out.results[0].disposition is Disposition.PASS

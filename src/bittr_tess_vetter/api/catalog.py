@@ -51,12 +51,14 @@ def _convert_result(result: object) -> CheckResult:
     Returns:
         Facade CheckResult dataclass
     """
+    details = dict(result.details)  # type: ignore[attr-defined]
+    details["_metrics_only"] = True
     return CheckResult(
         id=result.id,  # type: ignore[attr-defined]
         name=result.name,  # type: ignore[attr-defined]
-        passed=result.passed,  # type: ignore[attr-defined]
+        passed=None,
         confidence=result.confidence,  # type: ignore[attr-defined]
-        details=dict(result.details),  # type: ignore[attr-defined]
+        details=details,
     )
 
 
@@ -79,6 +81,7 @@ def _make_skipped_result(check_id: str, name: str) -> CheckResult:
             "status": "skipped",
             "reason": "network_disabled",
             "note": "Network access disabled; set network=True to query catalog",
+            "_metrics_only": True,
         },
     )
 
@@ -94,6 +97,7 @@ def _make_missing_metadata_result(check_id: str, name: str, *, missing: list[str
             "status": "skipped",
             "reason": "missing_metadata",
             "missing": missing,
+            "_metrics_only": True,
         },
     )
 
