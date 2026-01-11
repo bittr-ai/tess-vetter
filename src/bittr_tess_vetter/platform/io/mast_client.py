@@ -584,8 +584,23 @@ class MASTClient:
             2,
             f"Downloading light curve for TIC {tic_id} sector {sector}...",
         )
+
+        def _looks_like_lightcurve(obj: Any) -> bool:
+            """Best-effort guard for mocked/invalid download results."""
+            try:
+                t = getattr(getattr(obj, "time"), "value")
+                arr = np.asarray(t)
+                return arr.ndim == 1 and arr.size > 0 and np.isfinite(arr).any()
+            except Exception:
+                return False
+
         try:
             lc_result = selected_row.download()
+            # Compatibility fallback: some mocks (and some upstream wrappers) attach `.download()`
+            # to the SearchResult collection rather than the row. Prefer the row, but if the
+            # returned object doesn't look like a light curve, fall back to the collection.
+            if not _looks_like_lightcurve(lc_result) and hasattr(search_result, "download"):
+                lc_result = search_result.download()
             # Check if result is a LightCurveCollection (multiple light curves)
             # vs a single LightCurve. Don't use len() - LightCurve has len = n_points
             if type(lc_result).__name__ == "LightCurveCollection":

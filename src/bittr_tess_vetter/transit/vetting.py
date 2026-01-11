@@ -28,6 +28,8 @@ def _empty_odd_even_result(*, n_odd: int = 0, n_even: int = 0) -> OddEvenResult:
         depth_diff_ppm=0.0,
         relative_depth_diff_percent=0.0,
         significance_sigma=0.0,
+        is_suspicious=False,
+        interpretation="INSUFFICIENT_DATA",
         n_odd=n_odd,
         n_even=n_even,
     )
@@ -242,6 +244,9 @@ def compute_odd_even_result(
     period: float,
     t0: float,
     duration_hours: float,
+    *,
+    relative_threshold_percent: float = 10.0,
+    min_transits_per_parity: int = 3,
 ) -> OddEvenResult:
     """Perform full odd/even depth comparison analysis.
 
@@ -261,6 +266,10 @@ def compute_odd_even_result(
         period: Orbital period, in days
         t0: Reference transit epoch, in days (e.g., BTJD)
         duration_hours: Transit duration, in hours
+        relative_threshold_percent: Relative depth difference threshold for flagging
+            suspicious odd/even mismatch. Default 10%.
+        min_transits_per_parity: Minimum number of odd and even transits required
+            to evaluate suspiciousness. Default 3 (power gate).
     Returns:
         OddEvenResult with depth comparison and significance
     """
@@ -306,12 +315,23 @@ def compute_odd_even_result(
     else:
         relative_depth_diff_percent = 0.0
 
+    power_ok = int(n_odd) >= int(min_transits_per_parity) and int(n_even) >= int(min_transits_per_parity)
+    is_suspicious = bool(power_ok and relative_depth_diff_percent >= float(relative_threshold_percent))
+    if not power_ok:
+        interpretation = "INSUFFICIENT_TRANSITS"
+    elif is_suspicious:
+        interpretation = "ODD_EVEN_DEPTH_MISMATCH"
+    else:
+        interpretation = "CONSISTENT"
+
     return OddEvenResult(
         depth_odd_ppm=depth_odd_ppm,
         depth_even_ppm=depth_even_ppm,
         depth_diff_ppm=depth_diff_ppm,
         relative_depth_diff_percent=relative_depth_diff_percent,
         significance_sigma=significance,
+        is_suspicious=is_suspicious,
+        interpretation=interpretation,
         n_odd=n_odd,
         n_even=n_even,
     )

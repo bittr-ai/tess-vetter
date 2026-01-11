@@ -106,6 +106,8 @@ class OddEvenResult:
         depth_diff_ppm: Absolute difference |odd - even| (ppm)
         relative_depth_diff_percent: Relative difference as percentage of mean depth
         significance_sigma: Statistical significance of the difference (sigma)
+        is_suspicious: True if relative depth difference exceeds threshold
+        interpretation: Coarse classification of the result
         n_odd: Number of odd-epoch transits measured
         n_even: Number of even-epoch transits measured
     """
@@ -115,8 +117,10 @@ class OddEvenResult:
     depth_diff_ppm: float
     relative_depth_diff_percent: float
     significance_sigma: float
-    n_odd: int
-    n_even: int
+    is_suspicious: bool = False
+    interpretation: str = "INSUFFICIENT_DATA"
+    n_odd: int = 0
+    n_even: int = 0
 
     def to_dict(self) -> dict[str, object]:
         """Convert to a JSON-serializable dictionary.
@@ -130,6 +134,8 @@ class OddEvenResult:
             "depth_diff_ppm": round(self.depth_diff_ppm, 1),
             "relative_depth_diff_percent": round(self.relative_depth_diff_percent, 2),
             "significance_sigma": round(self.significance_sigma, 2),
+            "is_suspicious": bool(self.is_suspicious),
+            "interpretation": self.interpretation,
             "n_odd": self.n_odd,
             "n_even": self.n_even,
         }

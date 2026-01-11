@@ -148,11 +148,15 @@ class FppResult:
     runtime_seconds: float
     """Total runtime in seconds."""
 
+    disposition: str | None = None
+    """Coarse label mapping FPP/NFPP into a human-readable category."""
+
     def to_dict(self) -> dict[str, Any]:
         """Convert result to dictionary for JSON serialization."""
         return {
             "fpp": round(self.fpp, 6),
             "nfpp": round(self.nfpp, 6),
+            "disposition": self.disposition,
             "prob_planet": round(self.prob_planet, 6),
             "prob_eb": round(self.prob_eb, 6),
             "prob_beb": round(self.prob_beb, 6),
@@ -171,6 +175,24 @@ class FppResult:
             "sectors_used": self.sectors_used,
             "runtime_seconds": round(self.runtime_seconds, 1),
         }
+
+
+def _get_disposition(fpp: float, nfpp: float) -> str:
+    """Map TRICERATOPS FPP/NFPP into a coarse disposition label.
+
+    Kept local to avoid importing `bittr_tess_vetter.api.*` from validation code.
+    """
+    if fpp < 0.01:
+        if nfpp < 0.001:
+            return "VALIDATED"
+        return "LIKELY_PLANET_NEARBY_UNCERTAIN"
+    if fpp < 0.05:
+        return "LIKELY_PLANET"
+    if fpp < 0.5:
+        return "INCONCLUSIVE"
+    if fpp < 0.9:
+        return "LIKELY_FP"
+    return "FALSE_POSITIVE"
 
 
 # =============================================================================
@@ -719,6 +741,7 @@ def _extract_single_run_result(
     result = FppResult(
         fpp=fpp,
         nfpp=nfpp,
+        disposition=_get_disposition(fpp, nfpp),
         prob_planet=prob_planet,
         prob_eb=prob_eb,
         prob_beb=prob_beb,
