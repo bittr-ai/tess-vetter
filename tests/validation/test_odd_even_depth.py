@@ -82,3 +82,42 @@ def test_odd_even_depth_metrics_only_alternating_depths() -> None:
     assert r.details.get("_metrics_only") is True
     assert float(r.details["rel_diff"]) > 0.2
     assert float(r.details["delta_sigma"]) > 2.0
+
+
+def test_odd_even_depth_local_baseline_handles_long_gap() -> None:
+    lc = _make_lightcurve_with_box_transits(
+        period_days=3.0,
+        t0_btjd=1.0,
+        duration_hours=2.0,
+        baseline_days=27.0,
+        cadence_minutes=2.0,
+        depth_frac=0.001,
+        noise_ppm=30.0,
+        seed=5,
+    )
+
+    # Simulate a sector gap by dropping a contiguous chunk of cadences.
+    # This should not break per-epoch local baseline depth estimation.
+    time = lc.time.copy()
+    valid_mask = lc.valid_mask.copy()
+    gap_mask = (time > 10.0) & (time < 15.0)
+    valid_mask[gap_mask] = False
+    lc_gap = LightCurveData(
+        time=lc.time,
+        flux=lc.flux,
+        flux_err=lc.flux_err,
+        quality=lc.quality,
+        valid_mask=valid_mask,
+        tic_id=lc.tic_id,
+        sector=lc.sector,
+        cadence_seconds=lc.cadence_seconds,
+    )
+
+    cand = TransitCandidate(period=3.0, t0=1.0, duration_hours=2.0, depth=0.001, snr=10.0)
+    r = check_odd_even_depth(lc_gap, cand.period, cand.t0, cand.duration_hours)
+
+    assert r.passed is None
+    assert r.details.get("_metrics_only") is True
+    # Still should have multiple transits with sufficient data on both parities.
+    assert r.details["n_odd_transits"] >= 2
+    assert r.details["n_even_transits"] >= 2
