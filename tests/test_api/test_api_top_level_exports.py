@@ -7,6 +7,8 @@ def test_api_top_level_exports_import() -> None:
     from bittr_tess_vetter.api import (  # noqa: F401
         ConsistencyClass,
         ControlType,
+        EvidenceEnvelope,
+        EvidenceProvenance,
         EphemerisEntry,
         EphemerisIndex,
         GhostFeatures,
@@ -17,6 +19,7 @@ def test_api_top_level_exports_import() -> None:
         TransitTime,
         analyze_ttvs,
         classify_alias,
+        compute_evidence_code_hash,
         compute_ghost_features,
         compute_harmonic_scores,
         compute_reliability_curves,

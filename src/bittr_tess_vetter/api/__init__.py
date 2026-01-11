@@ -411,6 +411,13 @@ from bittr_tess_vetter.api.vet import vet_candidate
 
 # Evidence helpers
 from bittr_tess_vetter.api.evidence import checks_to_evidence_items
+from bittr_tess_vetter.api.evidence_contracts import (  # noqa: F401
+    EvidenceEnvelope,
+    EvidenceProvenance,
+    compute_code_hash as compute_evidence_code_hash,
+    load_evidence,
+    save_evidence,
+)
 
 # WCS-aware pixel tools (v0.2 supported surface)
 from bittr_tess_vetter.api.aperture_family import (
@@ -498,6 +505,12 @@ __all__ = [
     "vet_candidate",
     # Evidence helpers
     "checks_to_evidence_items",
+    # Generic evidence contracts
+    "EvidenceEnvelope",
+    "EvidenceProvenance",
+    "compute_evidence_code_hash",
+    "load_evidence",
+    "save_evidence",
     # Prefilters (PFxx)
     "compute_depth_over_depth_err_snr",
     "compute_phase_coverage",
