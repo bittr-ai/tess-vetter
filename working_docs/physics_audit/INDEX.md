@@ -67,7 +67,7 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ✅ `src/bittr_tess_vetter/api/evidence.py` → `working_docs/physics_audit/modules/completed/api_evidence_and_report.md`
 - ✅ `src/bittr_tess_vetter/api/exovetter.py` → `working_docs/physics_audit/modules/completed/api_exovetter.md`
 - ✅ `src/bittr_tess_vetter/api/io.py` → `working_docs/physics_audit/modules/completed/api_io_and_target.md`
-- ☐ `src/bittr_tess_vetter/api/joint_inference.py`
+- ✅ `src/bittr_tess_vetter/api/joint_inference.py` → `working_docs/physics_audit/modules/completed/api_joint_inference.md`
 - ✅ `src/bittr_tess_vetter/api/localization.py` → `working_docs/physics_audit/modules/completed/api_proxy_localization.md`
 - ✅ `src/bittr_tess_vetter/api/mlx.py` → `working_docs/physics_audit/modules/completed/api_mlx_and_compute_mlx_detection.md`
 - ✅ `src/bittr_tess_vetter/api/model_competition.py` → `working_docs/physics_audit/modules/completed/model_competition.md`
