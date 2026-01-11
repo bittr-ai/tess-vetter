@@ -57,8 +57,8 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ☐ `src/bittr_tess_vetter/api/bls_like_search.py`
 - ☐ `src/bittr_tess_vetter/api/canonical.py`
 - ☐ `src/bittr_tess_vetter/api/caps.py`
-- ☐ `src/bittr_tess_vetter/api/catalog.py`
-- ☐ `src/bittr_tess_vetter/api/catalogs.py`
+- ✅ `src/bittr_tess_vetter/api/catalog.py` → `working_docs/physics_audit/modules/completed/api_catalog_and_catalogs.md`
+- ✅ `src/bittr_tess_vetter/api/catalogs.py` → `working_docs/physics_audit/modules/completed/api_catalog_and_catalogs.md`
 - ✅ `src/bittr_tess_vetter/api/centroid.py` → `working_docs/physics_audit/modules/completed/api_centroid_shift.md`
 - ✅ `src/bittr_tess_vetter/api/detection.py` → `working_docs/physics_audit/modules/completed/api_detection_and_detrend.md`
 - ✅ `src/bittr_tess_vetter/api/detrend.py` → `working_docs/physics_audit/modules/completed/api_detection_and_detrend.md`
