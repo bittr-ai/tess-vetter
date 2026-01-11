@@ -47,3 +47,10 @@ false positives (or missed blends).
   - `peak_pixel_depth_sigma`: median(oot) − median(in) at the peak pixel, with a robust MAD-based error estimate.
   - `baseline_mode`: `"local"` if `oot_window_mult` is finite, else `"global"`.
   These exist specifically to prevent overconfident OFF_TARGET claims when the diff image is baseline-sensitive or low-SNR.
+
+## Additional audit items (new metrics)
+
+- [x] `diff_peak_snr` is computed from the diff image itself (`diff_peak_value - median(diff_image)`) normalized by a robust MAD sigma across pixels.
+- [x] `peak_pixel_depth_sigma` is computed from the time-series at the peak pixel using robust MAD per-cadence scatter for in/out-of-transit samples.
+- [ ] Add synthetic monotonicity test: increasing injected depth should increase `peak_pixel_depth_sigma` (in expectation).
+- [x] Add synthetic monotonicity test: increasing injected depth should increase `peak_pixel_depth_sigma` (in expectation).

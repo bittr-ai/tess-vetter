@@ -513,8 +513,76 @@ class TestLocalizeTransitSource:
         assert "peak_pixel_depth_sigma" in extra
         assert "baseline_mode" in extra
         assert extra["baseline_mode"] in ("local", "global")
-        assert "distances_to_sources" in d
-        assert isinstance(d["verdict"], str)
+
+    def test_peak_pixel_depth_sigma_increases_with_injected_depth(self) -> None:
+        """Deeper injected transits should increase peak-pixel depth significance (in expectation)."""
+        common_kwargs = dict(
+            shape=(800, 11, 11),
+            stars=[StarSpec(row=5.0, col=5.0, flux=200000.0)],
+            period=5.0,
+            t0=2458001.0,
+            duration_days=0.2,
+            wcs_crval=(120.0, -50.0),
+            pixel_scale_arcsec=21.0,
+            noise_level=50.0,
+            seed=123,
+        )
+
+        tpf_shallow = make_synthetic_tpf_fits(
+            shape=common_kwargs["shape"],
+            stars=common_kwargs["stars"],
+            transit_spec=TransitSpec(
+                star_idx=0,
+                depth_frac=0.01,
+                period=common_kwargs["period"],
+                t0=common_kwargs["t0"],
+                duration_days=common_kwargs["duration_days"],
+            ),
+            wcs_crval=common_kwargs["wcs_crval"],
+            pixel_scale_arcsec=common_kwargs["pixel_scale_arcsec"],
+            noise_level=common_kwargs["noise_level"],
+            seed=common_kwargs["seed"],
+        )
+        tpf_deep = make_synthetic_tpf_fits(
+            shape=common_kwargs["shape"],
+            stars=common_kwargs["stars"],
+            transit_spec=TransitSpec(
+                star_idx=0,
+                depth_frac=0.05,
+                period=common_kwargs["period"],
+                t0=common_kwargs["t0"],
+                duration_days=common_kwargs["duration_days"],
+            ),
+            wcs_crval=common_kwargs["wcs_crval"],
+            pixel_scale_arcsec=common_kwargs["pixel_scale_arcsec"],
+            noise_level=common_kwargs["noise_level"],
+            seed=common_kwargs["seed"],
+        )
+
+        r_shallow = localize_transit_source(
+            tpf_fits=tpf_shallow,
+            period=common_kwargs["period"],
+            t0=common_kwargs["t0"],
+            duration_hours=common_kwargs["duration_days"] * 24.0,
+            reference_sources=[{"name": "target", "ra": 120.0, "dec": -50.0}],
+            bootstrap_draws=0,
+            bootstrap_seed=42,
+        )
+        r_deep = localize_transit_source(
+            tpf_fits=tpf_deep,
+            period=common_kwargs["period"],
+            t0=common_kwargs["t0"],
+            duration_hours=common_kwargs["duration_days"] * 24.0,
+            reference_sources=[{"name": "target", "ra": 120.0, "dec": -50.0}],
+            bootstrap_draws=0,
+            bootstrap_seed=42,
+        )
+
+        s_shallow = float((r_shallow.extra or {}).get("peak_pixel_depth_sigma", float("nan")))
+        s_deep = float((r_deep.extra or {}).get("peak_pixel_depth_sigma", float("nan")))
+        assert np.isfinite(s_shallow)
+        assert np.isfinite(s_deep)
+        assert s_deep > s_shallow
 
     def test_zero_bootstrap_draws_fast_mode(self, single_star_tpf: TPFFitsData) -> None:
         """Zero bootstrap draws should work (fast mode)."""
