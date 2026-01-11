@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.catalogs.spatial import SpatialIndex
+from bittr_tess_vetter.platform.catalogs.spatial import SpatialIndex
 
 # =============================================================================
 # Fixtures

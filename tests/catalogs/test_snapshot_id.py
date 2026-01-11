@@ -10,7 +10,7 @@ import hashlib
 
 import pytest
 
-from bittr_tess_vetter.catalogs.snapshot_id import (
+from bittr_tess_vetter.platform.catalogs.snapshot_id import (
     SHA256_PREFIX_LENGTH,
     SNAPSHOT_PREFIX,
     SNAPSHOT_SEPARATOR,

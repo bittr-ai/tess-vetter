@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from bittr_tess_vetter.catalogs.gaia_client import (
+from bittr_tess_vetter.platform.catalogs.gaia_client import (
     RUWE_ELEVATED_THRESHOLD,
     GaiaAstrophysicalParams,
     GaiaClient,

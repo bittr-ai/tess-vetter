@@ -123,7 +123,7 @@ def compute_target_flux_fraction_from_neighbor_mags(
     """Compute target flux fraction (F_target/F_total) given neighbor magnitudes.
 
     This matches the convention historically used by
-    `bittr_tess_vetter.catalogs.crossmatch.compute_dilution_factor`.
+    `bittr_tess_vetter.platform.catalogs.crossmatch.compute_dilution_factor`.
     """
     if target_mag is None or not neighbor_mags:
         return None

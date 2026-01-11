@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from bittr_tess_vetter.errors import ErrorType, make_error
-from bittr_tess_vetter.network.timeout import network_timeout
+from bittr_tess_vetter.platform.network.timeout import network_timeout
 
 
 def test_make_error_envelope() -> None:
@@ -14,7 +14,7 @@ def test_make_error_envelope() -> None:
 
 
 def test_network_timeout_rejects_non_positive_seconds_when_supported(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("bittr_tess_vetter.network.timeout._is_timeout_supported", lambda: True)
+    monkeypatch.setattr("bittr_tess_vetter.platform.network.timeout._is_timeout_supported", lambda: True)
     with pytest.raises(ValueError):
         with network_timeout(0, operation="x"):
             pass

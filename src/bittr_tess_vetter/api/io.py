@@ -1,11 +1,11 @@
 """Host-facing I/O helpers (network + caching).
 
-This module is intentionally a thin API wrapper around `bittr_tess_vetter.io`.
+This module is intentionally a thin API wrapper around `bittr_tess_vetter.platform.io`.
 Downstream applications should import from `bittr_tess_vetter.api.io` rather than
 deep-importing implementation modules.
 """
 
-from bittr_tess_vetter.io import (
+from bittr_tess_vetter.platform.io import (
     DEFAULT_QUALITY_MASK,
     QUALITY_FLAG_BITS,
     DownloadPhase,
@@ -38,4 +38,3 @@ __all__ = [
     "DownloadPhase",
     "ProgressCallback",
 ]
-

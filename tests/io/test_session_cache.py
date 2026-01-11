@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from bittr_tess_vetter.api.lightcurve import LightCurveData
-from bittr_tess_vetter.io.cache import SessionCache
+from bittr_tess_vetter.platform.io.cache import SessionCache
 
 if TYPE_CHECKING:
     pass

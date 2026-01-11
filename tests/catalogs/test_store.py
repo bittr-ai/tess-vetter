@@ -23,7 +23,7 @@ from typing import Any
 
 import pytest
 
-from bittr_tess_vetter.catalogs.store import (
+from bittr_tess_vetter.platform.catalogs.store import (
     CatalogChecksumError,
     CatalogData,
     CatalogInstallError,
@@ -966,8 +966,8 @@ class TestModuleImports:
     """Tests for module imports and exports."""
 
     def test_import_from_catalogs_package(self) -> None:
-        """Can import from bittr_tess_vetter.catalogs package."""
-        from bittr_tess_vetter.catalogs import (
+        """Can import from bittr_tess_vetter.platform.catalogs package."""
+        from bittr_tess_vetter.platform.catalogs import (
             CatalogChecksumError,
             CatalogData,
             CatalogInstallError,
@@ -982,8 +982,8 @@ class TestModuleImports:
         assert CatalogInstallError is not None
 
     def test_import_from_store_module(self) -> None:
-        """Can import from bittr_tess_vetter.catalogs.store module."""
-        from bittr_tess_vetter.catalogs.store import (
+        """Can import from bittr_tess_vetter.platform.catalogs.store module."""
+        from bittr_tess_vetter.platform.catalogs.store import (
             CatalogChecksumError,
             CatalogData,
             CatalogInstallError,

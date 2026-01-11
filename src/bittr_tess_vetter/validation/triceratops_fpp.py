@@ -39,14 +39,14 @@ from urllib.request import Request, urlopen
 import numpy as np
 from pydantic import BaseModel, Field
 
-from bittr_tess_vetter.network.timeout import (
+from bittr_tess_vetter.platform.network.timeout import (
     TRICERATOPS_CALC_TIMEOUT,
     NetworkTimeoutError,
     network_timeout,
 )
 
 if TYPE_CHECKING:
-    from bittr_tess_vetter.io import PersistentCache
+    from bittr_tess_vetter.platform.io import PersistentCache
 
 logger = logging.getLogger(__name__)
 

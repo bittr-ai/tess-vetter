@@ -271,7 +271,7 @@ def run_exofop_toi_lookup(
     - bounded retries/backoff for network fetches
     """
     try:
-        from bittr_tess_vetter.catalogs.exofop_toi_table import fetch_exofop_toi_table
+        from bittr_tess_vetter.platform.catalogs.exofop_toi_table import fetch_exofop_toi_table
 
         cache_ttl_seconds = 24 * 3600
         table = fetch_exofop_toi_table(cache_ttl_seconds=cache_ttl_seconds)
@@ -279,7 +279,7 @@ def run_exofop_toi_lookup(
         # Fallback: if the ExoFOP network fetch fails, try returning any disk cache
         # (even if stale) rather than hard-failing.
         try:
-            from bittr_tess_vetter.catalogs.exofop_toi_table import fetch_exofop_toi_table
+            from bittr_tess_vetter.platform.catalogs.exofop_toi_table import fetch_exofop_toi_table
 
             table = fetch_exofop_toi_table(cache_ttl_seconds=10**9)
             used_stale_cache = True

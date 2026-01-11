@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from unittest.mock import patch
 
 from bittr_tess_vetter.validation.checks_catalog import run_exofop_toi_lookup, run_nearby_eb_search
-from bittr_tess_vetter.catalogs.exofop_toi_table import ExoFOPToiTable
+from bittr_tess_vetter.platform.catalogs.exofop_toi_table import ExoFOPToiTable
 
 
 @dataclass
@@ -88,7 +88,7 @@ def test_run_exofop_toi_lookup_can_filter_by_toi() -> None:
             {"tic_id": "123", "toi": "101.01", "tfopwg_disposition": "FP"},
         ],
     )
-    with patch("bittr_tess_vetter.catalogs.exofop_toi_table.fetch_exofop_toi_table", return_value=table):
+    with patch("bittr_tess_vetter.platform.catalogs.exofop_toi_table.fetch_exofop_toi_table", return_value=table):
         result = run_exofop_toi_lookup(tic_id=123, toi=101.01, http_get=None)
     assert result.id == "V07"
     assert result.details["status"] == "ok"
@@ -104,7 +104,7 @@ def test_run_exofop_toi_lookup_uses_stale_cache_on_fetch_failure() -> None:
     )
 
     with patch(
-        "bittr_tess_vetter.catalogs.exofop_toi_table.fetch_exofop_toi_table",
+        "bittr_tess_vetter.platform.catalogs.exofop_toi_table.fetch_exofop_toi_table",
         side_effect=[RuntimeError("network down"), stale_table],
     ):
         result = run_exofop_toi_lookup(tic_id=123, toi=101.01, http_get=None)

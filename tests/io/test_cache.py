@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.io import PersistentCache
+from bittr_tess_vetter.platform.io import PersistentCache
 
 
 class TestPersistentCache:
@@ -118,7 +118,7 @@ class TestPersistentCache:
             clock["t"] += 1.0
             return clock["t"]
 
-        monkeypatch.setattr("bittr_tess_vetter.io.cache.time.time", fake_time)
+        monkeypatch.setattr("bittr_tess_vetter.platform.io.cache.time.time", fake_time)
 
         with tempfile.TemporaryDirectory() as td:
             cache = PersistentCache(td, max_entries=2)

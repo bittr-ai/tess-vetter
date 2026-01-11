@@ -4,7 +4,7 @@ This module provides MASTClient, a wrapper around lightkurve for querying
 and downloading TESS light curves from MAST (Mikulski Archive for Space Telescopes).
 
 Usage:
-    from bittr_tess_vetter.io import MASTClient
+    from bittr_tess_vetter.platform.io import MASTClient
 
     client = MASTClient()
     results = client.search_lightcurve(tic_id=261136679)

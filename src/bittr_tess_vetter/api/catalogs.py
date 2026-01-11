@@ -1,16 +1,19 @@
 """Host-facing catalog clients + offline fixtures.
 
-This module is intentionally a thin API wrapper around `bittr_tess_vetter.catalogs`.
+This module is intentionally a thin API wrapper around `bittr_tess_vetter.platform.catalogs`.
 Downstream applications should import from `bittr_tess_vetter.api.catalogs` rather
 than deep-importing implementation modules.
 """
 
-from bittr_tess_vetter.catalogs.exofop_target_page import (  # noqa: F401
+from bittr_tess_vetter.platform.catalogs.exofop_target_page import (  # noqa: F401
     ExoFOPTargetSummary,
     fetch_exofop_target_summary,
 )
-from bittr_tess_vetter.catalogs.exofop_toi_table import ExoFOPToiTable, fetch_exofop_toi_table  # noqa: F401
-from bittr_tess_vetter.catalogs import (  # noqa: F401
+from bittr_tess_vetter.platform.catalogs.exofop_toi_table import (  # noqa: F401
+    ExoFOPToiTable,
+    fetch_exofop_toi_table,
+)
+from bittr_tess_vetter.platform.catalogs import (  # noqa: F401
     GAIA_TAP_ENDPOINT,
     RUWE_ELEVATED_THRESHOLD,
     SIMBAD_TAP_ENDPOINT,

@@ -1,8 +1,7 @@
 """Catalog utilities for astronomical data processing (platform-facing).
 
 Canonical home for networked catalog lookups and on-disk catalog snapshot
-storage. Legacy imports via `bittr_tess_vetter.catalogs` remain available via
-compatibility shims.
+storage.
 """
 
 from __future__ import annotations
@@ -149,4 +148,3 @@ __all__ = [
     "query_simbad_by_id_sync",
     "query_simbad_by_position_sync",
 ]
-
