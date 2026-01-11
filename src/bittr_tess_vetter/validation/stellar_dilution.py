@@ -74,30 +74,17 @@ class DilutionScenario:
     observed_depth_ppm: float
     depth_correction_factor: float
     true_depth_ppm: float
-    implied_companion_radius_rearth: float | None
-    implied_companion_radius_rjup: float | None
-    implied_companion_radius_rsun: float | None
-    planet_radius_inconsistent: bool
-    stellar_companion_likely: bool
-
-    @property
-    def dilution_factor(self) -> float:
-        """Compatibility alias for older callers.
-
-        Historically, downstream code used `dilution_factor` to mean the
-        depth correction factor (F_total/F_host), which is >= 1.
-        """
-
-        return float(self.depth_correction_factor)
+    implied_companion_radius_rearth: float | None = None
+    implied_companion_radius_rjup: float | None = None
+    implied_companion_radius_rsun: float | None = None
+    planet_radius_inconsistent: bool = False
+    stellar_companion_likely: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "host": self.host.to_dict(),
             "observed_depth_ppm": float(self.observed_depth_ppm),
-            # Preferred explicit name
             "depth_correction_factor": float(self.depth_correction_factor),
-            # Compatibility alias (same semantics)
-            "dilution_factor": float(self.depth_correction_factor),
             "true_depth_ppm": float(self.true_depth_ppm),
             "implied_companion_radius_rearth": self.implied_companion_radius_rearth,
             "implied_companion_radius_rjup": self.implied_companion_radius_rjup,
