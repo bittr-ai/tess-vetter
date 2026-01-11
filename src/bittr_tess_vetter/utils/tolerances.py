@@ -164,21 +164,23 @@ def _check_t0_tolerance(
     delta = replayed - original
     abs_delta = abs(delta)
 
-    # Get period for phase calculation
-    # Default to 1.0 if no period config available
-    _ = tolerances.get("period_days", {})  # period_config unused
-    # We need an actual period value, not tolerance config
-    # Use a reference period if available, otherwise assume delta is meaningful
-    reference_period = config.get("reference_period", 1.0)
+    # We need a period VALUE (days) to express the epoch delta as a phase fraction.
+    # Since `check_tolerance` only receives t0 values, callers must provide
+    # a `reference_period` in the tolerance config.
+    #
+    # Note: `tolerances["period_days"]` is tolerance configuration, not a period value.
+    del tolerances
+    reference_period = float(config.get("reference_period", 1.0))
+    reference_period = abs(reference_period)
 
     # Calculate phase difference
-    phase_diff = abs_delta / reference_period if reference_period != 0 else abs_delta
+    phase_diff = abs_delta / reference_period if reference_period > 0 else abs_delta
 
     # Check if within phase tolerance
     within = phase_diff <= phase_fraction
 
     # Also handle case where t0 is wrapped by multiple periods
-    if not within and reference_period != 0:
+    if not within and reference_period > 0:
         # Check modulo period
         wrapped_delta = abs_delta % reference_period
         wrapped_phase = min(wrapped_delta, reference_period - wrapped_delta) / reference_period

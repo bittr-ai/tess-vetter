@@ -81,7 +81,7 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ✅ `src/bittr_tess_vetter/api/systematics.py` → `working_docs/physics_audit/modules/completed/api_systematics_proxy.md`
 - ✅ `src/bittr_tess_vetter/api/target.py` → `working_docs/physics_audit/modules/completed/api_io_and_target.md`
 - ☐ `src/bittr_tess_vetter/api/timing_primitives.py`
-- ☐ `src/bittr_tess_vetter/api/tolerances.py`
+- ✅ `src/bittr_tess_vetter/api/tolerances.py` → `working_docs/physics_audit/modules/completed/utils_and_api_tolerances.md`
 - ✅ `src/bittr_tess_vetter/api/tpf.py` → `working_docs/physics_audit/modules/completed/api_tpf_and_tpf_fits.md`
 - ✅ `src/bittr_tess_vetter/api/tpf_fits.py` → `working_docs/physics_audit/modules/completed/api_tpf_and_tpf_fits.md`
 - ✅ `src/bittr_tess_vetter/api/transit_fit_primitives.py` → `working_docs/physics_audit/modules/completed/api_transit_fit_primitives.md`
@@ -167,7 +167,7 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ☐ `src/bittr_tess_vetter/network/timeout.py`
 - ☐ `src/bittr_tess_vetter/utils/canonical.py`
 - ☐ `src/bittr_tess_vetter/utils/caps.py`
-- ☐ `src/bittr_tess_vetter/utils/tolerances.py`
+- ✅ `src/bittr_tess_vetter/utils/tolerances.py` → `working_docs/physics_audit/modules/completed/utils_and_api_tolerances.md`
 - ☐ `src/bittr_tess_vetter/errors.py`
 
 ### 4.8) Vendored (third-party) — optional but recommended
