@@ -7,6 +7,7 @@ This is the ordered queue for the function-by-function audit.
 - `CONVENTIONS.md` (units, time bases, definitions)
 - `REVIEW_TEMPLATE.md` (what we check for each function)
 - `INVENTORY.md` (API → implementation map; entry points used by agents first)
+- `NEXT_PRIORITIES.md` (dynamic “what to audit next” queue based on blast radius)
 - Module notes live in `modules/in_progress/` while active and move to `modules/completed/` when all checkboxes are checked.
 
 ## 1) Early-agent entry points (review first)
@@ -62,16 +63,16 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ✅ `src/bittr_tess_vetter/api/detection.py` → `working_docs/physics_audit/modules/completed/api_detection_and_detrend.md`
 - ✅ `src/bittr_tess_vetter/api/detrend.py` → `working_docs/physics_audit/modules/completed/api_detection_and_detrend.md`
 - ☐ `src/bittr_tess_vetter/api/difference.py`
-- ☐ `src/bittr_tess_vetter/api/ephemeris_specificity.py`
+- ✅ `src/bittr_tess_vetter/api/ephemeris_specificity.py` → `working_docs/physics_audit/modules/completed/validation_ephemeris_specificity_and_prefilter.md`
 - ☐ `src/bittr_tess_vetter/api/evidence.py`
 - ☐ `src/bittr_tess_vetter/api/exovetter.py`
 - ✅ `src/bittr_tess_vetter/api/io.py` → `working_docs/physics_audit/modules/completed/api_io_and_target.md`
 - ☐ `src/bittr_tess_vetter/api/joint_inference.py`
 - ✅ `src/bittr_tess_vetter/api/localization.py` → `working_docs/physics_audit/modules/completed/api_proxy_localization.md`
-- ☐ `src/bittr_tess_vetter/api/mlx.py`
+- ✅ `src/bittr_tess_vetter/api/mlx.py` → `working_docs/physics_audit/modules/completed/api_mlx_and_compute_mlx_detection.md`
 - ☐ `src/bittr_tess_vetter/api/model_competition.py`
 - ✅ `src/bittr_tess_vetter/api/pixel_host_hypotheses.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
-- ☐ `src/bittr_tess_vetter/api/prefilter.py`
+- ✅ `src/bittr_tess_vetter/api/prefilter.py` → `working_docs/physics_audit/modules/completed/validation_ephemeris_specificity_and_prefilter.md`
 - ☐ `src/bittr_tess_vetter/api/primitives.py`
 - ☐ `src/bittr_tess_vetter/api/recovery_primitives.py`
 - ☐ `src/bittr_tess_vetter/api/references.py`
@@ -97,35 +98,36 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ☐ `src/bittr_tess_vetter/compute/detrend.py`
 - ✅ `src/bittr_tess_vetter/compute/joint_inference_schemas.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/compute/joint_likelihood.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
-- ☐ `src/bittr_tess_vetter/compute/mlx_detection.py`
+- ✅ `src/bittr_tess_vetter/compute/mlx_detection.py` → `working_docs/physics_audit/modules/completed/api_mlx_and_compute_mlx_detection.md`
 - ☐ `src/bittr_tess_vetter/compute/model_competition.py`
-- ☐ `src/bittr_tess_vetter/compute/periodogram.py`
+- ✅ `src/bittr_tess_vetter/compute/periodogram.py` → `working_docs/physics_audit/modules/completed/api_periodogram.md`
 - ✅ `src/bittr_tess_vetter/compute/pixel_host_hypotheses.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/compute/pixel_hypothesis_prf.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/compute/pixel_prf_lite.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/compute/pixel_timeseries.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/compute/prf_psf.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/compute/prf_schemas.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
+- ✅ `src/bittr_tess_vetter/compute/mlx_detection.py` → `working_docs/physics_audit/modules/completed/api_mlx_and_compute_mlx_detection.md`
 - ☐ `src/bittr_tess_vetter/compute/primitives.py`
-- ☐ `src/bittr_tess_vetter/compute/transit.py`
+- ✅ `src/bittr_tess_vetter/compute/transit.py` → `working_docs/physics_audit/modules/completed/compute_transit_and_recovery_pipeline.md`
 
 ### 4.3) Catalogs + crossmatch (astro context + priors)
 
-- ☐ `src/bittr_tess_vetter/catalogs/crossmatch.py`
-- ☐ `src/bittr_tess_vetter/catalogs/exofop_target_page.py`
-- ☐ `src/bittr_tess_vetter/catalogs/exofop_toi_table.py`
-- ☐ `src/bittr_tess_vetter/catalogs/exoplanet_archive.py`
-- ☐ `src/bittr_tess_vetter/catalogs/gaia_client.py`
-- ☐ `src/bittr_tess_vetter/catalogs/simbad_client.py`
-- ☐ `src/bittr_tess_vetter/catalogs/snapshot_id.py`
-- ☐ `src/bittr_tess_vetter/catalogs/spatial.py`
-- ☐ `src/bittr_tess_vetter/catalogs/store.py`
+- ✅ `src/bittr_tess_vetter/catalogs/crossmatch.py` → `working_docs/physics_audit/modules/completed/catalogs_spatial_and_crossmatch.md`
+- ✅ `src/bittr_tess_vetter/catalogs/exofop_target_page.py` → `working_docs/physics_audit/modules/completed/catalogs_exofop_target_page_and_toi_table.md`
+- ✅ `src/bittr_tess_vetter/catalogs/exofop_toi_table.py` → `working_docs/physics_audit/modules/completed/catalogs_exofop_target_page_and_toi_table.md`
+- ✅ `src/bittr_tess_vetter/catalogs/exoplanet_archive.py` → `working_docs/physics_audit/modules/completed/catalogs_snapshot_id_and_exoplanet_archive.md`
+- ✅ `src/bittr_tess_vetter/catalogs/gaia_client.py` → `working_docs/physics_audit/modules/completed/catalogs_gaia_simbad_store.md`
+- ✅ `src/bittr_tess_vetter/catalogs/simbad_client.py` → `working_docs/physics_audit/modules/completed/catalogs_gaia_simbad_store.md`
+- ✅ `src/bittr_tess_vetter/catalogs/snapshot_id.py` → `working_docs/physics_audit/modules/completed/catalogs_snapshot_id_and_exoplanet_archive.md`
+- ✅ `src/bittr_tess_vetter/catalogs/spatial.py` → `working_docs/physics_audit/modules/completed/catalogs_spatial_and_crossmatch.md`
+- ✅ `src/bittr_tess_vetter/catalogs/store.py` → `working_docs/physics_audit/modules/completed/catalogs_gaia_simbad_store.md`
 
 ### 4.4) Pixel pipeline (non-API package mirrors)
 
 - ✅ `src/bittr_tess_vetter/pixel/aperture.py` → `working_docs/physics_audit/modules/completed/api_aperture_dependence.md`
 - ✅ `src/bittr_tess_vetter/pixel/aperture_family.py` → `working_docs/physics_audit/modules/completed/api_aperture_family.md`
-- ☐ `src/bittr_tess_vetter/pixel/cadence_mask.py`
+- ✅ `src/bittr_tess_vetter/pixel/cadence_mask.py` → `working_docs/physics_audit/modules/completed/pixel_cadence_mask.md`
 - ✅ `src/bittr_tess_vetter/pixel/centroid.py` → `working_docs/physics_audit/modules/completed/api_centroid_shift.md`
 - ✅ `src/bittr_tess_vetter/pixel/difference.py` → `working_docs/physics_audit/modules/completed/api_proxy_localization.md`
 - ✅ `src/bittr_tess_vetter/pixel/localization.py` → `working_docs/physics_audit/modules/completed/api_proxy_localization.md`
@@ -137,7 +139,7 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 
 ### 4.5) Transit + recovery packages (non-API package mirrors)
 
-- ☐ `src/bittr_tess_vetter/recovery/pipeline.py`
+- ✅ `src/bittr_tess_vetter/recovery/pipeline.py` → `working_docs/physics_audit/modules/completed/compute_transit_and_recovery_pipeline.md`
 - ☐ `src/bittr_tess_vetter/recovery/primitives.py`
 - ☐ `src/bittr_tess_vetter/recovery/result.py`
 - ☐ `src/bittr_tess_vetter/transit/result.py`
@@ -148,14 +150,14 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 
 - ✅ `src/bittr_tess_vetter/validation/checks_catalog.py` → `working_docs/physics_audit/modules/completed/validation_checks_pixel_and_catalog.md`
 - ✅ `src/bittr_tess_vetter/validation/checks_pixel.py` → `working_docs/physics_audit/modules/completed/validation_checks_pixel_and_catalog.md`
-- ☐ `src/bittr_tess_vetter/validation/ephemeris_specificity.py`
-- ☐ `src/bittr_tess_vetter/validation/prefilter.py`
+- ✅ `src/bittr_tess_vetter/validation/ephemeris_specificity.py` → `working_docs/physics_audit/modules/completed/validation_ephemeris_specificity_and_prefilter.md`
+- ✅ `src/bittr_tess_vetter/validation/prefilter.py` → `working_docs/physics_audit/modules/completed/validation_ephemeris_specificity_and_prefilter.md`
 - ✅ `src/bittr_tess_vetter/validation/systematics_proxy.py` → `working_docs/physics_audit/modules/completed/api_systematics_proxy.md`
 - ✅ `src/bittr_tess_vetter/validation/triceratops_fpp.py` → `working_docs/physics_audit/modules/completed/api_fpp.md`
 
 ### 4.7) Supporting domain / utils / IO
 
-- ☐ `src/bittr_tess_vetter/domain/detection.py`
+- ✅ `src/bittr_tess_vetter/domain/detection.py` → `working_docs/physics_audit/modules/completed/compute_transit_and_recovery_pipeline.md`
 - ✅ `src/bittr_tess_vetter/domain/lightcurve.py` → `working_docs/physics_audit/modules/completed/api_lightcurve.md`
 - ☐ `src/bittr_tess_vetter/domain/target.py`
 - ☐ `src/bittr_tess_vetter/activity/primitives.py`

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from bittr_tess_vetter.validation.prefilter import (
     compute_depth_over_depth_err_snr,
@@ -15,6 +16,12 @@ def test_compute_phase_coverage_full_coverage() -> None:
     assert 0.0 <= res.transit_phase_coverage <= 1.0
     assert res.total_bins == 20
     assert 1 <= res.bins_with_data <= 20
+
+
+def test_compute_phase_coverage_rejects_invalid_period() -> None:
+    time = np.linspace(0.0, 30.0, 5000, dtype=np.float64)
+    with pytest.raises(ValueError, match="period_days must be positive"):
+        compute_phase_coverage(time=time, period_days=0.0, t0_btjd=0.1, n_bins=20)
 
 
 def test_compute_depth_over_depth_err_snr_reasonable() -> None:

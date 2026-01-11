@@ -47,6 +47,13 @@ def compute_phase_coverage(
     n_bins: int = 20,
     transit_bins: tuple[int, ...] = (0, 1, -1),
 ) -> PhaseCoverageResult:
+    if not np.isfinite(period_days) or float(period_days) <= 0:
+        raise ValueError(f"period_days must be positive and finite, got {period_days}")
+    if not np.isfinite(t0_btjd):
+        raise ValueError(f"t0_btjd must be finite, got {t0_btjd}")
+    if int(n_bins) <= 0:
+        raise ValueError(f"n_bins must be positive, got {n_bins}")
+
     phase = ((time - t0_btjd) / period_days) % 1.0
     bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
     bin_counts, _ = np.histogram(phase, bins=bin_edges)
@@ -67,4 +74,3 @@ def compute_phase_coverage(
         bins_with_data=bins_with_data,
         total_bins=int(n_bins),
     )
-
