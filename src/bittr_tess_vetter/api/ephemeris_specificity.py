@@ -15,11 +15,13 @@ from __future__ import annotations
 
 from bittr_tess_vetter.validation.ephemeris_specificity import (  # noqa: F401
     ConcentrationMetrics,
+    DepthThresholdResult,
     LocalT0SensitivityResult,
     PhaseShiftNullResult,
     SmoothTemplateConfig,
     SmoothTemplateScoreResult,
     compute_concentration_metrics,
+    compute_depth_threshold_numpy,
     compute_local_t0_sensitivity_numpy,
     compute_phase_shift_null,
     downsample_evenly,
@@ -34,6 +36,7 @@ __all__ = [
     "SmoothTemplateScoreResult",
     "PhaseShiftNullResult",
     "ConcentrationMetrics",
+    "DepthThresholdResult",
     "LocalT0SensitivityResult",
     "downsample_evenly",
     "smooth_box_template_numpy",
@@ -42,6 +45,6 @@ __all__ = [
     "scores_for_t0s_numpy",
     "compute_phase_shift_null",
     "compute_concentration_metrics",
+    "compute_depth_threshold_numpy",
     "compute_local_t0_sensitivity_numpy",
 ]
-

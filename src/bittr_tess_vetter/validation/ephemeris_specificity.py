@@ -43,6 +43,17 @@ class ConcentrationMetrics:
     n_in_transit: int
 
 
+@dataclass(frozen=True)
+class DepthThresholdResult:
+    backend: Literal["numpy"]
+    score_current: float
+    target_score: float
+    depth_hat_ppm: float
+    depth_sigma_ppm: float
+    depth_needed_ppm: float
+    dscore_ddepth_per_fraction: float
+
+
 def downsample_evenly(
     *,
     time: NDArray[np.float64],
@@ -116,6 +127,45 @@ def score_fixed_period_numpy(
     score = float(depth_hat / max(depth_sigma, eps))
     return SmoothTemplateScoreResult(
         score=score, depth_hat=depth_hat, depth_sigma=depth_sigma, template=template
+    )
+
+
+def compute_depth_threshold_numpy(
+    *,
+    time: NDArray[np.float64],
+    flux: NDArray[np.float64],
+    flux_err: NDArray[np.float64],
+    period_days: float,
+    t0_btjd: float,
+    duration_hours: float,
+    target_score: float,
+    config: SmoothTemplateConfig,
+) -> DepthThresholdResult:
+    """Compute the additional depth needed (in ppm) to reach a target smooth-template score."""
+    res = score_fixed_period_numpy(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        period_days=float(period_days),
+        t0_btjd=float(t0_btjd),
+        duration_hours=float(duration_hours),
+        config=config,
+    )
+    depth_hat = float(res.depth_hat)
+    depth_sigma = float(res.depth_sigma)
+    score_current = float(res.score)
+
+    # score = depth_hat / depth_sigma, so d(score)/d(depth_hat) = 1/depth_sigma.
+    dscore_ddepth = 1.0 / max(depth_sigma, 1e-12)
+    depth_needed = max(float(target_score) * depth_sigma - depth_hat, 0.0)
+    return DepthThresholdResult(
+        backend="numpy",
+        score_current=float(score_current),
+        target_score=float(target_score),
+        depth_hat_ppm=float(depth_hat * 1e6),
+        depth_sigma_ppm=float(depth_sigma * 1e6),
+        depth_needed_ppm=float(depth_needed * 1e6),
+        dscore_ddepth_per_fraction=float(dscore_ddepth),
     )
 
 
