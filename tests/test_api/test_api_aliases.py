@@ -18,7 +18,7 @@ def test_top_level_aliases_import_and_resolve() -> None:
 
 
 def test_facade_imports() -> None:
-    # Facade removed: the canonical surface is `bittr_tess_vetter.api`.
+    # Canonical surface is `bittr_tess_vetter.api` (full surface is first-class).
     from bittr_tess_vetter.api import (  # noqa: F401
         Candidate,
         Ephemeris,
