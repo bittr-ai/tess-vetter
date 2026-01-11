@@ -93,6 +93,7 @@ from __future__ import annotations
 import ast
 import importlib
 import importlib.util as _importlib_util
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -136,6 +137,11 @@ __all__ = [
     "RecoveryResult",
     # Main orchestrator (v2)
     "vet_candidate",
+    # Preferred short aliases (non-breaking)
+    "vet",
+    "periodogram",
+    "localize",
+    "aperture_family_depth_curve",
     # Evidence helpers
     "checks_to_evidence_items",
     # Generic evidence contracts
@@ -870,11 +876,29 @@ def _get_export_map() -> dict[str, tuple[str, str]]:
     return exports
 
 
+_ALIASES: dict[str, str] = {
+    # Primary orchestration
+    "vet": "vet_candidate",
+    # Discovery / ephemeris tools
+    "periodogram": "run_periodogram",
+    # Pixel localization/reporting
+    "localize": "localize_transit_source",
+    "aperture_family_depth_curve": "compute_aperture_family_depth_curve",
+}
+
+
 def __getattr__(name: str) -> Any:
     if name == "MLX_AVAILABLE":
         return MLX_AVAILABLE
     if name in _MLX_GUARDED_EXPORTS and not MLX_AVAILABLE:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    alias_target = _ALIASES.get(name)
+    if alias_target is not None:
+        mod = sys.modules[__name__]
+        value = getattr(mod, alias_target)
+        globals()[name] = value
+        return value
 
     exports = _get_export_map()
     target = exports.get(name)
@@ -898,4 +922,4 @@ def __dir__() -> list[str]:
         exports = _get_export_map()
     except Exception:
         exports = {}
-    return sorted(set(globals().keys()) | set(__all__) | set(exports.keys()))
+    return sorted(set(globals().keys()) | set(__all__) | set(exports.keys()) | set(_ALIASES.keys()))
