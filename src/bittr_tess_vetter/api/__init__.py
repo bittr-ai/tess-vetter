@@ -311,6 +311,33 @@ from bittr_tess_vetter.api.ephemeris_match import (  # noqa: F401
     save_index,
     wrap_t0,
 )
+from bittr_tess_vetter.api.alias_diagnostics import (  # noqa: F401
+    PhaseShiftEvent,
+    compute_secondary_significance,
+    detect_phase_shift_events,
+)
+from bittr_tess_vetter.api.ghost_features import (  # noqa: F401
+    GhostFeatures,
+    compute_ghost_features,
+)
+from bittr_tess_vetter.api.negative_controls import (  # noqa: F401
+    ControlType,
+    generate_control,
+    generate_flux_invert,
+    generate_null_inject,
+    generate_phase_scramble,
+    generate_time_scramble,
+)
+from bittr_tess_vetter.api.reliability_curves import (  # noqa: F401
+    compute_conditional_rates,
+    compute_reliability_curves,
+    recommend_thresholds,
+)
+from bittr_tess_vetter.api.sector_consistency import (  # noqa: F401
+    ConsistencyClass,
+    SectorMeasurement,
+    compute_sector_consistency,
+)
 
 # Detrending (host-facing)
 from bittr_tess_vetter.api.detrend import (  # noqa: F401
@@ -580,6 +607,28 @@ __all__ = [
     "compute_local_t0_sensitivity_numpy",
     "SystematicsProxyResult",
     "compute_systematics_proxy",
+    # Alias diagnostics extras
+    "PhaseShiftEvent",
+    "compute_secondary_significance",
+    "detect_phase_shift_events",
+    # Ghost features
+    "GhostFeatures",
+    "compute_ghost_features",
+    # Negative controls
+    "ControlType",
+    "generate_control",
+    "generate_flux_invert",
+    "generate_null_inject",
+    "generate_phase_scramble",
+    "generate_time_scramble",
+    # Reliability curves
+    "compute_conditional_rates",
+    "compute_reliability_curves",
+    "recommend_thresholds",
+    # Sector consistency
+    "ConsistencyClass",
+    "SectorMeasurement",
+    "compute_sector_consistency",
     # LC-only checks (V01-V05)
     "odd_even_depth",
     "secondary_eclipse",
