@@ -86,8 +86,8 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ✅ `src/bittr_tess_vetter/api/transit_fit_primitives.py` → `working_docs/physics_audit/modules/completed/api_transit_fit_primitives.md`
 - ✅ `src/bittr_tess_vetter/api/transit_primitives.py` → `working_docs/physics_audit/modules/completed/api_transit_primitives.md`
 - ☐ `src/bittr_tess_vetter/api/triceratops_cache.py`
-- ☐ `src/bittr_tess_vetter/api/vet.py`
-- ☐ `src/bittr_tess_vetter/api/vetting_primitives.py`
+- ✅ `src/bittr_tess_vetter/api/vet.py` → `working_docs/physics_audit/modules/completed/api_vet_and_vetting_primitives.md`
+- ✅ `src/bittr_tess_vetter/api/vetting_primitives.py` → `working_docs/physics_audit/modules/completed/api_vet_and_vetting_primitives.md`
 - ✅ `src/bittr_tess_vetter/api/wcs_utils.py` → `working_docs/physics_audit/modules/completed/api_wcs_utils.md`
 
 ### 4.2) Compute layer (physics + numerics implementations)
