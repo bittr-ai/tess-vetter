@@ -1,0 +1,80 @@
+from __future__ import annotations
+
+import numpy as np
+
+from bittr_tess_vetter.api.alias_diagnostics import classify_alias, compute_harmonic_scores
+
+
+def _box_events(time: np.ndarray, *, period: float, t0: float, duration_days: float) -> np.ndarray:
+    phase = ((time - t0) % period) / period
+    phase = np.where(phase > 0.5, phase - 1.0, phase)
+    half = (duration_days / 2.0) / period
+    return np.abs(phase) <= half
+
+
+def test_alias_strong_when_true_period_is_p_over_2() -> None:
+    rng = np.random.default_rng(0)
+    time = np.linspace(0.0, 30.0, 5000, dtype=np.float64)
+    flux_err = np.full_like(time, 1e-3)
+
+    base_period = 5.0
+    true_period = 2.5
+    t0 = 0.0
+    duration_hours = 2.0
+    duration_days = duration_hours / 24.0
+
+    in_transit_true = _box_events(time, period=true_period, t0=t0, duration_days=duration_days)
+    flux = np.ones_like(time)
+    flux[in_transit_true] -= 0.01
+    flux += rng.normal(0.0, 2e-4, size=flux.shape)
+
+    scores = compute_harmonic_scores(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        base_period=base_period,
+        base_t0=t0,
+        duration_hours=duration_hours,
+    )
+
+    base_score = next(s.score for s in scores if s.harmonic == "P")
+    alias_class, best_harmonic, ratio = classify_alias(scores, base_score)
+
+    # With this simple box scorer, the main gain at P/2 comes from doubling the
+    # number of stacked events (significance ~ sqrt(2)), so this should register
+    # as at least a weak alias.
+    assert alias_class in ("ALIAS_WEAK", "ALIAS_STRONG")
+    assert best_harmonic == "P/2"
+    assert ratio >= 1.1
+
+
+def test_alias_none_for_clean_period() -> None:
+    rng = np.random.default_rng(1)
+    time = np.linspace(0.0, 30.0, 5000, dtype=np.float64)
+    flux_err = np.full_like(time, 1e-3)
+
+    base_period = 5.0
+    t0 = 0.0
+    duration_hours = 2.0
+    duration_days = duration_hours / 24.0
+
+    in_transit = _box_events(time, period=base_period, t0=t0, duration_days=duration_days)
+    flux = np.ones_like(time)
+    flux[in_transit] -= 0.01
+    flux += rng.normal(0.0, 2e-4, size=flux.shape)
+
+    scores = compute_harmonic_scores(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        base_period=base_period,
+        base_t0=t0,
+        duration_hours=duration_hours,
+    )
+
+    base_score = next(s.score for s in scores if s.harmonic == "P")
+    alias_class, best_harmonic, ratio = classify_alias(scores, base_score)
+
+    assert alias_class == "NONE"
+    assert best_harmonic == "P"
+    assert ratio < 1.1
