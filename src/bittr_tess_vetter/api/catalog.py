@@ -217,8 +217,7 @@ def exofop_disposition(
 
     del candidate
     del cache
-    del toi
-    result = run_exofop_toi_lookup(tic_id=tic_id, http_get=http_get)
+    result = run_exofop_toi_lookup(tic_id=tic_id, toi=toi, http_get=http_get)
     return _convert_result(result)
 
 

@@ -138,13 +138,23 @@ def compute_pixel_level_depths_ppm(
     duration_hours: float,
 ) -> NDArray[np.floating[Any]]:
     """Compute per-pixel transit depths in ppm using simple in/out masks."""
-    in_mask = get_in_transit_mask(time, period_days, t0_btjd, duration_hours)
-    out_mask = get_out_of_transit_mask(time, period_days, t0_btjd, duration_hours, buffer_factor=3.0)
-
     if tpf_data.ndim != 3:
         raise ValueError(f"tpf_data must be 3D (time, rows, cols), got {tpf_data.shape}")
     if time.shape[0] != tpf_data.shape[0]:
         raise ValueError("time length must match tpf_data first axis")
+
+    time = np.asarray(time, dtype=np.float64)
+    tpf_data = np.asarray(tpf_data, dtype=np.float64)
+
+    finite_time = np.isfinite(time)
+    frame_has_finite = np.any(np.isfinite(tpf_data), axis=(1, 2))
+    cadence_mask = finite_time & frame_has_finite
+
+    time = time[cadence_mask]
+    tpf_data = tpf_data[cadence_mask]
+
+    in_mask = get_in_transit_mask(time, period_days, t0_btjd, duration_hours)
+    out_mask = get_out_of_transit_mask(time, period_days, t0_btjd, duration_hours, buffer_factor=3.0)
 
     in_flux = tpf_data[in_mask]
     out_flux = tpf_data[out_mask]
@@ -238,6 +248,17 @@ def check_pixel_level_lc_with_tpf(
         if not np.isfinite(metrics.distance_to_target_pixels):
             confidence = 0.2
             warnings.append("NO_VALID_PIXEL_DEPTHS")
+    except ValueError as e:
+        return _metrics_result(
+            check_id="V09",
+            name="pixel_level_lc",
+            confidence=0.0,
+            details={
+                "status": "insufficient_data",
+                "error": str(e),
+                "tpf_shape": list(tpf_data.shape),
+            },
+        )
     except Exception as e:
         return _metrics_result(
             check_id="V09",
@@ -251,6 +272,7 @@ def check_pixel_level_lc_with_tpf(
         name="pixel_level_lc",
         confidence=confidence,
         details={
+            "status": "ok",
             "max_depth_pixel": metrics.max_depth_pixel,
             "max_depth_ppm": metrics.max_depth_ppm,
             "target_pixel": metrics.target_pixel,
@@ -280,15 +302,34 @@ def check_aperture_dependence_with_tpf(
     params = ApertureTransitParams(
         period=float(candidate.period),
         t0=float(candidate.t0),
-        duration=float(candidate.duration_hours),
+        duration=float(candidate.duration_hours) / 24.0,
     )
-    result = compute_aperture_dependence(
-        tpf_data=tpf_data,
-        time=time,
-        transit_params=params,
-        aperture_radii=aperture_radii_px,
-        center=center_row_col,
-    )
+    try:
+        result = compute_aperture_dependence(
+            tpf_data=tpf_data,
+            time=time,
+            transit_params=params,
+            aperture_radii=aperture_radii_px,
+            center=center_row_col,
+        )
+    except ValueError as e:
+        return _metrics_result(
+            check_id="V10",
+            name="aperture_dependence",
+            confidence=0.0,
+            details={
+                "status": "insufficient_data",
+                "error": str(e),
+                "tpf_shape": list(tpf_data.shape),
+            },
+        )
+    except Exception as e:
+        return _metrics_result(
+            check_id="V10",
+            name="aperture_dependence",
+            confidence=0.0,
+            details={"status": "error", "error": str(e), "tpf_shape": list(tpf_data.shape)},
+        )
 
     n_in = int(result.n_in_transit_cadences)
     n_out = int(result.n_out_of_transit_cadences)
@@ -299,6 +340,7 @@ def check_aperture_dependence_with_tpf(
         name="aperture_dependence",
         confidence=confidence,
         details={
+            "status": "ok",
             "stability_metric": float(result.stability_metric),
             "depths_by_aperture_ppm": {str(k): float(v) for k, v in result.depths_by_aperture.items()},
             "depth_variance_ppm2": float(result.depth_variance),

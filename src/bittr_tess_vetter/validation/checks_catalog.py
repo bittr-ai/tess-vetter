@@ -12,7 +12,9 @@ import csv
 import io
 import logging
 import math
+import time
 from typing import Any, Callable
+from xml.etree import ElementTree as ET
 
 import requests
 
@@ -69,6 +71,53 @@ def _angular_separation_arcsec(
     c = 2.0 * math.asin(math.sqrt(a))
     return float(math.degrees(c) * 3600.0)
 
+
+def _strip_ns(tag: str) -> str:
+    return tag.split("}", 1)[-1]
+
+
+def _parse_vizier_votable(text: str) -> list[dict[str, str]]:
+    root = ET.fromstring(text)
+
+    fields: list[str] = []
+    for elem in root.iter():
+        if _strip_ns(elem.tag) != "FIELD":
+            continue
+        name = elem.attrib.get("name") or elem.attrib.get("ID")
+        if name:
+            fields.append(name)
+
+    rows: list[dict[str, str]] = []
+    for tr in root.iter():
+        if _strip_ns(tr.tag) != "TR":
+            continue
+        values: list[str] = []
+        for td in tr:
+            if _strip_ns(td.tag) != "TD":
+                continue
+            values.append(td.text.strip() if td.text else "")
+
+        if not values:
+            continue
+
+        if fields and len(fields) == len(values):
+            rows.append({fields[i]: values[i] for i in range(len(values))})
+        else:
+            # Fallback: assume the requested output column order.
+            row: dict[str, str] = {}
+            if len(values) >= 1:
+                row["TIC"] = values[0]
+            if len(values) >= 2:
+                row["Per"] = values[1]
+            if len(values) >= 3:
+                row["RAJ2000"] = values[2]
+            if len(values) >= 4:
+                row["DEJ2000"] = values[3]
+            rows.append(row)
+
+    return rows
+
+
 def run_nearby_eb_search(
     *,
     ra_deg: float,
@@ -96,11 +145,22 @@ def run_nearby_eb_search(
             check_id="V06",
             name="nearby_eb_search",
             confidence=0.0,
-            details={"status": "error", "error": str(e), "ra": ra_deg, "dec": dec_deg},
+            details={
+                "status": "error",
+                "error": str(e),
+                "ra": ra_deg,
+                "dec": dec_deg,
+            },
         )
 
     text = resp.text
-    if "<TR>" not in text:
+    parsed_rows: list[dict[str, str]] = []
+    try:
+        parsed_rows = _parse_vizier_votable(text)
+    except Exception:
+        parsed_rows = []
+
+    if not parsed_rows and "<TR>" not in text:
         return _metrics_result(
             check_id="V06",
             name="nearby_eb_search",
@@ -114,28 +174,40 @@ def run_nearby_eb_search(
             },
         )
 
-    # Extremely lightweight parse (VOTable-ish HTML). Extract rows by naive split.
+    # Extremely lightweight fallback parse (VOTable-ish HTML). Extract rows by naive split.
+    if not parsed_rows:
+        for tr in text.split("<TR>")[1:]:
+            tds = tr.split("<TD>")[1:]
+            if len(tds) < 4:
+                continue
+            parsed_rows.append(
+                {
+                    "TIC": tds[0].split("</TD>")[0].strip(),
+                    "Per": tds[1].split("</TD>")[0].strip(),
+                    "RAJ2000": tds[2].split("</TD>")[0].strip(),
+                    "DEJ2000": tds[3].split("</TD>")[0].strip(),
+                }
+            )
+
     rows: list[dict[str, Any]] = []
-    for tr in text.split("<TR>")[1:]:
-        tds = tr.split("<TD>")[1:]
-        if len(tds) < 4:
-            continue
+    for r in parsed_rows:
         try:
-            tic = int(tds[0].split("</TD>")[0].strip())
+            tic = int(str(r.get("TIC", "")).strip())
         except Exception:
             continue
         try:
-            per = float(tds[1].split("</TD>")[0].strip())
+            per = float(str(r.get("Per", "")).strip())
         except Exception:
             per = float("nan")
         try:
-            ra = float(tds[2].split("</TD>")[0].strip())
+            ra = float(str(r.get("RAJ2000", "")).strip())
         except Exception:
             ra = float("nan")
         try:
-            dec = float(tds[3].split("</TD>")[0].strip())
+            dec = float(str(r.get("DEJ2000", "")).strip())
         except Exception:
             dec = float("nan")
+
         rows.append({"tic_id": tic, "period_days": per, "ra_deg": ra, "dec_deg": dec})
 
     candidate_period_days = float(candidate_period_days) if candidate_period_days is not None else None
@@ -157,7 +229,16 @@ def run_nearby_eb_search(
             if (math.isfinite(ra2) and math.isfinite(dec2))
             else None
         )
-        match_summaries.append({"tic_id": r["tic_id"], "period_days": per, "sep_arcsec": sep_arcsec, **deltas})
+        match_summaries.append(
+            {
+                "tic_id": r["tic_id"],
+                "period_days": per,
+                "ra_deg": (ra2 if math.isfinite(ra2) else None),
+                "dec_deg": (dec2 if math.isfinite(dec2) else None),
+                "sep_arcsec": sep_arcsec,
+                **deltas,
+            }
+        )
 
     return _metrics_result(
         check_id="V06",
@@ -182,49 +263,98 @@ def run_exofop_toi_lookup(
     toi: float | None = None,
     http_get: Callable[..., Any] | None = None,
 ) -> VetterCheckResult:
-    """V07: Download ExoFOP's TOI table and return the row for `tic_id` (optionally TOI-filtered)."""
-    http_get = http_get or requests.get
+    """V07: Query ExoFOP's TOI table for `tic_id` (optionally TOI-filtered).
+
+    Uses the shared `catalogs.exofop_toi_table` implementation which provides:
+    - in-process caching
+    - on-disk caching with TTL (persists across MCP restarts)
+    - bounded retries/backoff for network fetches
+    """
     try:
-        resp = http_get(EXOFOP_TOI_URL, timeout=REQUEST_TIMEOUT_S)
-        resp.raise_for_status()
+        from bittr_tess_vetter.catalogs.exofop_toi_table import fetch_exofop_toi_table
+
+        cache_ttl_seconds = 24 * 3600
+        table = fetch_exofop_toi_table(cache_ttl_seconds=cache_ttl_seconds)
     except Exception as e:
-        return _metrics_result(
-            check_id="V07",
-            name="exofop_toi_lookup",
-            confidence=0.0,
-            details={"status": "error", "error": str(e), "tic_id": int(tic_id)},
-        )
-
-    csv_text = resp.text
-    reader = csv.DictReader(io.StringIO(csv_text))
-    row: dict[str, Any] | None = None
-    for r in reader:
+        # Fallback: if the ExoFOP network fetch fails, try returning any disk cache
+        # (even if stale) rather than hard-failing.
         try:
-            if int(r.get("TIC ID", "0")) != int(tic_id):
-                continue
-            if toi is not None:
-                toi_val = float(r.get("TOI", "nan"))
-                if not (abs(toi_val - float(toi)) < 1e-6):
-                    continue
-            row = r
-            break
-        except Exception:
-            continue
+            from bittr_tess_vetter.catalogs.exofop_toi_table import fetch_exofop_toi_table
 
-    if row is None:
+            table = fetch_exofop_toi_table(cache_ttl_seconds=10**9)
+            used_stale_cache = True
+            fetch_error = str(e)
+        except Exception:
+            return _metrics_result(
+                check_id="V07",
+                name="exofop_toi_lookup",
+                confidence=0.0,
+                details={
+                    "status": "error",
+                    "error": str(e),
+                    "tic_id": int(tic_id),
+                    "note": "ExoFOP fetch failed and no disk cache was available",
+                },
+            )
+    else:
+        used_stale_cache = False
+        fetch_error = None
+
+    # Filter rows for this TIC (+ optional TOI).
+    rows = list(table.entries_for_tic(int(tic_id)))
+    selected: dict[str, str] | None = None
+    if toi is not None:
+        target_toi = float(toi)
+        for r in rows:
+            try:
+                if abs(float(r.get("toi", "nan")) - target_toi) < 1e-6:
+                    selected = r
+                    break
+            except Exception:
+                continue
+    else:
+        selected = rows[0] if rows else None
+
+    now = time.time()
+    age_seconds = float(now - float(table.fetched_at_unix)) if table.fetched_at_unix else None
+    is_stale = bool(age_seconds is not None and age_seconds > float(cache_ttl_seconds))
+
+    if selected is None:
         return _metrics_result(
             check_id="V07",
             name="exofop_toi_lookup",
             confidence=0.7,
-            details={"status": "ok", "tic_id": int(tic_id), "found": False},
+            details={
+                "status": "ok",
+                "tic_id": int(tic_id),
+                "toi": (float(toi) if toi is not None else None),
+                "found": False,
+                "source": "exofop_toi_table",
+                "cache_ttl_seconds": int(cache_ttl_seconds),
+                "cache_age_seconds": age_seconds,
+                "cache_stale": is_stale,
+                "used_stale_cache": used_stale_cache,
+                "fetch_error": fetch_error,
+            },
         )
 
-    # Keep raw strings; downstream code can interpret dispositions.
     return _metrics_result(
         check_id="V07",
         name="exofop_toi_lookup",
         confidence=0.8,
-        details={"status": "ok", "tic_id": int(tic_id), "found": True, "row": dict(row)},
+        details={
+            "status": "ok",
+            "tic_id": int(tic_id),
+            "toi": (float(toi) if toi is not None else None),
+            "found": True,
+            "row": dict(selected),
+            "source": "exofop_toi_table",
+            "cache_ttl_seconds": int(cache_ttl_seconds),
+            "cache_age_seconds": age_seconds,
+            "cache_stale": is_stale,
+            "used_stale_cache": used_stale_cache,
+            "fetch_error": fetch_error,
+        },
     )
 
 
