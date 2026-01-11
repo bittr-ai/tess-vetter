@@ -269,6 +269,12 @@ SIDECAR_HEADER_KEYS = frozenset(
         "TSTART",
         "TSTOP",
         "EXPOSURE",
+        "TIMESYS",
+        "TIMEUNIT",
+        "BJDREFI",
+        "BJDREFF",
+        "MJDREFI",
+        "MJDREFF",
         "TIMEDEL",
     }
 )
@@ -314,6 +320,23 @@ def _extract_header_subset(header: fits.Header) -> dict[str, Any]:
             elif isinstance(value, np.floating):
                 value = float(value)
             result[key] = value
+
+    # Include any column unit keywords (e.g., TUNIT1, TUNIT2, ...) to preserve
+    # time/flux units when present in the FITS table header.
+    for key in header.keys():
+        if not isinstance(key, str):
+            continue
+        if not key.startswith("TUNIT"):
+            continue
+        suffix = key[5:]
+        if not suffix.isdigit():
+            continue
+        value = header[key]
+        if isinstance(value, np.integer):
+            value = int(value)
+        elif isinstance(value, np.floating):
+            value = float(value)
+        result[key] = value
     return result
 
 

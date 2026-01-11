@@ -81,8 +81,8 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ✅ `src/bittr_tess_vetter/api/target.py` → `working_docs/physics_audit/modules/completed/api_io_and_target.md`
 - ☐ `src/bittr_tess_vetter/api/timing_primitives.py`
 - ☐ `src/bittr_tess_vetter/api/tolerances.py`
-- ☐ `src/bittr_tess_vetter/api/tpf.py`
-- ☐ `src/bittr_tess_vetter/api/tpf_fits.py`
+- ✅ `src/bittr_tess_vetter/api/tpf.py` → `working_docs/physics_audit/modules/completed/api_tpf_and_tpf_fits.md`
+- ✅ `src/bittr_tess_vetter/api/tpf_fits.py` → `working_docs/physics_audit/modules/completed/api_tpf_and_tpf_fits.md`
 - ✅ `src/bittr_tess_vetter/api/transit_fit_primitives.py` → `working_docs/physics_audit/modules/completed/api_transit_fit_primitives.md`
 - ✅ `src/bittr_tess_vetter/api/transit_primitives.py` → `working_docs/physics_audit/modules/completed/api_transit_primitives.md`
 - ☐ `src/bittr_tess_vetter/api/triceratops_cache.py`

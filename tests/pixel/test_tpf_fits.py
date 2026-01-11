@@ -407,6 +407,32 @@ class TestTPFFitsCache:
         assert sidecar is not None
         assert sidecar.get("source_url") == source_url
 
+    def test_sidecar_includes_time_system_and_units(
+        self, cache: TPFFitsCache, sample_data: TPFFitsData
+    ) -> None:
+        """put preserves time-system/unit metadata and TUNIT* when provided."""
+        sample_data.meta.update(
+            {
+                "TIMESYS": "TDB",
+                "TIMEUNIT": "d",
+                "BJDREFI": 2457000,
+                "BJDREFF": 0.0,
+                "TUNIT1": "d",
+                "TUNIT2": "e-/s",
+            }
+        )
+        cache.put(sample_data)
+
+        sidecar = cache.get_sidecar(sample_data.ref)
+        assert sidecar is not None
+        header_subset = sidecar["fits_header_subset"]
+        assert header_subset["TIMESYS"] == "TDB"
+        assert header_subset["TIMEUNIT"] == "d"
+        assert header_subset["BJDREFI"] == 2457000
+        assert header_subset["BJDREFF"] == 0.0
+        assert header_subset["TUNIT1"] == "d"
+        assert header_subset["TUNIT2"] == "e-/s"
+
     def test_remove_existing(self, cache: TPFFitsCache, sample_data: TPFFitsData) -> None:
         """remove deletes cached entry and returns True."""
         cache.put(sample_data)
