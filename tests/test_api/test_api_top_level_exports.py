@@ -12,11 +12,17 @@ def test_api_top_level_exports_import() -> None:
         GhostFeatures,
         PhaseShiftEvent,
         SectorMeasurement,
+        TPFFitsCache,
+        TPFFitsRef,
+        TransitTime,
+        analyze_ttvs,
+        classify_alias,
         compute_ghost_features,
+        compute_harmonic_scores,
         compute_reliability_curves,
         compute_sector_consistency,
         compute_secondary_significance,
         detect_phase_shift_events,
         generate_time_scramble,
+        load_index,
     )
-

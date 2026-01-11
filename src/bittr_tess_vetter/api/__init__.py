@@ -313,6 +313,8 @@ from bittr_tess_vetter.api.ephemeris_match import (  # noqa: F401
 )
 from bittr_tess_vetter.api.alias_diagnostics import (  # noqa: F401
     PhaseShiftEvent,
+    classify_alias,
+    compute_harmonic_scores,
     compute_secondary_significance,
     detect_phase_shift_events,
 )
@@ -609,6 +611,8 @@ __all__ = [
     "compute_systematics_proxy",
     # Alias diagnostics extras
     "PhaseShiftEvent",
+    "classify_alias",
+    "compute_harmonic_scores",
     "compute_secondary_significance",
     "detect_phase_shift_events",
     # Ghost features
