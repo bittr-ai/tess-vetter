@@ -136,6 +136,13 @@ __all__ = [
     "RecoveryResult",
     # Main orchestrator (v2)
     "vet_candidate",
+    # Policy layer (host-facing)
+    "Disposition",
+    "PolicyConfig",
+    "PolicyCheckResult",
+    "PolicyBundleResult",
+    "apply_policy",
+    "apply_policy_to_check",
     # Evidence helpers
     "checks_to_evidence_items",
     # Generic evidence contracts
@@ -404,6 +411,16 @@ if TYPE_CHECKING:
         exofop_disposition,
         nearby_eb_search,
         vet_catalog,
+    )
+
+    # Policy layer (host-facing)
+    from bittr_tess_vetter.api.policy import (  # noqa: F401
+        Disposition,
+        PolicyBundleResult,
+        PolicyCheckResult,
+        PolicyConfig,
+        apply_policy,
+        apply_policy_to_check,
     )
 
     # Exovetter checks (V11-V12)
