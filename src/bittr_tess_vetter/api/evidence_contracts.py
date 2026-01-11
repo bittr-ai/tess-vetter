@@ -5,8 +5,8 @@ These types are intentionally domain-agnostic:
 - They provide a stable, JSON-serializable "envelope" for shipping computed
   evidence artifacts with provenance.
 
-Host apps (like `astro-arc-tess`) can layer domain-specific meaning on top of
-`evidence_type`, `subject`, and `guardrails_triggered`.
+Host applications can layer domain-specific meaning on top of `evidence_type`,
+`subject`, and `guardrails_triggered`.
 """
 
 from __future__ import annotations
@@ -176,4 +176,3 @@ __all__ = [
     "load_evidence",
     "save_evidence",
 ]
-
