@@ -20,8 +20,20 @@ Last updated: 2026-01-11
 - Extensive unit + API tests (`tests/`) across most subsystems
 
 Main architectural risks are (a) import-time / surface-area complexity of `api/__init__.py`,
-(b) drift between “domain-only” aspiration vs in-repo caching/I/O/catalog installation utilities,
-and (c) “policy vs metrics” separation being mostly enforced by convention rather than types.
+(b) “policy vs metrics” separation being mostly enforced by convention rather than types,
+and (c) keeping “domain-only” runtime guarantees clear when optional platform I/O/network code is present.
+
+## What’s Completed Since This Review Was Written
+
+Completed (high priority):
+- **P0.1: Reduce import-time coupling in `api/__init__.py`**: implemented via lazy exports (keeps the
+  import surface stable while avoiding eager heavy imports).
+- **P0.3: Clarify/standardize boundaries for “I/O-adjacent” helpers**: implemented by moving I/O,
+  catalogs, and network helpers under `src/bittr_tess_vetter/platform/` and removing the legacy
+  `bittr_tess_vetter.io/catalogs/network` import paths (breaking change, but boundary is now explicit).
+
+Still recommended (not completed):
+- **P0.2: Make “metrics-only” a type-level invariant (or centralize policy)**.
 
 ## Current Architecture (as implemented)
 
@@ -48,10 +60,10 @@ and (c) “policy vs metrics” separation being mostly enforced by convention r
    - Implements check logic (LC-only, catalog-backed, pixel-backed, exovetter-style).
    - Outputs `VetterCheckResult` (metrics-first, host applies policy).
 
-5. **I/O and external data (`io/`, `catalogs/`, `network/`, `ext/`)**
-   - `io/`: caching and MAST client helpers.
-   - `catalogs/`: external catalog clients + disk-backed snapshot store.
-   - `network/timeout.py`: best-effort timeouts (SIGALRM-based on Unix).
+5. **Platform I/O and external data (`platform/*`, `ext/`)**
+   - `platform/io/`: caching and MAST client helpers.
+   - `platform/catalogs/`: external catalog clients + disk-backed snapshot store.
+   - `platform/network/timeout.py`: best-effort timeouts (SIGALRM-based on Unix).
    - `ext/`: vendored TRICERATOPS+ tree for FPP.
 
 ### Primary Execution Flows
@@ -102,22 +114,25 @@ Potential gaps:
 - TRICERATOPS+ is vendored but still brings a large dependency surface (extras).
 - `api/__init__.py` historically re-exported a very large surface area and imported many modules
   eagerly; this risks slow import, accidental heavy dependency import, and increased circular-import
-  fragility. (Refactoring this to lazy exports is a high-leverage improvement.)
+  fragility. (Status: lazy exports implemented.)
 
 ### 4) “Domain-only” vs “I/O-adjacent”
 
 README positions this as “domain-only”, yet the repository includes:
-- session and persistent caches (`io/cache.py`, `tests/io/...`)
-- catalog snapshot installation (`catalogs/store.py`) including network fetch
+- session and persistent caches (`platform/io/cache.py`, `tests/io/...`)
+- catalog snapshot installation (`platform/catalogs/store.py`) including network fetch
 
 This is not inherently wrong, but it does create an implicit second axis:
 “pure algorithms” vs “data access + reproducibility tooling”. The boundary is currently by
 directory convention rather than an explicit package-level separation.
 
+Status: this boundary is now explicit: platform-facing modules live under
+`src/bittr_tess_vetter/platform/`.
+
 ### 5) Platform Assumptions
 
-- `io/cache.py` uses `fcntl` and so is Unix-centric.
-- `network/timeout.py` uses SIGALRM; on platforms without it, timeouts become best-effort no-ops.
+- `platform/io/cache.py` uses `fcntl` and so is Unix-centric.
+- `platform/network/timeout.py` uses SIGALRM; on platforms without it, timeouts become best-effort no-ops.
 
 ## Testing Posture (observed)
 
@@ -137,9 +152,7 @@ Risk:
 1) **Reduce import-time coupling in `api/__init__.py`**
    - Problem: eager imports make `import bittr_tess_vetter.api` heavy and more fragile.
    - Impact: slower imports for host apps, higher circular-import risk, harder optional-dep hygiene.
-   - Suggested direction:
-     - Use lazy exports (module-level `__getattr__`) for heavy submodules, keeping the existing
-       import surface stable for clients.
+   - Status: completed (lazy exports).
 
 2) **Make “metrics-only” a type-level invariant (or centralize policy)**
    - Problem: “policy_mode” exists but is only `"metrics_only"`; enforcement is scattered.
@@ -152,9 +165,7 @@ Risk:
 3) **Clarify/standardize boundaries for “I/O-adjacent” helpers**
    - Problem: caching + catalog installation are valuable, but they blur the “domain-only” framing.
    - Impact: harder to reason about what’s safe in restricted environments; risk of CWD-based caches.
-   - Suggested direction:
-     - Ensure any disk-writing default is explicit and documented (avoid CWD surprises),
-       and keep all network/disk entry points clearly gated.
+   - Status: completed (platform split; legacy import paths removed).
 
 ### P1 (Medium impact / follow-up)
 
@@ -189,4 +200,3 @@ Risk:
    - Impact: contributors outside the mono-repo layout may hit install friction.
    - Suggested direction:
      - Document expected workspace layout and/or provide a fallback install path.
-
