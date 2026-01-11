@@ -296,6 +296,21 @@ from bittr_tess_vetter.api.transit_masks import (  # noqa: F401
     get_out_of_transit_mask,
     measure_transit_depth,
 )
+from bittr_tess_vetter.api.ephemeris_match import (  # noqa: F401
+    EphemerisEntry,
+    EphemerisIndex,
+    EphemerisMatch,
+    EphemerisMatchResult,
+    MatchClass,
+    build_index_from_csv,
+    classify_matches,
+    compute_harmonic_match,
+    compute_match_score,
+    load_index,
+    run_ephemeris_matching,
+    save_index,
+    wrap_t0,
+)
 
 # Detrending (host-facing)
 from bittr_tess_vetter.api.detrend import (  # noqa: F401
@@ -463,6 +478,20 @@ __all__ = [
     "ToleranceResult",
     "HARMONIC_RATIOS",
     "check_tolerance",
+    # Ephemeris matching
+    "EphemerisEntry",
+    "EphemerisIndex",
+    "EphemerisMatch",
+    "EphemerisMatchResult",
+    "MatchClass",
+    "build_index_from_csv",
+    "classify_matches",
+    "compute_harmonic_match",
+    "compute_match_score",
+    "load_index",
+    "run_ephemeris_matching",
+    "save_index",
+    "wrap_t0",
     # Transit primitives
     "odd_even_result",
     # Low-level primitives (host-facing)
