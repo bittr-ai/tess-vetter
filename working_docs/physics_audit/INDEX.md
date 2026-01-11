@@ -12,37 +12,38 @@ This is the ordered queue for the function-by-function audit.
 ## 1) Early-agent entry points (review first)
 
 ### Types + contracts (prevents silent physics errors)
-- `src/bittr_tess_vetter/api/types.py` → `working_docs/physics_audit/modules/in_progress/api_types.md`
+- ✅ `src/bittr_tess_vetter/api/types.py` → `working_docs/physics_audit/modules/completed/api_types.md`
 - `src/bittr_tess_vetter/api/lightcurve.py`
 
 ### Light curve assembly / normalization
-- `src/bittr_tess_vetter/api/stitch.py` → `working_docs/physics_audit/modules/in_progress/api_stitch.md`
+- ✅ `src/bittr_tess_vetter/api/stitch.py` → `working_docs/physics_audit/modules/completed/api_stitch.md`
 
 ### Transit masking primitives (used everywhere)
-- `src/bittr_tess_vetter/api/compute_transit.py` → `working_docs/physics_audit/modules/in_progress/api_compute_transit.md`
-- `src/bittr_tess_vetter/api/transit_masks.py` → `working_docs/physics_audit/modules/in_progress/api_transit_masks.md`
-- `src/bittr_tess_vetter/validation/base.py` (mask helpers + depth measurement)
+- ✅ `src/bittr_tess_vetter/api/compute_transit.py` → `working_docs/physics_audit/modules/completed/api_compute_transit.md`
+- ✅ `src/bittr_tess_vetter/api/transit_masks.py` → `working_docs/physics_audit/modules/completed/api_transit_masks.md`
+- ✅ `src/bittr_tess_vetter/validation/base.py` → `working_docs/physics_audit/modules/completed/api_validation_base_masks.md`
 
 ### Detection (periodogram) + minimal models
-- `src/bittr_tess_vetter/api/periodogram.py` → `working_docs/physics_audit/modules/in_progress/api_periodogram.md`
-- `src/bittr_tess_vetter/api/transit_model.py`
+- ✅ `src/bittr_tess_vetter/api/periodogram.py` → `working_docs/physics_audit/modules/completed/api_periodogram.md`
+- ✅ `src/bittr_tess_vetter/api/transit_model.py` → `working_docs/physics_audit/modules/completed/api_transit_model.md`
 
 ### LC-only vetting (fast triage)
-- `src/bittr_tess_vetter/api/lc_only.py` → `working_docs/physics_audit/modules/in_progress/api_lc_only.md`
+- ✅ `src/bittr_tess_vetter/api/lc_only.py` → `working_docs/physics_audit/modules/completed/api_lc_only.md`
 
 ## 2) Next layer (review after early-agent surface is solid)
 
-- `src/bittr_tess_vetter/api/recovery.py`
-- `src/bittr_tess_vetter/api/timing.py`
-- `src/bittr_tess_vetter/api/activity.py`
-- `src/bittr_tess_vetter/api/fpp.py`
-- `src/bittr_tess_vetter/api/pixel.py`, `src/bittr_tess_vetter/api/wcs_localization.py`
+- ✅ `src/bittr_tess_vetter/api/recovery.py` → `working_docs/physics_audit/modules/completed/api_recovery.md`
+- ✅ `src/bittr_tess_vetter/api/timing.py` → `working_docs/physics_audit/modules/completed/api_timing.md`
+- ✅ `src/bittr_tess_vetter/api/activity.py` → `working_docs/physics_audit/modules/completed/api_activity.md`
+- ✅ `src/bittr_tess_vetter/api/fpp.py` → `working_docs/physics_audit/modules/completed/api_fpp.md` (if present; otherwise audit later)
+- ✅ `src/bittr_tess_vetter/api/pixel.py` / `src/bittr_tess_vetter/api/wcs_localization.py` → `working_docs/physics_audit/modules/completed/api_wcs_localization.md`
 
 ## 3) Deep pixel + PRF + advanced inference (later)
 
 - `src/bittr_tess_vetter/api/pixel_prf.py` (and underlying `pixel/*`)
 - `src/bittr_tess_vetter/transit/transit_fit.py` (batman fitting)
-- `src/bittr_tess_vetter/validation/*` remaining checks
+- ◐ `src/bittr_tess_vetter/validation/exovetter_checks.py` → `working_docs/physics_audit/modules/in_progress/validation_exovetter_checks.md`
+- `src/bittr_tess_vetter/validation/lc_checks.py` (V01–V10 metrics; thresholds as measurements)
 
 ## Status legend
 
