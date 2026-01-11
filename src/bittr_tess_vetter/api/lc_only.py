@@ -22,6 +22,7 @@ References:
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 from bittr_tess_vetter.api.references import (
@@ -95,11 +96,19 @@ def _convert_result(result: object) -> CheckResult:
 
 def _apply_policy_mode(check: CheckResult, *, policy_mode: str) -> CheckResult:
     if policy_mode != "metrics_only":
-        raise ValueError(f"Unsupported policy_mode={policy_mode!r} (only 'metrics_only' is supported)")
+        warnings.warn(
+            "bittr_tess_vetter.api.* `policy_mode` is deprecated and ignored; "
+            "bittr-tess-vetter always returns metrics-only results. "
+            "Move interpretation/policy decisions to astro-arc-tess validation (tess-validate).",
+            category=FutureWarning,
+            stacklevel=2,
+        )
     if check.passed is None and check.details.get("_metrics_only") is True:
         return check
     details = dict(check.details)
     details["_metrics_only"] = True
+    if policy_mode != "metrics_only":
+        details["_policy_mode_ignored"] = policy_mode
     return CheckResult(
         id=check.id,
         name=check.name,

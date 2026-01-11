@@ -23,6 +23,7 @@ References:
 from __future__ import annotations
 
 import importlib.metadata
+import warnings
 from typing import Any
 
 from bittr_tess_vetter.api.references import (
@@ -100,6 +101,7 @@ def vet_candidate(
             Pass specific IDs like {"V01", "V03", "V08"} to filter.
         config: Per-check configuration dict. Keys are check IDs (e.g., "V01"),
             values are config dicts passed to individual checks.
+        policy_mode: Deprecated and ignored (always metrics-only).
         network: If True and metadata available, run catalog checks (V06-V07)
         ra_deg: Right ascension in degrees (for V06)
         dec_deg: Declination in degrees (for V06)
@@ -127,9 +129,21 @@ def vet_candidate(
         [2] Thompson et al. 2018, ApJS 235, 38 (2018ApJS..235...38T)
             Section 3: Check execution ordering and aggregation
     """
+    if policy_mode != "metrics_only":
+        warnings.warn(
+            "`policy_mode` is deprecated and ignored; bittr-tess-vetter always returns metrics-only "
+            "results. Move interpretation/policy decisions to astro-arc-tess validation (tess-validate).",
+            category=FutureWarning,
+            stacklevel=2,
+        )
+        policy_mode_requested = policy_mode
+        policy_mode = "metrics_only"
+    else:
+        policy_mode_requested = None
+
     config = config or {}
     results: list[CheckResult] = []
-    warnings: list[str] = []
+    run_warnings: list[str] = []
 
     # Determine which checks to run
     if enabled is None:
@@ -151,7 +165,7 @@ def vet_candidate(
         checks_to_run = enabled & _ALL_CHECKS
         unknown = enabled - _ALL_CHECKS
         if unknown:
-            warnings.append(f"Unknown check IDs ignored: {sorted(unknown)}")
+            run_warnings.append(f"Unknown check IDs ignored: {sorted(unknown)}")
 
     # Run LC-only checks (V01-V05)
     lc_checks_to_run = checks_to_run & _LC_ONLY_CHECKS
@@ -172,9 +186,9 @@ def vet_candidate(
     catalog_checks_to_run = checks_to_run & _CATALOG_CHECKS
     if catalog_checks_to_run:
         if "V06" in catalog_checks_to_run and (ra_deg is None or dec_deg is None):
-            warnings.append("Catalog check V06 requested but ra_deg/dec_deg missing; skipping")
+            run_warnings.append("Catalog check V06 requested but ra_deg/dec_deg missing; skipping")
         if "V07" in catalog_checks_to_run and tic_id is None:
-            warnings.append("Catalog check V07 requested but tic_id missing; skipping")
+            run_warnings.append("Catalog check V07 requested but tic_id missing; skipping")
 
         from bittr_tess_vetter.api.catalog import vet_catalog
 
@@ -201,7 +215,7 @@ def vet_candidate(
         )
         results.extend(pixel_results)
     elif pixel_checks_to_run and tpf is None:
-        warnings.append("Pixel checks requested but no TPF provided; skipping V08-V10")
+        run_warnings.append("Pixel checks requested but no TPF provided; skipping V08-V10")
 
     # Run exovetter checks (V11-V12)
     exovetter_checks_to_run = checks_to_run & _EXOVETTER_CHECKS
@@ -227,11 +241,13 @@ def vet_candidate(
         "tpf_provided": tpf is not None,
         "stellar_provided": stellar is not None,
     }
+    if policy_mode_requested is not None:
+        provenance["policy_mode_requested"] = policy_mode_requested
     if context:
         provenance["context"] = context
 
     return VettingBundleResult(
         results=results,
         provenance=provenance,
-        warnings=warnings,
+        warnings=run_warnings,
     )
