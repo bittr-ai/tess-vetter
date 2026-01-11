@@ -5,6 +5,10 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+import numpy as np
+import pytest
+
+from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.io import PersistentCache
 
 
@@ -80,3 +84,53 @@ class TestPersistentCache:
             assert cache.has("lc:12345:1")
             assert cache.has("lc:12345:2")
             assert not cache.has("lc:12345:3")
+
+    def test_meta_captures_tic_id_sector_for_lightcurve_data(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            cache = PersistentCache(td)
+
+            lc = LightCurveData(
+                time=np.linspace(1000.0, 1010.0, 10, dtype=np.float64),
+                flux=np.ones(10, dtype=np.float64),
+                flux_err=np.ones(10, dtype=np.float64) * 1e-4,
+                quality=np.zeros(10, dtype=np.int32),
+                valid_mask=np.ones(10, dtype=np.bool_),
+                tic_id=123,
+                sector=7,
+                cadence_seconds=120.0,
+            )
+
+            key = "lc:123:7:pdcsap"
+            cache.set(key, lc)
+
+            meta_files = list((Path(td) / "meta").glob("*.json"))
+            assert len(meta_files) == 1
+            meta = meta_files[0].read_text(encoding="utf-8")
+            assert "\"key\"" in meta
+            assert "\"tic_id\": 123" in meta
+            assert "\"sector\": 7" in meta
+
+    def test_eviction_prefers_oldest_accessed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Use deterministic timestamps so accessed_at ordering is stable.
+        clock = {"t": 1000.0}
+
+        def fake_time() -> float:
+            clock["t"] += 1.0
+            return clock["t"]
+
+        monkeypatch.setattr("bittr_tess_vetter.io.cache.time.time", fake_time)
+
+        with tempfile.TemporaryDirectory() as td:
+            cache = PersistentCache(td, max_entries=2)
+            cache.set("k1", {"v": 1})
+            cache.set("k2", {"v": 2})
+
+            # Touch k1 so k2 is the oldest accessed.
+            assert cache.get("k1") == {"v": 1}
+
+            # Adding k3 should evict k2.
+            cache.set("k3", {"v": 3})
+
+            assert cache.has("k1")
+            assert not cache.has("k2")
+            assert cache.has("k3")
