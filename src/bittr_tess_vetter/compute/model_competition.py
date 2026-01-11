@@ -171,7 +171,9 @@ def _compute_log_likelihood(
         Log-likelihood value
     """
     # Gaussian log-likelihood: -0.5 * sum((r/sigma)^2 + log(2*pi*sigma^2))
-    var = flux_err**2
+    var = np.asarray(flux_err, dtype=np.float64) ** 2
+    # Guard against zero/negative/NaN variances (common when flux_err missing and set to 0).
+    var = np.where(np.isfinite(var) & (var > 0), var, 1e-20)
     chi2 = float(np.sum(residuals**2 / var))
     log_det = float(np.sum(np.log(2 * np.pi * var)))
     return -0.5 * (chi2 + log_det)

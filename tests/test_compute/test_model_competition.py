@@ -308,6 +308,23 @@ class TestFitTransitOnly:
         # Should return zero depth without error
         assert result.fitted_params["depth"] == 0.0
 
+    def test_handles_zero_flux_err(self, time_array: np.ndarray, rng: np.random.Generator) -> None:
+        """Zero flux_err should not produce inf/NaN likelihoods."""
+        period = 3.5
+        t0 = 1001.0
+        duration_hours = 2.5
+        true_depth = 0.001
+
+        flux = make_box_transit(time_array, period, t0, duration_hours, true_depth)
+        flux += rng.normal(0, 50e-6, len(flux))
+
+        flux_err = np.zeros_like(time_array)
+        result = fit_transit_only(time_array, flux, flux_err, period, t0, duration_hours)
+
+        assert np.isfinite(result.log_likelihood)
+        assert np.isfinite(result.aic)
+        assert np.isfinite(result.bic)
+
 
 # =============================================================================
 # Test fit_transit_sinusoid

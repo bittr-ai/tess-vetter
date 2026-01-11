@@ -70,7 +70,7 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ☐ `src/bittr_tess_vetter/api/joint_inference.py`
 - ✅ `src/bittr_tess_vetter/api/localization.py` → `working_docs/physics_audit/modules/completed/api_proxy_localization.md`
 - ✅ `src/bittr_tess_vetter/api/mlx.py` → `working_docs/physics_audit/modules/completed/api_mlx_and_compute_mlx_detection.md`
-- ☐ `src/bittr_tess_vetter/api/model_competition.py`
+- ✅ `src/bittr_tess_vetter/api/model_competition.py` → `working_docs/physics_audit/modules/completed/model_competition.md`
 - ✅ `src/bittr_tess_vetter/api/pixel_host_hypotheses.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/api/prefilter.py` → `working_docs/physics_audit/modules/completed/validation_ephemeris_specificity_and_prefilter.md`
 - ☐ `src/bittr_tess_vetter/api/primitives.py`
@@ -99,7 +99,7 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ✅ `src/bittr_tess_vetter/compute/joint_inference_schemas.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/compute/joint_likelihood.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/compute/mlx_detection.py` → `working_docs/physics_audit/modules/completed/api_mlx_and_compute_mlx_detection.md`
-- ☐ `src/bittr_tess_vetter/compute/model_competition.py`
+- ✅ `src/bittr_tess_vetter/compute/model_competition.py` → `working_docs/physics_audit/modules/completed/model_competition.md`
 - ✅ `src/bittr_tess_vetter/compute/periodogram.py` → `working_docs/physics_audit/modules/completed/api_periodogram.md`
 - ✅ `src/bittr_tess_vetter/compute/pixel_host_hypotheses.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/compute/pixel_hypothesis_prf.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
