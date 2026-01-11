@@ -659,10 +659,11 @@ def fit_mcmc(
     samples = sampler.get_chain(discard=nburn, flat=True)
 
     # Compute Gelman-Rubin diagnostic with arviz
-    # Need chains in shape (nsamples, nwalkers, ndim) for arviz
+    # emcee returns chains in shape (draws, chains, ndim); arviz expects (chains, draws, ...).
     chains_raw = sampler.get_chain(discard=nburn)
     assert chains_raw is not None, "MCMC did not produce chains"
     chains: NDArray[np.float64] = chains_raw
+    chains = np.swapaxes(chains, 0, 1)  # (chains=nwalkers, draws, ndim)
 
     # Convert to arviz InferenceData
     var_dict = {labels[i]: chains[:, :, i] for i in range(ndim)}
