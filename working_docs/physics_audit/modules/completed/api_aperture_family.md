@@ -32,6 +32,7 @@ Small mistakes in masking (quality/NaNs), phase windowing, or depth definition w
 - [x] Single-star transit affecting all pixels → depth approximately constant vs radius (`blend_indicator` not increasing)
 - [x] Blended transit on off-center source → depth increases with radius (increasing when significant)
 - [x] Quality-flagged cadences are ignored (depth remains finite when enough good points exist)
+- [x] Slope significance threshold is explicitly tested (`tests/pixel/test_aperture_family.py`, `SLOPE_SIGNIFICANCE_THRESHOLD`)
 
 ## Notes (final)
 
