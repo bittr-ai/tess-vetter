@@ -55,14 +55,14 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ✅ `src/bittr_tess_vetter/api/aperture.py` → `working_docs/physics_audit/modules/completed/api_aperture_dependence.md`
 - ✅ `src/bittr_tess_vetter/api/aperture_family.py` → `working_docs/physics_audit/modules/completed/api_aperture_family.md`
 - ✅ `src/bittr_tess_vetter/api/bls_like_search.py` → `working_docs/physics_audit/modules/completed/api_bls_like_search.md`
-- ☐ `src/bittr_tess_vetter/api/canonical.py`
-- ☐ `src/bittr_tess_vetter/api/caps.py`
+- ✅ `src/bittr_tess_vetter/api/canonical.py` → `working_docs/physics_audit/modules/completed/api_misc_wrappers.md`
+- ✅ `src/bittr_tess_vetter/api/caps.py` → `working_docs/physics_audit/modules/completed/api_misc_wrappers.md`
 - ✅ `src/bittr_tess_vetter/api/catalog.py` → `working_docs/physics_audit/modules/completed/api_catalog_and_catalogs.md`
 - ✅ `src/bittr_tess_vetter/api/catalogs.py` → `working_docs/physics_audit/modules/completed/api_catalog_and_catalogs.md`
 - ✅ `src/bittr_tess_vetter/api/centroid.py` → `working_docs/physics_audit/modules/completed/api_centroid_shift.md`
 - ✅ `src/bittr_tess_vetter/api/detection.py` → `working_docs/physics_audit/modules/completed/api_detection_and_detrend.md`
 - ✅ `src/bittr_tess_vetter/api/detrend.py` → `working_docs/physics_audit/modules/completed/api_detection_and_detrend.md`
-- ☐ `src/bittr_tess_vetter/api/difference.py`
+- ✅ `src/bittr_tess_vetter/api/difference.py` → `working_docs/physics_audit/modules/completed/api_misc_wrappers.md`
 - ✅ `src/bittr_tess_vetter/api/ephemeris_specificity.py` → `working_docs/physics_audit/modules/completed/validation_ephemeris_specificity_and_prefilter.md`
 - ✅ `src/bittr_tess_vetter/api/evidence.py` → `working_docs/physics_audit/modules/completed/api_evidence_and_report.md`
 - ✅ `src/bittr_tess_vetter/api/exovetter.py` → `working_docs/physics_audit/modules/completed/api_exovetter.md`
@@ -73,20 +73,20 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ✅ `src/bittr_tess_vetter/api/model_competition.py` → `working_docs/physics_audit/modules/completed/model_competition.md`
 - ✅ `src/bittr_tess_vetter/api/pixel_host_hypotheses.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/api/prefilter.py` → `working_docs/physics_audit/modules/completed/validation_ephemeris_specificity_and_prefilter.md`
-- ☐ `src/bittr_tess_vetter/api/primitives.py`
-- ☐ `src/bittr_tess_vetter/api/recovery_primitives.py`
-- ☐ `src/bittr_tess_vetter/api/references.py`
+- ✅ `src/bittr_tess_vetter/api/primitives.py` → `working_docs/physics_audit/modules/completed/api_misc_wrappers.md`
+- ✅ `src/bittr_tess_vetter/api/recovery_primitives.py` → `working_docs/physics_audit/modules/completed/api_misc_wrappers.md`
+- ✅ `src/bittr_tess_vetter/api/references.py` → `working_docs/physics_audit/modules/completed/api_references_registry.md`
 - ✅ `src/bittr_tess_vetter/api/report.py` → `working_docs/physics_audit/modules/completed/api_evidence_and_report.md`
-- ☐ `src/bittr_tess_vetter/api/sandbox_primitives.py`
+- ✅ `src/bittr_tess_vetter/api/sandbox_primitives.py` → `working_docs/physics_audit/modules/completed/api_misc_wrappers.md`
 - ✅ `src/bittr_tess_vetter/api/systematics.py` → `working_docs/physics_audit/modules/completed/api_systematics_proxy.md`
 - ✅ `src/bittr_tess_vetter/api/target.py` → `working_docs/physics_audit/modules/completed/api_io_and_target.md`
-- ☐ `src/bittr_tess_vetter/api/timing_primitives.py`
+- ✅ `src/bittr_tess_vetter/api/timing_primitives.py` → `working_docs/physics_audit/modules/completed/api_misc_wrappers.md`
 - ✅ `src/bittr_tess_vetter/api/tolerances.py` → `working_docs/physics_audit/modules/completed/utils_and_api_tolerances.md`
 - ✅ `src/bittr_tess_vetter/api/tpf.py` → `working_docs/physics_audit/modules/completed/api_tpf_and_tpf_fits.md`
 - ✅ `src/bittr_tess_vetter/api/tpf_fits.py` → `working_docs/physics_audit/modules/completed/api_tpf_and_tpf_fits.md`
 - ✅ `src/bittr_tess_vetter/api/transit_fit_primitives.py` → `working_docs/physics_audit/modules/completed/api_transit_fit_primitives.md`
 - ✅ `src/bittr_tess_vetter/api/transit_primitives.py` → `working_docs/physics_audit/modules/completed/api_transit_primitives.md`
-- ☐ `src/bittr_tess_vetter/api/triceratops_cache.py`
+- ✅ `src/bittr_tess_vetter/api/triceratops_cache.py` → `working_docs/physics_audit/modules/completed/api_misc_wrappers.md`
 - ✅ `src/bittr_tess_vetter/api/vet.py` → `working_docs/physics_audit/modules/completed/api_vet_and_vetting_primitives.md`
 - ✅ `src/bittr_tess_vetter/api/vetting_primitives.py` → `working_docs/physics_audit/modules/completed/api_vet_and_vetting_primitives.md`
 - ✅ `src/bittr_tess_vetter/api/wcs_utils.py` → `working_docs/physics_audit/modules/completed/api_wcs_utils.md`
@@ -164,11 +164,11 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ✅ `src/bittr_tess_vetter/activity/result.py` → `working_docs/physics_audit/modules/completed/activity_primitives_and_result.md`
 - ✅ `src/bittr_tess_vetter/io/cache.py` → `working_docs/physics_audit/modules/completed/io_cache.md`
 - ✅ `src/bittr_tess_vetter/io/mast_client.py` → `working_docs/physics_audit/modules/completed/api_lightcurve.md`
-- ☐ `src/bittr_tess_vetter/network/timeout.py`
-- ☐ `src/bittr_tess_vetter/utils/canonical.py`
-- ☐ `src/bittr_tess_vetter/utils/caps.py`
+- ✅ `src/bittr_tess_vetter/network/timeout.py` → `working_docs/physics_audit/modules/completed/support_network_and_errors.md`
+- ✅ `src/bittr_tess_vetter/utils/canonical.py` → `working_docs/physics_audit/modules/completed/utils_canonical_and_caps.md`
+- ✅ `src/bittr_tess_vetter/utils/caps.py` → `working_docs/physics_audit/modules/completed/utils_canonical_and_caps.md`
 - ✅ `src/bittr_tess_vetter/utils/tolerances.py` → `working_docs/physics_audit/modules/completed/utils_and_api_tolerances.md`
-- ☐ `src/bittr_tess_vetter/errors.py`
+- ✅ `src/bittr_tess_vetter/errors.py` → `working_docs/physics_audit/modules/completed/support_network_and_errors.md`
 
 ### 4.8) Vendored (third-party) — optional but recommended
 
