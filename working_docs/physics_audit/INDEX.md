@@ -131,20 +131,20 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ✅ `src/bittr_tess_vetter/pixel/centroid.py` → `working_docs/physics_audit/modules/completed/api_centroid_shift.md`
 - ✅ `src/bittr_tess_vetter/pixel/difference.py` → `working_docs/physics_audit/modules/completed/api_proxy_localization.md`
 - ✅ `src/bittr_tess_vetter/pixel/localization.py` → `working_docs/physics_audit/modules/completed/api_proxy_localization.md`
-- ☐ `src/bittr_tess_vetter/pixel/report.py`
-- ☐ `src/bittr_tess_vetter/pixel/tpf.py`
-- ☐ `src/bittr_tess_vetter/pixel/tpf_fits.py`
+- ✅ `src/bittr_tess_vetter/pixel/report.py` → `working_docs/physics_audit/modules/completed/pixel_report.md`
+- ✅ `src/bittr_tess_vetter/pixel/tpf.py` → `working_docs/physics_audit/modules/completed/domain_target_and_pixel_tpf.md`
+- ✅ `src/bittr_tess_vetter/pixel/tpf_fits.py` → `working_docs/physics_audit/modules/completed/domain_target_and_pixel_tpf.md`
 - ✅ `src/bittr_tess_vetter/pixel/wcs_localization.py` → `working_docs/physics_audit/modules/completed/api_wcs_localization.md`
 - ✅ `src/bittr_tess_vetter/pixel/wcs_utils.py` → `working_docs/physics_audit/modules/completed/api_wcs_utils.md`
 
 ### 4.5) Transit + recovery packages (non-API package mirrors)
 
 - ✅ `src/bittr_tess_vetter/recovery/pipeline.py` → `working_docs/physics_audit/modules/completed/compute_transit_and_recovery_pipeline.md`
-- ☐ `src/bittr_tess_vetter/recovery/primitives.py`
-- ☐ `src/bittr_tess_vetter/recovery/result.py`
-- ☐ `src/bittr_tess_vetter/transit/result.py`
-- ☐ `src/bittr_tess_vetter/transit/timing.py`
-- ☐ `src/bittr_tess_vetter/transit/vetting.py`
+- ✅ `src/bittr_tess_vetter/recovery/primitives.py` → `working_docs/physics_audit/modules/completed/recovery_primitives_and_result.md`
+- ✅ `src/bittr_tess_vetter/recovery/result.py` → `working_docs/physics_audit/modules/completed/recovery_primitives_and_result.md`
+- ✅ `src/bittr_tess_vetter/transit/result.py` → `working_docs/physics_audit/modules/completed/transit_timing_and_result.md`
+- ✅ `src/bittr_tess_vetter/transit/timing.py` → `working_docs/physics_audit/modules/completed/transit_timing_and_result.md`
+- ✅ `src/bittr_tess_vetter/transit/vetting.py` → `working_docs/physics_audit/modules/completed/api_vet_and_vetting_primitives.md`
 
 ### 4.6) Validation (additional modules)
 
@@ -159,7 +159,7 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 
 - ✅ `src/bittr_tess_vetter/domain/detection.py` → `working_docs/physics_audit/modules/completed/compute_transit_and_recovery_pipeline.md`
 - ✅ `src/bittr_tess_vetter/domain/lightcurve.py` → `working_docs/physics_audit/modules/completed/api_lightcurve.md`
-- ☐ `src/bittr_tess_vetter/domain/target.py`
+- ✅ `src/bittr_tess_vetter/domain/target.py` → `working_docs/physics_audit/modules/completed/domain_target_and_pixel_tpf.md`
 - ☐ `src/bittr_tess_vetter/activity/primitives.py`
 - ☐ `src/bittr_tess_vetter/activity/result.py`
 - ☐ `src/bittr_tess_vetter/io/cache.py`
