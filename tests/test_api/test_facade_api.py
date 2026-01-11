@@ -18,7 +18,8 @@ def test_top_level_aliases_import_and_resolve() -> None:
 
 
 def test_facade_imports() -> None:
-    from bittr_tess_vetter.api.facade import (  # noqa: F401
+    # Facade removed: the canonical surface is `bittr_tess_vetter.api`.
+    from bittr_tess_vetter.api import (  # noqa: F401
         Candidate,
         Ephemeris,
         LightCurve,
@@ -40,4 +41,3 @@ def test_facade_imports() -> None:
     assert callable(periodogram)
     assert callable(localize)
     assert callable(aperture_family_depth_curve)
-
