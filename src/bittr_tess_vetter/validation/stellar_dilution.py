@@ -51,9 +51,9 @@ class HostHypothesis:
     source_id: int
     name: str
     separation_arcsec: float
-    g_mag: float | None
-    estimated_flux_fraction: float
-    radius_rsun: float | None
+    g_mag: float | None = None
+    estimated_flux_fraction: float = 1.0
+    radius_rsun: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -80,11 +80,24 @@ class DilutionScenario:
     planet_radius_inconsistent: bool
     stellar_companion_likely: bool
 
+    @property
+    def dilution_factor(self) -> float:
+        """Compatibility alias for older callers.
+
+        Historically, downstream code used `dilution_factor` to mean the
+        depth correction factor (F_total/F_host), which is >= 1.
+        """
+
+        return float(self.depth_correction_factor)
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "host": self.host.to_dict(),
             "observed_depth_ppm": float(self.observed_depth_ppm),
+            # Preferred explicit name
             "depth_correction_factor": float(self.depth_correction_factor),
+            # Compatibility alias (same semantics)
+            "dilution_factor": float(self.depth_correction_factor),
             "true_depth_ppm": float(self.true_depth_ppm),
             "implied_companion_radius_rearth": self.implied_companion_radius_rearth,
             "implied_companion_radius_rjup": self.implied_companion_radius_rjup,
@@ -226,7 +239,7 @@ def compute_dilution_scenarios(
     return scenarios
 
 
-def evaluate_physics_flags(*, scenarios: list[DilutionScenario], host_ambiguous: bool) -> PhysicsFlags:
+def evaluate_physics_flags(scenarios: list[DilutionScenario], host_ambiguous: bool) -> PhysicsFlags:
     """Summarize plausibility/guardrails from dilution scenarios."""
     if not scenarios:
         return PhysicsFlags(
@@ -349,4 +362,3 @@ __all__ = [
     "RSUN_TO_REARTH",
     "RSUN_TO_RJUP",
 ]
-
