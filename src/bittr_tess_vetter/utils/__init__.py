@@ -1,10 +1,5 @@
 """Astronomy-specific utility functions."""
 
-from bittr_tess_vetter.utils.canonical import (
-    canonical_hash,
-    canonical_hash_prefix,
-    canonical_json,
-)
 from bittr_tess_vetter.utils.caps import (
     cap_neighbors,
     cap_plots,
@@ -22,10 +17,6 @@ __all__ = [
     "ToleranceResult",
     "check_tolerance",
     "HARMONIC_RATIOS",
-    # canonical
-    "canonical_json",
-    "canonical_hash",
-    "canonical_hash_prefix",
     # caps
     "cap_top_k",
     "cap_variant_summaries",

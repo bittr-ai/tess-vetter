@@ -154,11 +154,6 @@ __all__ = [
     "compute_depth_over_depth_err_snr",
     "compute_phase_coverage",
     # Utilities
-    "FLOAT_DECIMAL_PLACES",
-    "CanonicalEncoder",
-    "canonical_json",
-    "canonical_hash",
-    "canonical_hash_prefix",
     "DEFAULT_TOP_K_CAP",
     "DEFAULT_VARIANT_SUMMARIES_CAP",
     "DEFAULT_NEIGHBORS_CAP",
@@ -792,13 +787,6 @@ if TYPE_CHECKING:
     )
 
     # Utilities
-    from bittr_tess_vetter.api.canonical import (  # noqa: F401
-        FLOAT_DECIMAL_PLACES,
-        CanonicalEncoder,
-        canonical_hash,
-        canonical_hash_prefix,
-        canonical_json,
-    )
     from bittr_tess_vetter.api.caps import (  # noqa: F401
         DEFAULT_NEIGHBORS_CAP,
         DEFAULT_PLOTS_CAP,
