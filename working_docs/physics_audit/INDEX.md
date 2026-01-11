@@ -65,7 +65,7 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ☐ `src/bittr_tess_vetter/api/ephemeris_specificity.py`
 - ☐ `src/bittr_tess_vetter/api/evidence.py`
 - ☐ `src/bittr_tess_vetter/api/exovetter.py`
-- ☐ `src/bittr_tess_vetter/api/io.py`
+- ✅ `src/bittr_tess_vetter/api/io.py` → `working_docs/physics_audit/modules/completed/api_io_and_target.md`
 - ☐ `src/bittr_tess_vetter/api/joint_inference.py`
 - ✅ `src/bittr_tess_vetter/api/localization.py` → `working_docs/physics_audit/modules/completed/api_proxy_localization.md`
 - ☐ `src/bittr_tess_vetter/api/mlx.py`
@@ -78,7 +78,7 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ☐ `src/bittr_tess_vetter/api/report.py`
 - ☐ `src/bittr_tess_vetter/api/sandbox_primitives.py`
 - ✅ `src/bittr_tess_vetter/api/systematics.py` → `working_docs/physics_audit/modules/completed/api_systematics_proxy.md`
-- ☐ `src/bittr_tess_vetter/api/target.py`
+- ✅ `src/bittr_tess_vetter/api/target.py` → `working_docs/physics_audit/modules/completed/api_io_and_target.md`
 - ☐ `src/bittr_tess_vetter/api/timing_primitives.py`
 - ☐ `src/bittr_tess_vetter/api/tolerances.py`
 - ☐ `src/bittr_tess_vetter/api/tpf.py`
@@ -146,8 +146,8 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 
 ### 4.6) Validation (additional modules)
 
-- ☐ `src/bittr_tess_vetter/validation/checks_catalog.py`
-- ☐ `src/bittr_tess_vetter/validation/checks_pixel.py`
+- ✅ `src/bittr_tess_vetter/validation/checks_catalog.py` → `working_docs/physics_audit/modules/completed/validation_checks_pixel_and_catalog.md`
+- ✅ `src/bittr_tess_vetter/validation/checks_pixel.py` → `working_docs/physics_audit/modules/completed/validation_checks_pixel_and_catalog.md`
 - ☐ `src/bittr_tess_vetter/validation/ephemeris_specificity.py`
 - ☐ `src/bittr_tess_vetter/validation/prefilter.py`
 - ✅ `src/bittr_tess_vetter/validation/systematics_proxy.py` → `working_docs/physics_audit/modules/completed/api_systematics_proxy.md`

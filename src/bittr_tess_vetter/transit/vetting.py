@@ -21,6 +21,18 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
+def _empty_odd_even_result(*, n_odd: int = 0, n_even: int = 0) -> OddEvenResult:
+    return OddEvenResult(
+        depth_odd_ppm=0.0,
+        depth_even_ppm=0.0,
+        depth_diff_ppm=0.0,
+        relative_depth_diff_percent=0.0,
+        significance_sigma=0.0,
+        n_odd=n_odd,
+        n_even=n_even,
+    )
+
+
 def split_odd_even(
     time: NDArray[np.float64],
     flux: NDArray[np.float64],
@@ -55,6 +67,16 @@ def split_odd_even(
                   (even_time, even_flux, even_flux_err),
                   n_odd_transits, n_even_transits)
     """
+    if (
+        not np.isfinite(period)
+        or period <= 0
+        or not np.isfinite(duration_hours)
+        or duration_hours <= 0
+        or not np.isfinite(t0)
+    ):
+        empty = (time[:0], flux[:0], flux_err[:0])
+        return empty, empty, 0, 0
+
     duration_days = duration_hours / 24.0
     if duration_days >= 0.5 * period:
         # If the transit duration is a large fraction of the orbit, in/out-of-transit
@@ -242,6 +264,15 @@ def compute_odd_even_result(
     Returns:
         OddEvenResult with depth comparison and significance
     """
+    if (
+        not np.isfinite(period)
+        or period <= 0
+        or not np.isfinite(duration_hours)
+        or duration_hours <= 0
+        or not np.isfinite(t0)
+    ):
+        return _empty_odd_even_result()
+
     # Split by parity
     (
         (odd_time, odd_flux, odd_flux_err),
@@ -256,15 +287,7 @@ def compute_odd_even_result(
 
     # Handle case with insufficient data
     if n_odd < 1 or n_even < 1:
-        return OddEvenResult(
-            depth_odd_ppm=0.0,
-            depth_even_ppm=0.0,
-            depth_diff_ppm=0.0,
-            relative_depth_diff_percent=0.0,
-            significance_sigma=0.0,
-            n_odd=n_odd,
-            n_even=n_even,
-        )
+        return _empty_odd_even_result(n_odd=n_odd, n_even=n_even)
 
     # Compare depths
     (

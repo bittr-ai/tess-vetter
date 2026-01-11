@@ -79,6 +79,20 @@ class TestSplitOddEven:
         total_expected = int(100 / period)
         assert n_odd + n_even <= total_expected + 5  # Allow some margin
 
+    def test_invalid_ephemeris_returns_empty(self) -> None:
+        """Invalid period/duration/t0 returns an empty split (no crash)."""
+        time = np.array([0.0, 1.0, 2.0], dtype=np.float64)
+        flux = np.ones_like(time)
+        flux_err = np.full_like(time, 1e-3)
+
+        (odd, even, n_odd, n_even) = split_odd_even(
+            time, flux, flux_err, period=0.0, t0=0.0, duration_hours=2.0
+        )
+        assert n_odd == 0
+        assert n_even == 0
+        assert len(odd[0]) == 0
+        assert len(even[0]) == 0
+
 
 class TestCompareOddEvenDepths:
     """Tests for comparing depths between odd and even transits."""
@@ -247,6 +261,17 @@ class TestComputeOddEvenResult:
 
         # Relative difference should be small for planet-like signals
         assert result.relative_depth_diff_percent < 10.0
+
+    def test_invalid_inputs_return_empty_result(self) -> None:
+        """Invalid ephemeris inputs return a safe all-zero result."""
+        time = np.array([0.0, 1.0, 2.0], dtype=np.float64)
+        flux = np.ones_like(time)
+        flux_err = np.full_like(time, 1e-3)
+
+        result = compute_odd_even_result(time, flux, flux_err, period=-1.0, t0=0.0, duration_hours=2.0)
+        assert result.n_odd == 0
+        assert result.n_even == 0
+        assert result.depth_diff_ppm == 0.0
 
     def test_to_dict_method(self, equal_depth_lc: dict[str, NDArray[np.float64] | float]) -> None:
         """OddEvenResult.to_dict() returns valid dictionary."""

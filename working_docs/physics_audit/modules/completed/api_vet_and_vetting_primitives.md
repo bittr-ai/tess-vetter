@@ -53,11 +53,10 @@ Applies: `working_docs/physics_audit/REVIEW_TEMPLATE.md`
 
 ### Potential orchestration issues (logic, not physics)
 
-- Catalog tier enabling mismatch:
-  - Default enabling adds `_CATALOG_CHECKS` when `network` and `(ra_deg is not None or tic_id is not None)`.
-  - Execution currently requires **all** `ra_deg`, `dec_deg`, and `tic_id` to be non-None.
-  - If a caller provides only RA/Dec (V06) or only TIC (V07), catalog checks will be requested but silently not executed (no warning).
-  - This is not a unit bug, but it is an evidence-availability policy issue that can surprise host apps.
+- Catalog tier enabling mismatch (fixed):
+  - Default enabling now adds V06 only when `network` and `ra_deg+dec_deg` are present, and adds V07 only when `network` and `tic_id` is present.
+  - If a caller explicitly enables V06/V07 but required metadata is missing, the orchestrator emits a warning and returns a per-check skipped result (no silent drop).
+  - This is evidence-availability policy (not a unit bug), but it materially affects downstream completeness.
 
 ### Cross-references (already audited elsewhere)
 
@@ -117,7 +116,5 @@ This file is a citation-decorated re-export surface (no numerical modifications)
 
 ## Follow-ups / potential improvements
 
-1) `vet_candidate` catalog gating:
-   - Consider splitting catalog execution conditions so V06 can run with RA/Dec and V07 with TIC, and emit warnings when metadata is insufficient for an enabled check.
-2) `transit/vetting.py` input validation:
-   - Consider validating that `period>0`, `duration_hours>0`, and that arrays are finite enough for meaningful results (currently handled indirectly).
+1) `vet_candidate` catalog gating: implemented (see note above).
+2) `transit/vetting.py` input validation: implemented (`period>0`, `duration_hours>0`, finite `t0` guards).

@@ -88,6 +88,7 @@ def check_centroid_shift_with_tpf(
         name="centroid_shift",
         confidence=confidence,
         details={
+            "status": "ok",
             "centroid_shift_pixels": float(result.centroid_shift_pixels),
             "centroid_shift_arcsec": float(result.centroid_shift_arcsec),
             "significance_sigma": float(result.significance_sigma),
@@ -326,4 +327,3 @@ __all__ = [
     "compute_pixel_depth_map_metrics",
     "PixelDepthMapMetrics",
 ]
-

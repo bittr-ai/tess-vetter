@@ -83,6 +83,21 @@ def _make_skipped_result(check_id: str, name: str) -> CheckResult:
     )
 
 
+def _make_missing_metadata_result(check_id: str, name: str, *, missing: list[str]) -> CheckResult:
+    """Create a skipped result when required metadata is missing."""
+    return CheckResult(
+        id=check_id,
+        name=name,
+        passed=None,
+        confidence=0.0,
+        details={
+            "status": "skipped",
+            "reason": "missing_metadata",
+            "missing": missing,
+        },
+    )
+
+
 def _candidate_to_internal(candidate: Candidate) -> TransitCandidate:
     """Convert facade Candidate to internal TransitCandidate.
 
@@ -214,9 +229,9 @@ _DEFAULT_CHECKS = ["V06", "V07"]
 def vet_catalog(
     candidate: Candidate,
     *,
-    tic_id: int,
-    ra_deg: float,
-    dec_deg: float,
+    tic_id: int | None = None,
+    ra_deg: float | None = None,
+    dec_deg: float | None = None,
     network: bool = False,
     cache: Any | None = None,
     toi: float | None = None,
@@ -231,9 +246,9 @@ def vet_catalog(
 
     Args:
         candidate: Transit candidate with ephemeris
-        tic_id: TIC ID for ExoFOP query
-        ra_deg: Target RA in degrees for TESS-EB query
-        dec_deg: Target Dec in degrees for TESS-EB query
+        tic_id: TIC ID for ExoFOP query (required for V07)
+        ra_deg: Target RA in degrees for TESS-EB query (required for V06)
+        dec_deg: Target Dec in degrees for TESS-EB query (required for V06)
         network: If False, return skipped results for all checks
         cache: Optional cache for dependency injection (reserved for future use)
         toi: Optional specific TOI number for ExoFOP
@@ -274,6 +289,20 @@ def vet_catalog(
 
     for check_id in checks_to_run:
         if check_id == "V06":
+            missing = []
+            if ra_deg is None:
+                missing.append("ra_deg")
+            if dec_deg is None:
+                missing.append("dec_deg")
+            if missing:
+                results.append(
+                    _make_missing_metadata_result(
+                        "V06", "nearby_eb_search", missing=missing
+                    )
+                )
+                continue
+            assert ra_deg is not None
+            assert dec_deg is not None
             results.append(
                 nearby_eb_search(
                     candidate,
@@ -286,6 +315,14 @@ def vet_catalog(
                 )
             )
         elif check_id == "V07":
+            if tic_id is None:
+                results.append(
+                    _make_missing_metadata_result(
+                        "V07", "exofop_disposition", missing=["tic_id"]
+                    )
+                )
+                continue
+            assert tic_id is not None
             results.append(
                 exofop_disposition(
                     candidate,

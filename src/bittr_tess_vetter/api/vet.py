@@ -136,8 +136,11 @@ def vet_candidate(
         # Default: LC-only always, others based on available data
         checks_to_run = set(_LC_ONLY_CHECKS)
 
-        if network and (ra_deg is not None or tic_id is not None):
-            checks_to_run |= _CATALOG_CHECKS
+        # Catalog checks are enabled only when their required metadata is present.
+        if network and ra_deg is not None and dec_deg is not None:
+            checks_to_run.add("V06")
+        if network and tic_id is not None:
+            checks_to_run.add("V07")
 
         if tpf is not None:
             checks_to_run |= _PIXEL_CHECKS
@@ -165,9 +168,14 @@ def vet_candidate(
         )
         results.extend(lc_results)
 
-    # Run catalog checks (V06-V07) if enabled and required metadata provided
+    # Run catalog checks (V06-V07) if enabled.
     catalog_checks_to_run = checks_to_run & _CATALOG_CHECKS
-    if catalog_checks_to_run and ra_deg is not None and dec_deg is not None and tic_id is not None:
+    if catalog_checks_to_run:
+        if "V06" in catalog_checks_to_run and (ra_deg is None or dec_deg is None):
+            warnings.append("Catalog check V06 requested but ra_deg/dec_deg missing; skipping")
+        if "V07" in catalog_checks_to_run and tic_id is None:
+            warnings.append("Catalog check V07 requested but tic_id missing; skipping")
+
         from bittr_tess_vetter.api.catalog import vet_catalog
 
         catalog_results = vet_catalog(
