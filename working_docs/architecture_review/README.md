@@ -34,6 +34,9 @@ Completed (high priority):
 
 Still recommended (not completed):
 - **P0.2: Make “metrics-only” a type-level invariant (or centralize policy)**.
+  - Update: interpretation/policy is intentionally out of scope for `bittr-tess-vetter` and should
+    live in `astro-arc-tess` (`astro_arc/validation`) / tess-validate. The remaining work here is to
+    enforce metrics-only invariants at the API boundary.
 
 ## Current Architecture (as implemented)
 
@@ -97,6 +100,10 @@ mostly by convention:
 - `domain/VetterCheckResult.passed` is documented as metrics-only (typically `None`).
 - Facade wrappers force metrics-only in some places (e.g. `api/lc_only._apply_policy_mode`), but
   the “policy_mode” abstraction currently supports only `"metrics_only"` and raises otherwise.
+
+Status update:
+- The public API wrappers now consistently enforce metrics-only semantics (`passed=None` and
+  `details["_metrics_only"]=True`) across LC-only, catalog, pixel, and exovetter wrappers.
 
 ### 2) Provenance / Reproducibility
 
