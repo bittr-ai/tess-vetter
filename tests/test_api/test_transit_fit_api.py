@@ -106,3 +106,60 @@ def test_fit_transit_insufficient_points_returns_error() -> None:
     result = fit_transit(lc, cand, stellar, method="optimize")
     assert result.status == "error"
     assert "Insufficient usable points" in (result.error_message or "")
+
+
+def test_fit_transit_mcmc_falls_back_to_optimize_if_emcee_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(sys.modules, "batman", types.ModuleType("batman"))
+
+    real_import = builtins.__import__
+
+    def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):  # type: ignore[no-untyped-def]
+        if name == "emcee":
+            raise ImportError("emcee intentionally missing for test")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+
+    import bittr_tess_vetter.transit.batman_model as bm
+
+    lc, cand, stellar = _minimal_inputs()
+    seen: dict[str, object] = {}
+
+    def _fake_fit_transit_model(**kwargs):  # type: ignore[no-untyped-def]
+        seen["method"] = kwargs["method"]
+        seen["duration"] = kwargs["duration"]
+        assert kwargs["method"] == "optimize"
+        assert kwargs["duration"] == pytest.approx(cand.ephemeris.duration_hours, rel=0)
+
+        return bm.TransitFitResult(
+            fit_method=str(kwargs["method"]),
+            stellar_params=kwargs["stellar_params"],
+            rp_rs=bm.ParameterEstimate(value=0.1, uncertainty=0.01),
+            a_rs=bm.ParameterEstimate(value=10.0, uncertainty=1.0),
+            inc=bm.ParameterEstimate(value=88.0, uncertainty=0.5),
+            t0=bm.ParameterEstimate(value=float(kwargs["t0"]), uncertainty=0.01),
+            u1=bm.ParameterEstimate(value=0.1, uncertainty=0.0),
+            u2=bm.ParameterEstimate(value=0.2, uncertainty=0.0),
+            transit_depth_ppm=10000.0,
+            duration_hours=2.0,
+            impact_parameter=0.5,
+            stellar_density_gcc=1.41,
+            chi_squared=1.0,
+            bic=0.0,
+            rms_ppm=50.0,
+            phase=[],
+            flux_model=[],
+            flux_data=[],
+            flux_err=[],
+            mcmc_diagnostics=None,
+            converged=True,
+        )
+
+    monkeypatch.setattr(bm, "fit_transit_model", _fake_fit_transit_model)
+
+    result = fit_transit(lc, cand, stellar, method="mcmc")
+    assert seen["method"] == "optimize"
+    assert result.status == "success"
+    assert result.fit_method == "optimize"
