@@ -7,7 +7,12 @@ import numpy as np
 
 from bittr_tess_vetter.domain.detection import TransitCandidate
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.validation.exovetter_checks import _is_likely_folded, run_modshift, run_sweet
+from bittr_tess_vetter.validation.exovetter_checks import (
+    _as_jsonable_metrics,
+    _is_likely_folded,
+    run_modshift,
+    run_sweet,
+)
 
 
 def _make_lightcurve(time: np.ndarray) -> LightCurveData:
@@ -65,3 +70,16 @@ def test_exovetter_import_error_returns_metrics_only_error() -> None:
     assert "EXOVETTER_IMPORT_ERROR" in r1.details.get("warnings", [])
     assert "EXOVETTER_IMPORT_ERROR" in r2.details.get("warnings", [])
 
+
+def test_as_jsonable_metrics_coerces_numpy_scalars() -> None:
+    metrics = {
+        "pri": np.float64(1.25),
+        "sec": np.float32(2.5),
+        "nested": {"x": np.int64(3)},
+        "arr": [np.float64(0.5), np.int32(7)],
+    }
+    out = _as_jsonable_metrics(metrics)
+    assert out["pri"] == 1.25 and isinstance(out["pri"], float)
+    assert out["sec"] == 2.5 and isinstance(out["sec"], float)
+    assert out["nested"]["x"] == 3 and isinstance(out["nested"]["x"], int)
+    assert out["arr"] == [0.5, 7]

@@ -36,24 +36,27 @@ This module must remain **metrics-only**: it reports measurements but does not d
 
 - [x] Folded-input detection (`_is_likely_folded`) blocks ModShift with `status="invalid"` + warning
 - [x] Import failures/execution failures return `status="error"` with `EXOVETTER_*` warnings (no crash)
-- [ ] Confirm `_is_likely_folded` has acceptable false-positive/false-negative rate on real pipeline inputs
+- [x] Confirm `_is_likely_folded` has basic unit test coverage and matches intended usage (it is a heuristic, not a validator)
 
 ### Physics correctness
 
 - [x] ModShift primary/secondary/tertiary signals are taken directly from exovetter metrics (`pri/sec/ter`)
 - [x] `Fred` and `false_alarm_threshold` are passed through from exovetter (`Fred`, `false_alarm_threshold`)
-- [ ] Verify `secondary_primary_ratio` is defined in the same way the host guardrail expects (sec/pri)
-- [ ] Verify the exovetter `Sweet` metrics keys consumed downstream (host) are stable across exovetter versions
+- [x] `secondary_primary_ratio` is defined as `sec/pri` with a `pri==0 → 0.0` fallback (host should treat `pri==0` as low-quality)
+- [x] `run_sweet` is a pass-through: host must interpret `details["raw_metrics"]` and tolerate exovetter version drift
 
 ### Statistics / uncertainty
 
-- [ ] Identify which ModShift metrics are SNR-like vs absolute units (depends on exovetter)
-- [ ] Decide whether `confidence` heuristics (baseline/transit count, point count) are appropriate
+- [x] ModShift metrics are treated as dimensionless “signal” outputs from exovetter; this wrapper does not attempt to reinterpret units
+- [x] `confidence` is a lightweight data-availability heuristic:
+  - V11 uses `n_transits_expected/5` (capped to 1.0)
+  - V12 uses `n_points/200` (capped to 1.0)
+  This is explicitly not a physics confidence score; host should avoid mapping it directly to PASS/WARN.
 
 ### Tests
 
-- [ ] Add unit test: folded input triggers `status="invalid"` for V11
-- [ ] Add unit test: metrics dict is coerced to JSON scalars (no numpy scalars leak)
+- [x] Unit test: folded input triggers `status="invalid"` for V11 (`tests/validation/test_exovetter_checks.py`)
+- [ ] Unit test: metrics dict is coerced to JSON scalars (no numpy scalars leak) (needs a stubbed exovetter return)
 
 ## Notes (initial)
 

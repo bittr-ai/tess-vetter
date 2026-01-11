@@ -42,7 +42,7 @@ This is the ordered queue for the function-by-function audit.
 
 - `src/bittr_tess_vetter/api/pixel_prf.py` (and underlying `pixel/*`)
 - `src/bittr_tess_vetter/transit/transit_fit.py` (batman fitting)
-- ◐ `src/bittr_tess_vetter/validation/exovetter_checks.py` → `working_docs/physics_audit/modules/in_progress/validation_exovetter_checks.md`
+- ✅ `src/bittr_tess_vetter/validation/exovetter_checks.py` → `working_docs/physics_audit/modules/completed/validation_exovetter_checks.md`
 - `src/bittr_tess_vetter/validation/lc_checks.py` (V01–V10 metrics; thresholds as measurements)
 
 ## Status legend

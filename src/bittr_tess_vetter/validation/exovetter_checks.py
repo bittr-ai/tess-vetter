@@ -53,6 +53,15 @@ def _coerce_metrics_dict(d: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _as_jsonable_metrics(metrics: Any) -> dict[str, Any]:
+    """Coerce exovetter metrics to a JSON-serializable dict.
+
+    exovetter vetters may return dict-like objects and may include NumPy scalar
+    types; we normalize these into plain Python scalars/lists/dicts.
+    """
+    return _coerce_metrics_dict(dict(metrics))
+
+
 def _is_likely_folded(time: np.ndarray, period_days: float) -> bool:
     if len(time) < 2:
         return False
@@ -175,7 +184,7 @@ def run_modshift(
             },
         )
 
-    metrics = _coerce_metrics_dict(dict(metrics))
+    metrics = _as_jsonable_metrics(metrics)
     pri = float(metrics.get("pri", 0.0) or 0.0)
     sec = float(metrics.get("sec", 0.0) or 0.0)
     ter = float(metrics.get("ter", 0.0) or 0.0)
@@ -258,7 +267,7 @@ def run_sweet(
             },
         )
 
-    metrics = _coerce_metrics_dict(dict(metrics))
+    metrics = _as_jsonable_metrics(metrics)
     n_points = int(inputs_summary.get("n_points", 0))
     confidence = min(1.0, n_points / 200.0) if n_points > 0 else 0.5
 
@@ -274,4 +283,3 @@ def run_sweet(
 
 
 __all__ = ["run_modshift", "run_sweet"]
-
