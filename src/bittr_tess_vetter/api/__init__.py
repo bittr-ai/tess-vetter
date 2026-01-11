@@ -617,6 +617,14 @@ if TYPE_CHECKING:
         scores_for_t0s_numpy,
         smooth_box_template_numpy,
     )
+    from bittr_tess_vetter.api.ephemeris_refinement import (  # noqa: F401
+        EphemerisRefinementCandidate,
+        EphemerisRefinementCandidateResult,
+        EphemerisRefinementConfig,
+        EphemerisRefinementRunResult,
+        refine_candidates_numpy,
+        refine_one_candidate_numpy,
+    )
     from bittr_tess_vetter.api.systematics import SystematicsProxyResult, compute_systematics_proxy
     from bittr_tess_vetter.api.transit_masks import (  # noqa: F401
         count_transits,
