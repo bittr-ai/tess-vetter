@@ -95,7 +95,7 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 
 - ✅ `src/bittr_tess_vetter/compute/aperture_prediction.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ☐ `src/bittr_tess_vetter/compute/bls_like_search.py`
-- ☐ `src/bittr_tess_vetter/compute/detrend.py`
+- ✅ `src/bittr_tess_vetter/compute/detrend.py` → `working_docs/physics_audit/modules/completed/compute_detrend.md`
 - ✅ `src/bittr_tess_vetter/compute/joint_inference_schemas.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/compute/joint_likelihood.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/compute/mlx_detection.py` → `working_docs/physics_audit/modules/completed/api_mlx_and_compute_mlx_detection.md`
@@ -108,7 +108,7 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ✅ `src/bittr_tess_vetter/compute/prf_psf.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/compute/prf_schemas.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - ✅ `src/bittr_tess_vetter/compute/mlx_detection.py` → `working_docs/physics_audit/modules/completed/api_mlx_and_compute_mlx_detection.md`
-- ☐ `src/bittr_tess_vetter/compute/primitives.py`
+- ✅ `src/bittr_tess_vetter/compute/primitives.py` → `working_docs/physics_audit/modules/completed/compute_primitives.md`
 - ✅ `src/bittr_tess_vetter/compute/transit.py` → `working_docs/physics_audit/modules/completed/compute_transit_and_recovery_pipeline.md`
 
 ### 4.3) Catalogs + crossmatch (astro context + priors)

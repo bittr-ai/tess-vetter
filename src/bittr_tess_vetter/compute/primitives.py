@@ -73,6 +73,13 @@ def periodogram(
     # Mean-subtract the flux
     flux_centered = flux_clean - np.mean(flux_clean)
 
+    # If the flux has (near) zero variance, Lomb-Scargle normalization can
+    # produce divide-by-zero warnings and non-finite power. Treat this as
+    # "no periodic signal" and return a zero spectrum.
+    flux_var = float(np.var(flux_centered))
+    if not np.isfinite(flux_var) or flux_var <= 0.0:
+        return np.zeros_like(periods, dtype=np.float64)
+
     # Validate periods are all positive to prevent overflow in angular frequency
     if np.any(periods <= 0):
         raise ValueError("All periods must be positive")
