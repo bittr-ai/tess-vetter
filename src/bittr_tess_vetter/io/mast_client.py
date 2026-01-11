@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 
-from bittr_tess_vetter.api.lightcurve import LightCurveData
+from bittr_tess_vetter.api.lightcurve import LightCurveData, LightCurveProvenance
 from bittr_tess_vetter.api.target import Target
 
 if TYPE_CHECKING:
@@ -495,50 +495,88 @@ class MASTClient:
         if search_result is None or len(search_result) == 0:
             raise LightCurveNotFoundError(f"No light curve found for TIC {tic_id} sector {sector}")
 
-        # Filter by exptime if specified
-        if exptime is not None:
-            # Filter the search results to find matching exptime
-            matching_indices = []
-            for i in range(len(search_result)):
-                row = search_result[i]
-                if hasattr(row, "exptime"):
-                    row_exptime = row.exptime
-                    # Handle astropy Quantity
-                    if hasattr(row_exptime, "value"):
-                        row_exptime = row_exptime.value
-                    # Handle numpy array
-                    if hasattr(row_exptime, "item"):
-                        row_exptime = row_exptime.item()
-                    elif hasattr(row_exptime, "__getitem__") and hasattr(row_exptime, "__len__"):
-                        if len(row_exptime) > 0:
-                            row_exptime = row_exptime[0]
-                    # Check if exptime matches (with 1s tolerance)
-                    if abs(float(row_exptime) - exptime) < 1.0:
-                        matching_indices.append(i)
+        def _coerce_float(val: object) -> float | None:
+            if val is None:
+                return None
+            if hasattr(val, "value"):
+                val = val.value
+            if hasattr(val, "item"):
+                try:
+                    return float(val.item())
+                except Exception:
+                    return None
+            if hasattr(val, "__getitem__") and hasattr(val, "__len__"):
+                try:
+                    if len(val) == 0:
+                        return None
+                    return float(val[0])
+                except Exception:
+                    return None
+            try:
+                return float(val)
+            except Exception:
+                return None
 
-            if not matching_indices:
-                available_exptimes = []
+        def _row_author(row: Any) -> str | None:
+            try:
+                if hasattr(row, "author") and row.author is not None:
+                    return str(row.author)
+            except Exception:
+                return None
+            return None
+
+        def _row_exptime(row: Any) -> float | None:
+            if not hasattr(row, "exptime"):
+                return None
+            return _coerce_float(getattr(row, "exptime", None))
+
+        # Select a single product deterministically (avoid relying on upstream ordering).
+        candidate_indices = list(range(len(search_result)))
+        requested_exptime = exptime
+        if requested_exptime is not None:
+            candidate_indices = [
+                i
+                for i in candidate_indices
+                if (_row_exptime(search_result[i]) is not None)
+                and abs(float(_row_exptime(search_result[i]) or 0.0) - requested_exptime) < 1.0
+            ]
+
+            if not candidate_indices:
+                available_exptimes: list[float] = []
                 for i in range(len(search_result)):
-                    row = search_result[i]
-                    if hasattr(row, "exptime"):
-                        row_exptime = row.exptime
-                        if hasattr(row_exptime, "value"):
-                            row_exptime = row_exptime.value
-                        if hasattr(row_exptime, "item"):
-                            row_exptime = row_exptime.item()
-                        elif hasattr(row_exptime, "__getitem__") and hasattr(
-                            row_exptime, "__len__"
-                        ):
-                            if len(row_exptime) > 0:
-                                row_exptime = row_exptime[0]
-                        available_exptimes.append(float(row_exptime))
+                    exptime_i = _row_exptime(search_result[i])
+                    if exptime_i is not None:
+                        available_exptimes.append(float(exptime_i))
                 raise LightCurveNotFoundError(
                     f"No light curve found for TIC {tic_id} sector {sector} "
-                    f"with exptime={exptime}s. Available exptimes: {available_exptimes}"
+                    f"with exptime={requested_exptime}s. Available exptimes: {available_exptimes}"
                 )
 
-            # Use only matching results
-            search_result = search_result[matching_indices[0]]
+        preferred_author = search_author
+        preferred_exptime = requested_exptime if requested_exptime is not None else 120.0
+        selection_reason = None
+
+        def _selection_key(i: int) -> tuple[int, float, str, float, int]:
+            row = search_result[i]
+            author_i = _row_author(row) or ""
+            exptime_i = _row_exptime(row)
+
+            author_match = 1
+            if preferred_author is not None and author_i.lower() == preferred_author.lower():
+                author_match = 0
+
+            exptime_delta = abs(float(exptime_i) - preferred_exptime) if exptime_i is not None else 1e9
+            exptime_val = float(exptime_i) if exptime_i is not None else 1e9
+            return (author_match, exptime_delta, author_i, exptime_val, i)
+
+        selected_index = min(candidate_indices, key=_selection_key)
+        if len(candidate_indices) > 1:
+            selection_reason = (
+                "preferred_author/exptime_tiebreak"
+                if preferred_author is not None
+                else "exptime_tiebreak"
+            )
+        selected_row = search_result[selected_index]
 
         # Step 2: Download the light curve
         _report_progress(
@@ -547,11 +585,11 @@ class MASTClient:
             f"Downloading light curve for TIC {tic_id} sector {sector}...",
         )
         try:
-            lc_result = search_result.download()
+            lc_result = selected_row.download()
             # Check if result is a LightCurveCollection (multiple light curves)
             # vs a single LightCurve. Don't use len() - LightCurve has len = n_points
             if type(lc_result).__name__ == "LightCurveCollection":
-                lc = lc_result[0]  # Take first light curve from collection
+                lc = lc_result[0]  # Deterministic after selecting a single product row.
             else:
                 lc = lc_result  # Single light curve
         except Exception as e:
@@ -582,13 +620,13 @@ class MASTClient:
                 # Fallback to default flux
                 flux_raw = np.asarray(lc.flux.value, dtype=np.float64)
 
+            flux_err_raw: np.ndarray[Any, np.dtype[np.float64]] | None
             if hasattr(lc, flux_err_col):
                 flux_err_raw = np.asarray(getattr(lc, flux_err_col).value, dtype=np.float64)
             elif hasattr(lc, "flux_err"):
                 flux_err_raw = np.asarray(lc.flux_err.value, dtype=np.float64)
             else:
-                # If no errors available, use small placeholder
-                flux_err_raw = np.ones_like(flux_raw) * 1e-4
+                flux_err_raw = None
 
             # Quality flags
             if hasattr(lc, "quality"):
@@ -600,28 +638,50 @@ class MASTClient:
             logger.error(f"Failed to extract data from light curve: {e}")
             raise MASTClientError(f"Failed to process light curve data: {e}") from e
 
-        # Build validity mask
-        # Invalid if: NaN in time/flux, or quality flag set
-        valid_mask = (
-            ~np.isnan(time)
-            & ~np.isnan(flux_raw)
-            & ~np.isnan(flux_err_raw)
-            & ((quality & mask) == 0)
+        # Base validity mask (ignores flux_err availability).
+        base_valid = (
+            np.isfinite(time) & np.isfinite(flux_raw) & ((quality & mask) == 0)
         ).astype(np.bool_)
 
-        # Normalize flux to median ~1.0
-        if self.normalize and np.any(valid_mask):
-            median_flux = np.median(flux_raw[valid_mask])
+        # Normalize flux to median ~1.0 (based on base_valid points).
+        median_flux = None
+        if self.normalize and np.any(base_valid):
+            median_flux = float(np.median(flux_raw[base_valid]))
             if median_flux > 0 and np.isfinite(median_flux):
                 flux = flux_raw / median_flux
-                flux_err = flux_err_raw / median_flux
             else:
                 logger.warning(f"Invalid median flux {median_flux}, skipping normalization")
+                median_flux = None
                 flux = flux_raw
-                flux_err = flux_err_raw
         else:
             flux = flux_raw
-            flux_err = flux_err_raw
+
+        # Flux errors:
+        # - If provided by the product, preserve them (and propagate NaNs into valid_mask).
+        # - If absent, estimate a representative per-point uncertainty from the flux scatter,
+        #   and record this explicitly in provenance.
+        flux_err_kind: str = "provided"
+        if flux_err_raw is None:
+            flux_err_kind = "estimated_missing"
+            if np.any(base_valid):
+                med = float(np.median(flux[base_valid]))
+                mad = float(np.median(np.abs(flux[base_valid] - med)))
+                sigma = 1.4826 * mad
+                if not np.isfinite(sigma) or sigma <= 0:
+                    sigma = float(np.std(flux[base_valid]))
+                if not np.isfinite(sigma) or sigma <= 0:
+                    sigma = 1e-3
+            else:
+                sigma = 1e-3
+            flux_err = np.full_like(flux, sigma, dtype=np.float64)
+        else:
+            if median_flux is not None:
+                flux_err = flux_err_raw / median_flux
+            else:
+                flux_err = flux_err_raw
+
+        # Final validity mask (requires finite flux_err).
+        valid_mask = (base_valid & np.isfinite(flux_err)).astype(np.bool_)
 
         # Determine cadence from time differences
         if len(time) > 1:
@@ -655,6 +715,20 @@ class MASTClient:
             tic_id=tic_id,
             sector=sector,
             cadence_seconds=cadence_seconds,
+            provenance=LightCurveProvenance(
+                source="MAST/lightkurve",
+                selected_author=_row_author(selected_row),
+                selected_exptime_seconds=_row_exptime(selected_row),
+                preferred_author=preferred_author,
+                requested_exptime_seconds=requested_exptime,
+                flux_type=flux_type,
+                quality_mask=int(mask),
+                normalize=bool(self.normalize),
+                selection_reason=selection_reason,
+                flux_err_kind=(
+                    "estimated_missing" if flux_err_kind == "estimated_missing" else "provided"
+                ),
+            ),
         )
 
     def get_target_info(self, tic_id: int) -> Target:

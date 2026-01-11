@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from bittr_tess_vetter.domain.lightcurve import LightCurveData, make_data_ref
+from bittr_tess_vetter.domain.lightcurve import LightCurveData, LightCurveProvenance, make_data_ref
 
 
 class FrozenModel(BaseModel):
@@ -52,5 +52,4 @@ class LightCurveRef(FrozenModel):
         )
 
 
-__all__ = ["LightCurveData", "LightCurveRef", "make_data_ref"]
-
+__all__ = ["LightCurveData", "LightCurveProvenance", "LightCurveRef", "make_data_ref"]

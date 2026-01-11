@@ -58,6 +58,7 @@ def mock_search_result_row():
     row.author = "SPOC"
     row.exptime = 120.0
     row.distance = 0.5
+    row.download = MagicMock()
     return row
 
 
@@ -263,7 +264,7 @@ class TestDownloadLightcurve:
         self, mock_lightkurve, mock_search_result, mock_lightcurve
     ):
         """download_lightcurve() returns LightCurveData object."""
-        mock_search_result.download.return_value = mock_lightcurve
+        mock_search_result.__getitem__.return_value.download.return_value = mock_lightcurve
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
@@ -277,7 +278,7 @@ class TestDownloadLightcurve:
 
     def test_download_correct_dtypes(self, mock_lightkurve, mock_search_result, mock_lightcurve):
         """LightCurveData has correct numpy dtypes."""
-        mock_search_result.download.return_value = mock_lightcurve
+        mock_search_result.__getitem__.return_value.download.return_value = mock_lightcurve
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
@@ -295,7 +296,7 @@ class TestDownloadLightcurve:
 
     def test_download_metadata(self, mock_lightkurve, mock_search_result, mock_lightcurve):
         """LightCurveData has correct metadata attributes."""
-        mock_search_result.download.return_value = mock_lightcurve
+        mock_search_result.__getitem__.return_value.download.return_value = mock_lightcurve
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
@@ -340,7 +341,7 @@ class TestDownloadLightcurve:
 
         lc.quality = quality_values
 
-        mock_search_result.download.return_value = lc
+        mock_search_result.__getitem__.return_value.download.return_value = lc
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
@@ -365,7 +366,7 @@ class TestDownloadLightcurve:
 
     def test_download_invalid_flux_type(self, mock_lightkurve, mock_search_result, mock_lightcurve):
         """download_lightcurve() raises ValueError for invalid flux_type."""
-        mock_search_result.download.return_value = mock_lightcurve
+        mock_search_result.__getitem__.return_value.download.return_value = mock_lightcurve
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
@@ -378,7 +379,7 @@ class TestDownloadLightcurve:
 
     def test_download_sap_flux(self, mock_lightkurve, mock_search_result, mock_lightcurve):
         """download_lightcurve() can use SAP flux type."""
-        mock_search_result.download.return_value = mock_lightcurve
+        mock_search_result.__getitem__.return_value.download.return_value = mock_lightcurve
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
@@ -392,7 +393,7 @@ class TestDownloadLightcurve:
 
     def test_download_error_handling(self, mock_lightkurve, mock_search_result):
         """download_lightcurve() raises MASTClientError on download failure."""
-        mock_search_result.download.side_effect = Exception("Download failed")
+        mock_search_result.__getitem__.return_value.download.side_effect = Exception("Download failed")
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
@@ -402,6 +403,43 @@ class TestDownloadLightcurve:
 
             with pytest.raises(MASTClientError, match="Failed to download"):
                 client.download_lightcurve(tic_id=261136679, sector=1)
+
+    def test_download_missing_flux_err_is_estimated(
+        self, mock_lightkurve, mock_search_result
+    ) -> None:
+        """Missing flux_err is estimated and recorded in provenance."""
+        # LightCurve-like object without any flux_err attributes (spec to make hasattr work).
+        lc = MagicMock(spec=["time", "flux", "pdcsap_flux", "sap_flux", "quality"])
+
+        n_points = 100
+        time_values = np.linspace(1500.0, 1502.0, n_points)
+        flux_values = np.ones(n_points, dtype=np.float64) * 1000.0
+        quality_values = np.zeros(n_points, dtype=np.int32)
+
+        time_mock = MagicMock()
+        time_mock.value = time_values
+        lc.time = time_mock
+
+        flux_mock = MagicMock()
+        flux_mock.value = flux_values
+        lc.flux = flux_mock
+        lc.pdcsap_flux = flux_mock
+        lc.sap_flux = flux_mock
+
+        lc.quality = quality_values
+
+        mock_search_result.__getitem__.return_value.download.return_value = lc
+        mock_lightkurve.search_lightcurve.return_value = mock_search_result
+
+        with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
+            client = MASTClient(normalize=True)
+            client._lk = mock_lightkurve
+            client._lk_imported = True
+
+            lc_data = client.download_lightcurve(tic_id=261136679, sector=1)
+            assert np.all(np.isfinite(lc_data.flux_err))
+            assert lc_data.provenance is not None
+            assert lc_data.provenance.flux_err_kind == "estimated_missing"
 
 
 # -----------------------------------------------------------------------------
@@ -416,7 +454,7 @@ class TestQualityMaskFiltering:
         self, mock_lightkurve, mock_search_result, mock_lightcurve
     ):
         """Default quality mask filters points with bad quality flags."""
-        mock_search_result.download.return_value = mock_lightcurve
+        mock_search_result.__getitem__.return_value.download.return_value = mock_lightcurve
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
@@ -434,7 +472,7 @@ class TestQualityMaskFiltering:
 
     def test_custom_quality_mask(self, mock_lightkurve, mock_search_result, mock_lightcurve):
         """Custom quality mask can be passed to download_lightcurve()."""
-        mock_search_result.download.return_value = mock_lightcurve
+        mock_search_result.__getitem__.return_value.download.return_value = mock_lightcurve
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
@@ -452,7 +490,7 @@ class TestQualityMaskFiltering:
 
     def test_no_quality_mask(self, mock_lightkurve, mock_search_result, mock_lightcurve):
         """Quality mask of 0 allows all points."""
-        mock_search_result.download.return_value = mock_lightcurve
+        mock_search_result.__getitem__.return_value.download.return_value = mock_lightcurve
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
@@ -496,7 +534,7 @@ class TestQualityMaskFiltering:
 
         lc.quality = quality_values
 
-        mock_search_result.download.return_value = lc
+        mock_search_result.__getitem__.return_value.download.return_value = lc
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
@@ -524,7 +562,7 @@ class TestFluxNormalization:
         self, mock_lightkurve, mock_search_result, mock_lightcurve
     ):
         """Normalized flux has median close to 1.0."""
-        mock_search_result.download.return_value = mock_lightcurve
+        mock_search_result.__getitem__.return_value.download.return_value = mock_lightcurve
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
@@ -540,7 +578,7 @@ class TestFluxNormalization:
 
     def test_normalization_disabled(self, mock_lightkurve, mock_search_result, mock_lightcurve):
         """Flux is not normalized when normalize=False."""
-        mock_search_result.download.return_value = mock_lightcurve
+        mock_search_result.__getitem__.return_value.download.return_value = mock_lightcurve
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
@@ -558,7 +596,7 @@ class TestFluxNormalization:
         self, mock_lightkurve, mock_search_result, mock_lightcurve
     ):
         """Flux errors are scaled proportionally during normalization."""
-        mock_search_result.download.return_value = mock_lightcurve
+        mock_search_result.__getitem__.return_value.download.return_value = mock_lightcurve
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
@@ -907,12 +945,12 @@ class TestDownloadAllSectors:
             row.author = "SPOC"
             row.exptime = 120.0
             row.distance = None
+            row.download = MagicMock(return_value=mock_lightcurve)
             rows.append(row)
 
         mock_multi_result = MagicMock()
         mock_multi_result.__len__ = MagicMock(return_value=3)
         mock_multi_result.__getitem__ = lambda self, i: rows[i]
-        mock_multi_result.download = MagicMock(return_value=mock_lightcurve)
 
         # First call returns multiple results, subsequent calls return single results
         call_count = [0]
@@ -924,7 +962,7 @@ class TestDownloadAllSectors:
             return mock_search_result
 
         mock_lightkurve.search_lightcurve.side_effect = search_side_effect
-        mock_search_result.download.return_value = mock_lightcurve
+        mock_search_result.__getitem__.return_value.download.return_value = mock_lightcurve
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
             client = MASTClient()
@@ -952,7 +990,7 @@ class TestDownloadAllSectors:
         self, mock_lightkurve, mock_search_result, mock_lightcurve
     ):
         """download_all_sectors() can download specific sectors."""
-        mock_search_result.download.return_value = mock_lightcurve
+        mock_search_result.__getitem__.return_value.download.return_value = mock_lightcurve
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
@@ -990,7 +1028,6 @@ class TestExptimeFiltering:
         mock_result = MagicMock()
         mock_result.__len__ = MagicMock(return_value=2)
         mock_result.__getitem__ = lambda self, i: rows[i]
-        mock_result.download = MagicMock(return_value=mock_lightcurve)
 
         mock_lightkurve.search_lightcurve.return_value = mock_result
 
@@ -1003,6 +1040,8 @@ class TestExptimeFiltering:
             lc_data = client.download_lightcurve(tic_id=261136679, sector=1, exptime=20)
 
             assert isinstance(lc_data, LightCurveData)
+            assert rows[0].download.call_count == 1
+            assert rows[1].download.call_count == 0
 
     def test_download_with_exptime_filter_120s(self, mock_lightkurve, mock_lightcurve):
         """download_lightcurve() can filter for 120s cadence."""
@@ -1021,7 +1060,6 @@ class TestExptimeFiltering:
         mock_result = MagicMock()
         mock_result.__len__ = MagicMock(return_value=2)
         mock_result.__getitem__ = lambda self, i: rows[i]
-        mock_result.download = MagicMock(return_value=mock_lightcurve)
 
         mock_lightkurve.search_lightcurve.return_value = mock_result
 
@@ -1034,6 +1072,37 @@ class TestExptimeFiltering:
             lc_data = client.download_lightcurve(tic_id=261136679, sector=1, exptime=120)
 
             assert isinstance(lc_data, LightCurveData)
+            assert rows[0].download.call_count == 0
+            assert rows[1].download.call_count == 1
+
+    def test_download_exptime_none_prefers_120s(self, mock_lightkurve, mock_lightcurve):
+        """When exptime is omitted, selection prefers the 120s cadence product."""
+        rows = []
+        for exptime in [20.0, 120.0]:
+            row = MagicMock()
+            row.mission = ["TESS Sector 1"]
+            row.sequence_number = 1
+            row.author = "SPOC"
+            row.exptime = exptime
+            row.distance = None
+            row.download = MagicMock(return_value=mock_lightcurve)
+            rows.append(row)
+
+        mock_result = MagicMock()
+        mock_result.__len__ = MagicMock(return_value=2)
+        mock_result.__getitem__ = lambda self, i: rows[i]
+
+        mock_lightkurve.search_lightcurve.return_value = mock_result
+
+        with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
+            client = MASTClient()
+            client._lk = mock_lightkurve
+            client._lk_imported = True
+
+            lc_data = client.download_lightcurve(tic_id=261136679, sector=1, exptime=None)
+            assert isinstance(lc_data, LightCurveData)
+            assert rows[0].download.call_count == 0
+            assert rows[1].download.call_count == 1
 
     def test_download_exptime_not_found(self, mock_lightkurve, mock_lightcurve):
         """download_lightcurve() raises error when exptime not available."""
@@ -1044,11 +1113,11 @@ class TestExptimeFiltering:
         row.author = "SPOC"
         row.exptime = 120.0
         row.distance = None
+        row.download = MagicMock(return_value=mock_lightcurve)
 
         mock_result = MagicMock()
         mock_result.__len__ = MagicMock(return_value=1)
         mock_result.__getitem__ = lambda self, i: row
-        mock_result.download = MagicMock(return_value=mock_lightcurve)
 
         mock_lightkurve.search_lightcurve.return_value = mock_result
 
@@ -1065,7 +1134,7 @@ class TestExptimeFiltering:
         self, mock_lightkurve, mock_search_result, mock_lightcurve
     ):
         """download_lightcurve() uses first result when exptime is None."""
-        mock_search_result.download.return_value = mock_lightcurve
+        mock_search_result.__getitem__.return_value.download.return_value = mock_lightcurve
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):

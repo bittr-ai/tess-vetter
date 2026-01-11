@@ -8,6 +8,7 @@ This module provides:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -35,6 +36,26 @@ class FrozenModel(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
+@dataclass(frozen=True)
+class LightCurveProvenance:
+    """Provenance metadata for LightCurveData.
+
+    This is intended to answer "what exact data product did we ingest and how?".
+    It is kept lightweight and pickle-friendly for use with PersistentCache.
+    """
+
+    source: str
+    selected_author: str | None
+    selected_exptime_seconds: float | None
+    preferred_author: str | None
+    requested_exptime_seconds: float | None
+    flux_type: str
+    quality_mask: int
+    normalize: bool
+    selection_reason: str | None = None
+    flux_err_kind: Literal["provided", "estimated_missing"] = "provided"
+
+
 @dataclass
 class LightCurveData:
     """Internal representation of light curve data with numpy arrays.
@@ -51,6 +72,7 @@ class LightCurveData:
         tic_id: TIC identifier
         sector: TESS sector number
         cadence_seconds: Observation cadence in seconds
+        provenance: Optional provenance metadata about the source product
     """
 
     time: NDArray[np.float64]
@@ -61,6 +83,7 @@ class LightCurveData:
     tic_id: int
     sector: int
     cadence_seconds: float
+    provenance: LightCurveProvenance | None = None
 
     def __post_init__(self) -> None:
         """Validate array dtypes, shapes, and make arrays immutable."""
