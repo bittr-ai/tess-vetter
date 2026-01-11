@@ -309,6 +309,48 @@ class TestDownloadLightcurve:
             assert lc_data.sector == 1
             assert lc_data.cadence_seconds > 0
 
+    def test_download_cadence_seconds_robust_to_gaps(
+        self, mock_lightkurve, mock_search_result
+    ) -> None:
+        """cadence_seconds uses median dt (robust to occasional large gaps)."""
+        lc = MagicMock()
+
+        # Mostly 2-min cadence in days, with one huge gap injected.
+        cadence_days = 120.0 / 86400.0
+        time_values = 1500.0 + np.arange(1000, dtype=np.float64) * cadence_days
+        time_values[500:] += 3.0  # 3-day gap
+
+        flux_values = np.ones_like(time_values) * 1000.0
+        flux_err_values = np.ones_like(time_values) * 0.5
+        quality_values = np.zeros(len(time_values), dtype=np.int32)
+
+        time_mock = MagicMock()
+        time_mock.value = time_values
+        lc.time = time_mock
+
+        flux_mock = MagicMock()
+        flux_mock.value = flux_values
+        lc.flux = flux_mock
+        lc.pdcsap_flux = flux_mock
+
+        flux_err_mock = MagicMock()
+        flux_err_mock.value = flux_err_values
+        lc.flux_err = flux_err_mock
+        lc.pdcsap_flux_err = flux_err_mock
+
+        lc.quality = quality_values
+
+        mock_search_result.download.return_value = lc
+        mock_lightkurve.search_lightcurve.return_value = mock_search_result
+
+        with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
+            client = MASTClient(normalize=True)
+            client._lk = mock_lightkurve
+            client._lk_imported = True
+
+            lc_data = client.download_lightcurve(tic_id=261136679, sector=1)
+            assert abs(lc_data.cadence_seconds - 120.0) < 5.0
+
     def test_download_not_found_error(self, mock_lightkurve):
         """download_lightcurve() raises LightCurveNotFoundError when not found."""
         mock_lightkurve.search_lightcurve.return_value = None

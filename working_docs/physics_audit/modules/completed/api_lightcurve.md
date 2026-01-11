@@ -1,57 +1,74 @@
-# Module Review: `api/lightcurve.py` (+ `domain/lightcurve.py`)
+# Module Review: `api/lightcurve.py` (+ `domain/lightcurve.py`, `io/mast_client.py`)
 
 Applies: `working_docs/physics_audit/REVIEW_TEMPLATE.md`
 
 ## Why this is early / high leverage
 
-The light curve container contract is upstream of every downstream physics check:
-- `valid_mask` semantics determine what “data exists” for every statistic and mask.
-- dtype/shape immutability prevents subtle cache corruption.
-- metadata like `duration_days` and `cadence_seconds` is used for sanity checks, window sizing, and reporting.
+`LightCurveData` is the core container that essentially every computation consumes. If its units, masking,
+or normalization semantics drift, every downstream “physics” calculation can silently become wrong.
 
-## Scope (functions / types)
+This module should remain a **data/contract layer** (no pass/fail policy).
 
-- `bittr_tess_vetter.api.lightcurve.LightCurveRef`
-- `bittr_tess_vetter.api.lightcurve.make_data_ref` (re-export)
-- `bittr_tess_vetter.domain.lightcurve.LightCurveData`
-- `bittr_tess_vetter.domain.lightcurve.make_data_ref`
-- Construction points that must honor the contract:
-  - `bittr_tess_vetter.api.types.LightCurve.to_internal` (dtype + finite-mask normalization)
-  - `bittr_tess_vetter.api.stitch.stitch_lightcurve_data` (valid_mask + cadence inference)
-  - `bittr_tess_vetter.io.mast_client` (download → normalization → cadence inference)
+## Scope (files / entrypoints)
 
-## Audit checklist (to fill)
+API layer:
+- `src/bittr_tess_vetter/api/lightcurve.py` (`LightCurveRef`, re-export `LightCurveData`, `make_data_ref`)
+
+Core contract:
+- `src/bittr_tess_vetter/domain/lightcurve.py` (`LightCurveData`, `make_data_ref`)
+
+Primary producer:
+- `src/bittr_tess_vetter/io/mast_client.py` (`MASTClient.download_lightcurve` builds `LightCurveData`)
+
+## Audit checklist
 
 ### Units + conventions
 
-- [x] `time` arrays are BTJD days (same scale as `t0_btjd`); no implicit conversion in the container
-- [x] `cadence_seconds` is seconds (informational; stitched series may be mixed-cadence)
-- [x] Flux is expected normalized near 1.0 for downstream depth metrics; IO normalizes, API does not silently renormalize
+- [x] `time` is BTJD days (float64) everywhere; no JD/BJD mix (by contract; producer uses `lc.time.value`)
+- [x] `flux` is normalized (median ~1) and `flux_err` follows the same normalization
+- [x] `cadence_seconds` is derived from time deltas in **seconds** and is robust to gaps/outliers (median positive finite dt)
+- [x] `valid_mask` semantics are consistent: True means usable and implies finite time/flux/flux_err
 
-### Container invariants (safety)
+### Masking + robustness
 
-- [x] `LightCurveData` enforces dtype + equal-length arrays for `time/flux/flux_err/quality/valid_mask`
-- [x] Arrays are made immutable (read-only) after construction to prevent cached mutation
-- [x] `LightCurveRef` is frozen + forbids extras (stable API response shape)
+- [x] `valid_mask` construction excludes quality-flagged points deterministically (`(quality & mask) == 0`)
+- [x] Derived stats (`duration_days`, `median_flux`, `flux_std`, `gap_fraction`) behave sensibly for edge cases
+- [x] Arrays are immutable in the container to avoid cache mutation bugs
 
-### Numerical stability / edge cases
+### API surface correctness
 
-- [x] Derived stats (`duration_days`, `median_flux`, `flux_std`) use only valid samples and are robust to non-finite values
-- [x] Empty and all-invalid light curves return sane metadata (`n_points==0`, `duration_days==0`, medians NaN)
-- [x] `quality_flags_present` is stable for empty and non-empty arrays
-
-### Contract consistency across constructors
-
-- [x] `api.types.LightCurve.to_internal()` always excludes non-finite time/flux/flux_err from `valid_mask`
-- [x] `api.stitch.stitch_lightcurve_data()` constructs `valid_mask` consistent with the above (quality==0 AND finite time/flux/flux_err)
-- [x] `io.mast_client` cadence inference ignores non-finite `dt` and falls back to a default when needed
+- [x] `make_data_ref` format is stable and used consistently across cache layers (`lc:{tic_id}:{sector}:{flux_type}`)
+- [x] `LightCurveRef.from_data()` is deterministic and contains no raw arrays
+- [x] No “policy-ish” outputs (PASS/WARN/REJECT) appear in this layer
 
 ### Tests
 
-- [x] `tests/test_api/test_lightcurve_api.py` covers dtype validation, immutability, ref freezing, empty/all-invalid edge cases
-- [x] `tests/test_api/test_stitch_api.py` covers cadence inference (ignores cross-sector gaps) and stitched contract invariants
+- [x] Contract tests cover dtype/shape validation and immutability (`tests/test_api/test_lightcurve_api.py`)
+- [x] Edge cases: empty LC and all-invalid mask (`tests/test_api/test_lightcurve_api.py`)
+- [x] Producer test: `download_lightcurve()` normalization keeps median ~1 and `cadence_seconds` in a reasonable range (`tests/io/test_mast_client.py`)
 
-## Notes (final)
+## Notes (audit)
 
-- This module is intentionally “boring”: it defines a strict ndarray container and a stable metadata-only reference (`LightCurveRef`) to keep tool outputs lightweight and deterministic.
-- The most important physics safety property is **what counts as valid data**: `valid_mask` must exclude non-finite samples and typically excludes quality-flagged cadences (`quality==0`) for TESS light curves.
+### Current contract (as implemented)
+
+- `domain/lightcurve.LightCurveData` enforces:
+  - dtypes: `time/flux/flux_err` float64, `quality` int32, `valid_mask` bool
+  - shape alignment across all arrays
+  - immutability (`arr.flags.writeable = False`) for safe caching/reuse
+- Derived properties:
+  - `duration_days`: uses `valid_mask & isfinite(time)` and returns 0 for empty/all-invalid
+  - `median_flux`/`flux_std`: uses `valid_mask & isfinite(flux)`; returns NaN for all-invalid
+  - `gap_fraction`: `1 - n_valid/n_points` (0 for empty)
+
+### Producer behavior (MASTClient)
+
+- `valid_mask` is built as: finite time/flux/flux_err AND `(quality & mask) == 0`.
+- If `normalize=True`, `flux` and `flux_err` are divided by the median of `flux_raw[valid_mask]` (only if that median is finite and > 0).
+- `cadence_seconds` is derived from the median of positive finite `dt = diff(time[valid_mask])` (falls back to 120s if unavailable).
+
+### Potential footguns / follow-ups
+
+- The normalization semantics are “median of valid raw flux”. This is good for stability, but callers must remember that
+  absolute flux units are lost; pixel-level tools should use TPF flux, not LC flux.
+- `quality_flags_present` currently returns unique values from `quality` (not only flagged ones). That’s fine as “what values exist”,
+  but if someone interprets it as “flags used”, they may want to drop `0`.

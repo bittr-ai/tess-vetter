@@ -13,7 +13,7 @@ This is the ordered queue for the function-by-function audit.
 
 ### Types + contracts (prevents silent physics errors)
 - ✅ `src/bittr_tess_vetter/api/types.py` → `working_docs/physics_audit/modules/completed/api_types.md`
-- `src/bittr_tess_vetter/api/lightcurve.py`
+- ✅ `src/bittr_tess_vetter/api/lightcurve.py` → `working_docs/physics_audit/modules/completed/api_lightcurve.md`
 
 ### Light curve assembly / normalization
 - ✅ `src/bittr_tess_vetter/api/stitch.py` → `working_docs/physics_audit/modules/completed/api_stitch.md`
