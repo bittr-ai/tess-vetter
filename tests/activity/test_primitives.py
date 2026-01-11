@@ -119,6 +119,18 @@ class TestDetectFlares:
 
         assert len(flares) == 0
 
+    def test_handles_sparse_time_with_large_gaps(self) -> None:
+        """Does not crash when cadence estimate would ignore all diffs as gaps."""
+        time = 1000.0 + np.arange(200, dtype=np.float64) * 1.0  # 1-day cadence (all diffs >= 0.5)
+        flux = np.ones_like(time)
+        flux_err = np.ones_like(time) * 100e-6
+
+        # Inject a 2-point flare so it can be grouped (gap <= 3 cadences).
+        flux[50:52] += 0.01
+
+        flares = detect_flares(time, flux, flux_err, sigma_threshold=3.0, baseline_window_hours=24.0)
+        assert isinstance(flares, list)
+
 
 class TestMeasureRotationPeriod:
     """Tests for rotation period measurement."""
@@ -184,6 +196,14 @@ class TestMeasureRotationPeriod:
         period, period_err, snr = measure_rotation_period(time, flux)
 
         # Should return defaults
+        assert period == 1.0
+        assert period_err == 1.0
+        assert snr == 0.0
+
+    def test_constant_flux_returns_no_detection(self) -> None:
+        time = np.linspace(0, 30, 3000, dtype=np.float64)
+        flux = np.ones_like(time, dtype=np.float64)
+        period, period_err, snr = measure_rotation_period(time, flux)
         assert period == 1.0
         assert period_err == 1.0
         assert snr == 0.0

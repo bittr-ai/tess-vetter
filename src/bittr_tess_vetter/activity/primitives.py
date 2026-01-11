@@ -66,7 +66,16 @@ def detect_flares(
 
     # Estimate cadence from median time differences
     time_diffs = np.diff(time)
-    cadence_days = float(np.median(time_diffs[time_diffs < 0.5]))  # Ignore gaps
+    positive_diffs = time_diffs[np.isfinite(time_diffs) & (time_diffs > 0)]
+    if positive_diffs.size == 0:
+        return []
+
+    # Ignore long gaps when estimating cadence, but fall back to overall median
+    # if all diffs are "gaps" (prevents median-of-empty -> NaN -> crash).
+    small_diffs = positive_diffs[positive_diffs < 0.5]
+    cadence_days = float(np.median(small_diffs if small_diffs.size > 0 else positive_diffs))
+    if not np.isfinite(cadence_days) or cadence_days <= 0:
+        return []
     cadence_minutes = cadence_days * 24.0 * 60.0
 
     # Convert window to number of points (odd for symmetric median filter)
@@ -324,6 +333,8 @@ def measure_rotation_period(
 
     # Center flux around zero for Lomb-Scargle
     flux_centered = flux - np.mean(flux)
+    if float(np.var(flux_centered)) <= 0.0:
+        return 1.0, 1.0, 0.0
 
     # Convert periods to angular frequencies
     angular_frequencies = 2.0 * np.pi / periods

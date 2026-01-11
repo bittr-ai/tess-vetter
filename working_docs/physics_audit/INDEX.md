@@ -160,8 +160,8 @@ Auto-discovered by scanning `src/bittr_tess_vetter/**/*.py` and subtracting the 
 - ✅ `src/bittr_tess_vetter/domain/detection.py` → `working_docs/physics_audit/modules/completed/compute_transit_and_recovery_pipeline.md`
 - ✅ `src/bittr_tess_vetter/domain/lightcurve.py` → `working_docs/physics_audit/modules/completed/api_lightcurve.md`
 - ✅ `src/bittr_tess_vetter/domain/target.py` → `working_docs/physics_audit/modules/completed/domain_target_and_pixel_tpf.md`
-- ☐ `src/bittr_tess_vetter/activity/primitives.py`
-- ☐ `src/bittr_tess_vetter/activity/result.py`
+- ✅ `src/bittr_tess_vetter/activity/primitives.py` → `working_docs/physics_audit/modules/completed/activity_primitives_and_result.md`
+- ✅ `src/bittr_tess_vetter/activity/result.py` → `working_docs/physics_audit/modules/completed/activity_primitives_and_result.md`
 - ☐ `src/bittr_tess_vetter/io/cache.py`
 - ✅ `src/bittr_tess_vetter/io/mast_client.py` → `working_docs/physics_audit/modules/completed/api_lightcurve.md`
 - ☐ `src/bittr_tess_vetter/network/timeout.py`
