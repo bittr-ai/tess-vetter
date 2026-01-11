@@ -1,34 +1,11 @@
-"""I/O utilities for bittr-tess-vetter."""
+"""Compatibility shim for `bittr_tess_vetter.platform.io`."""
 
-from bittr_tess_vetter.io.cache import PersistentCache, SessionCache
-from bittr_tess_vetter.io.mast_client import (
-    DEFAULT_QUALITY_MASK,
-    QUALITY_FLAG_BITS,
-    DownloadPhase,
-    DownloadProgress,
-    LightCurveNotFoundError,
-    MASTClient,
-    MASTClientError,
-    NameResolutionError,
-    ProgressCallback,
-    ResolvedTarget,
-    SearchResult,
-    TargetNotFoundError,
-)
+from __future__ import annotations
 
-__all__ = [
-    "MASTClient",
-    "MASTClientError",
-    "LightCurveNotFoundError",
-    "TargetNotFoundError",
-    "NameResolutionError",
-    "ResolvedTarget",
-    "SearchResult",
-    "SessionCache",
-    "PersistentCache",
-    "QUALITY_FLAG_BITS",
-    "DEFAULT_QUALITY_MASK",
-    "DownloadProgress",
-    "DownloadPhase",
-    "ProgressCallback",
-]
+from bittr_tess_vetter.platform import io as _io
+
+__all__ = list(_io.__all__)
+
+for _name in __all__:
+    globals()[_name] = getattr(_io, _name)
+
