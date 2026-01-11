@@ -56,7 +56,7 @@ This module must remain **metrics-only**: it reports measurements but does not d
 ### Tests
 
 - [x] Unit test: folded input triggers `status="invalid"` for V11 (`tests/validation/test_exovetter_checks.py`)
-- [ ] Unit test: metrics dict is coerced to JSON scalars (no numpy scalars leak) (needs a stubbed exovetter return)
+- [x] Unit test: metrics dict is coerced to JSON scalars (no numpy scalars leak) (`tests/validation/test_exovetter_checks.py`, `_as_jsonable_metrics`)
 
 ## Notes (initial)
 
