@@ -35,7 +35,7 @@ This is the ordered queue for the function-by-function audit.
 - ✅ `src/bittr_tess_vetter/api/recovery.py` → `working_docs/physics_audit/modules/completed/api_recovery.md`
 - ✅ `src/bittr_tess_vetter/api/timing.py` → `working_docs/physics_audit/modules/completed/api_timing.md`
 - ✅ `src/bittr_tess_vetter/api/activity.py` → `working_docs/physics_audit/modules/completed/api_activity.md`
-- ✅ `src/bittr_tess_vetter/api/fpp.py` → `working_docs/physics_audit/modules/completed/api_fpp.md` (if present; otherwise audit later)
+- ✅ `src/bittr_tess_vetter/api/fpp.py` → `working_docs/physics_audit/modules/completed/api_fpp.md`
 - ✅ `src/bittr_tess_vetter/api/pixel.py` / `src/bittr_tess_vetter/api/wcs_localization.py` → `working_docs/physics_audit/modules/completed/api_wcs_localization.md`
 
 ## 3) Deep pixel + PRF + advanced inference (later)
