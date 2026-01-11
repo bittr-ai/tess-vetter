@@ -130,7 +130,8 @@ def assess_sector_quality(
         best_hyp = evidence.hypotheses[0]
         amplitude = best_hyp.get("fit_amplitude")
         if amplitude is not None and amplitude != 0:
-            # Transit amplitude should be negative (flux decrease)
+            # `fit_amplitude` is defined by the upstream difference-image convention.
+            # If diff_image = (out-of-transit - in-transit), transit dimming is positive.
             # Estimate SNR as |amplitude| / residual_rms
             abs_amp = abs(float(amplitude))
             if evidence.residual_rms > 0 and abs_amp > 0:

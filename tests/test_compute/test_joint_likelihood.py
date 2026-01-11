@@ -35,7 +35,7 @@ def sample_hypothesis_a() -> dict:
         "fit_loss": 100.0,
         "delta_loss": 0.0,
         "rank": 1,
-        "fit_amplitude": -0.001,
+        "fit_amplitude": 0.001,
         "fit_background": 0.0001,
     }
 
@@ -49,7 +49,7 @@ def sample_hypothesis_b() -> dict:
         "fit_loss": 150.0,
         "delta_loss": 50.0,
         "rank": 2,
-        "fit_amplitude": -0.0008,
+        "fit_amplitude": 0.0008,
         "fit_background": 0.0002,
     }
 
@@ -102,7 +102,7 @@ def sector_evidence_b_wins(sample_hypothesis_b: dict) -> SectorEvidence:
         "fit_loss": 180.0,
         "delta_loss": 100.0,
         "rank": 2,
-        "fit_amplitude": -0.0005,
+        "fit_amplitude": 0.0005,
         "fit_background": 0.0001,
     }
 

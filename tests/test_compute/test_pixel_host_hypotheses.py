@@ -51,8 +51,8 @@ def make_synthetic_diff_image(
         List of source definitions. Each dict should contain:
         - 'row': float, row coordinate of source center
         - 'col': float, column coordinate of source center
-        - 'amplitude': float, amplitude of the Gaussian (negative for dimming)
-        If None, creates a single source at center with amplitude -1.0.
+        - 'amplitude': float, amplitude of the Gaussian (positive for dimming)
+        If None, creates a single source at center with amplitude +1.0.
     noise_sigma : float, optional
         Standard deviation of Gaussian noise. Default is 0.1.
     seed : int, optional
@@ -68,7 +68,7 @@ def make_synthetic_diff_image(
     >>> # Single dimming source at center
     >>> img = make_synthetic_diff_image(
     ...     shape=(15, 15),
-    ...     sources=[{'row': 7, 'col': 7, 'amplitude': -1.0}],
+    ...     sources=[{'row': 7, 'col': 7, 'amplitude': 1.0}],
     ...     seed=42
     ... )
     >>> img.shape
@@ -78,7 +78,7 @@ def make_synthetic_diff_image(
 
     # Default: single dimming source at center
     if sources is None:
-        sources = [{"row": shape[0] // 2, "col": shape[1] // 2, "amplitude": -1.0}]
+        sources = [{"row": shape[0] // 2, "col": shape[1] // 2, "amplitude": 1.0}]
 
     # Create coordinate grids
     row_grid, col_grid = np.mgrid[0 : shape[0], 0 : shape[1]]
@@ -143,7 +143,7 @@ def make_synthetic_hypotheses(
 @pytest.fixture
 def single_source_scene() -> tuple[np.ndarray, list[dict[str, Any]]]:
     """Synthetic scene with a single dimming source at center."""
-    sources = [{"row": 7, "col": 7, "amplitude": -1.0, "name": "target"}]
+    sources = [{"row": 7, "col": 7, "amplitude": 1.0, "name": "target"}]
     diff_image = make_synthetic_diff_image(
         shape=(15, 15), sources=sources, noise_sigma=0.05, seed=42
     )
@@ -155,7 +155,7 @@ def single_source_scene() -> tuple[np.ndarray, list[dict[str, Any]]]:
 def two_source_resolved_scene() -> tuple[np.ndarray, list[dict[str, Any]]]:
     """Synthetic scene with two sources, one clearly dimming."""
     sources = [
-        {"row": 7, "col": 7, "amplitude": -1.0, "name": "target"},
+        {"row": 7, "col": 7, "amplitude": 1.0, "name": "target"},
         {"row": 10, "col": 10, "amplitude": 0.0, "name": "neighbor"},
     ]
     # Only target is dimming
@@ -173,8 +173,8 @@ def two_source_resolved_scene() -> tuple[np.ndarray, list[dict[str, Any]]]:
 def two_source_ambiguous_scene() -> tuple[np.ndarray, list[dict[str, Any]]]:
     """Synthetic scene with two sources of equal dimming - ambiguous case."""
     sources = [
-        {"row": 7, "col": 5, "amplitude": -0.5, "name": "source_a"},
-        {"row": 7, "col": 9, "amplitude": -0.5, "name": "source_b"},
+        {"row": 7, "col": 5, "amplitude": 0.5, "name": "source_a"},
+        {"row": 7, "col": 9, "amplitude": 0.5, "name": "source_b"},
     ]
     diff_image = make_synthetic_diff_image(
         shape=(15, 15), sources=sources, noise_sigma=0.05, seed=42
@@ -266,10 +266,58 @@ class TestScoreHypothesesPrfLite:
 
         scores = score_hypotheses_prf_lite(diff_image, hypotheses, seed=42)
 
-        # For a dimming source (negative amplitude in diff image),
-        # the fitted amplitude should be negative
+        # diff_image is defined as (out-of-transit - in-transit), so dimming is positive.
         assert scores[0]["fit_amplitude"] is not None
-        assert scores[0]["fit_amplitude"] < 0
+        assert scores[0]["fit_amplitude"] > 0
+
+    def test_score_hypotheses_handles_nan_pixels(self) -> None:
+        """NaN pixels should be ignored without flipping the best hypothesis."""
+        sources = [
+            {"row": 7, "col": 7, "amplitude": 1.0, "name": "target"},
+            {"row": 10, "col": 10, "amplitude": 0.0, "name": "neighbor"},
+        ]
+        diff_image = make_synthetic_diff_image(
+            shape=(15, 15),
+            sources=[sources[0]],
+            noise_sigma=0.0,
+            seed=123,
+        )
+        # Mask a chunk of pixels far from the signal core.
+        diff_image[0:4, 0:4] = np.nan
+
+        hypotheses = make_synthetic_hypotheses(sources)
+        scores = score_hypotheses_prf_lite(diff_image, hypotheses, seed=42)
+
+        assert scores[0]["source_id"] == "target"
+        assert np.isfinite(scores[0]["fit_loss"])
+
+    def test_margin_scales_with_signal_amplitude(self) -> None:
+        """A stronger transit-like signal should increase the best-vs-runnerup margin."""
+        hypotheses_def = [
+            {"row": 7, "col": 7, "name": "target"},
+            {"row": 11, "col": 11, "name": "neighbor"},
+        ]
+        hypotheses = make_synthetic_hypotheses(hypotheses_def)
+
+        diff_weak = make_synthetic_diff_image(
+            shape=(15, 15),
+            sources=[{"row": 7, "col": 7, "amplitude": 0.2}],
+            noise_sigma=0.0,
+            seed=1,
+        )
+        diff_strong = make_synthetic_diff_image(
+            shape=(15, 15),
+            sources=[{"row": 7, "col": 7, "amplitude": 1.0}],
+            noise_sigma=0.0,
+            seed=1,
+        )
+
+        scores_weak = score_hypotheses_prf_lite(diff_weak, hypotheses, seed=1)
+        scores_strong = score_hypotheses_prf_lite(diff_strong, hypotheses, seed=1)
+
+        margin_weak = scores_weak[1]["delta_loss"]
+        margin_strong = scores_strong[1]["delta_loss"]
+        assert margin_strong > margin_weak
 
     def test_score_hypotheses_returns_typed_dict(
         self, single_source_scene: tuple[np.ndarray, list[dict[str, Any]]]
@@ -295,8 +343,8 @@ class TestScoreHypothesesPrfLite:
     def test_score_hypotheses_deterministic(self) -> None:
         """Same seed should produce identical output."""
         sources = [
-            {"row": 7, "col": 7, "amplitude": -1.0, "name": "target"},
-            {"row": 10, "col": 10, "amplitude": -0.3, "name": "neighbor"},
+            {"row": 7, "col": 7, "amplitude": 1.0, "name": "target"},
+            {"row": 10, "col": 10, "amplitude": 0.3, "name": "neighbor"},
         ]
         diff_image = make_synthetic_diff_image(
             shape=(15, 15), sources=sources, noise_sigma=0.1, seed=123
@@ -610,7 +658,7 @@ class TestHostHypothesisIntegration:
         """Full pipeline on resolved case should identify correct host."""
         # Create multi-sector data with consistent host
         sources = [
-            {"row": 7, "col": 7, "amplitude": -1.0, "name": "target"},
+            {"row": 7, "col": 7, "amplitude": 1.0, "name": "target"},
             {"row": 11, "col": 11, "amplitude": 0.0, "name": "neighbor"},
         ]
 
@@ -665,7 +713,7 @@ class TestHostHypothesisIntegration:
         # Sector 1: source_a is dimming (it's at position 5,7)
         diff_s1 = make_synthetic_diff_image(
             shape=(15, 15),
-            sources=[{"row": 5, "col": 7, "amplitude": -1.0}],
+            sources=[{"row": 5, "col": 7, "amplitude": 1.0}],
             noise_sigma=0.05,
             seed=111,
         )
@@ -682,7 +730,7 @@ class TestHostHypothesisIntegration:
         # Sector 2: source_b is dimming (it's at position 10,7)
         diff_s2 = make_synthetic_diff_image(
             shape=(15, 15),
-            sources=[{"row": 10, "col": 7, "amplitude": -1.0}],
+            sources=[{"row": 10, "col": 7, "amplitude": 1.0}],
             noise_sigma=0.05,
             seed=222,
         )

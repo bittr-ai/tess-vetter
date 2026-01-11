@@ -40,7 +40,7 @@ This is the ordered queue for the function-by-function audit.
 
 ## 3) Deep pixel + PRF + advanced inference (later)
 
-- `src/bittr_tess_vetter/api/pixel_prf.py` (and underlying `pixel/*`)
+- ✅ `src/bittr_tess_vetter/api/pixel_prf.py` → `working_docs/physics_audit/modules/completed/api_pixel_prf.md`
 - `src/bittr_tess_vetter/transit/transit_fit.py` (batman fitting)
 - ✅ `src/bittr_tess_vetter/validation/exovetter_checks.py` → `working_docs/physics_audit/modules/completed/validation_exovetter_checks.md`
 - ✅ `src/bittr_tess_vetter/validation/lc_checks.py` → `working_docs/physics_audit/modules/completed/validation_lc_checks.md` (V01–V05 audited; extend later for V06–V10 as needed)

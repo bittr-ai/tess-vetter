@@ -354,10 +354,10 @@ def aggregate_multi_sector(
 
     Notes
     -----
-    The consensus is computed by summing delta_loss values across sectors
-    for each hypothesis. The hypothesis with the lowest total delta_loss
-    is the consensus best. This gives more weight to sectors with higher
-    signal-to-noise.
+    The consensus is computed as a simple vote over per-sector `best_source_id`,
+    with ties broken by the total `margin` summed over sectors where that source
+    won. This avoids deep dependencies on per-sector full rankings while still
+    rewarding sectors with higher evidence margins.
 
     A sector "flips" if its best_source_id differs from the consensus.
     The flip_rate is computed only over sectors with confident preferences
