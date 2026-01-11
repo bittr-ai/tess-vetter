@@ -331,7 +331,12 @@ from bittr_tess_vetter.api.alias_diagnostics import (  # noqa: F401
 )
 from bittr_tess_vetter.api.ghost_features import (  # noqa: F401
     GhostFeatures,
+    compute_aperture_contrast,
+    compute_difference_image,
+    compute_edge_gradient,
     compute_ghost_features,
+    compute_prf_likeness,
+    compute_spatial_uniformity,
 )
 from bittr_tess_vetter.api.negative_controls import (  # noqa: F401
     ControlType,
@@ -641,7 +646,12 @@ __all__ = [
     "detect_phase_shift_events",
     # Ghost features
     "GhostFeatures",
+    "compute_aperture_contrast",
+    "compute_difference_image",
+    "compute_edge_gradient",
     "compute_ghost_features",
+    "compute_prf_likeness",
+    "compute_spatial_uniformity",
     # Negative controls
     "ControlType",
     "generate_control",
