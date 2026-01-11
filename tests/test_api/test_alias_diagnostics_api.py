@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.api.alias_diagnostics import classify_alias, compute_harmonic_scores
+from bittr_tess_vetter.api.alias_diagnostics import (
+    classify_alias,
+    compute_harmonic_scores,
+    compute_secondary_significance,
+    detect_phase_shift_events,
+)
 
 
 def _box_events(time: np.ndarray, *, period: float, t0: float, duration_days: float) -> np.ndarray:
@@ -78,3 +83,53 @@ def test_alias_none_for_clean_period() -> None:
     assert alias_class == "NONE"
     assert best_harmonic == "P"
     assert ratio < 1.1
+
+
+def test_secondary_significance_detects_secondary_dip() -> None:
+    rng = np.random.default_rng(2)
+    time = np.linspace(0.0, 10.0, 5000, dtype=np.float64)
+    period = 2.0
+    t0 = 0.0
+    duration_hours = 2.0
+    duration_days = duration_hours / 24.0
+
+    phase = ((time - t0) % period) / period
+    in_secondary = (phase > 0.5 - (duration_days / period) / 2.0) & (
+        phase < 0.5 + (duration_days / period) / 2.0
+    )
+
+    flux = np.ones_like(time)
+    flux[in_secondary] -= 0.01
+    flux += rng.normal(0.0, 2e-4, size=flux.shape)
+    flux_err = np.full_like(time, 1e-3)
+
+    sig = compute_secondary_significance(time, flux, flux_err, period, t0, duration_hours)
+    assert sig > 3.0
+
+
+def test_detect_phase_shift_events_finds_non_primary_bin() -> None:
+    rng = np.random.default_rng(3)
+    time = np.linspace(0.0, 10.0, 5000, dtype=np.float64)
+    period = 2.0
+    t0 = 0.0
+    flux_err = np.full_like(time, 1e-3)
+
+    phase = ((time - t0) % period) / period
+    # Create a dip at phase ~0.25 (not primary, not necessarily secondary)
+    in_bin = (phase > 0.23) & (phase < 0.27)
+
+    flux = np.ones_like(time)
+    flux[in_bin] -= 0.01
+    flux += rng.normal(0.0, 2e-4, size=flux.shape)
+
+    events = detect_phase_shift_events(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        period=period,
+        t0=t0,
+        n_phase_bins=20,
+        significance_threshold=3.0,
+    )
+
+    assert any(0.15 < e.phase < 0.35 for e in events)

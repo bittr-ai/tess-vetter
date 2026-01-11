@@ -36,6 +36,16 @@ class HarmonicScore:
     duration_hours: float | None
 
 
+@dataclass
+class PhaseShiftEvent:
+    """A significant event at a phase other than the primary transit."""
+
+    phase: float
+    significance: float
+    depth_ppm: float
+    n_points: int
+
+
 def _compute_box_depth(
     time: NDArray[np.floating[Any]],
     flux: NDArray[np.floating[Any]],
@@ -141,6 +151,99 @@ def compute_harmonic_scores(
     return scores
 
 
+def detect_phase_shift_events(
+    time: NDArray[np.floating[Any]],
+    flux: NDArray[np.floating[Any]],
+    flux_err: NDArray[np.floating[Any]],
+    period: float,
+    t0: float,
+    *,
+    n_phase_bins: int = 10,
+    significance_threshold: float = 3.0,
+) -> list[PhaseShiftEvent]:
+    """Find significant events at phases other than the primary transit."""
+    _ = flux_err  # noise is estimated from a global baseline region for simplicity
+
+    phase = ((time - t0) % period) / period
+
+    events: list[PhaseShiftEvent] = []
+
+    baseline_mask = ((phase > 0.1) & (phase < 0.4)) | ((phase > 0.6) & (phase < 0.9))
+    if int(np.sum(baseline_mask)) < 20:
+        return events
+
+    baseline_flux = float(np.median(flux[baseline_mask]))
+    baseline_std = float(np.std(flux[baseline_mask]))
+    if baseline_std <= 0:
+        return events
+
+    bin_edges = np.linspace(0, 1, n_phase_bins + 1)
+    for i in range(n_phase_bins):
+        bin_center = float((bin_edges[i] + bin_edges[i + 1]) / 2)
+
+        # Skip the primary transit bin (phase ~ 0)
+        if bin_center < 0.05 or bin_center > 0.95:
+            continue
+
+        in_bin = (phase >= bin_edges[i]) & (phase < bin_edges[i + 1])
+        n_points = int(np.sum(in_bin))
+        if n_points < 3:
+            continue
+
+        bin_flux = float(np.mean(flux[in_bin]))
+        bin_err = baseline_std / float(np.sqrt(n_points))
+
+        depth = baseline_flux - bin_flux
+        significance = depth / bin_err if bin_err > 0 else 0.0
+
+        if significance >= significance_threshold:
+            events.append(
+                PhaseShiftEvent(
+                    phase=bin_center,
+                    significance=float(significance),
+                    depth_ppm=float(depth * 1e6),
+                    n_points=n_points,
+                )
+            )
+
+    return events
+
+
+def compute_secondary_significance(
+    time: NDArray[np.floating[Any]],
+    flux: NDArray[np.floating[Any]],
+    flux_err: NDArray[np.floating[Any]],
+    period: float,
+    t0: float,
+    duration_hours: float,
+) -> float:
+    """Compute significance of secondary eclipse at phase 0.5 (sigma)."""
+    _ = flux_err  # use OOT scatter for a simple, robust noise estimate
+
+    duration_days = duration_hours / 24.0
+    phase = ((time - t0) % period) / period
+
+    half_dur_phase = (duration_days / period) / 2.0
+    in_secondary = (phase > 0.5 - half_dur_phase) & (phase < 0.5 + half_dur_phase)
+    out_transit = ((phase > 0.15) & (phase < 0.35)) | ((phase > 0.65) & (phase < 0.85))
+
+    n_sec = int(np.sum(in_secondary))
+    n_out = int(np.sum(out_transit))
+    if n_sec < 3 or n_out < 10:
+        return 0.0
+
+    mean_secondary = float(np.mean(flux[in_secondary]))
+    mean_out = float(np.mean(flux[out_transit]))
+    std_out = float(np.std(flux[out_transit]))
+    if std_out <= 0:
+        return 0.0
+
+    depth = mean_out - mean_secondary
+    err = std_out / float(np.sqrt(n_sec))
+    significance = depth / err if err > 0 else 0.0
+    return float(max(0.0, significance))
+
+
 def classify_alias(
     harmonic_scores: list[HarmonicScore],
     base_score: float,
@@ -178,8 +281,10 @@ def classify_alias(
 __all__ = [
     "AliasClass",
     "HarmonicScore",
+    "PhaseShiftEvent",
     "HARMONIC_LABELS",
     "classify_alias",
     "compute_harmonic_scores",
+    "compute_secondary_significance",
+    "detect_phase_shift_events",
 ]
-
