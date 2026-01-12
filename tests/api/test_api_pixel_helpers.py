@@ -72,3 +72,42 @@ def test_get_out_of_transit_mask_windowed_matches_pixel_impl() -> None:
     assert m_api.dtype == bool
     assert np.array_equal(m_api, m_px)
 
+
+def test_compute_difference_image_centroid_diagnostics_contract() -> None:
+    from bittr_tess_vetter.api.wcs_localization import compute_difference_image_centroid_diagnostics
+    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+
+    # Minimal synthetic TPF: constant flux with a small injected dip in one pixel "in-transit"
+    n = 200
+    time = np.linspace(0.0, 10.0, n, dtype=np.float64)
+    flux = np.ones((n, 5, 5), dtype=np.float64)
+    flux[50:60, 2, 2] -= 0.01
+
+    tpf = TPFFitsData(
+        ref=TPFFitsRef(tic_id=1, sector=1, author="spoc"),
+        time=time,
+        flux=flux,
+        flux_err=None,
+        wcs=None,  # WCS not required for diff-image centroid
+        aperture_mask=None,
+        quality=np.zeros(n, dtype=np.int32),
+        camera=None,
+        ccd=None,
+        meta={},
+    )
+
+    centroid_rc, diff_image, diag = compute_difference_image_centroid_diagnostics(
+        tpf_fits=tpf,
+        period=2.0,
+        t0=0.5,
+        duration_hours=2.0,
+        oot_window_mult=None,
+        method="centroid",
+    )
+
+    assert diff_image.shape == (5, 5)
+    assert isinstance(centroid_rc[0], float)
+    assert isinstance(centroid_rc[1], float)
+    assert diag["n_cadences_total"] == n
+    assert diag["n_cadences_used"] == n
+    assert diag["baseline_mode"] == "global"
