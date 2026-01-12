@@ -119,7 +119,9 @@ def modshift(
     Key metrics:
     - primary_signal: Main transit/eclipse signal strength
     - secondary_signal: Secondary eclipse signal at any phase
-    - secondary_primary_ratio: sec/pri ratio (>0.5 indicates EB)
+    - secondary_primary_ratio: sec/pri ratio of ModShift *signal metrics* (not a depth ratio);
+      can become unstable when primary_signal is very small, so corroborate with a depth-style
+      secondary eclipse measurement (phase~0.5) and pixel/localization evidence.
     - fred: Red noise level affecting reliability
 
     Args:
