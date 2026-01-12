@@ -94,6 +94,7 @@ import ast
 import importlib
 import importlib.util as _importlib_util
 import sys
+import types as _types
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -929,3 +930,23 @@ def __dir__() -> list[str]:
     except Exception:
         exports = {}
     return sorted(set(globals().keys()) | set(__all__) | set(exports.keys()) | set(_ALIASES.keys()))
+
+
+class _APIModule(_types.ModuleType):
+    """Module wrapper that makes top-level aliases stable.
+
+    Python sets package attributes for imported submodules (e.g. importing
+    `bittr_tess_vetter.api.vet` sets `bittr_tess_vetter.api.vet` to a module),
+    which can collide with our preferred callable aliases (`vet`, `periodogram`, …).
+
+    This wrapper forces alias names to resolve to their target callables even if a
+    submodule of the same name has been imported.
+    """
+
+    def __getattribute__(self, name: str) -> Any:  # noqa: D401
+        if name in _ALIASES:
+            return getattr(self, _ALIASES[name])
+        return super().__getattribute__(name)
+
+
+sys.modules[__name__].__class__ = _APIModule
