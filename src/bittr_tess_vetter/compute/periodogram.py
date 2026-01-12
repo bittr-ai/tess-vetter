@@ -368,6 +368,7 @@ def tls_search_per_sector(
 
     # Run TLS on each sector
     all_results: list[dict] = []
+    n_periods_grid_total = 0
 
     for i, (sector_time, sector_flux, sector_err) in enumerate(sectors):
         if len(sector_time) < min_sector_points:
@@ -405,6 +406,10 @@ def tls_search_per_sector(
         result["sector_index"] = i
         result["sector_baseline"] = sector_baseline
         result["sector_n_points"] = len(sector_time)
+        try:
+            n_periods_grid_total += int(result.get("n_periods_grid") or 0)
+        except Exception:
+            n_periods_grid_total += 0
 
         # Only keep results with meaningful detections
         if result.get("sde", 0) > 5.0:
@@ -467,6 +472,7 @@ def tls_search_per_sector(
         "transit_times": best.get("transit_times", []),
         "in_transit_mask": in_transit_combined,
         "_tls_results": best.get("_tls_results"),
+        "n_periods_grid_total": int(n_periods_grid_total),
         "per_sector_results": merged,
         "n_sectors_searched": len(sectors),
         "best_sector_index": best.get("sector_index", 0),
@@ -616,6 +622,14 @@ def tls_search(
     if hasattr(results, "in_transit") and results.in_transit is not None:
         in_transit_mask = np.array(results.in_transit, dtype=bool)
 
+    n_periods_grid = 0
+    try:
+        periods_grid = getattr(results, "periods", None)
+        if periods_grid is not None:
+            n_periods_grid = int(len(periods_grid))
+    except Exception:
+        n_periods_grid = 0
+
     transit_times: list[float] = []
     if hasattr(results, "transit_times") and results.transit_times is not None:
         try:
@@ -654,6 +668,7 @@ def tls_search(
         "transit_count": safe_int(getattr(results, "transit_count", 0), 0),
         "transit_times": transit_times,
         "in_transit_mask": in_transit_mask,
+        "n_periods_grid": int(n_periods_grid),
         "_tls_results": results,  # Keep full results for masking
     }
 
@@ -1048,6 +1063,18 @@ def auto_periodogram(
             single_result.pop("_tls_results", None)
             results = [single_result]
 
+        n_periods_searched_tls = 0
+        try:
+            for row in results:
+                if not isinstance(row, dict):
+                    continue
+                if row.get("n_periods_grid_total") is not None:
+                    n_periods_searched_tls += int(row.get("n_periods_grid_total") or 0)
+                else:
+                    n_periods_searched_tls += int(row.get("n_periods_grid") or 0)
+        except Exception:
+            n_periods_searched_tls = 0
+
         # Build PeriodogramPeak objects from TLS results
         peaks: list[PeriodogramPeak] = []
         for result in results:
@@ -1095,7 +1122,9 @@ def auto_periodogram(
             best_duration_hours=best_duration_hours,
             snr=best_snr,
             fap=best_fap,
-            n_periods_searched=0,  # TLS auto-generates grid
+            # TLS uses an internal/adaptive grid; we estimate the effective period count from
+            # the returned TLS results when available (0 means "unknown").
+            n_periods_searched=int(n_periods_searched_tls),
             period_range=(float(min_period), float(max_period)),
         )
 

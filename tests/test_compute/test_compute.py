@@ -685,6 +685,7 @@ class TestAutoPeriodogram:
 
         # Method should be TLS
         assert result.method == "tls"
+        assert result.n_periods_searched >= 1
 
     def test_auto_method_selection(self, time_array: np.ndarray, flat_flux: np.ndarray):
         """Verify auto method selection uses TLS for transit search."""
@@ -1036,8 +1037,20 @@ class TestPerSectorSearch:
         from bittr_tess_vetter.compute.periodogram import cluster_cross_sector_candidates
 
         candidates = [
-            {"period_days": 3.0, "t0_btjd": 1500.0, "score_z": 12.5, "sector": 1, "member_key": "s1:a"},
-            {"period_days": 3.001, "t0_btjd": 1530.0, "score_z": 11.2, "sector": 4, "member_key": "s4:b"},
+            {
+                "period_days": 3.0,
+                "t0_btjd": 1500.0,
+                "score_z": 12.5,
+                "sector": 1,
+                "member_key": "s1:a",
+            },
+            {
+                "period_days": 3.001,
+                "t0_btjd": 1530.0,
+                "score_z": 11.2,
+                "sector": 4,
+                "member_key": "s4:b",
+            },
         ]
 
         families = cluster_cross_sector_candidates(candidates, min_sectors=2)

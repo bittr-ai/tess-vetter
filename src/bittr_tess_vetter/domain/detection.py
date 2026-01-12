@@ -123,7 +123,7 @@ class PeriodogramResult(FrozenModel):
     best_duration_hours: DurationHours | None = None
     snr: SNR | None = None
     fap: FAP | None = None
-    n_periods_searched: int = Field(ge=0)  # 0 for TLS (auto-generates grid)
+    n_periods_searched: int = Field(ge=0)  # TLS may report 0 when grid count is unavailable
     period_range: tuple[float, float]
 
     @model_validator(mode="after")
