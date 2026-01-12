@@ -373,6 +373,9 @@ __all__ = [
     "TransitParams",
     "generate_pixel_vet_report",
     "PixelVetReport",
+    # Pixel localize facade (host-facing)
+    "localize_transit_host_single_sector",
+    "localize_transit_host_single_sector_with_baseline_check",
     # Optional MLX (guarded)
     "MLX_AVAILABLE",
 ]
@@ -787,6 +790,10 @@ if TYPE_CHECKING:
         wcs_sanity_check,
         world_to_pixel,
         world_to_pixel_batch,
+    )
+    from bittr_tess_vetter.api.pixel_localize import (
+        localize_transit_host_single_sector,
+        localize_transit_host_single_sector_with_baseline_check,
     )
 
     # Prefilters (PFxx)
