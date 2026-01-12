@@ -376,6 +376,7 @@ __all__ = [
     # Pixel localize facade (host-facing)
     "localize_transit_host_single_sector",
     "localize_transit_host_single_sector_with_baseline_check",
+    "localize_transit_host_multi_sector",
     # Optional MLX (guarded)
     "MLX_AVAILABLE",
 ]
@@ -794,6 +795,7 @@ if TYPE_CHECKING:
     from bittr_tess_vetter.api.pixel_localize import (
         localize_transit_host_single_sector,
         localize_transit_host_single_sector_with_baseline_check,
+        localize_transit_host_multi_sector,
     )
 
     # Prefilters (PFxx)

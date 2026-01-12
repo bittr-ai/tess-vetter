@@ -15,6 +15,7 @@ from typing import Any, Literal, TypedDict
 import numpy as np
 
 from bittr_tess_vetter.api.pixel_prf import (
+    aggregate_multi_sector,
     MARGIN_RESOLVE_THRESHOLD,
     PRFParams,
     prf_params_from_dict,
@@ -79,6 +80,11 @@ class PixelLocalizeSectorResult(TypedDict, total=False):
     baseline_global: dict[str, Any] | None
 
 
+class PixelLocalizeMultiSectorResult(TypedDict):
+    per_sector_results: list[PixelLocalizeSectorResult]
+    consensus: dict[str, Any]
+
+
 def _is_target_best(
     *,
     best_source_id: str | None,
@@ -93,6 +99,47 @@ def _is_target_best(
     if best_source_name and "target" in best_source_name.lower():
         return True
     return False
+
+
+def _cadence_label(cadence_seconds: float) -> str:
+    if not np.isfinite(cadence_seconds) or cadence_seconds <= 0:
+        return "unknown"
+    if abs(cadence_seconds - 20.0) / 20.0 < 0.2:
+        return "20s"
+    if abs(cadence_seconds - 120.0) / 120.0 < 0.2:
+        return "120s"
+    return "unknown"
+
+
+def _compute_tpf_cadence_summary(
+    tpf_fits: "TPFFitsData",
+    diagnostics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    time = np.asarray(getattr(tpf_fits, "time", []), dtype=np.float64)
+    finite = np.isfinite(time)
+    dt_days = float("nan")
+    if int(np.sum(finite)) >= 3:
+        diffs = np.diff(time[finite])
+        diffs = diffs[np.isfinite(diffs) & (diffs > 0)]
+        if diffs.size:
+            dt_days = float(np.nanmedian(diffs))
+    cadence_days = float(dt_days)
+    cadence_seconds = float(dt_days * 86400.0) if np.isfinite(dt_days) else float("nan")
+
+    n_total = int(time.shape[0])
+    n_used = int(diagnostics.get("n_cadences_used", n_total)) if diagnostics else n_total
+    n_dropped = int(diagnostics.get("n_cadences_dropped", max(0, n_total - n_used))) if diagnostics else max(0, n_total - n_used)
+    dropped_fraction = float(n_dropped) / float(n_total) if n_total > 0 else float("nan")
+
+    return {
+        "n_cadences_total": n_total,
+        "n_cadences_used": n_used,
+        "n_cadences_dropped": n_dropped,
+        "dropped_fraction": dropped_fraction,
+        "cadence_seconds": cadence_seconds,
+        "cadence_days": cadence_days,
+        "cadence_label": _cadence_label(cadence_seconds),
+    }
 
 
 def localize_transit_host_single_sector(
@@ -403,11 +450,58 @@ def localize_transit_host_single_sector_with_baseline_check(
     return local
 
 
+def localize_transit_host_multi_sector(
+    *,
+    tpf_fits_list: list["TPFFitsData"],
+    period_days: float,
+    t0_btjd: float,
+    duration_hours: float,
+    reference_sources: list[ReferenceSource],
+    oot_margin_mult: float = 1.5,
+    oot_window_mult: float | None = 10.0,
+    centroid_method: Literal["centroid", "gaussian_fit"] = "centroid",
+    prf_backend: Literal["prf_lite", "parametric", "instrument"] = "prf_lite",
+    prf_params: dict[str, Any] | None = None,
+    random_seed: int = 42,
+    centroid_shift_threshold_pixels: float = 0.5,
+) -> PixelLocalizeMultiSectorResult:
+    """Localize the transit host across multiple sectors and build a consensus."""
+    per_sector_results: list[PixelLocalizeSectorResult] = []
+
+    for tpf in tpf_fits_list:
+        r = localize_transit_host_single_sector_with_baseline_check(
+            tpf_fits=tpf,
+            period_days=period_days,
+            t0_btjd=t0_btjd,
+            duration_hours=duration_hours,
+            reference_sources=reference_sources,
+            oot_margin_mult=oot_margin_mult,
+            oot_window_mult=oot_window_mult,
+            centroid_method=centroid_method,
+            prf_backend=prf_backend,
+            prf_params=prf_params,
+            random_seed=random_seed,
+            centroid_shift_threshold_pixels=centroid_shift_threshold_pixels,
+        )
+        # Attach lightweight metadata so callers don't need to loop just to label sectors.
+        try:
+            r["sector"] = int(getattr(tpf.ref, "sector", 0))
+            r["tpf_fits_ref"] = str(getattr(tpf.ref, "to_string")())
+        except Exception:
+            pass
+        r["cadence_summary"] = _compute_tpf_cadence_summary(tpf, r.get("diagnostics"))
+        per_sector_results.append(r)
+
+    consensus = aggregate_multi_sector(per_sector_results)
+    return PixelLocalizeMultiSectorResult(per_sector_results=per_sector_results, consensus=dict(consensus))
+
+
 __all__ = [
     "ReferenceSource",
     "BaselineConsistencyResult",
     "PixelLocalizeSectorResult",
+    "PixelLocalizeMultiSectorResult",
     "localize_transit_host_single_sector",
     "localize_transit_host_single_sector_with_baseline_check",
+    "localize_transit_host_multi_sector",
 ]
-
