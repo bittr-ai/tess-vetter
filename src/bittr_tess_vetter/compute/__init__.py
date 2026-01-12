@@ -40,9 +40,11 @@ search_planets: Any
 detect_sector_gaps: Any
 split_by_sectors: Any
 merge_candidates: Any
+cluster_cross_sector_candidates: Any
 try:
     from .periodogram import (
         auto_periodogram,
+        cluster_cross_sector_candidates,
         compute_bls_model,
         detect_sector_gaps,
         ls_periodogram,
@@ -66,6 +68,7 @@ try:
             "detect_sector_gaps",
             "split_by_sectors",
             "merge_candidates",
+            "cluster_cross_sector_candidates",
         ]
     )
 except ImportError:
@@ -79,6 +82,7 @@ except ImportError:
     detect_sector_gaps = None
     split_by_sectors = None
     merge_candidates = None
+    cluster_cross_sector_candidates = None
 
 # =============================================================================
 # Transit Module
@@ -148,8 +152,8 @@ import importlib.util as _importlib_util
 MLX_AVAILABLE = _importlib_util.find_spec("mlx") is not None
 
 from .mlx_detection import (  # noqa: E402
-    MlxTopKScoreResult,
     MlxT0RefinementResult,
+    MlxTopKScoreResult,
     integrated_gradients,
     score_fixed_period,
     score_fixed_period_refine_t0,

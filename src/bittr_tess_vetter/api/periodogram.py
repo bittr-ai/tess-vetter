@@ -10,9 +10,18 @@ from typing import Literal
 
 import numpy as np
 
+from bittr_tess_vetter.api.references import (
+    HIPPKE_HELLER_2019_TLS,
+    LOMB_1976,
+    SCARGLE_1982,
+    cite,
+    cites,
+)
+from bittr_tess_vetter.api.transit_model import compute_transit_model
 from bittr_tess_vetter.compute.periodogram import (  # noqa: F401
     PerformancePreset,
     auto_periodogram,
+    cluster_cross_sector_candidates,
     compute_bls_model,
     detect_sector_gaps,
     ls_periodogram,
@@ -24,14 +33,6 @@ from bittr_tess_vetter.compute.periodogram import (  # noqa: F401
 )
 from bittr_tess_vetter.compute.periodogram import refine_period as _refine_period_compute
 from bittr_tess_vetter.domain.detection import PeriodogramPeak, PeriodogramResult  # noqa: F401
-from bittr_tess_vetter.api.references import (
-    HIPPKE_HELLER_2019_TLS,
-    LOMB_1976,
-    SCARGLE_1982,
-    cite,
-    cites,
-)
-from bittr_tess_vetter.api.transit_model import compute_transit_model
 
 
 @cites(
@@ -128,6 +129,7 @@ __all__ = [
     "run_periodogram",
     "compute_transit_model",
     "auto_periodogram",
+    "cluster_cross_sector_candidates",
     "compute_bls_model",
     "detect_sector_gaps",
     "ls_periodogram",

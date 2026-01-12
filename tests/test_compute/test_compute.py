@@ -13,6 +13,7 @@ Note: TLS migration replaced BLS with Transit Least Squares.
 from __future__ import annotations
 
 import importlib.util
+
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_equal
@@ -29,8 +30,6 @@ from bittr_tess_vetter.compute.periodogram import (
     compute_bls_model,
     ls_periodogram,
     refine_period,
-    search_planets,
-    tls_search,
 )
 from bittr_tess_vetter.compute.transit import (
     detect_transit,
@@ -170,9 +169,7 @@ class TestMedianDetrend:
         """Verify that transit signals are preserved after detrending."""
         # Inject transit
         period, t0, duration_hours, depth = 3.5, 1.5, 2.4, 0.01
-        flux_with_transit = inject_transit(
-            time_array, flat_flux, period, t0, duration_hours, depth
-        )
+        flux_with_transit = inject_transit(time_array, flat_flux, period, t0, duration_hours, depth)
 
         # Add slow trend
         flux_with_trend = flux_with_transit * (1.0 + 0.005 * time_array / 27.0)
@@ -333,9 +330,7 @@ class TestFlatten:
         """Verify that transits are preserved with appropriate window."""
         # Inject transit
         period, t0, duration_hours, depth = 3.5, 1.5, 2.4, 0.01
-        flux_with_transit = inject_transit(
-            time_array, flat_flux, period, t0, duration_hours, depth
-        )
+        flux_with_transit = inject_transit(time_array, flat_flux, period, t0, duration_hours, depth)
 
         # Flatten with window > transit duration (0.1 days = 2.4 hours)
         flat = flatten(time_array, flux_with_transit, window_length=0.5)  # 12 hours
@@ -598,7 +593,9 @@ class TestDetectTransit:
             detect_transit(time_array, flat_flux, flux_err, period=3.5, t0=1.0, duration_hours=0.0)
 
         with pytest.raises(ValueError, match="Duration.*must be less than period"):
-            detect_transit(time_array, flat_flux, flux_err, period=3.5, t0=1.0, duration_hours=120.0)
+            detect_transit(
+                time_array, flat_flux, flux_err, period=3.5, t0=1.0, duration_hours=120.0
+            )
 
 
 # =============================================================================
@@ -809,7 +806,9 @@ class TestIntegration:
             flux_err,
             period=result.best_period,
             t0=result.best_t0,
-            duration_hours=result.best_duration_hours if result.best_duration_hours else duration_hours,
+            duration_hours=result.best_duration_hours
+            if result.best_duration_hours
+            else duration_hours,
         )
 
         # Step 5: Fold transit
@@ -818,9 +817,9 @@ class TestIntegration:
         # Verify results - period or its harmonic should be detected
         # LS may find harmonics, so check period or 2*period
         period_match = (
-            abs(candidate.period - period) < 0.1 * period or
-            abs(candidate.period - period / 2) < 0.1 * period or
-            abs(candidate.period - period * 2) < 0.1 * period
+            abs(candidate.period - period) < 0.1 * period
+            or abs(candidate.period - period / 2) < 0.1 * period
+            or abs(candidate.period - period * 2) < 0.1 * period
         )
         assert period_match, f"Expected period {period}, got {candidate.period}"
         # Depth measurement is sensitive to many factors in the pipeline
@@ -942,6 +941,96 @@ class TestPerSectorSearch:
         # Second should be the 3.14 period
         assert merged[1]["period"] == 3.14
 
+    def test_cluster_cross_sector_candidates_basic(self):
+        """Verify basic clustering groups candidates by period."""
+        from bittr_tess_vetter.compute.periodogram import cluster_cross_sector_candidates
+
+        candidates = [
+            {"period_days": 3.0, "t0_btjd": 1500.0, "score_z": 12.5, "sector": 1},
+            {"period_days": 3.001, "t0_btjd": 1530.0, "score_z": 11.2, "sector": 4},
+            {"period_days": 5.5, "t0_btjd": 1505.0, "score_z": 8.0, "sector": 1},
+        ]
+
+        families = cluster_cross_sector_candidates(candidates, min_sectors=2)
+
+        # Only the 3.0-day family should pass min_sectors=2
+        assert len(families) == 1
+        fam = families[0]
+        assert fam["n_sectors"] == 2
+        assert sorted(fam["sectors"]) == [1, 4]
+        assert fam["period_days_rep"] == 3.0  # Best-scoring member's period
+        assert fam["sum_score_z"] == 12.5 + 11.2
+
+    def test_cluster_cross_sector_candidates_phase_scatter(self):
+        """Verify phase scatter is computed correctly."""
+        from bittr_tess_vetter.compute.periodogram import cluster_cross_sector_candidates
+
+        # Candidates with coherent ephemeris (same phase when folded)
+        period = 3.0
+        t0_base = 1500.0
+        candidates_coherent = [
+            {"period_days": period, "t0_btjd": t0_base, "score_z": 10.0, "sector": 1},
+            {
+                "period_days": period,
+                "t0_btjd": t0_base + 10 * period,
+                "score_z": 9.0,
+                "sector": 4,
+            },  # Same phase
+        ]
+
+        families = cluster_cross_sector_candidates(candidates_coherent, min_sectors=2)
+        assert len(families) == 1
+        # Phase scatter should be ~0 for coherent ephemeris
+        assert families[0]["phase_scatter_cycles_rms"] < 0.01
+
+    def test_cluster_cross_sector_candidates_empty_input(self):
+        """Verify empty input returns empty list."""
+        from bittr_tess_vetter.compute.periodogram import cluster_cross_sector_candidates
+
+        families = cluster_cross_sector_candidates([])
+        assert families == []
+
+    def test_cluster_cross_sector_candidates_min_sectors_filter(self):
+        """Verify min_sectors filter works correctly."""
+        from bittr_tess_vetter.compute.periodogram import cluster_cross_sector_candidates
+
+        candidates = [
+            {"period_days": 3.0, "t0_btjd": 1500.0, "score_z": 12.5, "sector": 1},
+            {"period_days": 3.001, "t0_btjd": 1530.0, "score_z": 11.2, "sector": 4},
+            {"period_days": 3.002, "t0_btjd": 1560.0, "score_z": 10.0, "sector": 27},
+        ]
+
+        # With min_sectors=3, the 3-sector family should pass
+        families_3 = cluster_cross_sector_candidates(candidates, min_sectors=3)
+        assert len(families_3) == 1
+        assert families_3[0]["n_sectors"] == 3
+
+        # With min_sectors=4, nothing should pass
+        families_4 = cluster_cross_sector_candidates(candidates, min_sectors=4)
+        assert len(families_4) == 0
+
+    def test_cluster_cross_sector_candidates_representative(self):
+        """Verify representative is the best-scoring member."""
+        from bittr_tess_vetter.compute.periodogram import cluster_cross_sector_candidates
+
+        candidates = [
+            {"period_days": 3.0, "t0_btjd": 1500.0, "score_z": 8.0, "sector": 1, "extra": "a"},
+            {
+                "period_days": 3.001,
+                "t0_btjd": 1530.0,
+                "score_z": 15.0,
+                "sector": 4,
+                "extra": "b",
+            },  # Best
+            {"period_days": 3.002, "t0_btjd": 1560.0, "score_z": 10.0, "sector": 27, "extra": "c"},
+        ]
+
+        families = cluster_cross_sector_candidates(candidates, min_sectors=2)
+        assert len(families) == 1
+        # Representative should be the best-scoring member
+        assert families[0]["representative"]["score_z"] == 15.0
+        assert families[0]["representative"]["extra"] == "b"
+
     def test_single_sector_uses_standard_tls(self):
         """Verify that single-sector data uses standard TLS search."""
         from bittr_tess_vetter.compute.periodogram import tls_search_per_sector
@@ -956,9 +1045,7 @@ class TestPerSectorSearch:
         period, t0, duration_hours, depth = 3.5, 1.5, 2.4, 0.01
         flux = inject_transit(time, flux, period, t0, duration_hours, depth)
 
-        result = tls_search_per_sector(
-            time, flux, period_min=2.0, period_max=5.0
-        )
+        result = tls_search_per_sector(time, flux, period_min=2.0, period_max=5.0)
 
         # Should detect the transit
         assert result["sde"] > 5.0
@@ -981,9 +1068,7 @@ class TestPerSectorSearch:
         period, t0, duration_hours, depth = 3.5, 1.5, 2.4, 0.01
         flux = inject_transit(time, flux, period, t0, duration_hours, depth)
 
-        result = tls_search_per_sector(
-            time, flux, period_min=2.0, period_max=10.0
-        )
+        result = tls_search_per_sector(time, flux, period_min=2.0, period_max=10.0)
 
         # Should detect the transit in per-sector mode
         assert result.get("n_sectors_searched", 1) == 2

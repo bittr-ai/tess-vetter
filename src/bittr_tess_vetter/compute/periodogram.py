@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 class PerformancePreset(str, Enum):
     fast = "fast"
     thorough = "thorough"
@@ -153,6 +154,143 @@ def merge_candidates(
             used_periods.append(period)
 
     return merged
+
+
+def cluster_cross_sector_candidates(
+    candidates: list[dict],
+    *,
+    period_tol_frac: float = 0.003,
+    min_sectors: int = 2,
+) -> list[dict]:
+    """Cluster transit candidates across sectors by period.
+
+    Groups candidates from multiple TESS sectors that share similar orbital
+    periods, computing cross-sector agreement metrics. This is useful for
+    validating planet candidates by confirming detection consistency.
+
+    Unlike `merge_candidates` (which simply deduplicates), this function:
+    - Tracks all sector memberships per family
+    - Computes phase scatter across sectors (coherence diagnostic)
+    - Sums detection scores for combined significance
+
+    Args:
+        candidates: List of candidate dicts, each with:
+            - period_days (float): Orbital period in days
+            - t0_btjd (float): Mid-transit epoch in BTJD
+            - score_z (float): Detection z-score (e.g., from BLS-like search)
+            - sector (int): TESS sector number
+            - Additional fields are preserved in members
+        period_tol_frac: Relative period tolerance for grouping (default 0.3%)
+        min_sectors: Minimum sectors to form a family (default 2)
+
+    Returns:
+        List of family dicts, sorted by sum_score_z descending, each with:
+            - period_days_rep (float): Representative period from best-scoring member
+            - n_sectors (int): Number of unique sectors in family
+            - sectors (list[int]): Sorted list of sector numbers
+            - sum_score_z (float): Sum of score_z across all members
+            - phase_scatter_cycles_rms (float): RMS of phase offsets in cycles
+              (low values indicate coherent ephemeris across sectors)
+            - representative (dict): Full candidate dict from best-scoring member
+            - members (list[dict]): All members with sector, score_z, t0_btjd
+
+    Example:
+        >>> candidates = [
+        ...     {"period_days": 3.0, "t0_btjd": 1500.0, "score_z": 12.5, "sector": 1},
+        ...     {"period_days": 3.001, "t0_btjd": 1530.0, "score_z": 11.2, "sector": 4},
+        ...     {"period_days": 5.5, "t0_btjd": 1505.0, "score_z": 8.0, "sector": 1},
+        ... ]
+        >>> families = cluster_cross_sector_candidates(candidates, min_sectors=2)
+        >>> len(families)  # Only the 3.0-day family meets min_sectors
+        1
+        >>> families[0]["n_sectors"]
+        2
+
+    Notes:
+        - Candidates are first sorted by score_z descending; families adopt
+          the period from the highest-scoring member
+        - Phase scatter is computed as RMS of phase offsets from the
+          best-scoring member's phase, wrapped to [-0.5, +0.5] cycles
+    """
+    if not candidates:
+        return []
+
+    # Sort by score_z descending so best candidate defines each family
+    items = sorted(
+        candidates,
+        key=lambda x: float(x.get("score_z", float("-inf"))),
+        reverse=True,
+    )
+
+    families: list[dict] = []
+    for item in items:
+        p = float(item["period_days"])
+        assigned = False
+        for fam in families:
+            pref = float(fam["period_days_rep"])
+            if abs(p - pref) / max(pref, 1e-9) <= period_tol_frac:
+                fam["members"].append(item)
+                assigned = True
+                break
+        if not assigned:
+            families.append(
+                {
+                    "period_days_rep": p,
+                    "members": [item],
+                }
+            )
+
+    out_families: list[dict] = []
+    for fam in families:
+        members = fam["members"]
+        # Re-sort members by score in case assignment order differed
+        members.sort(key=lambda x: float(x.get("score_z", float("-inf"))), reverse=True)
+        rep = members[0]
+        p = float(rep["period_days"])
+
+        # Phase scatter across sectors
+        phases = [(float(m["t0_btjd"]) / p) % 1.0 for m in members]
+        ref_phase = phases[0]
+        # Wrap phase differences to [-0.5, +0.5]
+        dphi = [(((ph - ref_phase) + 0.5) % 1.0) - 0.5 for ph in phases]
+        phase_rms = float(np.sqrt(np.mean(np.square(dphi)))) if dphi else float("nan")
+
+        sum_score = float(np.nansum([float(m.get("score_z", float("nan"))) for m in members]))
+        sectors_present = sorted({int(m["sector"]) for m in members})
+
+        out_families.append(
+            {
+                "period_days_rep": p,
+                "n_sectors": int(len(sectors_present)),
+                "sectors": sectors_present,
+                "sum_score_z": sum_score,
+                "phase_scatter_cycles_rms": phase_rms,
+                "representative": rep,
+                "members": [
+                    {
+                        "sector": int(m["sector"]),
+                        "score_z": float(m.get("score_z", float("nan"))),
+                        "t0_btjd": float(m["t0_btjd"]),
+                    }
+                    for m in members
+                ],
+            }
+        )
+
+    # Filter by min_sectors
+    out_families = [f for f in out_families if int(f["n_sectors"]) >= min_sectors]
+
+    # Sort by sum_score_z descending, then by phase scatter ascending, then by n_sectors
+    out_families.sort(
+        key=lambda f: (
+            float(f.get("sum_score_z", float("-inf"))),
+            -float(f.get("phase_scatter_cycles_rms", float("inf"))),
+            float(f.get("n_sectors", 0)),
+        ),
+        reverse=True,
+    )
+
+    return out_families
 
 
 def tls_search_per_sector(
@@ -922,7 +1060,9 @@ def auto_periodogram(
                     power=result["sde"],  # Use SDE as "power" metric
                     t0=result["t0"],
                     duration_hours=duration if duration > 0 else None,
-                    depth_ppm=float(result.get("depth_ppm", 0.0)) if result.get("depth_ppm") else None,
+                    depth_ppm=float(result.get("depth_ppm", 0.0))
+                    if result.get("depth_ppm")
+                    else None,
                     snr=result["snr"],
                     fap=result["fap"],
                 )
