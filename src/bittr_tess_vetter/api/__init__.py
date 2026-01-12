@@ -153,6 +153,9 @@ __all__ = [
     # Prefilters (PFxx)
     "compute_depth_over_depth_err_snr",
     "compute_phase_coverage",
+    # Cadence / aperture helpers (host-facing)
+    "default_cadence_mask",
+    "create_circular_aperture_mask",
     # Utilities
     "DEFAULT_TOP_K_CAP",
     "DEFAULT_VARIANT_SUMMARIES_CAP",
@@ -249,6 +252,7 @@ __all__ = [
     "FLIP_RATE_UNSTABLE_THRESHOLD",
     "get_in_transit_mask",
     "get_out_of_transit_mask",
+    "get_out_of_transit_mask_windowed",
     "get_odd_even_transit_indices",
     "measure_transit_depth",
     "count_transits",
@@ -516,6 +520,11 @@ if TYPE_CHECKING:
 
     # Transit primitives
     from bittr_tess_vetter.api.transit_primitives import odd_even_result
+
+    # Cadence / aperture helpers (host-facing)
+    from bittr_tess_vetter.api.aperture import create_circular_aperture_mask
+    from bittr_tess_vetter.api.cadence_mask import default_cadence_mask
+    from bittr_tess_vetter.api.transit_masks import get_out_of_transit_mask_windowed
 
     # Periodogram facade (host-facing)
     from bittr_tess_vetter.api.periodogram import (  # noqa: F401
