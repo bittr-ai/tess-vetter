@@ -224,6 +224,62 @@ def sigma_clip(
     return np.asarray(valid_mask, dtype=np.bool_)
 
 
+def bin_median_trend(
+    time: NDArray[np.float64],
+    flux: NDArray[np.float64],
+    *,
+    bin_hours: float,
+    min_bin_points: int = 10,
+) -> NDArray[np.float64]:
+    """Compute a piecewise median trend by time binning.
+
+    This is a lightweight detrending primitive: partition the time series into
+    bins of fixed width (in hours), compute the median flux per bin, and then
+    linearly interpolate the bin medians back onto the original time grid.
+
+    Args:
+        time: Time array in days (BTJD, float64)
+        flux: Flux array (float64)
+        bin_hours: Bin width in hours (must be > 0)
+        min_bin_points: Minimum points required per bin to accept its median.
+            Bins with fewer points are ignored.
+
+    Returns:
+        Trend array (float64) with same shape as input.
+
+    Raises:
+        ValueError: If bin_hours <= 0, or if there are insufficient populated bins.
+    """
+    if float(bin_hours) <= 0:
+        raise ValueError("bin_hours must be > 0")
+    if time.shape != flux.shape:
+        raise ValueError(f"time and flux must have same shape, got {time.shape} and {flux.shape}")
+
+    bin_width_days = float(bin_hours) / 24.0
+    t0 = float(np.nanmin(time))
+    bin_index = np.floor((time - t0) / bin_width_days).astype(int)
+    n_bins = int(np.nanmax(bin_index)) + 1
+    if n_bins < 3:
+        raise ValueError("Not enough bins for detrending")
+
+    medians = np.full(n_bins, np.nan, dtype=np.float64)
+    centers = np.full(n_bins, np.nan, dtype=np.float64)
+    for b in range(n_bins):
+        m = bin_index == b
+        if int(np.sum(m)) < int(min_bin_points):
+            continue
+        medians[b] = float(np.nanmedian(flux[m]))
+        centers[b] = float(np.nanmedian(time[m]))
+
+    ok = np.isfinite(medians) & np.isfinite(centers)
+    if int(np.sum(ok)) < 3:
+        raise ValueError("Too few populated bins for detrending")
+
+    trend = np.interp(time, centers[ok], medians[ok])
+    trend = np.where(np.isfinite(trend), trend, float(np.nanmedian(flux)))
+    return trend.astype(np.float64)
+
+
 def flatten(
     time: NDArray[np.float64],
     flux: NDArray[np.float64],

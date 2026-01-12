@@ -1031,6 +1031,20 @@ class TestPerSectorSearch:
         assert families[0]["representative"]["score_z"] == 15.0
         assert families[0]["representative"]["extra"] == "b"
 
+    def test_cluster_cross_sector_candidates_preserves_member_key(self):
+        """Verify optional member_key is propagated for stable member identification."""
+        from bittr_tess_vetter.compute.periodogram import cluster_cross_sector_candidates
+
+        candidates = [
+            {"period_days": 3.0, "t0_btjd": 1500.0, "score_z": 12.5, "sector": 1, "member_key": "s1:a"},
+            {"period_days": 3.001, "t0_btjd": 1530.0, "score_z": 11.2, "sector": 4, "member_key": "s4:b"},
+        ]
+
+        families = cluster_cross_sector_candidates(candidates, min_sectors=2)
+        assert len(families) == 1
+        member_keys = {m.get("member_key") for m in families[0]["members"]}
+        assert member_keys == {"s1:a", "s4:b"}
+
     def test_single_sector_uses_standard_tls(self):
         """Verify that single-sector data uses standard TLS search."""
         from bittr_tess_vetter.compute.periodogram import tls_search_per_sector

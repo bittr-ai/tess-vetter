@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from bittr_tess_vetter.compute.detrend import (  # noqa: F401
     WOTAN_AVAILABLE,
+    bin_median_trend,
     flatten,
     flatten_with_wotan,
     median_detrend,
@@ -16,4 +17,3 @@ from bittr_tess_vetter.compute.detrend import (  # noqa: F401
     sigma_clip,
     wotan_flatten,
 )
-

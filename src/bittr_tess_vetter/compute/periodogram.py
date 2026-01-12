@@ -271,6 +271,7 @@ def cluster_cross_sector_candidates(
                         "sector": int(m["sector"]),
                         "score_z": float(m.get("score_z", float("nan"))),
                         "t0_btjd": float(m["t0_btjd"]),
+                        **({"member_key": m["member_key"]} if "member_key" in m else {}),
                     }
                     for m in members
                 ],

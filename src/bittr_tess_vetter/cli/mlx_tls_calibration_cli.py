@@ -20,6 +20,7 @@ from transitleastsquares import transitleastsquares
 from transitleastsquares.grid import period_grid
 
 from bittr_tess_vetter.api.io import PersistentCache
+from bittr_tess_vetter.compute.detrend import bin_median_trend
 
 
 def _transit_mask(time_np: np.ndarray, period: float, t0: float, duration_hours: float) -> np.ndarray:
@@ -91,40 +92,6 @@ def _smooth_box_template_np(
     return np.clip(template, 0.0, 1.0).astype(np.float64)
 
 
-def _bin_median_trend(
-    time_np: np.ndarray,
-    flux_np: np.ndarray,
-    *,
-    bin_hours: float,
-    min_bin_points: int = 10,
-) -> np.ndarray:
-    if bin_hours <= 0:
-        raise ValueError("bin_hours must be > 0")
-    bin_width_days = bin_hours / 24.0
-    t0 = float(time_np.min())
-    bin_index = np.floor((time_np - t0) / bin_width_days).astype(int)
-    n_bins = int(bin_index.max()) + 1
-    if n_bins < 3:
-        raise ValueError("Not enough bins for detrending")
-
-    medians = np.full(n_bins, np.nan, dtype=np.float64)
-    centers = np.full(n_bins, np.nan, dtype=np.float64)
-    for b in range(n_bins):
-        m = bin_index == b
-        if int(m.sum()) < min_bin_points:
-            continue
-        medians[b] = float(np.nanmedian(flux_np[m]))
-        centers[b] = float(np.nanmedian(time_np[m]))
-
-    ok = np.isfinite(medians) & np.isfinite(centers)
-    if int(ok.sum()) < 3:
-        raise ValueError("Too few populated bins for detrending")
-
-    trend = np.interp(time_np, centers[ok], medians[ok])
-    trend = np.where(np.isfinite(trend), trend, np.nanmedian(flux_np))
-    return trend.astype(np.float64)
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run MLX vs TLS calibration (subprocess-safe).")
     parser.add_argument("data_ref")
@@ -182,7 +149,9 @@ def main(argv: list[str] | None = None) -> int:
     baseline_detrend_applied = False
     if baseline_detrend:
         try:
-            trend = _bin_median_trend(time_np, flux_np, bin_hours=detrend_bin_hours, min_bin_points=1)
+            trend = bin_median_trend(
+                time_np, flux_np, bin_hours=detrend_bin_hours, min_bin_points=1
+            )
             trend = np.where(trend <= 0, np.nanmedian(trend[trend > 0]), trend)
             flux_np = flux_np / trend
             ferr_np = ferr_np / trend
