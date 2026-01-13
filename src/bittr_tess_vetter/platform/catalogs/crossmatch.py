@@ -23,16 +23,16 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import ClassVar, Protocol, runtime_checkable
 
-from bittr_reason_core.models.base import FrozenModel
+from pydantic import BaseModel, ConfigDict
 
 # =============================================================================
 # Data Models
 # =============================================================================
 
 
-class KnownObjectMatch(FrozenModel):
+class KnownObjectMatch(BaseModel):
     """A match to a known object in a catalog.
 
     Attributes:
@@ -47,13 +47,15 @@ class KnownObjectMatch(FrozenModel):
         catalog_source: Name/identifier of the source catalog.
     """
 
+    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True, extra="forbid")
+
     object_type: str  # "TOI", "CONFIRMED", "FP", "EB"
     object_id: str
     separation_arcsec: float
     catalog_source: str
 
 
-class ContaminationRisk(FrozenModel):
+class ContaminationRisk(BaseModel):
     """Assessment of contamination risk from nearby sources.
 
     Contamination occurs when light from nearby stars falls within the
@@ -71,13 +73,15 @@ class ContaminationRisk(FrozenModel):
             None if no neighbors or cannot be computed.
     """
 
+    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True, extra="forbid")
+
     has_neighbors: bool
     nearest_neighbor_arcsec: float | None = None
     brightness_delta_mag: float | None = None
     dilution_factor: float | None = None
 
 
-class CrossmatchReport(FrozenModel):
+class CrossmatchReport(BaseModel):
     """Complete crossmatch analysis report.
 
     Contains all known object matches, contamination risk assessment,
@@ -94,6 +98,8 @@ class CrossmatchReport(FrozenModel):
         snapshot_ids_used: List of catalog snapshot IDs that were searched.
         search_radius_arcsec: The search radius that was used in arcseconds.
     """
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True, extra="forbid")
 
     known_object_matches: list[KnownObjectMatch]
     contamination_risk: ContaminationRisk

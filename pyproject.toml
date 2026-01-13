@@ -19,7 +19,6 @@ dependencies = [
   "astropy>=5.0.0",
   "setuptools>=70.0.0",
   "requests>=2.31.0",
-  "bittr-reason-core>=0.1.0",
   "transitleastsquares>=1.32",
   # transitleastsquares depends on numba; pin to a Python 3.12-compatible release.
   "numba>=0.63.0",
@@ -91,5 +90,3 @@ dev = [
     "ruff>=0.14.10",
 ]
 
-[tool.uv.sources]
-bittr-reason-core = { path = "../bittr-reason-core", editable = true }

@@ -28,7 +28,7 @@ from bittr_tess_vetter.platform.catalogs.gaia_client import (
     _parse_astrophysical_params,
     _parse_gaia_source,
 )
-from bittr_reason_core.provenance import SourceRecord
+from bittr_tess_vetter.platform.catalogs.models import SourceRecord
 
 # Fixture directory
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "gaia"

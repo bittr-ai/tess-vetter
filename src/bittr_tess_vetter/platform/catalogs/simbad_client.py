@@ -29,9 +29,9 @@ import time
 from datetime import UTC, datetime
 from typing import Any, ClassVar
 
-from bittr_reason_core.models import FrozenModel
-from bittr_reason_core.provenance import SourceRecord
-from pydantic import ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from bittr_tess_vetter.platform.catalogs.models import SourceRecord
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ class SimbadTAPError(SimbadQueryError):
     pass
 
 
-class SimbadIdentifiers(FrozenModel):
+class SimbadIdentifiers(BaseModel):
     """Cross-match identifiers from SIMBAD.
 
     Captures the main identifier and common catalog cross-matches.
@@ -126,7 +126,7 @@ class SimbadIdentifiers(FrozenModel):
     all_ids: list[str] = Field(default_factory=list, description="All identifiers")
 
 
-class SimbadObjectType(FrozenModel):
+class SimbadObjectType(BaseModel):
     """SIMBAD object classification.
 
     Captures the object type from SIMBAD with derived boolean flags
@@ -149,7 +149,7 @@ class SimbadObjectType(FrozenModel):
     is_variable: bool = Field(description="Whether object is variable")
 
 
-class SimbadSpectralInfo(FrozenModel):
+class SimbadSpectralInfo(BaseModel):
     """Spectral type and luminosity class from SIMBAD.
 
     Parses and classifies spectral types to identify early-type stars
@@ -170,7 +170,7 @@ class SimbadSpectralInfo(FrozenModel):
     is_giant: bool = Field(description="True for luminosity class III, II, I")
 
 
-class SimbadQueryResult(FrozenModel):
+class SimbadQueryResult(BaseModel):
     """Complete SIMBAD query result.
 
     Combines identifiers, object classification, spectral information,

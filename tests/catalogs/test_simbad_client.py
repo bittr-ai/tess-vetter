@@ -26,7 +26,7 @@ from bittr_tess_vetter.platform.catalogs.simbad_client import (
     classify_object_type,
     parse_spectral_type,
 )
-from bittr_reason_core.provenance import SourceRecord
+from bittr_tess_vetter.platform.catalogs.models import SourceRecord
 
 
 # Fixture directory

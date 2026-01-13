@@ -27,9 +27,9 @@ import logging
 from datetime import UTC, datetime
 from typing import Any, ClassVar
 
-from bittr_reason_core.models import FrozenModel
-from bittr_reason_core.provenance import SourceRecord
-from pydantic import ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from bittr_tess_vetter.platform.catalogs.models import SourceRecord
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class GaiaTAPError(GaiaQueryError):
     pass
 
 
-class GaiaSourceRecord(FrozenModel):
+class GaiaSourceRecord(BaseModel):
     """Gaia DR3 source table record.
 
     Contains astrometric, photometric, and quality fields from gaia_source.
@@ -112,7 +112,7 @@ class GaiaSourceRecord(FrozenModel):
         return 1000.0 / self.parallax
 
 
-class GaiaAstrophysicalParams(FrozenModel):
+class GaiaAstrophysicalParams(BaseModel):
     """Gaia DR3 astrophysical_parameters table record.
 
     Contains stellar parameters from GSP-Phot and FLAME modules.
@@ -184,7 +184,7 @@ class GaiaAstrophysicalParams(FrozenModel):
         return (self.radius_gspphot_upper - self.radius_gspphot_lower) / 2.0
 
 
-class GaiaNeighbor(FrozenModel):
+class GaiaNeighbor(BaseModel):
     """A Gaia source found in a cone search.
 
     Represents a neighboring source with separation and magnitude difference
@@ -218,7 +218,7 @@ class GaiaNeighbor(FrozenModel):
         return self.ruwe is not None and self.ruwe > RUWE_ELEVATED_THRESHOLD
 
 
-class GaiaQueryResult(FrozenModel):
+class GaiaQueryResult(BaseModel):
     """Complete result from Gaia DR3 queries.
 
     Combines source record, astrophysical parameters, cone search neighbors,
