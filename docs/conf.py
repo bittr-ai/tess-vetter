@@ -26,7 +26,7 @@ except Exception:
     project = "bittr-tess-vetter"
     release = "0.0.1"
 
-copyright = "2024, bittr-tess-vetter contributors"
+copyright = "2026, bittr-tess-vetter contributors"
 author = "bittr-tess-vetter contributors"
 version = release
 
