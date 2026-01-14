@@ -48,6 +48,7 @@ Contents
    installation
    quickstart
    stability
+   tutorials
    tutorials/blend_localization
 
 .. toctree::
