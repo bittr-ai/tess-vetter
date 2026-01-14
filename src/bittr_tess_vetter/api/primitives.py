@@ -1,25 +1,83 @@
-"""Computation primitives catalog (host-facing).
+"""Advanced building blocks for custom pipelines.
 
-Host applications should use this module to discover which computation
-primitives are available in the current installation without importing from
-`bittr_tess_vetter.compute.*`.
+This module re-exports lower-level primitives that are supported but not
+part of the "golden path" API. Use these when you need fine-grained control.
+
+For most use cases, prefer the main `bittr_tess_vetter.api` exports.
+
+Example:
+    >>> from bittr_tess_vetter.api.primitives import (
+    ...     fold, detrend, mask_transits, check_odd_even_depth
+    ... )
+    >>> # Build your own custom analysis pipeline
 """
 
 from __future__ import annotations
 
-from bittr_tess_vetter.compute import PRIMITIVES_CATALOG, PrimitiveInfo  # noqa: F401
+# Re-export primitives catalog (for discovery)
+from bittr_tess_vetter.api.primitives_catalog import (
+    PRIMITIVES_CATALOG,
+    PrimitiveInfo,
+    list_primitives,
+)
 
+# Re-export compute primitives (pure-compute, no I/O)
+from bittr_tess_vetter.compute.primitives import (
+    AstroPrimitives,
+    astro,
+    box_model,
+    detrend,
+    fold,
+    periodogram,
+)
 
-def list_primitives(*, include_unimplemented: bool = False) -> dict[str, PrimitiveInfo]:
-    """Return the primitives catalog, optionally including unimplemented items."""
-    if include_unimplemented:
-        return PRIMITIVES_CATALOG.copy()
-    return {k: v for k, v in PRIMITIVES_CATALOG.items() if v.implemented}
+# Re-export pixel utilities
+from bittr_tess_vetter.pixel.centroid import (
+    CentroidResult,
+    CentroidShiftConfig,
+    TransitParams,
+    compute_centroid_shift,
+)
 
+# Re-export catalog check functions
+from bittr_tess_vetter.validation.checks_catalog import (
+    run_exofop_toi_lookup,
+    run_nearby_eb_search,
+)
+
+# Re-export individual check functions (legacy API, pre-VettingPipeline)
+from bittr_tess_vetter.validation.lc_checks import (
+    check_depth_stability,
+    check_duration_consistency,
+    check_odd_even_depth,
+    check_secondary_eclipse,
+    check_v_shape,
+)
 
 __all__ = [
-    "PrimitiveInfo",
+    # Compute primitives (pure-compute, no I/O)
+    "astro",
+    "AstroPrimitives",
+    "periodogram",
+    "fold",
+    "detrend",
+    "box_model",
+    # Legacy LC check functions (pre-VettingPipeline API)
+    "check_odd_even_depth",
+    "check_secondary_eclipse",
+    "check_duration_consistency",
+    "check_depth_stability",
+    "check_v_shape",
+    # Catalog check functions
+    "run_nearby_eb_search",
+    "run_exofop_toi_lookup",
+    # Pixel utilities
+    "compute_centroid_shift",
+    "CentroidResult",
+    "CentroidShiftConfig",
+    "TransitParams",
+    # Primitives catalog (discovery)
     "PRIMITIVES_CATALOG",
+    "PrimitiveInfo",
     "list_primitives",
 ]
-
