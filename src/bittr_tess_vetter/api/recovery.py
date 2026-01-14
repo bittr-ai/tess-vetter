@@ -122,6 +122,10 @@ class PreparedRecoveryInputs:
     n_transits: int
 
 
+@cites(
+    cite(HIPPKE_HELLER_2019_TLS, "phase folding and stacking of transit signals"),
+    cite(KOVACS_2002, "epoch folding / box-shaped transit search lineage"),
+)
 def prepare_recovery_inputs(
     lightcurves: list[LightCurveData],
     *,
@@ -436,6 +440,10 @@ def detrend(
     )
 
 
+@cites(
+    cite(HIPPKE_HELLER_2019_TLS, "phase folding and stacked transit recovery"),
+    cite(KOVACS_2002, "epoch folding / box-shaped transit search lineage"),
+)
 def stack_transits(
     lc: LightCurve,
     candidate: Candidate,

@@ -22,6 +22,15 @@ from bittr_tess_vetter.api.pixel_prf import (
     score_hypotheses_prf_lite,
     score_hypotheses_with_prf,
 )
+from bittr_tess_vetter.api.references import (
+    BRYSON_2010,
+    BRYSON_2013,
+    CALABRETTA_GREISEN_2002,
+    GREISEN_CALABRETTA_2002,
+    TWICKEN_2018,
+    cite,
+    cites,
+)
 from bittr_tess_vetter.api.wcs_localization import compute_difference_image_centroid_diagnostics
 from bittr_tess_vetter.api.wcs_utils import compute_pixel_scale, pixel_to_world, world_to_pixel
 from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData
@@ -142,6 +151,13 @@ def _compute_tpf_cadence_summary(
     }
 
 
+@cites(
+    cite(BRYSON_2013, "difference-image centroid offsets and localization diagnostics"),
+    cite(TWICKEN_2018, "difference image centroiding / DV-like diagnostics"),
+    cite(BRYSON_2010, "PRF-based hypothesis scoring"),
+    cite(GREISEN_CALABRETTA_2002, "FITS WCS framework (pixel↔sky transforms)"),
+    cite(CALABRETTA_GREISEN_2002, "celestial WCS conventions"),
+)
 def localize_transit_host_single_sector(
     *,
     tpf_fits: TPFFitsData,
@@ -357,6 +373,10 @@ def localize_transit_host_single_sector(
     )
 
 
+@cites(
+    cite(BRYSON_2013, "baseline sensitivity as a localization robustness check"),
+    cite(TWICKEN_2018, "difference-image centroid consistency diagnostics"),
+)
 def localize_transit_host_single_sector_with_baseline_check(
     *,
     tpf_fits: TPFFitsData,
@@ -464,6 +484,13 @@ def localize_transit_host_single_sector_with_baseline_check(
     return local
 
 
+@cites(
+    cite(BRYSON_2013, "difference-image localization diagnostics across epochs"),
+    cite(TWICKEN_2018, "DV-like multi-epoch consistency checks"),
+    cite(BRYSON_2010, "PRF-based host hypothesis scoring"),
+    cite(GREISEN_CALABRETTA_2002, "FITS WCS framework (pixel↔sky transforms)"),
+    cite(CALABRETTA_GREISEN_2002, "celestial WCS conventions"),
+)
 def localize_transit_host_multi_sector(
     *,
     tpf_fits_list: list[TPFFitsData],

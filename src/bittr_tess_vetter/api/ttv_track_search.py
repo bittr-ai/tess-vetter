@@ -11,6 +11,13 @@ from __future__ import annotations
 
 import numpy as np
 
+from bittr_tess_vetter.api.references import (
+    AGOL_2005,
+    HOLMAN_MURRAY_2005,
+    STEFFEN_AGOL_2006,
+    cite,
+    cites,
+)
 from bittr_tess_vetter.api.types import Candidate, LightCurve
 from bittr_tess_vetter.transit.ttv_track_search import (
     TTVSearchBudget,
@@ -82,6 +89,11 @@ def estimate_search_cost(
     )
 
 
+@cites(
+    cite(HOLMAN_MURRAY_2005, "TTVs as a probe of additional planets"),
+    cite(AGOL_2005, "timing-based detection sensitivity"),
+    cite(STEFFEN_AGOL_2006, "TTV detection methodology and developments"),
+)
 def run_ttv_track_search(
     time_btjd: np.ndarray,
     flux: np.ndarray,
@@ -156,6 +168,11 @@ def run_ttv_track_search(
     )
 
 
+@cites(
+    cite(HOLMAN_MURRAY_2005, "TTVs as a probe of additional planets"),
+    cite(AGOL_2005, "timing-based detection sensitivity"),
+    cite(STEFFEN_AGOL_2006, "TTV detection methodology and developments"),
+)
 def run_ttv_track_search_for_candidate(
     lc: LightCurve,
     candidate: Candidate,

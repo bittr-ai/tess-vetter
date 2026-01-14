@@ -227,6 +227,10 @@ def sweet(
     return _convert_result(result)
 
 
+@cites(
+    cite(THOMPSON_2018, "DR25 Robovetter ModShift/SWEET"),
+    cite(COUGHLIN_2016, "DR24 Robovetter ModShift/SWEET"),
+)
 def vet_exovetter(
     lc: LightCurve,
     candidate: Candidate,

@@ -229,6 +229,10 @@ def exofop_disposition(
 _DEFAULT_CHECKS = ["V06", "V07"]
 
 
+@cites(
+    cite(PRSA_2022, "TESS-EB catalog"),
+    cite(GUERRERO_2021, "TESS TOI vetting procedures context"),
+)
 def vet_catalog(
     candidate: Candidate,
     *,

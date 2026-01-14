@@ -144,6 +144,11 @@ def vet_candidate(
     )
 
 
+@cites(
+    cite(COUGHLIN_2016, "tiered Robovetter methodology"),
+    cite(THOMPSON_2018, "DR25 vetting pipeline architecture"),
+    cite(GUERRERO_2021, "TESS TOI vetting procedures context"),
+)
 def vet_many(
     lc: LightCurve,
     candidates: list[Candidate],

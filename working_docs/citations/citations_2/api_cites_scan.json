@@ -1,0 +1,1328 @@
+{
+  "api_functions": [
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 83,
+      "name": "characterize_activity",
+      "path": "src/bittr_tess_vetter/api/activity.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 199,
+      "name": "mask_flares",
+      "path": "src/bittr_tess_vetter/api/activity.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 22,
+      "name": "create_circular_aperture_mask",
+      "path": "src/bittr_tess_vetter/api/aperture.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 100,
+      "name": "canonical_json",
+      "path": "src/bittr_tess_vetter/api/canonical.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 114,
+      "name": "canonical_hash",
+      "path": "src/bittr_tess_vetter/api/canonical.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 119,
+      "name": "canonical_hash_prefix",
+      "path": "src/bittr_tess_vetter/api/canonical.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 127,
+      "name": "nearby_eb_search",
+      "path": "src/bittr_tess_vetter/api/catalog.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 184,
+      "name": "exofop_disposition",
+      "path": "src/bittr_tess_vetter/api/catalog.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 232,
+      "name": "vet_catalog",
+      "path": "src/bittr_tess_vetter/api/catalog.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 36,
+      "name": "checks_to_evidence_items",
+      "path": "src/bittr_tess_vetter/api/evidence.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 37,
+      "name": "compute_code_hash",
+      "path": "src/bittr_tess_vetter/api/evidence_contracts.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": false,
+      "lineno": 155,
+      "name": "save_evidence",
+      "path": "src/bittr_tess_vetter/api/evidence_contracts.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": false,
+      "lineno": 163,
+      "name": "load_evidence",
+      "path": "src/bittr_tess_vetter/api/evidence_contracts.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 106,
+      "name": "modshift",
+      "path": "src/bittr_tess_vetter/api/exovetter.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 170,
+      "name": "sweet",
+      "path": "src/bittr_tess_vetter/api/exovetter.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 230,
+      "name": "vet_exovetter",
+      "path": "src/bittr_tess_vetter/api/exovetter.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 121,
+      "name": "calculate_fpp",
+      "path": "src/bittr_tess_vetter/api/fpp.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 131,
+      "name": "odd_even_depth",
+      "path": "src/bittr_tess_vetter/api/lc_only.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 177,
+      "name": "secondary_eclipse",
+      "path": "src/bittr_tess_vetter/api/lc_only.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 222,
+      "name": "duration_consistency",
+      "path": "src/bittr_tess_vetter/api/lc_only.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 265,
+      "name": "depth_stability",
+      "path": "src/bittr_tess_vetter/api/lc_only.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 311,
+      "name": "v_shape",
+      "path": "src/bittr_tess_vetter/api/lc_only.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 356,
+      "name": "vet_lc_only",
+      "path": "src/bittr_tess_vetter/api/lc_only.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": false,
+      "lineno": 41,
+      "name": "smooth_box_template",
+      "path": "src/bittr_tess_vetter/api/mlx.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": false,
+      "lineno": 63,
+      "name": "score_fixed_period",
+      "path": "src/bittr_tess_vetter/api/mlx.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": false,
+      "lineno": 91,
+      "name": "score_fixed_period_refine_t0",
+      "path": "src/bittr_tess_vetter/api/mlx.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": false,
+      "lineno": 123,
+      "name": "score_top_k_periods",
+      "path": "src/bittr_tess_vetter/api/mlx.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": false,
+      "lineno": 151,
+      "name": "integrated_gradients",
+      "path": "src/bittr_tess_vetter/api/mlx.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 43,
+      "name": "run_periodogram",
+      "path": "src/bittr_tess_vetter/api/periodogram.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 93,
+      "name": "refine_period",
+      "path": "src/bittr_tess_vetter/api/periodogram.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 376,
+      "name": "list_checks",
+      "path": "src/bittr_tess_vetter/api/pipeline.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 405,
+      "name": "describe_checks",
+      "path": "src/bittr_tess_vetter/api/pipeline.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 104,
+      "name": "centroid_shift",
+      "path": "src/bittr_tess_vetter/api/pixel.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 177,
+      "name": "difference_image_localization",
+      "path": "src/bittr_tess_vetter/api/pixel.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 251,
+      "name": "aperture_dependence",
+      "path": "src/bittr_tess_vetter/api/pixel.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 317,
+      "name": "vet_pixel",
+      "path": "src/bittr_tess_vetter/api/pixel.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": false,
+      "lineno": 145,
+      "name": "localize_transit_host_single_sector",
+      "path": "src/bittr_tess_vetter/api/pixel_localize.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": false,
+      "lineno": 360,
+      "name": "localize_transit_host_single_sector_with_baseline_check",
+      "path": "src/bittr_tess_vetter/api/pixel_localize.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 467,
+      "name": "localize_transit_host_multi_sector",
+      "path": "src/bittr_tess_vetter/api/pixel_localize.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 13,
+      "name": "list_primitives",
+      "path": "src/bittr_tess_vetter/api/primitives_catalog.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 125,
+      "name": "prepare_recovery_inputs",
+      "path": "src/bittr_tess_vetter/api/recovery.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 184,
+      "name": "recover_transit",
+      "path": "src/bittr_tess_vetter/api/recovery.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 346,
+      "name": "detrend",
+      "path": "src/bittr_tess_vetter/api/recovery.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 439,
+      "name": "stack_transits",
+      "path": "src/bittr_tess_vetter/api/recovery.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 211,
+      "name": "cite",
+      "path": "src/bittr_tess_vetter/api/references.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 251,
+      "name": "reference",
+      "path": "src/bittr_tess_vetter/api/references.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 1253,
+      "name": "get_reference",
+      "path": "src/bittr_tess_vetter/api/references.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 1283,
+      "name": "get_all_references",
+      "path": "src/bittr_tess_vetter/api/references.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 1292,
+      "name": "generate_bibtex",
+      "path": "src/bittr_tess_vetter/api/references.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 1313,
+      "name": "generate_bibliography_markdown",
+      "path": "src/bittr_tess_vetter/api/references.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 1356,
+      "name": "cites",
+      "path": "src/bittr_tess_vetter/api/references.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 1412,
+      "name": "get_function_references",
+      "path": "src/bittr_tess_vetter/api/references.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 1439,
+      "name": "collect_module_citations",
+      "path": "src/bittr_tess_vetter/api/references.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 134,
+      "name": "stitch_lightcurves",
+      "path": "src/bittr_tess_vetter/api/stitch.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 235,
+      "name": "stitch_lightcurve_data",
+      "path": "src/bittr_tess_vetter/api/stitch.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 75,
+      "name": "measure_transit_times",
+      "path": "src/bittr_tess_vetter/api/timing.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 144,
+      "name": "analyze_ttvs",
+      "path": "src/bittr_tess_vetter/api/timing.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 206,
+      "name": "quick_estimate",
+      "path": "src/bittr_tess_vetter/api/transit_fit.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 258,
+      "name": "fit_transit",
+      "path": "src/bittr_tess_vetter/api/transit_fit.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 25,
+      "name": "get_out_of_transit_mask_windowed",
+      "path": "src/bittr_tess_vetter/api/transit_masks.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 17,
+      "name": "compute_transit_model",
+      "path": "src/bittr_tess_vetter/api/transit_model.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 41,
+      "name": "odd_even_result",
+      "path": "src/bittr_tess_vetter/api/transit_primitives.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 36,
+      "name": "get_disposition",
+      "path": "src/bittr_tess_vetter/api/triceratops_cache.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": false,
+      "lineno": 43,
+      "name": "identify_observing_windows",
+      "path": "src/bittr_tess_vetter/api/ttv_track_search.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": false,
+      "lineno": 51,
+      "name": "should_run_ttv_search",
+      "path": "src/bittr_tess_vetter/api/ttv_track_search.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": false,
+      "lineno": 66,
+      "name": "estimate_search_cost",
+      "path": "src/bittr_tess_vetter/api/ttv_track_search.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 85,
+      "name": "run_ttv_track_search",
+      "path": "src/bittr_tess_vetter/api/ttv_track_search.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 159,
+      "name": "run_ttv_track_search_for_candidate",
+      "path": "src/bittr_tess_vetter/api/ttv_track_search.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 49,
+      "name": "vet_candidate",
+      "path": "src/bittr_tess_vetter/api/vet.py"
+    },
+    {
+      "has_cites": false,
+      "has_docstring": true,
+      "lineno": 147,
+      "name": "vet_many",
+      "path": "src/bittr_tess_vetter/api/vet.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 91,
+      "name": "localize_transit_source",
+      "path": "src/bittr_tess_vetter/api/wcs_localization.py"
+    },
+    {
+      "has_cites": true,
+      "has_docstring": true,
+      "lineno": 124,
+      "name": "compute_difference_image_centroid_diagnostics",
+      "path": "src/bittr_tess_vetter/api/wcs_localization.py"
+    }
+  ],
+  "api_modules": [
+    {
+      "functions": [
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 83,
+          "name": "characterize_activity"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 199,
+          "name": "mask_flares"
+        }
+      ],
+      "has_REFERENCES_const": true,
+      "path": "src/bittr_tess_vetter/api/activity.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/alias_diagnostics.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 22,
+          "name": "create_circular_aperture_mask"
+        }
+      ],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/aperture.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/aperture_family.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/bls_like_search.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/cadence_mask.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 100,
+          "name": "canonical_json"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 114,
+          "name": "canonical_hash"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 119,
+          "name": "canonical_hash_prefix"
+        }
+      ],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/canonical.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/caps.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 127,
+          "name": "nearby_eb_search"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 184,
+          "name": "exofop_disposition"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 232,
+          "name": "vet_catalog"
+        }
+      ],
+      "has_REFERENCES_const": true,
+      "path": "src/bittr_tess_vetter/api/catalog.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/catalogs.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/centroid.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/compute_transit.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/detection.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/detrend.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/difference.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/ephemeris_match.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/ephemeris_refinement.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/ephemeris_reliability.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/ephemeris_sensitivity_sweep.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/ephemeris_specificity.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 36,
+          "name": "checks_to_evidence_items"
+        }
+      ],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/evidence.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 37,
+          "name": "compute_code_hash"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": false,
+          "lineno": 155,
+          "name": "save_evidence"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": false,
+          "lineno": 163,
+          "name": "load_evidence"
+        }
+      ],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/evidence_contracts.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 106,
+          "name": "modshift"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 170,
+          "name": "sweet"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 230,
+          "name": "vet_exovetter"
+        }
+      ],
+      "has_REFERENCES_const": true,
+      "path": "src/bittr_tess_vetter/api/exovetter.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/experimental.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 121,
+          "name": "calculate_fpp"
+        }
+      ],
+      "has_REFERENCES_const": true,
+      "path": "src/bittr_tess_vetter/api/fpp.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/ghost_features.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/io.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/joint_inference.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 131,
+          "name": "odd_even_depth"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 177,
+          "name": "secondary_eclipse"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 222,
+          "name": "duration_consistency"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 265,
+          "name": "depth_stability"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 311,
+          "name": "v_shape"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 356,
+          "name": "vet_lc_only"
+        }
+      ],
+      "has_REFERENCES_const": true,
+      "path": "src/bittr_tess_vetter/api/lc_only.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/lightcurve.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/localization.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": true,
+          "has_docstring": false,
+          "lineno": 41,
+          "name": "smooth_box_template"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": false,
+          "lineno": 63,
+          "name": "score_fixed_period"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": false,
+          "lineno": 91,
+          "name": "score_fixed_period_refine_t0"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": false,
+          "lineno": 123,
+          "name": "score_top_k_periods"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": false,
+          "lineno": 151,
+          "name": "integrated_gradients"
+        }
+      ],
+      "has_REFERENCES_const": true,
+      "path": "src/bittr_tess_vetter/api/mlx.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/model_competition.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/negative_controls.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 43,
+          "name": "run_periodogram"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 93,
+          "name": "refine_period"
+        }
+      ],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/periodogram.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 376,
+          "name": "list_checks"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 405,
+          "name": "describe_checks"
+        }
+      ],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/pipeline.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 104,
+          "name": "centroid_shift"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 177,
+          "name": "difference_image_localization"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 251,
+          "name": "aperture_dependence"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 317,
+          "name": "vet_pixel"
+        }
+      ],
+      "has_REFERENCES_const": true,
+      "path": "src/bittr_tess_vetter/api/pixel.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/pixel_host_hypotheses.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": false,
+          "has_docstring": false,
+          "lineno": 145,
+          "name": "localize_transit_host_single_sector"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": false,
+          "lineno": 360,
+          "name": "localize_transit_host_single_sector_with_baseline_check"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 467,
+          "name": "localize_transit_host_multi_sector"
+        }
+      ],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/pixel_localize.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/pixel_prf.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/prefilter.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/primitives.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 13,
+          "name": "list_primitives"
+        }
+      ],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/primitives_catalog.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 125,
+          "name": "prepare_recovery_inputs"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 184,
+          "name": "recover_transit"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 346,
+          "name": "detrend"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 439,
+          "name": "stack_transits"
+        }
+      ],
+      "has_REFERENCES_const": true,
+      "path": "src/bittr_tess_vetter/api/recovery.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/recovery_primitives.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 211,
+          "name": "cite"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 251,
+          "name": "reference"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 1253,
+          "name": "get_reference"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 1283,
+          "name": "get_all_references"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 1292,
+          "name": "generate_bibtex"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 1313,
+          "name": "generate_bibliography_markdown"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 1356,
+          "name": "cites"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 1412,
+          "name": "get_function_references"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 1439,
+          "name": "collect_module_citations"
+        }
+      ],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/references.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/reliability_curves.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/report.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/sandbox_primitives.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/sector_consistency.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/stellar_dilution.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 134,
+          "name": "stitch_lightcurves"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 235,
+          "name": "stitch_lightcurve_data"
+        }
+      ],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/stitch.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/systematics.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/target.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 75,
+          "name": "measure_transit_times"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 144,
+          "name": "analyze_ttvs"
+        }
+      ],
+      "has_REFERENCES_const": true,
+      "path": "src/bittr_tess_vetter/api/timing.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/timing_primitives.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/tolerances.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/tpf.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/tpf_fits.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 206,
+          "name": "quick_estimate"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 258,
+          "name": "fit_transit"
+        }
+      ],
+      "has_REFERENCES_const": true,
+      "path": "src/bittr_tess_vetter/api/transit_fit.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/transit_fit_primitives.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 25,
+          "name": "get_out_of_transit_mask_windowed"
+        }
+      ],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/transit_masks.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 17,
+          "name": "compute_transit_model"
+        }
+      ],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/transit_model.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 41,
+          "name": "odd_even_result"
+        }
+      ],
+      "has_REFERENCES_const": true,
+      "path": "src/bittr_tess_vetter/api/transit_primitives.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 36,
+          "name": "get_disposition"
+        }
+      ],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/triceratops_cache.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": false,
+          "has_docstring": false,
+          "lineno": 43,
+          "name": "identify_observing_windows"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": false,
+          "lineno": 51,
+          "name": "should_run_ttv_search"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": false,
+          "lineno": 66,
+          "name": "estimate_search_cost"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 85,
+          "name": "run_ttv_track_search"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 159,
+          "name": "run_ttv_track_search_for_candidate"
+        }
+      ],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/ttv_track_search.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/types.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 49,
+          "name": "vet_candidate"
+        },
+        {
+          "has_cites": false,
+          "has_docstring": true,
+          "lineno": 147,
+          "name": "vet_many"
+        }
+      ],
+      "has_REFERENCES_const": true,
+      "path": "src/bittr_tess_vetter/api/vet.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": false,
+      "path": "src/bittr_tess_vetter/api/vetting_primitives.py"
+    },
+    {
+      "functions": [
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 91,
+          "name": "localize_transit_source"
+        },
+        {
+          "has_cites": true,
+          "has_docstring": true,
+          "lineno": 124,
+          "name": "compute_difference_image_centroid_diagnostics"
+        }
+      ],
+      "has_REFERENCES_const": true,
+      "path": "src/bittr_tess_vetter/api/wcs_localization.py"
+    },
+    {
+      "functions": [],
+      "has_REFERENCES_const": true,
+      "path": "src/bittr_tess_vetter/api/wcs_utils.py"
+    }
+  ],
+  "summary": {
+    "api_function_missing_cites": 39,
+    "api_function_total": 72
+  }
+}

@@ -314,6 +314,11 @@ def aperture_dependence(
 _DEFAULT_PIXEL_CHECKS = ["V08", "V09", "V10"]
 
 
+@cites(
+    cite(BRYSON_2013, "Kepler pixel-level diagnostics"),
+    cite(TWICKEN_2018, "Kepler Data Validation difference-image centroiding"),
+    cite(GUERRERO_2021, "TESS TOI vetting procedures context"),
+)
 def vet_pixel(
     tpf: TPFStamp,
     candidate: Candidate,

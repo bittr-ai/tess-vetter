@@ -1,0 +1,319 @@
+{
+  "errors": [],
+  "missing": [
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.aperture",
+      "n_refs": 0,
+      "name": "create_circular_aperture_mask",
+      "qualname": "create_circular_aperture_mask",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.canonical",
+      "n_refs": 0,
+      "name": "canonical_json",
+      "qualname": "canonical_json",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.canonical",
+      "n_refs": 0,
+      "name": "canonical_hash",
+      "qualname": "canonical_hash",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.canonical",
+      "n_refs": 0,
+      "name": "canonical_hash_prefix",
+      "qualname": "canonical_hash_prefix",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.catalog",
+      "n_refs": 0,
+      "name": "vet_catalog",
+      "qualname": "vet_catalog",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.evidence",
+      "n_refs": 0,
+      "name": "checks_to_evidence_items",
+      "qualname": "checks_to_evidence_items",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.evidence_contracts",
+      "n_refs": 0,
+      "name": "compute_code_hash",
+      "qualname": "compute_code_hash",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.evidence_contracts",
+      "n_refs": 0,
+      "name": "save_evidence",
+      "qualname": "save_evidence",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.evidence_contracts",
+      "n_refs": 0,
+      "name": "load_evidence",
+      "qualname": "load_evidence",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.exovetter",
+      "n_refs": 0,
+      "name": "vet_exovetter",
+      "qualname": "vet_exovetter",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.lc_only",
+      "n_refs": 0,
+      "name": "vet_lc_only",
+      "qualname": "vet_lc_only",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.pipeline",
+      "n_refs": 0,
+      "name": "list_checks",
+      "qualname": "list_checks",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.pipeline",
+      "n_refs": 0,
+      "name": "describe_checks",
+      "qualname": "describe_checks",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.pixel",
+      "n_refs": 0,
+      "name": "vet_pixel",
+      "qualname": "vet_pixel",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.pixel_localize",
+      "n_refs": 0,
+      "name": "localize_transit_host_single_sector",
+      "qualname": "localize_transit_host_single_sector",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.pixel_localize",
+      "n_refs": 0,
+      "name": "localize_transit_host_single_sector_with_baseline_check",
+      "qualname": "localize_transit_host_single_sector_with_baseline_check",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.pixel_localize",
+      "n_refs": 0,
+      "name": "localize_transit_host_multi_sector",
+      "qualname": "localize_transit_host_multi_sector",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.primitives_catalog",
+      "n_refs": 0,
+      "name": "list_primitives",
+      "qualname": "list_primitives",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.recovery",
+      "n_refs": 0,
+      "name": "prepare_recovery_inputs",
+      "qualname": "prepare_recovery_inputs",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.recovery",
+      "n_refs": 0,
+      "name": "stack_transits",
+      "qualname": "stack_transits",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.references",
+      "n_refs": 0,
+      "name": "cite",
+      "qualname": "cite",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.references",
+      "n_refs": 0,
+      "name": "reference",
+      "qualname": "reference",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.references",
+      "n_refs": 0,
+      "name": "get_reference",
+      "qualname": "get_reference",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.references",
+      "n_refs": 0,
+      "name": "get_all_references",
+      "qualname": "get_all_references",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.references",
+      "n_refs": 0,
+      "name": "generate_bibtex",
+      "qualname": "generate_bibtex",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.references",
+      "n_refs": 0,
+      "name": "generate_bibliography_markdown",
+      "qualname": "generate_bibliography_markdown",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.references",
+      "n_refs": 0,
+      "name": "cites",
+      "qualname": "cites",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.references",
+      "n_refs": 0,
+      "name": "get_function_references",
+      "qualname": "get_function_references",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.references",
+      "n_refs": 0,
+      "name": "collect_module_citations",
+      "qualname": "collect_module_citations",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.stitch",
+      "n_refs": 0,
+      "name": "stitch_lightcurves",
+      "qualname": "stitch_lightcurves",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.stitch",
+      "n_refs": 0,
+      "name": "stitch_lightcurve_data",
+      "qualname": "stitch_lightcurve_data",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.transit_masks",
+      "n_refs": 0,
+      "name": "get_out_of_transit_mask_windowed",
+      "qualname": "get_out_of_transit_mask_windowed",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.triceratops_cache",
+      "n_refs": 0,
+      "name": "get_disposition",
+      "qualname": "get_disposition",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.ttv_track_search",
+      "n_refs": 0,
+      "name": "identify_observing_windows",
+      "qualname": "identify_observing_windows",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.ttv_track_search",
+      "n_refs": 0,
+      "name": "should_run_ttv_search",
+      "qualname": "should_run_ttv_search",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.ttv_track_search",
+      "n_refs": 0,
+      "name": "estimate_search_cost",
+      "qualname": "estimate_search_cost",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.ttv_track_search",
+      "n_refs": 0,
+      "name": "run_ttv_track_search",
+      "qualname": "run_ttv_track_search",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.ttv_track_search",
+      "n_refs": 0,
+      "name": "run_ttv_track_search_for_candidate",
+      "qualname": "run_ttv_track_search_for_candidate",
+      "refs": []
+    },
+    {
+      "error": null,
+      "module": "bittr_tess_vetter.api.vet",
+      "n_refs": 0,
+      "name": "vet_many",
+      "qualname": "vet_many",
+      "refs": []
+    }
+  ],
+  "missing_citations": 39,
+  "total_api_submodule_callables": 72
+}

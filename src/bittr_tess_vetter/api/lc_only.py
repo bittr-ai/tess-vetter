@@ -353,6 +353,11 @@ def v_shape(
 _DEFAULT_CHECKS = ["V01", "V02", "V03", "V04", "V05"]
 
 
+@cites(
+    cite(COUGHLIN_2016, "tiered Robovetter methodology"),
+    cite(THOMPSON_2018, "DR25 vetting pipeline architecture"),
+    cite(GUERRERO_2021, "TESS TOI vetting procedures context"),
+)
 def vet_lc_only(
     lc: LightCurve,
     ephemeris: Ephemeris,
