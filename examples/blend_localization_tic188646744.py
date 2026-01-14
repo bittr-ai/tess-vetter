@@ -154,20 +154,28 @@ def _print_dilution_plausibility(
         companions=companion_hypotheses,
     )
 
-    print("\nDilution plausibility (depth-only):")
+    print("\nDilution plausibility (depth-only; necessary condition, not validation):")
     depth_feasible: list[str] = []
+    tested = 0
+    ruled_out = 0
     for s in scenarios[:12]:
+        tested += 1
         frac = s.host.estimated_flux_fraction
         true_ppm = s.true_depth_ppm
         impossible = true_ppm > 1_000_000.0
         tag = "IMPOSSIBLE (>100%)" if impossible else ""
         if not impossible:
             depth_feasible.append(s.host.name)
+        else:
+            ruled_out += 1
         print(
             f'- {s.host.name} sep={s.host.separation_arcsec:5.1f}" '
             f"G={s.host.g_mag if s.host.g_mag is not None else float('nan'):.2f} "
             f"flux_frac={frac:.3e} true_depth={true_ppm:9.0f} ppm {tag}"
         )
+    print(
+        f"\nDepth-only plausibility scoreboard: tested={tested}, ruled_out={ruled_out}, remaining={len(depth_feasible)}"
+    )
     return depth_feasible
 
 
@@ -294,7 +302,7 @@ def main() -> int:
         print("\nSkipping Gaia/dilution step (could not read RA_OBJ/DEC_OBJ from TPF headers).")
 
     if depth_feasible:
-        print("\nPlausibility-filtered host candidates remaining (depth-only):")
+        print("\nRemaining depth-feasible hosts (after dilution physics):")
         for name in depth_feasible:
             print(f"- {name}")
         print(
