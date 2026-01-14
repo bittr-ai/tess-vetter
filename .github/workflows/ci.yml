@@ -40,5 +40,37 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: uv sync --all-extras
-      - name: Run tests
-        run: uv run pytest -x -q
+      - name: Install pytest-cov
+        run: uv pip install pytest-cov
+      - name: Run tests with coverage
+        run: uv run pytest -x -q --cov=bittr_tess_vetter --cov-report=xml --cov-report=term-missing
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --extra docs
+      - name: Build docs
+        run: |
+          cd docs
+          uv run sphinx-build -b html . _build/html
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-html
+          path: docs/_build/html

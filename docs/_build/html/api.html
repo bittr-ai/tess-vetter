@@ -1,0 +1,1312 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="bittr_tess_vetter.api.Ephemeris" href="_autosummary/bittr_tess_vetter.api.Ephemeris.html"><link rel="prev" title="Quickstart" href="quickstart.html">
+
+    <!-- Generated with Sphinx 8.2.3 and Furo 2025.12.19 -->
+        <title>API Reference - bittr-tess-vetter v0.0.1</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #0066cc;
+  --color-brand-content: #0066cc;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #4d9fff;
+  --color-brand-content: #4d9fff;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #4d9fff;
+  --color-brand-content: #4d9fff;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">bittr-tess-vetter v0.0.1</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  
+  <span class="sidebar-brand-text">bittr-tess-vetter v0.0.1</span>
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current has-children current-page"><a class="current reference internal" href="#">API Reference</a><input aria-label="Toggle navigation of API Reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.Ephemeris.html">bittr_tess_vetter.api.Ephemeris</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.LightCurve.html">bittr_tess_vetter.api.LightCurve</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.StellarParams.html">bittr_tess_vetter.api.StellarParams</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.CheckResult.html">bittr_tess_vetter.api.CheckResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.Candidate.html">bittr_tess_vetter.api.Candidate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TPFStamp.html">bittr_tess_vetter.api.TPFStamp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.VettingBundleResult.html">bittr_tess_vetter.api.VettingBundleResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TransitFitResult.html">bittr_tess_vetter.api.TransitFitResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TransitTime.html">bittr_tess_vetter.api.TransitTime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TTVResult.html">bittr_tess_vetter.api.TTVResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.OddEvenResult.html">bittr_tess_vetter.api.OddEvenResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TrapezoidFit.html">bittr_tess_vetter.api.TrapezoidFit</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.StackedTransit.html">bittr_tess_vetter.api.StackedTransit</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.RecoveryResult.html">bittr_tess_vetter.api.RecoveryResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.ActivityResult.html">bittr_tess_vetter.api.ActivityResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.Flare.html">bittr_tess_vetter.api.Flare</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.vet_candidate.html">bittr_tess_vetter.api.vet_candidate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.run_periodogram.html">bittr_tess_vetter.api.run_periodogram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.auto_periodogram.html">bittr_tess_vetter.api.auto_periodogram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.ls_periodogram.html">bittr_tess_vetter.api.ls_periodogram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.tls_search.html">bittr_tess_vetter.api.tls_search</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.tls_search_per_sector.html">bittr_tess_vetter.api.tls_search_per_sector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.search_planets.html">bittr_tess_vetter.api.search_planets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.refine_period.html">bittr_tess_vetter.api.refine_period</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_transit_model.html">bittr_tess_vetter.api.compute_transit_model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_bls_model.html">bittr_tess_vetter.api.compute_bls_model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.detect_sector_gaps.html">bittr_tess_vetter.api.detect_sector_gaps</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.split_by_sectors.html">bittr_tess_vetter.api.split_by_sectors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.merge_candidates.html">bittr_tess_vetter.api.merge_candidates</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PerformancePreset.html">bittr_tess_vetter.api.PerformancePreset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PeriodogramPeak.html">bittr_tess_vetter.api.PeriodogramPeak</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PeriodogramResult.html">bittr_tess_vetter.api.PeriodogramResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.odd_even_depth.html">bittr_tess_vetter.api.odd_even_depth</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.secondary_eclipse.html">bittr_tess_vetter.api.secondary_eclipse</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.duration_consistency.html">bittr_tess_vetter.api.duration_consistency</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.depth_stability.html">bittr_tess_vetter.api.depth_stability</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.v_shape.html">bittr_tess_vetter.api.v_shape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.vet_lc_only.html">bittr_tess_vetter.api.vet_lc_only</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.nearby_eb_search.html">bittr_tess_vetter.api.nearby_eb_search</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.exofop_disposition.html">bittr_tess_vetter.api.exofop_disposition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.vet_catalog.html">bittr_tess_vetter.api.vet_catalog</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.centroid_shift.html">bittr_tess_vetter.api.centroid_shift</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.difference_image_localization.html">bittr_tess_vetter.api.difference_image_localization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.aperture_dependence.html">bittr_tess_vetter.api.aperture_dependence</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.vet_pixel.html">bittr_tess_vetter.api.vet_pixel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.modshift.html">bittr_tess_vetter.api.modshift</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.sweet.html">bittr_tess_vetter.api.sweet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.vet_exovetter.html">bittr_tess_vetter.api.vet_exovetter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.localize_transit_source.html">bittr_tess_vetter.api.localize_transit_source</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.localize_transit_host_single_sector.html">bittr_tess_vetter.api.localize_transit_host_single_sector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.localize_transit_host_single_sector_with_baseline_check.html">bittr_tess_vetter.api.localize_transit_host_single_sector_with_baseline_check</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.localize_transit_host_multi_sector.html">bittr_tess_vetter.api.localize_transit_host_multi_sector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_aperture_family_depth_curve.html">bittr_tess_vetter.api.compute_aperture_family_depth_curve</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.generate_pixel_vet_report.html">bittr_tess_vetter.api.generate_pixel_vet_report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.LocalizationResult.html">bittr_tess_vetter.api.LocalizationResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.LocalizationVerdict.html">bittr_tess_vetter.api.LocalizationVerdict</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.ReferenceSource.html">bittr_tess_vetter.api.ReferenceSource</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.LocalizationDiagnostics.html">bittr_tess_vetter.api.LocalizationDiagnostics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.LocalizationImages.html">bittr_tess_vetter.api.LocalizationImages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TransitParams.html">bittr_tess_vetter.api.TransitParams</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.ApertureFamilyResult.html">bittr_tess_vetter.api.ApertureFamilyResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PixelVetReport.html">bittr_tess_vetter.api.PixelVetReport</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.fit_transit.html">bittr_tess_vetter.api.fit_transit</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.quick_estimate.html">bittr_tess_vetter.api.quick_estimate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.measure_transit_times.html">bittr_tess_vetter.api.measure_transit_times</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.analyze_ttvs.html">bittr_tess_vetter.api.analyze_ttvs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.run_ttv_track_search.html">bittr_tess_vetter.api.run_ttv_track_search</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.run_ttv_track_search_for_candidate.html">bittr_tess_vetter.api.run_ttv_track_search_for_candidate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.estimate_search_cost.html">bittr_tess_vetter.api.estimate_search_cost</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.identify_observing_windows.html">bittr_tess_vetter.api.identify_observing_windows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.should_run_ttv_search.html">bittr_tess_vetter.api.should_run_ttv_search</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TTVSearchBudget.html">bittr_tess_vetter.api.TTVSearchBudget</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TTVTrackSearchResult.html">bittr_tess_vetter.api.TTVTrackSearchResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.characterize_activity.html">bittr_tess_vetter.api.characterize_activity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.mask_flares.html">bittr_tess_vetter.api.mask_flares</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.recover_transit.html">bittr_tess_vetter.api.recover_transit</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.recover_transit_timeseries.html">bittr_tess_vetter.api.recover_transit_timeseries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.detrend.html">bittr_tess_vetter.api.detrend</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.stack_transits.html">bittr_tess_vetter.api.stack_transits</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.build_prf_model.html">bittr_tess_vetter.api.build_prf_model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.build_prf_model_at_pixels.html">bittr_tess_vetter.api.build_prf_model_at_pixels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.evaluate_prf_weights.html">bittr_tess_vetter.api.evaluate_prf_weights</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.get_prf_model.html">bittr_tess_vetter.api.get_prf_model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.score_hypotheses_prf_lite.html">bittr_tess_vetter.api.score_hypotheses_prf_lite</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.score_hypotheses_with_prf.html">bittr_tess_vetter.api.score_hypotheses_with_prf</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.fit_aperture_hypothesis.html">bittr_tess_vetter.api.fit_aperture_hypothesis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.aggregate_multi_sector.html">bittr_tess_vetter.api.aggregate_multi_sector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PRFParams.html">bittr_tess_vetter.api.PRFParams</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PRFFitResult.html">bittr_tess_vetter.api.PRFFitResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.BackgroundParams.html">bittr_tess_vetter.api.BackgroundParams</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PRFModel.html">bittr_tess_vetter.api.PRFModel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PRFBackend.html">bittr_tess_vetter.api.PRFBackend</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.HypothesisScore.html">bittr_tess_vetter.api.HypothesisScore</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.MultiSectorConsensus.html">bittr_tess_vetter.api.MultiSectorConsensus</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.ApertureHypothesisFit.html">bittr_tess_vetter.api.ApertureHypothesisFit</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.AperturePrediction.html">bittr_tess_vetter.api.AperturePrediction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.ApertureConflict.html">bittr_tess_vetter.api.ApertureConflict</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.calculate_fpp.html">bittr_tess_vetter.api.calculate_fpp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TriceratopsFppPreset.html">bittr_tess_vetter.api.TriceratopsFppPreset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.FAST_PRESET.html">bittr_tess_vetter.api.FAST_PRESET</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.STANDARD_PRESET.html">bittr_tess_vetter.api.STANDARD_PRESET</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.run_ephemeris_matching.html">bittr_tess_vetter.api.run_ephemeris_matching</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.build_index_from_csv.html">bittr_tess_vetter.api.build_index_from_csv</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_match_score.html">bittr_tess_vetter.api.compute_match_score</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_harmonic_match.html">bittr_tess_vetter.api.compute_harmonic_match</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.classify_matches.html">bittr_tess_vetter.api.classify_matches</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.load_index.html">bittr_tess_vetter.api.load_index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.save_index.html">bittr_tess_vetter.api.save_index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.wrap_t0.html">bittr_tess_vetter.api.wrap_t0</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.EphemerisEntry.html">bittr_tess_vetter.api.EphemerisEntry</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.EphemerisIndex.html">bittr_tess_vetter.api.EphemerisIndex</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.EphemerisMatch.html">bittr_tess_vetter.api.EphemerisMatch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.EphemerisMatchResult.html">bittr_tess_vetter.api.EphemerisMatchResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.MatchClass.html">bittr_tess_vetter.api.MatchClass</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.get_in_transit_mask.html">bittr_tess_vetter.api.get_in_transit_mask</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.get_out_of_transit_mask.html">bittr_tess_vetter.api.get_out_of_transit_mask</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.get_out_of_transit_mask_windowed.html">bittr_tess_vetter.api.get_out_of_transit_mask_windowed</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.get_odd_even_transit_indices.html">bittr_tess_vetter.api.get_odd_even_transit_indices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.measure_transit_depth.html">bittr_tess_vetter.api.measure_transit_depth</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.count_transits.html">bittr_tess_vetter.api.count_transits</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.odd_even_result.html">bittr_tess_vetter.api.odd_even_result</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_depth_over_depth_err_snr.html">bittr_tess_vetter.api.compute_depth_over_depth_err_snr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_phase_coverage.html">bittr_tess_vetter.api.compute_phase_coverage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.default_cadence_mask.html">bittr_tess_vetter.api.default_cadence_mask</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.create_circular_aperture_mask.html">bittr_tess_vetter.api.create_circular_aperture_mask</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.checks_to_evidence_items.html">bittr_tess_vetter.api.checks_to_evidence_items</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.EvidenceEnvelope.html">bittr_tess_vetter.api.EvidenceEnvelope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.EvidenceProvenance.html">bittr_tess_vetter.api.EvidenceProvenance</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_evidence_code_hash.html">bittr_tess_vetter.api.compute_evidence_code_hash</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.load_evidence.html">bittr_tess_vetter.api.load_evidence</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.save_evidence.html">bittr_tess_vetter.api.save_evidence</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.cap_top_k.html">bittr_tess_vetter.api.cap_top_k</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.cap_neighbors.html">bittr_tess_vetter.api.cap_neighbors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.cap_plots.html">bittr_tess_vetter.api.cap_plots</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.cap_variant_summaries.html">bittr_tess_vetter.api.cap_variant_summaries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.check_tolerance.html">bittr_tess_vetter.api.check_tolerance</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.ToleranceResult.html">bittr_tess_vetter.api.ToleranceResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.smooth_box_template.html">bittr_tess_vetter.api.smooth_box_template</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.score_fixed_period.html">bittr_tess_vetter.api.score_fixed_period</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.score_fixed_period_refine_t0.html">bittr_tess_vetter.api.score_fixed_period_refine_t0</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.score_top_k_periods.html">bittr_tess_vetter.api.score_top_k_periods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.integrated_gradients.html">bittr_tess_vetter.api.integrated_gradients</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.MlxTopKScoreResult.html">bittr_tess_vetter.api.MlxTopKScoreResult</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.MlxT0RefinementResult.html">bittr_tess_vetter.api.MlxT0RefinementResult</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="_sources/api.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="api-reference">
+<h1>API Reference<a class="headerlink" href="#api-reference" title="Link to this heading">¶</a></h1>
+<p>This page documents the public API of bittr-tess-vetter.</p>
+<p>The recommended import pattern is:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">bittr_tess_vetter.api</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">btv</span>
+</pre></div>
+</div>
+<nav class="contents local" id="contents">
+<p class="topic-title">Contents</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#core-types" id="id3">Core Types</a></p>
+<ul>
+<li><p><a class="reference internal" href="#transit-fitting-types" id="id4">Transit Fitting Types</a></p></li>
+<li><p><a class="reference internal" href="#activity-types" id="id5">Activity Types</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#main-entry-point" id="id6">Main Entry Point</a></p></li>
+<li><p><a class="reference internal" href="#periodogram-and-detection" id="id7">Periodogram and Detection</a></p></li>
+<li><p><a class="reference internal" href="#vetting-checks" id="id8">Vetting Checks</a></p>
+<ul>
+<li><p><a class="reference internal" href="#lc-only-checks-v01-v05" id="id9">LC-Only Checks (V01-V05)</a></p></li>
+<li><p><a class="reference internal" href="#catalog-checks-v06-v07" id="id10">Catalog Checks (V06-V07)</a></p></li>
+<li><p><a class="reference internal" href="#pixel-checks-v08-v10" id="id11">Pixel Checks (V08-V10)</a></p></li>
+<li><p><a class="reference internal" href="#exovetter-checks-v11-v12" id="id12">Exovetter Checks (V11-V12)</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#pixel-localization" id="id13">Pixel Localization</a></p></li>
+<li><p><a class="reference internal" href="#transit-fitting-v3" id="id14">Transit Fitting (v3)</a></p></li>
+<li><p><a class="reference internal" href="#timing-analysis-v3" id="id15">Timing Analysis (v3)</a></p>
+<ul>
+<li><p><a class="reference internal" href="#ttv-track-search" id="id16">TTV Track Search</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#activity-characterization-v3" id="id17">Activity Characterization (v3)</a></p></li>
+<li><p><a class="reference internal" href="#transit-recovery-v3" id="id18">Transit Recovery (v3)</a></p></li>
+<li><p><a class="reference internal" href="#prf-and-pixel-modeling" id="id19">PRF and Pixel Modeling</a></p></li>
+<li><p><a class="reference internal" href="#false-positive-probability" id="id20">False Positive Probability</a></p></li>
+<li><p><a class="reference internal" href="#ephemeris-matching" id="id21">Ephemeris Matching</a></p></li>
+<li><p><a class="reference internal" href="#transit-masks-and-utilities" id="id22">Transit Masks and Utilities</a></p>
+<ul>
+<li><p><a class="reference internal" href="#prefilters" id="id23">Prefilters</a></p></li>
+<li><p><a class="reference internal" href="#cadence-and-aperture" id="id24">Cadence and Aperture</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#evidence-and-provenance" id="id25">Evidence and Provenance</a></p></li>
+<li><p><a class="reference internal" href="#utilities" id="id26">Utilities</a></p></li>
+<li><p><a class="reference internal" href="#mlx-acceleration-optional" id="id27">MLX Acceleration (Optional)</a></p></li>
+</ul>
+</nav>
+<section id="core-types">
+<h2><a class="toc-backref" href="#id3" role="doc-backlink">Core Types</a><a class="headerlink" href="#core-types" title="Link to this heading">¶</a></h2>
+<p>Data containers and type definitions used throughout the API.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.Ephemeris.html#bittr_tess_vetter.api.Ephemeris" title="bittr_tess_vetter.api.Ephemeris"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Ephemeris</span></code></a></p></td>
+<td><p>Transit ephemeris parameters.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.LightCurve.html#bittr_tess_vetter.api.LightCurve" title="bittr_tess_vetter.api.LightCurve"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LightCurve</span></code></a></p></td>
+<td><p>Simplified light curve container for API use.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.StellarParams.html#bittr_tess_vetter.api.StellarParams" title="bittr_tess_vetter.api.StellarParams"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StellarParams</span></code></a></p></td>
+<td><p>alias of <code class="xref py py-class docutils literal notranslate"><span class="pre">StellarParameters</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.CheckResult.html#bittr_tess_vetter.api.CheckResult" title="bittr_tess_vetter.api.CheckResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CheckResult</span></code></a></p></td>
+<td><p>Result of a single vetting check.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.Candidate.html#bittr_tess_vetter.api.Candidate" title="bittr_tess_vetter.api.Candidate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Candidate</span></code></a></p></td>
+<td><p>Transit candidate container for vetting.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TPFStamp.html#bittr_tess_vetter.api.TPFStamp" title="bittr_tess_vetter.api.TPFStamp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TPFStamp</span></code></a></p></td>
+<td><p>Target Pixel File data container (array-only, no FITS I/O).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.VettingBundleResult.html#bittr_tess_vetter.api.VettingBundleResult" title="bittr_tess_vetter.api.VettingBundleResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">VettingBundleResult</span></code></a></p></td>
+<td><p>Structured output from the vetting orchestrator.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<section id="transit-fitting-types">
+<h3><a class="toc-backref" href="#id4" role="doc-backlink">Transit Fitting Types</a><a class="headerlink" href="#transit-fitting-types" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TransitFitResult.html#bittr_tess_vetter.api.TransitFitResult" title="bittr_tess_vetter.api.TransitFitResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TransitFitResult</span></code></a></p></td>
+<td><p>Result of physical transit model fit.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TransitTime.html#bittr_tess_vetter.api.TransitTime" title="bittr_tess_vetter.api.TransitTime"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TransitTime</span></code></a></p></td>
+<td><p>Single transit timing measurement.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TTVResult.html#bittr_tess_vetter.api.TTVResult" title="bittr_tess_vetter.api.TTVResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TTVResult</span></code></a></p></td>
+<td><p>Transit timing variation analysis summary.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.OddEvenResult.html#bittr_tess_vetter.api.OddEvenResult" title="bittr_tess_vetter.api.OddEvenResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">OddEvenResult</span></code></a></p></td>
+<td><p>Odd/even depth comparison result for eclipsing binary vetting.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TrapezoidFit.html#bittr_tess_vetter.api.TrapezoidFit" title="bittr_tess_vetter.api.TrapezoidFit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TrapezoidFit</span></code></a></p></td>
+<td><p>Trapezoid model fit result.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.StackedTransit.html#bittr_tess_vetter.api.StackedTransit" title="bittr_tess_vetter.api.StackedTransit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StackedTransit</span></code></a></p></td>
+<td><p>Stacked transit light curve.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.RecoveryResult.html#bittr_tess_vetter.api.RecoveryResult" title="bittr_tess_vetter.api.RecoveryResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RecoveryResult</span></code></a></p></td>
+<td><p>Transit recovery result from active star.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="activity-types">
+<h3><a class="toc-backref" href="#id5" role="doc-backlink">Activity Types</a><a class="headerlink" href="#activity-types" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.ActivityResult.html#bittr_tess_vetter.api.ActivityResult" title="bittr_tess_vetter.api.ActivityResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ActivityResult</span></code></a></p></td>
+<td><p>Comprehensive stellar activity characterization.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.Flare.html#bittr_tess_vetter.api.Flare" title="bittr_tess_vetter.api.Flare"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Flare</span></code></a></p></td>
+<td><p>Single flare event detection.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+<section id="main-entry-point">
+<h2><a class="toc-backref" href="#id6" role="doc-backlink">Main Entry Point</a><a class="headerlink" href="#main-entry-point" title="Link to this heading">¶</a></h2>
+<p>The primary orchestration function for running the complete vetting pipeline.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.vet_candidate.html#bittr_tess_vetter.api.vet_candidate" title="bittr_tess_vetter.api.vet_candidate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vet_candidate</span></code></a></p></td>
+<td><p>Run a complete vetting pipeline on a transit candidate.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Aliases:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">btv.vet</span></code> is an alias for <code class="docutils literal notranslate"><span class="pre">vet_candidate</span></code></p></li>
+</ul>
+</section>
+<section id="periodogram-and-detection">
+<h2><a class="toc-backref" href="#id7" role="doc-backlink">Periodogram and Detection</a><a class="headerlink" href="#periodogram-and-detection" title="Link to this heading">¶</a></h2>
+<p>Functions for transit detection and periodogram analysis.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.run_periodogram.html#bittr_tess_vetter.api.run_periodogram" title="bittr_tess_vetter.api.run_periodogram"><code class="xref py py-obj docutils literal notranslate"><span class="pre">run_periodogram</span></code></a></p></td>
+<td><p>Host-facing wrapper for periodogram analysis.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.auto_periodogram.html#bittr_tess_vetter.api.auto_periodogram" title="bittr_tess_vetter.api.auto_periodogram"><code class="xref py py-obj docutils literal notranslate"><span class="pre">auto_periodogram</span></code></a></p></td>
+<td><p>Automatically compute periodogram with optimal settings.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.ls_periodogram.html#bittr_tess_vetter.api.ls_periodogram" title="bittr_tess_vetter.api.ls_periodogram"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ls_periodogram</span></code></a></p></td>
+<td><p>Compute Lomb-Scargle periodogram.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.tls_search.html#bittr_tess_vetter.api.tls_search" title="bittr_tess_vetter.api.tls_search"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tls_search</span></code></a></p></td>
+<td><p>Single TLS search.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.tls_search_per_sector.html#bittr_tess_vetter.api.tls_search_per_sector" title="bittr_tess_vetter.api.tls_search_per_sector"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tls_search_per_sector</span></code></a></p></td>
+<td><p>TLS search with per-sector strategy for multi-sector data.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.search_planets.html#bittr_tess_vetter.api.search_planets" title="bittr_tess_vetter.api.search_planets"><code class="xref py py-obj docutils literal notranslate"><span class="pre">search_planets</span></code></a></p></td>
+<td><p>Iterative multi-planet search using TLS.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.refine_period.html#bittr_tess_vetter.api.refine_period" title="bittr_tess_vetter.api.refine_period"><code class="xref py py-obj docutils literal notranslate"><span class="pre">refine_period</span></code></a></p></td>
+<td><p>Refine a period estimate with a constrained TLS search.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_transit_model.html#bittr_tess_vetter.api.compute_transit_model" title="bittr_tess_vetter.api.compute_transit_model"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_transit_model</span></code></a></p></td>
+<td><p>Compute a simple box transit model and fit diagnostics.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_bls_model.html#bittr_tess_vetter.api.compute_bls_model" title="bittr_tess_vetter.api.compute_bls_model"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_bls_model</span></code></a></p></td>
+<td><p>Compute BLS box model for given parameters.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.detect_sector_gaps.html#bittr_tess_vetter.api.detect_sector_gaps" title="bittr_tess_vetter.api.detect_sector_gaps"><code class="xref py py-obj docutils literal notranslate"><span class="pre">detect_sector_gaps</span></code></a></p></td>
+<td><p>Find indices where gaps &gt; threshold indicate sector boundaries.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.split_by_sectors.html#bittr_tess_vetter.api.split_by_sectors" title="bittr_tess_vetter.api.split_by_sectors"><code class="xref py py-obj docutils literal notranslate"><span class="pre">split_by_sectors</span></code></a></p></td>
+<td><p>Split light curve arrays at sector boundaries.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.merge_candidates.html#bittr_tess_vetter.api.merge_candidates" title="bittr_tess_vetter.api.merge_candidates"><code class="xref py py-obj docutils literal notranslate"><span class="pre">merge_candidates</span></code></a></p></td>
+<td><p>Merge candidates from multiple sectors, deduplicate by period.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Types:</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PerformancePreset.html#bittr_tess_vetter.api.PerformancePreset" title="bittr_tess_vetter.api.PerformancePreset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PerformancePreset</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PeriodogramPeak.html#bittr_tess_vetter.api.PeriodogramPeak" title="bittr_tess_vetter.api.PeriodogramPeak"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PeriodogramPeak</span></code></a></p></td>
+<td><p>Individual peak from periodogram analysis.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PeriodogramResult.html#bittr_tess_vetter.api.PeriodogramResult" title="bittr_tess_vetter.api.PeriodogramResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PeriodogramResult</span></code></a></p></td>
+<td><p>Complete periodogram analysis result.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Aliases:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">btv.periodogram</span></code> is an alias for <code class="docutils literal notranslate"><span class="pre">run_periodogram</span></code></p></li>
+</ul>
+</section>
+<section id="vetting-checks">
+<h2><a class="toc-backref" href="#id8" role="doc-backlink">Vetting Checks</a><a class="headerlink" href="#vetting-checks" title="Link to this heading">¶</a></h2>
+<section id="lc-only-checks-v01-v05">
+<h3><a class="toc-backref" href="#id9" role="doc-backlink">LC-Only Checks (V01-V05)</a><a class="headerlink" href="#lc-only-checks-v01-v05" title="Link to this heading">¶</a></h3>
+<p>Light curve-only vetting checks that do not require external data.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.odd_even_depth.html#bittr_tess_vetter.api.odd_even_depth" title="bittr_tess_vetter.api.odd_even_depth"><code class="xref py py-obj docutils literal notranslate"><span class="pre">odd_even_depth</span></code></a></p></td>
+<td><p>V01: Compare depth of odd vs even transits.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.secondary_eclipse.html#bittr_tess_vetter.api.secondary_eclipse" title="bittr_tess_vetter.api.secondary_eclipse"><code class="xref py py-obj docutils literal notranslate"><span class="pre">secondary_eclipse</span></code></a></p></td>
+<td><p>V02: Search for secondary eclipse at phase 0.5.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.duration_consistency.html#bittr_tess_vetter.api.duration_consistency" title="bittr_tess_vetter.api.duration_consistency"><code class="xref py py-obj docutils literal notranslate"><span class="pre">duration_consistency</span></code></a></p></td>
+<td><p>V03: Check transit duration vs stellar density expectation.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.depth_stability.html#bittr_tess_vetter.api.depth_stability" title="bittr_tess_vetter.api.depth_stability"><code class="xref py py-obj docutils literal notranslate"><span class="pre">depth_stability</span></code></a></p></td>
+<td><p>V04: Check depth consistency across individual transits.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.v_shape.html#bittr_tess_vetter.api.v_shape" title="bittr_tess_vetter.api.v_shape"><code class="xref py py-obj docutils literal notranslate"><span class="pre">v_shape</span></code></a></p></td>
+<td><p>V05: Distinguish U-shaped (planet) vs V-shaped (grazing EB) transits.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.vet_lc_only.html#bittr_tess_vetter.api.vet_lc_only" title="bittr_tess_vetter.api.vet_lc_only"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vet_lc_only</span></code></a></p></td>
+<td><p>Run all LC-only vetting checks (V01-V05).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="catalog-checks-v06-v07">
+<h3><a class="toc-backref" href="#id10" role="doc-backlink">Catalog Checks (V06-V07)</a><a class="headerlink" href="#catalog-checks-v06-v07" title="Link to this heading">¶</a></h3>
+<p>Checks that query external catalogs (require <code class="docutils literal notranslate"><span class="pre">network=True</span></code>).</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.nearby_eb_search.html#bittr_tess_vetter.api.nearby_eb_search" title="bittr_tess_vetter.api.nearby_eb_search"><code class="xref py py-obj docutils literal notranslate"><span class="pre">nearby_eb_search</span></code></a></p></td>
+<td><p>V06: Search for known eclipsing binaries near target.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.exofop_disposition.html#bittr_tess_vetter.api.exofop_disposition" title="bittr_tess_vetter.api.exofop_disposition"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exofop_disposition</span></code></a></p></td>
+<td><p>V07: Look up the ExoFOP-TESS TOI table row for a TIC.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.vet_catalog.html#bittr_tess_vetter.api.vet_catalog" title="bittr_tess_vetter.api.vet_catalog"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vet_catalog</span></code></a></p></td>
+<td><p>Run catalog vetting checks (V06-V07).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="pixel-checks-v08-v10">
+<h3><a class="toc-backref" href="#id11" role="doc-backlink">Pixel Checks (V08-V10)</a><a class="headerlink" href="#pixel-checks-v08-v10" title="Link to this heading">¶</a></h3>
+<p>Pixel-level vetting checks.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.centroid_shift.html#bittr_tess_vetter.api.centroid_shift" title="bittr_tess_vetter.api.centroid_shift"><code class="xref py py-obj docutils literal notranslate"><span class="pre">centroid_shift</span></code></a></p></td>
+<td><p>V08: Detect centroid motion during transit.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.difference_image_localization.html#bittr_tess_vetter.api.difference_image_localization" title="bittr_tess_vetter.api.difference_image_localization"><code class="xref py py-obj docutils literal notranslate"><span class="pre">difference_image_localization</span></code></a></p></td>
+<td><p>V09: Locate transit source via pixel-level light curve analysis.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.aperture_dependence.html#bittr_tess_vetter.api.aperture_dependence" title="bittr_tess_vetter.api.aperture_dependence"><code class="xref py py-obj docutils literal notranslate"><span class="pre">aperture_dependence</span></code></a></p></td>
+<td><p>V10: Check if transit depth varies with aperture size.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.vet_pixel.html#bittr_tess_vetter.api.vet_pixel" title="bittr_tess_vetter.api.vet_pixel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vet_pixel</span></code></a></p></td>
+<td><p>Run all pixel-level vetting checks (V08-V10).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="exovetter-checks-v11-v12">
+<h3><a class="toc-backref" href="#id12" role="doc-backlink">Exovetter Checks (V11-V12)</a><a class="headerlink" href="#exovetter-checks-v11-v12" title="Link to this heading">¶</a></h3>
+<p>Integration with the Exovetter package.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.modshift.html#bittr_tess_vetter.api.modshift" title="bittr_tess_vetter.api.modshift"><code class="xref py py-obj docutils literal notranslate"><span class="pre">modshift</span></code></a></p></td>
+<td><p>V11: ModShift test for secondary eclipse detection at arbitrary phase.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.sweet.html#bittr_tess_vetter.api.sweet" title="bittr_tess_vetter.api.sweet"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sweet</span></code></a></p></td>
+<td><p>V12: SWEET test for stellar variability masquerading as transits.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.vet_exovetter.html#bittr_tess_vetter.api.vet_exovetter" title="bittr_tess_vetter.api.vet_exovetter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vet_exovetter</span></code></a></p></td>
+<td><p>Run all exovetter checks (V11-V12).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+<section id="pixel-localization">
+<h2><a class="toc-backref" href="#id13" role="doc-backlink">Pixel Localization</a><a class="headerlink" href="#pixel-localization" title="Link to this heading">¶</a></h2>
+<p>WCS-aware localization and pixel analysis tools.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.localize_transit_source.html#bittr_tess_vetter.api.localize_transit_source" title="bittr_tess_vetter.api.localize_transit_source"><code class="xref py py-obj docutils literal notranslate"><span class="pre">localize_transit_source</span></code></a></p></td>
+<td><p>Localize the transit source using WCS-aware difference imaging.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.localize_transit_host_single_sector.html#bittr_tess_vetter.api.localize_transit_host_single_sector" title="bittr_tess_vetter.api.localize_transit_host_single_sector"><code class="xref py py-obj docutils literal notranslate"><span class="pre">localize_transit_host_single_sector</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.localize_transit_host_single_sector_with_baseline_check.html#bittr_tess_vetter.api.localize_transit_host_single_sector_with_baseline_check" title="bittr_tess_vetter.api.localize_transit_host_single_sector_with_baseline_check"><code class="xref py py-obj docutils literal notranslate"><span class="pre">localize_transit_host_single_sector_with_baseline_check</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.localize_transit_host_multi_sector.html#bittr_tess_vetter.api.localize_transit_host_multi_sector" title="bittr_tess_vetter.api.localize_transit_host_multi_sector"><code class="xref py py-obj docutils literal notranslate"><span class="pre">localize_transit_host_multi_sector</span></code></a></p></td>
+<td><p>Localize the transit host across multiple sectors and build a consensus.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_aperture_family_depth_curve.html#bittr_tess_vetter.api.compute_aperture_family_depth_curve" title="bittr_tess_vetter.api.compute_aperture_family_depth_curve"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_aperture_family_depth_curve</span></code></a></p></td>
+<td><p>Compute transit depth as a function of aperture size.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.generate_pixel_vet_report.html#bittr_tess_vetter.api.generate_pixel_vet_report" title="bittr_tess_vetter.api.generate_pixel_vet_report"><code class="xref py py-obj docutils literal notranslate"><span class="pre">generate_pixel_vet_report</span></code></a></p></td>
+<td><p>Generate a <cite>PixelVetReport</cite> bundling available pixel diagnostics.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Types:</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.LocalizationResult.html#bittr_tess_vetter.api.LocalizationResult" title="bittr_tess_vetter.api.LocalizationResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LocalizationResult</span></code></a></p></td>
+<td><p>WCS-aware localization result with uncertainty quantification.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.LocalizationVerdict.html#bittr_tess_vetter.api.LocalizationVerdict" title="bittr_tess_vetter.api.LocalizationVerdict"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LocalizationVerdict</span></code></a></p></td>
+<td><p>Machine-readable localization verdict.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.ReferenceSource.html#bittr_tess_vetter.api.ReferenceSource" title="bittr_tess_vetter.api.ReferenceSource"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ReferenceSource</span></code></a></p></td>
+<td><p>Reference sky position used for host-hypothesis localization.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.LocalizationDiagnostics.html#bittr_tess_vetter.api.LocalizationDiagnostics" title="bittr_tess_vetter.api.LocalizationDiagnostics"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LocalizationDiagnostics</span></code></a></p></td>
+<td><p>alias of <code class="xref py py-class docutils literal notranslate"><span class="pre">LocalizationDiagnosticsResult</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.LocalizationImages.html#bittr_tess_vetter.api.LocalizationImages" title="bittr_tess_vetter.api.LocalizationImages"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LocalizationImages</span></code></a></p></td>
+<td><p>dict() -&gt; new empty dictionary dict(mapping) -&gt; new dictionary initialized from a mapping object's     (key, value) pairs dict(iterable) -&gt; new dictionary initialized as if via:     d = {}     for k, v in iterable:         d[k] = v dict(<a href="#id1"><span class="problematic" id="id2">**</span></a>kwargs) -&gt; new dictionary initialized with the name=value pairs     in the keyword argument list. For example:  dict(one=1, two=2).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TransitParams.html#bittr_tess_vetter.api.TransitParams" title="bittr_tess_vetter.api.TransitParams"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TransitParams</span></code></a></p></td>
+<td><p>Parameters describing a transit signal.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.ApertureFamilyResult.html#bittr_tess_vetter.api.ApertureFamilyResult" title="bittr_tess_vetter.api.ApertureFamilyResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ApertureFamilyResult</span></code></a></p></td>
+<td><p>Result from aperture family depth curve analysis.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PixelVetReport.html#bittr_tess_vetter.api.PixelVetReport" title="bittr_tess_vetter.api.PixelVetReport"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PixelVetReport</span></code></a></p></td>
+<td><p>Bundle of pixel-level diagnostics (no policy).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Aliases:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">btv.localize</span></code> is an alias for <code class="docutils literal notranslate"><span class="pre">localize_transit_source</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">btv.aperture_family_depth_curve</span></code> is an alias for <code class="docutils literal notranslate"><span class="pre">compute_aperture_family_depth_curve</span></code></p></li>
+</ul>
+</section>
+<section id="transit-fitting-v3">
+<h2><a class="toc-backref" href="#id14" role="doc-backlink">Transit Fitting (v3)</a><a class="headerlink" href="#transit-fitting-v3" title="Link to this heading">¶</a></h2>
+<p>Physical transit model fitting using batman.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.fit_transit.html#bittr_tess_vetter.api.fit_transit" title="bittr_tess_vetter.api.fit_transit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fit_transit</span></code></a></p></td>
+<td><p>Fit physical transit model using batman.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.quick_estimate.html#bittr_tess_vetter.api.quick_estimate" title="bittr_tess_vetter.api.quick_estimate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">quick_estimate</span></code></a></p></td>
+<td><p>Analytic initial guesses for transit parameters.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="timing-analysis-v3">
+<h2><a class="toc-backref" href="#id15" role="doc-backlink">Timing Analysis (v3)</a><a class="headerlink" href="#timing-analysis-v3" title="Link to this heading">¶</a></h2>
+<p>Transit timing measurements and TTV analysis.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.measure_transit_times.html#bittr_tess_vetter.api.measure_transit_times" title="bittr_tess_vetter.api.measure_transit_times"><code class="xref py py-obj docutils literal notranslate"><span class="pre">measure_transit_times</span></code></a></p></td>
+<td><p>Measure mid-transit times for all observable transits.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.analyze_ttvs.html#bittr_tess_vetter.api.analyze_ttvs" title="bittr_tess_vetter.api.analyze_ttvs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">analyze_ttvs</span></code></a></p></td>
+<td><p>Compute O-C residuals and TTV statistics.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<section id="ttv-track-search">
+<h3><a class="toc-backref" href="#id16" role="doc-backlink">TTV Track Search</a><a class="headerlink" href="#ttv-track-search" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.run_ttv_track_search.html#bittr_tess_vetter.api.run_ttv_track_search" title="bittr_tess_vetter.api.run_ttv_track_search"><code class="xref py py-obj docutils literal notranslate"><span class="pre">run_ttv_track_search</span></code></a></p></td>
+<td><p>Run a TTV track search around a known ephemeris.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.run_ttv_track_search_for_candidate.html#bittr_tess_vetter.api.run_ttv_track_search_for_candidate" title="bittr_tess_vetter.api.run_ttv_track_search_for_candidate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">run_ttv_track_search_for_candidate</span></code></a></p></td>
+<td><p>Run TTV track search using a Candidate's ephemeris.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.estimate_search_cost.html#bittr_tess_vetter.api.estimate_search_cost" title="bittr_tess_vetter.api.estimate_search_cost"><code class="xref py py-obj docutils literal notranslate"><span class="pre">estimate_search_cost</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.identify_observing_windows.html#bittr_tess_vetter.api.identify_observing_windows" title="bittr_tess_vetter.api.identify_observing_windows"><code class="xref py py-obj docutils literal notranslate"><span class="pre">identify_observing_windows</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.should_run_ttv_search.html#bittr_tess_vetter.api.should_run_ttv_search" title="bittr_tess_vetter.api.should_run_ttv_search"><code class="xref py py-obj docutils literal notranslate"><span class="pre">should_run_ttv_search</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Types:</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TTVSearchBudget.html#bittr_tess_vetter.api.TTVSearchBudget" title="bittr_tess_vetter.api.TTVSearchBudget"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TTVSearchBudget</span></code></a></p></td>
+<td><p>Budget controls for TTV track search.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TTVTrackSearchResult.html#bittr_tess_vetter.api.TTVTrackSearchResult" title="bittr_tess_vetter.api.TTVTrackSearchResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TTVTrackSearchResult</span></code></a></p></td>
+<td><p>Full result from a TTV track search.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+<section id="activity-characterization-v3">
+<h2><a class="toc-backref" href="#id17" role="doc-backlink">Activity Characterization (v3)</a><a class="headerlink" href="#activity-characterization-v3" title="Link to this heading">¶</a></h2>
+<p>Stellar activity analysis and flare detection.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.characterize_activity.html#bittr_tess_vetter.api.characterize_activity" title="bittr_tess_vetter.api.characterize_activity"><code class="xref py py-obj docutils literal notranslate"><span class="pre">characterize_activity</span></code></a></p></td>
+<td><p>Characterize stellar activity from light curve.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.mask_flares.html#bittr_tess_vetter.api.mask_flares" title="bittr_tess_vetter.api.mask_flares"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mask_flares</span></code></a></p></td>
+<td><p>Replace flare regions with interpolated baseline.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="transit-recovery-v3">
+<h2><a class="toc-backref" href="#id18" role="doc-backlink">Transit Recovery (v3)</a><a class="headerlink" href="#transit-recovery-v3" title="Link to this heading">¶</a></h2>
+<p>Signal recovery for active stars.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.recover_transit.html#bittr_tess_vetter.api.recover_transit" title="bittr_tess_vetter.api.recover_transit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">recover_transit</span></code></a></p></td>
+<td><p>Recover transit signal from active star.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.recover_transit_timeseries.html#bittr_tess_vetter.api.recover_transit_timeseries" title="bittr_tess_vetter.api.recover_transit_timeseries"><code class="xref py py-obj docutils literal notranslate"><span class="pre">recover_transit_timeseries</span></code></a></p></td>
+<td><p>Recover a known transit signal by removing stellar variability and stacking transits.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.detrend.html#bittr_tess_vetter.api.detrend" title="bittr_tess_vetter.api.detrend"><code class="xref py py-obj docutils literal notranslate"><span class="pre">detrend</span></code></a></p></td>
+<td><p>Detrend light curve while preserving transits.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.stack_transits.html#bittr_tess_vetter.api.stack_transits" title="bittr_tess_vetter.api.stack_transits"><code class="xref py py-obj docutils literal notranslate"><span class="pre">stack_transits</span></code></a></p></td>
+<td><p>Phase-fold and stack all transits.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="prf-and-pixel-modeling">
+<h2><a class="toc-backref" href="#id19" role="doc-backlink">PRF and Pixel Modeling</a><a class="headerlink" href="#prf-and-pixel-modeling" title="Link to this heading">¶</a></h2>
+<p>Point Response Function modeling for pixel-level analysis.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.build_prf_model.html#bittr_tess_vetter.api.build_prf_model" title="bittr_tess_vetter.api.build_prf_model"><code class="xref py py-obj docutils literal notranslate"><span class="pre">build_prf_model</span></code></a></p></td>
+<td><p>Build a 2D Gaussian PSF model centered at given pixel coordinates.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.build_prf_model_at_pixels.html#bittr_tess_vetter.api.build_prf_model_at_pixels" title="bittr_tess_vetter.api.build_prf_model_at_pixels"><code class="xref py py-obj docutils literal notranslate"><span class="pre">build_prf_model_at_pixels</span></code></a></p></td>
+<td><p>Build a 2D Gaussian PSF model evaluated at specific pixel coordinates.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.evaluate_prf_weights.html#bittr_tess_vetter.api.evaluate_prf_weights" title="bittr_tess_vetter.api.evaluate_prf_weights"><code class="xref py py-obj docutils literal notranslate"><span class="pre">evaluate_prf_weights</span></code></a></p></td>
+<td><p>Evaluate the flux fraction captured within an aperture mask.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.get_prf_model.html#bittr_tess_vetter.api.get_prf_model" title="bittr_tess_vetter.api.get_prf_model"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_prf_model</span></code></a></p></td>
+<td><p>Get a PRF model instance.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.score_hypotheses_prf_lite.html#bittr_tess_vetter.api.score_hypotheses_prf_lite" title="bittr_tess_vetter.api.score_hypotheses_prf_lite"><code class="xref py py-obj docutils literal notranslate"><span class="pre">score_hypotheses_prf_lite</span></code></a></p></td>
+<td><p>Score source hypotheses by fitting PRF-lite models to a difference image.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.score_hypotheses_with_prf.html#bittr_tess_vetter.api.score_hypotheses_with_prf" title="bittr_tess_vetter.api.score_hypotheses_with_prf"><code class="xref py py-obj docutils literal notranslate"><span class="pre">score_hypotheses_with_prf</span></code></a></p></td>
+<td><p>Score source hypotheses using specified PRF backend.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.fit_aperture_hypothesis.html#bittr_tess_vetter.api.fit_aperture_hypothesis" title="bittr_tess_vetter.api.fit_aperture_hypothesis"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fit_aperture_hypothesis</span></code></a></p></td>
+<td><p>Fit aperture depth curves to identify the transit host.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.aggregate_multi_sector.html#bittr_tess_vetter.api.aggregate_multi_sector" title="bittr_tess_vetter.api.aggregate_multi_sector"><code class="xref py py-obj docutils literal notranslate"><span class="pre">aggregate_multi_sector</span></code></a></p></td>
+<td><p>Aggregate per-sector hypothesis rankings into a multi-sector consensus.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Types:</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PRFParams.html#bittr_tess_vetter.api.PRFParams" title="bittr_tess_vetter.api.PRFParams"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PRFParams</span></code></a></p></td>
+<td><p>Parameters for a PRF/PSF model.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PRFFitResult.html#bittr_tess_vetter.api.PRFFitResult" title="bittr_tess_vetter.api.PRFFitResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PRFFitResult</span></code></a></p></td>
+<td><p>Result of fitting a PRF/PSF model to image data.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.BackgroundParams.html#bittr_tess_vetter.api.BackgroundParams" title="bittr_tess_vetter.api.BackgroundParams"><code class="xref py py-obj docutils literal notranslate"><span class="pre">BackgroundParams</span></code></a></p></td>
+<td><p>Background gradient parameters.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PRFModel.html#bittr_tess_vetter.api.PRFModel" title="bittr_tess_vetter.api.PRFModel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PRFModel</span></code></a></p></td>
+<td><p>Protocol for PRF/PSF models.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.PRFBackend.html#bittr_tess_vetter.api.PRFBackend" title="bittr_tess_vetter.api.PRFBackend"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PRFBackend</span></code></a></p></td>
+<td><p>alias of <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Literal" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Literal</span></code></a>['prf_lite', 'parametric', 'instrument']</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.HypothesisScore.html#bittr_tess_vetter.api.HypothesisScore" title="bittr_tess_vetter.api.HypothesisScore"><code class="xref py py-obj docutils literal notranslate"><span class="pre">HypothesisScore</span></code></a></p></td>
+<td><p>Per-hypothesis scoring result from PRF-based fitting.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.MultiSectorConsensus.html#bittr_tess_vetter.api.MultiSectorConsensus" title="bittr_tess_vetter.api.MultiSectorConsensus"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MultiSectorConsensus</span></code></a></p></td>
+<td><p>Result of aggregating per-sector hypothesis rankings.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.ApertureHypothesisFit.html#bittr_tess_vetter.api.ApertureHypothesisFit" title="bittr_tess_vetter.api.ApertureHypothesisFit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ApertureHypothesisFit</span></code></a></p></td>
+<td><p>Result of aperture-based host hypothesis testing.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.AperturePrediction.html#bittr_tess_vetter.api.AperturePrediction" title="bittr_tess_vetter.api.AperturePrediction"><code class="xref py py-obj docutils literal notranslate"><span class="pre">AperturePrediction</span></code></a></p></td>
+<td><p>Predicted depth-vs-aperture curve for a hypothesis.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.ApertureConflict.html#bittr_tess_vetter.api.ApertureConflict" title="bittr_tess_vetter.api.ApertureConflict"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ApertureConflict</span></code></a></p></td>
+<td><p>Detected conflict between localization and aperture evidence.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="false-positive-probability">
+<h2><a class="toc-backref" href="#id20" role="doc-backlink">False Positive Probability</a><a class="headerlink" href="#false-positive-probability" title="Link to this heading">¶</a></h2>
+<p>FPP estimation using TRICERATOPS+.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.calculate_fpp.html#bittr_tess_vetter.api.calculate_fpp" title="bittr_tess_vetter.api.calculate_fpp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">calculate_fpp</span></code></a></p></td>
+<td><p>Calculate FPP using TRICERATOPS+ with an explicit preset.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Types:</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.TriceratopsFppPreset.html#bittr_tess_vetter.api.TriceratopsFppPreset" title="bittr_tess_vetter.api.TriceratopsFppPreset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TriceratopsFppPreset</span></code></a></p></td>
+<td><p>Controls tradeoffs between runtime, stability, and fidelity.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.FAST_PRESET.html#bittr_tess_vetter.api.FAST_PRESET" title="bittr_tess_vetter.api.FAST_PRESET"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FAST_PRESET</span></code></a></p></td>
+<td><p>Controls tradeoffs between runtime, stability, and fidelity.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.STANDARD_PRESET.html#bittr_tess_vetter.api.STANDARD_PRESET" title="bittr_tess_vetter.api.STANDARD_PRESET"><code class="xref py py-obj docutils literal notranslate"><span class="pre">STANDARD_PRESET</span></code></a></p></td>
+<td><p>Controls tradeoffs between runtime, stability, and fidelity.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="ephemeris-matching">
+<h2><a class="toc-backref" href="#id21" role="doc-backlink">Ephemeris Matching</a><a class="headerlink" href="#ephemeris-matching" title="Link to this heading">¶</a></h2>
+<p>Tools for matching ephemerides across catalogs.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.run_ephemeris_matching.html#bittr_tess_vetter.api.run_ephemeris_matching" title="bittr_tess_vetter.api.run_ephemeris_matching"><code class="xref py py-obj docutils literal notranslate"><span class="pre">run_ephemeris_matching</span></code></a></p></td>
+<td><p>Run full ephemeris matching for a candidate.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.build_index_from_csv.html#bittr_tess_vetter.api.build_index_from_csv" title="bittr_tess_vetter.api.build_index_from_csv"><code class="xref py py-obj docutils literal notranslate"><span class="pre">build_index_from_csv</span></code></a></p></td>
+<td><p>Build ephemeris index from a CSV file.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_match_score.html#bittr_tess_vetter.api.compute_match_score" title="bittr_tess_vetter.api.compute_match_score"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_match_score</span></code></a></p></td>
+<td><p>Compute match score from residuals (higher is better, 0-1].</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_harmonic_match.html#bittr_tess_vetter.api.compute_harmonic_match" title="bittr_tess_vetter.api.compute_harmonic_match"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_harmonic_match</span></code></a></p></td>
+<td><p>Check for harmonic relationship between query and entry ephemerides.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.classify_matches.html#bittr_tess_vetter.api.classify_matches" title="bittr_tess_vetter.api.classify_matches"><code class="xref py py-obj docutils literal notranslate"><span class="pre">classify_matches</span></code></a></p></td>
+<td><p>Classify matches and return best match.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.load_index.html#bittr_tess_vetter.api.load_index" title="bittr_tess_vetter.api.load_index"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_index</span></code></a></p></td>
+<td><p>Load ephemeris index from a JSON file.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.save_index.html#bittr_tess_vetter.api.save_index" title="bittr_tess_vetter.api.save_index"><code class="xref py py-obj docutils literal notranslate"><span class="pre">save_index</span></code></a></p></td>
+<td><p>Save ephemeris index to a JSON file.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.wrap_t0.html#bittr_tess_vetter.api.wrap_t0" title="bittr_tess_vetter.api.wrap_t0"><code class="xref py py-obj docutils literal notranslate"><span class="pre">wrap_t0</span></code></a></p></td>
+<td><p>Wrap t0 to [0, period) relative to a reference epoch.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Types:</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.EphemerisEntry.html#bittr_tess_vetter.api.EphemerisEntry" title="bittr_tess_vetter.api.EphemerisEntry"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EphemerisEntry</span></code></a></p></td>
+<td><p>An entry in the ephemeris index.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.EphemerisIndex.html#bittr_tess_vetter.api.EphemerisIndex" title="bittr_tess_vetter.api.EphemerisIndex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EphemerisIndex</span></code></a></p></td>
+<td><p>Searchable ephemeris index with harmonic support.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.EphemerisMatch.html#bittr_tess_vetter.api.EphemerisMatch" title="bittr_tess_vetter.api.EphemerisMatch"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EphemerisMatch</span></code></a></p></td>
+<td><p>A match result from the ephemeris index.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.EphemerisMatchResult.html#bittr_tess_vetter.api.EphemerisMatchResult" title="bittr_tess_vetter.api.EphemerisMatchResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EphemerisMatchResult</span></code></a></p></td>
+<td><p>Full match result for a candidate.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.MatchClass.html#bittr_tess_vetter.api.MatchClass" title="bittr_tess_vetter.api.MatchClass"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MatchClass</span></code></a></p></td>
+<td><p>alias of <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Literal" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Literal</span></code></a>['EPHEMERIS_MATCH_STRONG', 'EPHEMERIS_MATCH_WEAK', 'NONE']</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="transit-masks-and-utilities">
+<h2><a class="toc-backref" href="#id22" role="doc-backlink">Transit Masks and Utilities</a><a class="headerlink" href="#transit-masks-and-utilities" title="Link to this heading">¶</a></h2>
+<p>Helper functions for transit analysis.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.get_in_transit_mask.html#bittr_tess_vetter.api.get_in_transit_mask" title="bittr_tess_vetter.api.get_in_transit_mask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_in_transit_mask</span></code></a></p></td>
+<td><p>Get boolean mask for in-transit points.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.get_out_of_transit_mask.html#bittr_tess_vetter.api.get_out_of_transit_mask" title="bittr_tess_vetter.api.get_out_of_transit_mask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_out_of_transit_mask</span></code></a></p></td>
+<td><p>Get boolean mask for out-of-transit points.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.get_out_of_transit_mask_windowed.html#bittr_tess_vetter.api.get_out_of_transit_mask_windowed" title="bittr_tess_vetter.api.get_out_of_transit_mask_windowed"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_out_of_transit_mask_windowed</span></code></a></p></td>
+<td><p>Out-of-transit mask with a local window around each transit.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.get_odd_even_transit_indices.html#bittr_tess_vetter.api.get_odd_even_transit_indices" title="bittr_tess_vetter.api.get_odd_even_transit_indices"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_odd_even_transit_indices</span></code></a></p></td>
+<td><p>Get transit orbit numbers for each time point (odd/even).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.measure_transit_depth.html#bittr_tess_vetter.api.measure_transit_depth" title="bittr_tess_vetter.api.measure_transit_depth"><code class="xref py py-obj docutils literal notranslate"><span class="pre">measure_transit_depth</span></code></a></p></td>
+<td><p>Measure transit depth from in/out-of-transit flux.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.count_transits.html#bittr_tess_vetter.api.count_transits" title="bittr_tess_vetter.api.count_transits"><code class="xref py py-obj docutils literal notranslate"><span class="pre">count_transits</span></code></a></p></td>
+<td><p>Count the number of observable transits in the data.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.odd_even_result.html#bittr_tess_vetter.api.odd_even_result" title="bittr_tess_vetter.api.odd_even_result"><code class="xref py py-obj docutils literal notranslate"><span class="pre">odd_even_result</span></code></a></p></td>
+<td><p>Compute odd/even depth comparison for eclipsing binary detection.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<section id="prefilters">
+<h3><a class="toc-backref" href="#id23" role="doc-backlink">Prefilters</a><a class="headerlink" href="#prefilters" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_depth_over_depth_err_snr.html#bittr_tess_vetter.api.compute_depth_over_depth_err_snr" title="bittr_tess_vetter.api.compute_depth_over_depth_err_snr"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_depth_over_depth_err_snr</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_phase_coverage.html#bittr_tess_vetter.api.compute_phase_coverage" title="bittr_tess_vetter.api.compute_phase_coverage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_phase_coverage</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="cadence-and-aperture">
+<h3><a class="toc-backref" href="#id24" role="doc-backlink">Cadence and Aperture</a><a class="headerlink" href="#cadence-and-aperture" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.default_cadence_mask.html#bittr_tess_vetter.api.default_cadence_mask" title="bittr_tess_vetter.api.default_cadence_mask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">default_cadence_mask</span></code></a></p></td>
+<td><p>Return a conservative cadence mask for pixel-level computations.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.create_circular_aperture_mask.html#bittr_tess_vetter.api.create_circular_aperture_mask" title="bittr_tess_vetter.api.create_circular_aperture_mask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_circular_aperture_mask</span></code></a></p></td>
+<td><p>Create a circular aperture mask.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+<section id="evidence-and-provenance">
+<h2><a class="toc-backref" href="#id25" role="doc-backlink">Evidence and Provenance</a><a class="headerlink" href="#evidence-and-provenance" title="Link to this heading">¶</a></h2>
+<p>Tools for evidence serialization and provenance tracking.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.checks_to_evidence_items.html#bittr_tess_vetter.api.checks_to_evidence_items" title="bittr_tess_vetter.api.checks_to_evidence_items"><code class="xref py py-obj docutils literal notranslate"><span class="pre">checks_to_evidence_items</span></code></a></p></td>
+<td><p>Convert CheckResult objects to JSON-serializable evidence-like dicts.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.EvidenceEnvelope.html#bittr_tess_vetter.api.EvidenceEnvelope" title="bittr_tess_vetter.api.EvidenceEnvelope"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EvidenceEnvelope</span></code></a></p></td>
+<td><p>A JSON-friendly envelope for an evidence product.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.EvidenceProvenance.html#bittr_tess_vetter.api.EvidenceProvenance" title="bittr_tess_vetter.api.EvidenceProvenance"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EvidenceProvenance</span></code></a></p></td>
+<td><p>Provenance for an evidence product.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.compute_evidence_code_hash.html#bittr_tess_vetter.api.compute_evidence_code_hash" title="bittr_tess_vetter.api.compute_evidence_code_hash"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_evidence_code_hash</span></code></a></p></td>
+<td><p>Compute a best-effort code identifier for provenance.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.load_evidence.html#bittr_tess_vetter.api.load_evidence" title="bittr_tess_vetter.api.load_evidence"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_evidence</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.save_evidence.html#bittr_tess_vetter.api.save_evidence" title="bittr_tess_vetter.api.save_evidence"><code class="xref py py-obj docutils literal notranslate"><span class="pre">save_evidence</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="utilities">
+<h2><a class="toc-backref" href="#id26" role="doc-backlink">Utilities</a><a class="headerlink" href="#utilities" title="Link to this heading">¶</a></h2>
+<p>General utility functions and constants.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.cap_top_k.html#bittr_tess_vetter.api.cap_top_k" title="bittr_tess_vetter.api.cap_top_k"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cap_top_k</span></code></a></p></td>
+<td><p>Truncate list to max_items, log warning if truncated.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.cap_neighbors.html#bittr_tess_vetter.api.cap_neighbors" title="bittr_tess_vetter.api.cap_neighbors"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cap_neighbors</span></code></a></p></td>
+<td><p>Truncate neighbor list, log warning if truncated.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.cap_plots.html#bittr_tess_vetter.api.cap_plots" title="bittr_tess_vetter.api.cap_plots"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cap_plots</span></code></a></p></td>
+<td><p>Truncate plot list, log warning if truncated.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.cap_variant_summaries.html#bittr_tess_vetter.api.cap_variant_summaries" title="bittr_tess_vetter.api.cap_variant_summaries"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cap_variant_summaries</span></code></a></p></td>
+<td><p>Truncate variant summaries, log warning if truncated.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.check_tolerance.html#bittr_tess_vetter.api.check_tolerance" title="bittr_tess_vetter.api.check_tolerance"><code class="xref py py-obj docutils literal notranslate"><span class="pre">check_tolerance</span></code></a></p></td>
+<td><p>Check if a replayed value is within tolerance of the original.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Types:</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.ToleranceResult.html#bittr_tess_vetter.api.ToleranceResult" title="bittr_tess_vetter.api.ToleranceResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ToleranceResult</span></code></a></p></td>
+<td><p>Result of a tolerance check between original and replayed values.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Constants:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">DEFAULT_TOP_K_CAP</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">DEFAULT_VARIANT_SUMMARIES_CAP</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">DEFAULT_NEIGHBORS_CAP</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">DEFAULT_PLOTS_CAP</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">HARMONIC_RATIOS</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MLX_AVAILABLE</span></code></p></li>
+</ul>
+</section>
+<section id="mlx-acceleration-optional">
+<h2><a class="toc-backref" href="#id27" role="doc-backlink">MLX Acceleration (Optional)</a><a class="headerlink" href="#mlx-acceleration-optional" title="Link to this heading">¶</a></h2>
+<p>GPU-accelerated functions for Apple Silicon (requires MLX).</p>
+<p>These functions are only available when <code class="docutils literal notranslate"><span class="pre">MLX_AVAILABLE</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.smooth_box_template.html#bittr_tess_vetter.api.smooth_box_template" title="bittr_tess_vetter.api.smooth_box_template"><code class="xref py py-obj docutils literal notranslate"><span class="pre">smooth_box_template</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.score_fixed_period.html#bittr_tess_vetter.api.score_fixed_period" title="bittr_tess_vetter.api.score_fixed_period"><code class="xref py py-obj docutils literal notranslate"><span class="pre">score_fixed_period</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.score_fixed_period_refine_t0.html#bittr_tess_vetter.api.score_fixed_period_refine_t0" title="bittr_tess_vetter.api.score_fixed_period_refine_t0"><code class="xref py py-obj docutils literal notranslate"><span class="pre">score_fixed_period_refine_t0</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.score_top_k_periods.html#bittr_tess_vetter.api.score_top_k_periods" title="bittr_tess_vetter.api.score_top_k_periods"><code class="xref py py-obj docutils literal notranslate"><span class="pre">score_top_k_periods</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.integrated_gradients.html#bittr_tess_vetter.api.integrated_gradients" title="bittr_tess_vetter.api.integrated_gradients"><code class="xref py py-obj docutils literal notranslate"><span class="pre">integrated_gradients</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Types:</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.MlxTopKScoreResult.html#bittr_tess_vetter.api.MlxTopKScoreResult" title="bittr_tess_vetter.api.MlxTopKScoreResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MlxTopKScoreResult</span></code></a></p></td>
+<td><p>Result of scoring a small set of candidate periods.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/bittr_tess_vetter.api.MlxT0RefinementResult.html#bittr_tess_vetter.api.MlxT0RefinementResult" title="bittr_tess_vetter.api.MlxT0RefinementResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MlxT0RefinementResult</span></code></a></p></td>
+<td><p>Result of local t0 refinement for a fixed-period MLX score.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="_autosummary/bittr_tess_vetter.api.Ephemeris.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">bittr_tess_vetter.api.Ephemeris</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="quickstart.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Quickstart</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2024, bittr-tess-vetter contributors
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">API Reference</a><ul>
+<li><a class="reference internal" href="#core-types">Core Types</a><ul>
+<li><a class="reference internal" href="#transit-fitting-types">Transit Fitting Types</a></li>
+<li><a class="reference internal" href="#activity-types">Activity Types</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#main-entry-point">Main Entry Point</a></li>
+<li><a class="reference internal" href="#periodogram-and-detection">Periodogram and Detection</a><ul>
+</ul>
+</li>
+<li><a class="reference internal" href="#vetting-checks">Vetting Checks</a><ul>
+<li><a class="reference internal" href="#lc-only-checks-v01-v05">LC-Only Checks (V01-V05)</a></li>
+<li><a class="reference internal" href="#catalog-checks-v06-v07">Catalog Checks (V06-V07)</a></li>
+<li><a class="reference internal" href="#pixel-checks-v08-v10">Pixel Checks (V08-V10)</a></li>
+<li><a class="reference internal" href="#exovetter-checks-v11-v12">Exovetter Checks (V11-V12)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#pixel-localization">Pixel Localization</a><ul>
+</ul>
+</li>
+<li><a class="reference internal" href="#transit-fitting-v3">Transit Fitting (v3)</a></li>
+<li><a class="reference internal" href="#timing-analysis-v3">Timing Analysis (v3)</a><ul>
+<li><a class="reference internal" href="#ttv-track-search">TTV Track Search</a><ul>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#activity-characterization-v3">Activity Characterization (v3)</a></li>
+<li><a class="reference internal" href="#transit-recovery-v3">Transit Recovery (v3)</a></li>
+<li><a class="reference internal" href="#prf-and-pixel-modeling">PRF and Pixel Modeling</a><ul>
+</ul>
+</li>
+<li><a class="reference internal" href="#false-positive-probability">False Positive Probability</a><ul>
+</ul>
+</li>
+<li><a class="reference internal" href="#ephemeris-matching">Ephemeris Matching</a><ul>
+</ul>
+</li>
+<li><a class="reference internal" href="#transit-masks-and-utilities">Transit Masks and Utilities</a><ul>
+<li><a class="reference internal" href="#prefilters">Prefilters</a></li>
+<li><a class="reference internal" href="#cadence-and-aperture">Cadence and Aperture</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#evidence-and-provenance">Evidence and Provenance</a></li>
+<li><a class="reference internal" href="#utilities">Utilities</a><ul>
+</ul>
+</li>
+<li><a class="reference internal" href="#mlx-acceleration-optional">MLX Acceleration (Optional)</a><ul>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=f539c95a"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>

@@ -47,6 +47,12 @@ triceratops = [
   "matplotlib>=3.5.1",
   "astroquery>=0.4.6",
 ]
+docs = [
+  "sphinx>=7.0",
+  "furo",
+  "sphinx-autodoc-typehints",
+  "myst-parser",
+]
 all = ["bittr-tess-vetter[wotan,ldtk,triceratops]"]
 
 [tool.hatch.build.targets.wheel]
