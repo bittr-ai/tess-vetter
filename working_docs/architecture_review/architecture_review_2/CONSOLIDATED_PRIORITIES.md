@@ -1,55 +1,48 @@
 # Open-Source Release Priorities: bittr-tess-vetter
-*Consolidated Architecture Review - 2026-01-14 (v2)*
+*Consolidated Architecture Review - 2026-01-14 (v3)*
 
 ---
 
 ## Executive Summary
 
-**bittr-tess-vetter is now release-ready.** All P0 critical blockers and P1 high-priority items were completed in commit `2c2f2e4` on 2026-01-14.
+**bittr-tess-vetter is ready for public release and JOSS/pyOpenSci submission.**
+
+Two tranches of work completed:
+- **Tranche 1** (`2c2f2e4`): All P0/P1 blockers — tests, linting, CI, licensing, community files
+- **Tranche 2** (`75b3fe3`): Documentation infrastructure — Sphinx, tutorials, release automation
 
 The repository now has:
-- ✅ All tests passing (`uv run pytest` → 1882 passed)
-- ✅ All linting clean (`uv run ruff check .` → 0 errors)
-- ✅ CI/CD automation (GitHub Actions: lint, typecheck, test matrix)
-- ✅ Security vulnerabilities patched (setuptools, requests, pydantic)
-- ✅ License clarity (MIT LICENSE file, ldtk made optional due to GPL-2.0)
-- ✅ Community infrastructure (CITATION.cff, CONTRIBUTING.md, CODE_OF_CONDUCT.md, templates)
-- ✅ Documentation accuracy (README paths fixed, REFERENCES.md generated)
+- ✅ All tests passing, all linting clean
+- ✅ CI/CD with coverage reporting and PyPI release automation
+- ✅ Sphinx documentation with full API reference (229 exports)
+- ✅ 3 tutorial notebooks (basic vetting, periodogram, pixel analysis)
+- ✅ ReadTheDocs configuration
+- ✅ MIT license with GPL dependencies made optional
 
-**Remaining work is polish and enhancements** — none of it blocks release.
+**Remaining work is minor polish** — ready to tag v0.1.0.
 
 ---
 
-## Current Priorities (P2 - Post-Release Polish)
+## Recommended Next Steps
 
-### P2.1 - Documentation: Create Sphinx Documentation Structure
-**Effort:** 4-6 hours
+1. **Push to GitHub** and enable ReadTheDocs
+2. **Tag `v0.1.0`** to trigger PyPI release
+3. **Enable Zenodo** for DOI citation
+4. **Submit to pyOpenSci/JOSS** for peer review
 
-Required for JOSS/pyOpenSci submission:
-- `docs/conf.py` with autodoc + napoleon
-- `docs/index.rst`
-- `docs/api.rst` (autosummary)
-- `.readthedocs.yaml`
+---
 
-### P2.2 - Testing: Add Edge Case Tests (NaN, Empty, Single-Element)
+## Remaining Items (P2/P3 - Optional Polish)
+
+### P2.2 - Testing: Add Edge Case Tests
 **Effort:** 4 hours
 
-Add parametrized tests for boundary conditions across public API functions.
-
-### P2.3 - CI: Add Coverage Reporting
-**Effort:** 1 hour
-
-Add pytest-cov and Codecov integration to CI workflow.
-
-### P2.4 - CI: Add Release Automation
-**Effort:** 1 hour
-
-Create `.github/workflows/release.yml` with trusted PyPI publishing.
+Add parametrized tests for boundary conditions (NaN, empty, single-element arrays).
 
 ### P2.8 - API: Add GPL Notice for triceratops Extras
 **Effort:** 15 minutes
 
-Document in installation docs that `[triceratops]` includes `pytransit` (GPL-2.0).
+Document that `[triceratops]` includes `pytransit` (GPL-2.0).
 
 ### P2.9 - UX: Add Warning When Checks Are Skipped
 **Effort:** 2 hours
@@ -59,11 +52,7 @@ When `network=False` or metadata missing, include warnings explaining skipped ch
 ### P2.11 - Define Minimal Install Path
 **Effort:** 2-4 hours
 
-Base deps are heavy (numba, emcee, arviz). Consider defining minimal core + extras pattern.
-
----
-
-## Backlog (P3 - Future Enhancements)
+Consider minimal core + extras pattern for lighter installs.
 
 ### P3.1 - Naming: Rename catalog.py to catalog_checks.py
 **Effort:** 2 hours
@@ -73,22 +62,17 @@ Address `catalog.py` vs `catalogs.py` confusion with deprecation wrapper.
 ### P3.2 - Documentation: Add Examples to Entry Point Docstrings
 **Effort:** 2 hours
 
-Add Example sections to `run_periodogram()`, `calculate_fpp()`, `localize_transit_source()`, `fit_transit()`.
-
-### P3.3 - Documentation: Add Tutorial Notebooks
-**Effort:** 8 hours
-
-Create numbered tutorials: `01-basic-vetting.ipynb`, `02-custom-checks.ipynb`, `03-batch-processing.ipynb`.
+Add Example sections to key functions.
 
 ### P3.4 - UX: Add vet_tic() Convenience Function
 **Effort:** 4 hours
 
-One-liner vetting: `result = vet_tic(tic_id=261136679, period=3.5, t0=1850.0, duration_hours=2.5)`
+One-liner vetting for researchers with known TIC ID.
 
 ### P3.5 - UX: Make FPP Cache Optional
 **Effort:** 4-6 hours
 
-Provide default in-memory caching or `calculate_fpp_simple()` alternative.
+Provide default in-memory caching for `calculate_fpp()`.
 
 ### P3.6 - Performance: Reduce First-Access Latency
 **Effort:** 4 hours
@@ -98,12 +82,12 @@ First access loads 935 modules. Consider splitting `types.py`.
 ### P3.7 - API: Add Stability Tier Documentation
 **Effort:** 2 hours
 
-Document 62 undocumented-but-accessible exports with stability tiers.
+Document stability guarantees for exports.
 
 ### P3.8 - Testing: Add TRICERATOPS Integration Test
 **Effort:** 3 hours
 
-End-to-end FPP calculation with known inputs.
+End-to-end FPP calculation test.
 
 ### P3.9 - Community: Register with ASCL
 **Effort:** 30 minutes
@@ -113,65 +97,60 @@ Submit to Astrophysics Source Code Library after first paper.
 ### P3.10 - Community: Submit to pyOpenSci/JOSS
 **Effort:** Ongoing
 
-Submit for peer review after docs complete.
+Now eligible — Sphinx docs and tutorials complete.
 
-### P3.11 - Cache Path Default (was P1.11)
+### P3.11 - Cache Path Default
 **Effort:** 1-2 hours
 
-Use `platformdirs` for OS-appropriate cache instead of CWD-relative paths.
+Use `platformdirs` for OS-appropriate cache paths.
 
 ---
 
-## Cross-Cutting Themes
+## Completed Items
 
-1. **Documentation Structure vs. Content** — Excellent docstrings exist but need Sphinx/RTD infrastructure
-2. **Two-System Type Architecture** — `LightCurve` vs `LightCurveData`, `catalog.py` vs `catalogs.py` requires documentation
-3. **Research vs. Research Library Gap** — Designed for integration; convenience functions would broaden adoption
+### Tranche 2 (Commit `75b3fe3`)
 
----
+Documentation & release infrastructure:
 
-## Recommended Next Steps
+- ✅ P2.1 - Created Sphinx documentation (`docs/`) with furo theme, autosummary for all 229 API exports
+- ✅ P2.3 - Added pytest-cov and Codecov integration to CI
+- ✅ P2.4 - Created `.github/workflows/release.yml` for PyPI trusted publishing
+- ✅ P3.3 - Created 3 tutorial notebooks:
+  - `01-basic-vetting.ipynb` — Core vetting workflow
+  - `02-periodogram-detection.ipynb` — Transit detection with TLS/BLS
+  - `03-pixel-analysis.ipynb` — Pixel-level diagnostics
+- ✅ Created `.readthedocs.yaml` for RTD integration
+- ✅ Added `docs` optional dependency group
 
-1. **Tag v0.1.0** and publish to PyPI
-2. **Enable Zenodo DOI** for citation
-3. **Create Sphinx docs** (P2.1) for pyOpenSci eligibility
-4. **Add tutorial notebooks** (P3.3) for researcher onboarding
+### Tranche 1 (Commit `2c2f2e4`)
 
----
+All P0 critical blockers and P1 high-priority items:
 
-## Completed Items (Commit 2c2f2e4)
-
-All P0 and P1 items were completed in a single commit. Summary:
-
-### Code Quality (Agent 1)
+**Code Quality:**
 - ✅ P0.7 - Fixed failing test in `test_tpf_fits.py`
 - ✅ P0.8 - Fixed all 115 ruff errors
-- ✅ P0.4 - Added CLI smoke tests (`tests/cli/test_cli_smoke.py`)
+- ✅ P0.4 - Added CLI smoke tests
 - ✅ P1.1 - Added exhaustive export test for all 229 API symbols
-- ✅ P1.2 - Added `vet_candidate` integration tests (`tests/test_integration/test_vet_candidate_full.py`)
+- ✅ P1.2 - Added `vet_candidate` integration tests
 
-### Dependencies & Licensing (Agent 2)
-- ✅ P0.1 - Updated CVE-affected deps: `setuptools>=78.1.1`, `requests>=2.32.4`, `pydantic>=2.4.0`
-- ✅ P0.2 - Verified ldtk is GPL-2.0 → made optional to preserve MIT core
+**Dependencies & Licensing:**
+- ✅ P0.1 - Updated CVE-affected deps (setuptools, requests, pydantic)
+- ✅ P0.2 - Made ldtk optional (GPL-2.0 incompatible with MIT core)
 - ✅ P0.5 - Created `LICENSE` (MIT)
-- ✅ P1.10 - Added LICENSE to vendored triceratops directory
-- ✅ P2.6 - Removed duplicate pins from triceratops extras
-- ✅ P2.7 - Modernized version floors (pandas, seaborn, mechanicalsoup)
-- ✅ P2.12 - Consolidated dev dependencies
+- ✅ P1.10 - Added LICENSE to vendored triceratops
+- ✅ P2.6, P2.7, P2.12 - Cleaned up pyproject.toml
 
-### Documentation (Agent 3)
-- ✅ P0.9 - Fixed README path drift (`io/` → `platform/io/`)
+**Documentation:**
+- ✅ P0.9 - Fixed README path drift
 - ✅ P0.10 - Removed bittr-reason-core references
 - ✅ P0.11 - Fixed astro_arc docstring remnants
 - ✅ P1.5 - Documented TTV track search functions
-- ✅ P1.6 - Generated `REFERENCES.md` from citations registry
+- ✅ P1.6 - Generated `REFERENCES.md`
 - ✅ P1.9 - Archived stale facade documentation
-- ✅ P1.12 - Documented platform support in README
-- ✅ P2.5 - Added recommended import alias (`import ... as btv`)
-- ✅ P2.10 - Clarified domain-only vs platform split
+- ✅ P1.12, P2.5, P2.10 - README improvements
 
-### Infrastructure & Community (Agent 4)
-- ✅ P0.3 - Created `.github/workflows/ci.yml` (lint, typecheck, test matrix)
+**Infrastructure & Community:**
+- ✅ P0.3 - Created `.github/workflows/ci.yml`
 - ✅ P0.6 - Created `CITATION.cff`
 - ✅ P1.3 - Created `.pre-commit-config.yaml`
 - ✅ P1.4 - Created `.github/dependabot.yml`
