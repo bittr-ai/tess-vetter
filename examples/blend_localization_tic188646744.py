@@ -154,6 +154,7 @@ def _print_dilution_plausibility(
         companions=companion_hypotheses,
     )
 
+    print("\nRule-out threshold: true_depth > 1,000,000 ppm (>100%) ⇒ physically impossible.")
     print("\nDilution plausibility (depth-only; necessary condition, not validation):")
     depth_feasible: list[tuple[str, float]] = []
     tested = 0
@@ -266,6 +267,12 @@ def main() -> int:
         print(f"- centroid_sigma_arcsec: {loc.uncertainty_semimajor_arcsec:.2f}")
         if isinstance(target_sep_arcsec, (int, float)) and np.isfinite(float(target_sep_arcsec)):
             print(f"- target_separation_arcsec: {float(target_sep_arcsec):.2f}")
+            if (
+                np.isfinite(loc.uncertainty_semimajor_arcsec)
+                and loc.uncertainty_semimajor_arcsec > 0
+            ):
+                offset_sigma = float(target_sep_arcsec) / float(loc.uncertainty_semimajor_arcsec)
+                print(f"- target_offset_sigma: {offset_sigma:.2f}σ")
         if nearest_name is not None and nearest_sep_arcsec is not None:
             print(f"- nearest_reference: {nearest_name}")
             print(f"- nearest_separation_arcsec: {float(nearest_sep_arcsec):.2f}")
@@ -306,7 +313,8 @@ def main() -> int:
         print("\nRemaining depth-feasible hosts (after dilution physics):")
         for name, true_ppm in depth_feasible:
             pct = true_ppm / 1e4  # ppm -> percent
-            print(f"- {name}: true_depth≈{true_ppm:,.0f} ppm ({pct:.3f}%)")
+            label = " (deep EB-like eclipse required)" if pct >= 10.0 else ""
+            print(f"- {name}: true_depth≈{true_ppm:,.0f} ppm ({pct:.3f}%){label}")
         print(
             "All other Gaia hypotheses in the cone are ruled out by dilution physics (>100% true depth)."
         )
