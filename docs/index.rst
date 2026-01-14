@@ -48,6 +48,7 @@ Contents
    installation
    quickstart
    stability
+   tutorials/blend_localization
 
 .. toctree::
    :maxdepth: 2

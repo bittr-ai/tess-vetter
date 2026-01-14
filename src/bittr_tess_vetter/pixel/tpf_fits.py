@@ -482,14 +482,25 @@ class TPFFitsCache:
 
                 # Get aperture mask from APERTURE extension if present
                 aperture_mask: np.ndarray[Any, np.dtype[np.integer[Any]]]
+                aperture_hdu = None
                 if len(hdu_list) > 2 and hdu_list[2].name == "APERTURE":
-                    aperture_mask = np.asarray(hdu_list[2].data, dtype=np.int32)
+                    aperture_hdu = hdu_list[2]
+                    aperture_mask = np.asarray(aperture_hdu.data, dtype=np.int32)
                 else:
                     # Create default mask (all pixels included)
                     aperture_mask = np.ones(flux.shape[1:], dtype=np.int32)
 
-                # Extract WCS from the data HDU header
-                wcs = WCS(data_hdu.header)
+                # Extract WCS. For SPOC TPFs, celestial WCS lives on the APERTURE
+                # HDU header; fall back to the table header for cached formats.
+                wcs: WCS | None = None
+                if aperture_hdu is not None:
+                    with contextlib.suppress(Exception):
+                        w = WCS(aperture_hdu.header)
+                        if w.has_celestial:
+                            wcs = w
+                if wcs is None:
+                    w = WCS(data_hdu.header)
+                    wcs = w
 
                 # Get camera and CCD from header
                 camera = int(primary_header.get("CAMERA", 1))
@@ -582,7 +593,9 @@ class TPFFitsCache:
                 )
 
             table_hdu = fits.BinTableHDU.from_columns(cols)
-            # Add WCS to the table HDU header
+            # Add WCS keywords. Real SPOC TPFs store celestial WCS on the APERTURE
+            # HDU; we also include it on the table HDU for backwards-compatible
+            # cache reads.
             wcs_header = data.wcs.to_header()
             for key in wcs_header:
                 if key not in ("", "COMMENT", "HISTORY"):
@@ -590,6 +603,9 @@ class TPFFitsCache:
 
             # Aperture mask HDU
             aperture_hdu = fits.ImageHDU(data=data.aperture_mask, name="APERTURE")
+            for key in wcs_header:
+                if key not in ("", "COMMENT", "HISTORY"):
+                    aperture_hdu.header[key] = wcs_header[key]
 
             # Write FITS
             hdu_list = fits.HDUList([primary_hdu, table_hdu, aperture_hdu])
