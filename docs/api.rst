@@ -9,10 +9,6 @@ The recommended import pattern is:
 
    import bittr_tess_vetter.api as btv
 
-.. contents:: Contents
-   :local:
-   :depth: 2
-
 Core Types
 ----------
 
