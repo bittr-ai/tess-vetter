@@ -56,6 +56,25 @@ class VettingBundleResult(BaseModel):
 
     model_config = {"extra": "forbid"}
 
+    @property
+    def n_passed(self) -> int:
+        """Count of checks with status 'ok'."""
+        return sum(1 for r in self.results if r.status == "ok")
+
+    def get_result(self, check_id: str) -> CheckResult | None:
+        """Get result for a specific check by ID.
+
+        Args:
+            check_id: Check identifier (e.g., "V01").
+
+        Returns:
+            CheckResult if found, None otherwise.
+        """
+        for r in self.results:
+            if r.id == check_id:
+                return r
+        return None
+
 
 def ok_result(
     id: str,
