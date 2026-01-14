@@ -272,31 +272,30 @@ name = "bittr-tess-vetter"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "arviz" },
     { name = "astropy" },
-    { name = "emcee" },
-    { name = "numba" },
     { name = "numpy" },
     { name = "pydantic" },
     { name = "requests" },
     { name = "scipy" },
-    { name = "setuptools" },
-    { name = "transitleastsquares" },
 ]
 
 [package.optional-dependencies]
 all = [
+    { name = "arviz" },
     { name = "astroquery" },
     { name = "celerite" },
     { name = "corner" },
+    { name = "emcee" },
     { name = "ldtk" },
     { name = "lightkurve" },
     { name = "matplotlib" },
     { name = "mechanicalsoup" },
+    { name = "numba" },
     { name = "pandas" },
     { name = "pyrr" },
     { name = "pytransit" },
     { name = "seaborn" },
+    { name = "transitleastsquares" },
     { name = "wotan" },
 ]
 docs = [
@@ -305,8 +304,16 @@ docs = [
     { name = "sphinx" },
     { name = "sphinx-autodoc-typehints" },
 ]
+fit = [
+    { name = "arviz" },
+    { name = "emcee" },
+]
 ldtk = [
     { name = "ldtk" },
+]
+tls = [
+    { name = "numba" },
+    { name = "transitleastsquares" },
 ]
 triceratops = [
     { name = "astroquery" },
@@ -333,20 +340,20 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "arviz", specifier = ">=0.23.0" },
+    { name = "arviz", marker = "extra == 'fit'", specifier = ">=0.23.0" },
     { name = "astropy", specifier = ">=5.0.0" },
     { name = "astroquery", marker = "extra == 'triceratops'", specifier = ">=0.4.6" },
-    { name = "bittr-tess-vetter", extras = ["wotan", "ldtk", "triceratops"], marker = "extra == 'all'" },
+    { name = "bittr-tess-vetter", extras = ["tls", "fit", "wotan", "ldtk", "triceratops"], marker = "extra == 'all'" },
     { name = "celerite", marker = "extra == 'triceratops'", specifier = ">=0.4.0" },
     { name = "corner", marker = "extra == 'triceratops'", specifier = ">=2.2.1" },
-    { name = "emcee", specifier = ">=3.1.6" },
+    { name = "emcee", marker = "extra == 'fit'", specifier = ">=3.1.6" },
     { name = "furo", marker = "extra == 'docs'" },
     { name = "ldtk", marker = "extra == 'ldtk'", specifier = ">=1.8.5" },
     { name = "lightkurve", marker = "extra == 'triceratops'", specifier = ">=2.0.0" },
     { name = "matplotlib", marker = "extra == 'triceratops'", specifier = ">=3.5.1" },
     { name = "mechanicalsoup", marker = "extra == 'triceratops'", specifier = ">=1.0.0" },
     { name = "myst-parser", marker = "extra == 'docs'" },
-    { name = "numba", specifier = ">=0.63.0" },
+    { name = "numba", marker = "extra == 'tls'", specifier = ">=0.63.0" },
     { name = "numpy", specifier = ">=1.24.0,<2.4.0" },
     { name = "pandas", marker = "extra == 'triceratops'", specifier = ">=2.0.0" },
     { name = "pydantic", specifier = ">=2.4.0" },
@@ -355,13 +362,12 @@ requires-dist = [
     { name = "requests", specifier = ">=2.32.4" },
     { name = "scipy", specifier = ">=1.10.0" },
     { name = "seaborn", marker = "extra == 'triceratops'", specifier = ">=0.13.0" },
-    { name = "setuptools", specifier = ">=78.1.1" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=7.0" },
     { name = "sphinx-autodoc-typehints", marker = "extra == 'docs'" },
-    { name = "transitleastsquares", specifier = ">=1.32" },
+    { name = "transitleastsquares", marker = "extra == 'tls'", specifier = ">=1.32" },
     { name = "wotan", marker = "extra == 'wotan'", specifier = ">=1.1" },
 ]
-provides-extras = ["wotan", "ldtk", "triceratops", "docs", "all"]
+provides-extras = ["tls", "fit", "wotan", "ldtk", "triceratops", "docs", "all"]
 
 [package.metadata.requires-dev]
 dev = [

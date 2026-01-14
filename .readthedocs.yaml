@@ -23,11 +23,3 @@ sphinx:
 # Optionally build PDF and ePub
 formats:
   - pdf
-
-# Python configuration
-python:
-  install:
-    - method: pip
-      path: .
-      extra_requirements:
-        - docs

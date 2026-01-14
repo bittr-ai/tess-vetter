@@ -17,16 +17,20 @@ dependencies = [
   "scipy>=1.10.0",
   "pydantic>=2.4.0",  # CVE-2024-3772 fix
   "astropy>=5.0.0",
-  "setuptools>=78.1.1",  # CVE-2025-47273 fix
   "requests>=2.32.4",  # CVE-2024-47081 fix
-  "transitleastsquares>=1.32",
-  # transitleastsquares depends on numba; pin to a Python 3.12-compatible release.
-  "numba>=0.63.0",
-  "emcee>=3.1.6",
-  "arviz>=0.23.0",
 ]
 
 [project.optional-dependencies]
+# Transit detection (TLS + numba for JIT compilation)
+tls = [
+  "transitleastsquares>=1.32",
+  "numba>=0.63.0",
+]
+# MCMC fitting (emcee + arviz for diagnostics)
+fit = [
+  "emcee>=3.1.6",
+  "arviz>=0.23.0",
+]
 wotan = [
   "wotan>=1.1",
 ]
@@ -35,6 +39,8 @@ ldtk = [
   "ldtk>=1.8.5",
 ]
 # TRICERATOPS+ vendored dependencies (duplicates of core deps removed: emcee, numba, arviz)
+# Note: triceratops extra includes pytransit (GPL-2.0). Installing changes
+# the effective license of your environment from BSD-3-Clause.
 triceratops = [
   "lightkurve>=2.0.0",
   "pytransit>=2.2",
@@ -53,7 +59,7 @@ docs = [
   "sphinx-autodoc-typehints",
   "myst-parser",
 ]
-all = ["bittr-tess-vetter[wotan,ldtk,triceratops]"]
+all = ["bittr-tess-vetter[tls,fit,wotan,ldtk,triceratops]"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bittr_tess_vetter"]
@@ -135,6 +141,8 @@ module = [
   "batman.*",
   "exoplanet",
   "exoplanet.*",
+  "platformdirs",
+  "platformdirs.*",
 ]
 ignore_missing_imports = true
 

@@ -312,7 +312,10 @@ def fit_transit(
         try:
             import emcee  # noqa: F401
         except ImportError:
-            logger.warning("emcee not installed, falling back to optimize method")
+            logger.warning(
+                "emcee not installed, falling back to optimize method. "
+                "Install with: pip install 'bittr-tess-vetter[fit]'"
+            )
             actual_method = "optimize"
 
     # Normalize + apply valid_mask/finite filtering.

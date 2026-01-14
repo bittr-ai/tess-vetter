@@ -156,8 +156,25 @@ def vet_candidate(
         if network and tic_id is not None:
             checks_to_run.add("V07")
 
+        # Warn when network=False skips catalog checks
+        if not network:
+            warnings.warn(
+                "Catalog cross-match checks skipped (network=False). "
+                "Enable network access for ExoFOP/Gaia validation.",
+                UserWarning,
+                stacklevel=2,
+            )
+
         if tpf is not None:
             checks_to_run |= _PIXEL_CHECKS
+        else:
+            # Warn when pixel data is missing
+            warnings.warn(
+                "Pixel-level checks skipped (no TPF provided). "
+                "Provide tpf argument for centroid shift and difference image analysis.",
+                UserWarning,
+                stacklevel=2,
+            )
 
         # Always try exovetter checks (they handle missing dependency)
         checks_to_run |= _EXOVETTER_CHECKS

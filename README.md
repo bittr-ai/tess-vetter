@@ -41,30 +41,45 @@ The `platform/` module is entirely optional and only used when explicitly import
 - FPP (optional): TRICERATOPS+ support with a vendored copy under `src/bittr_tess_vetter/ext/` (`bittr_tess_vetter.api.fpp`)
 - References: many public API entry points carry machine-readable citations (`src/bittr_tess_vetter/api/REFERENCES.md`)
 
-## Install
+## Installation
 
 Requires Python 3.11–3.12.
+
+### Minimal install (basic vetting)
+```bash
+pip install bittr-tess-vetter
+```
+
+### With transit detection (TLS)
+```bash
+pip install 'bittr-tess-vetter[tls]'
+```
+
+### With MCMC fitting
+```bash
+pip install 'bittr-tess-vetter[fit]'
+```
+
+### Full install
+```bash
+pip install 'bittr-tess-vetter[all]'
+```
+
+### Development
 
 Using `uv` (recommended for this repo; uses `uv.lock`):
 
 ```bash
-uv sync
-# Optional extras:
-uv sync --all-extras
+uv sync --all-extras --group dev
 ```
 
 Using `pip`:
 
 ```bash
-python -m pip install -e .
 python -m pip install -e ".[all]"
 ```
 
-For development (tests, linting, type-checking), this project uses `uv` dependency groups:
-
-```bash
-uv sync --group dev
-```
+**License note for optional extras:** The `[triceratops]` extra includes `pytransit`, which is GPL-2.0 licensed. Installing this extra changes the effective license of your environment. The `[ldtk]` extra is also GPL-2.0. The core package remains BSD-3-Clause.
 
 
 ## Quickstart

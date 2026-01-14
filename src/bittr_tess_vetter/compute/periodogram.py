@@ -444,7 +444,13 @@ def tls_search_per_sector(
     best = merged[0]
 
     # Build combined in_transit_mask for full time array using best detection
-    from transitleastsquares import transit_mask
+    try:
+        from transitleastsquares import transit_mask
+    except ImportError as e:
+        raise ImportError(
+            "Transit detection requires the 'tls' extra. "
+            "Install with: pip install 'bittr-tess-vetter[tls]'"
+        ) from e
 
     in_transit_combined = transit_mask(
         time,
@@ -520,7 +526,13 @@ def tls_search(
     """
     import warnings
 
-    from transitleastsquares import transitleastsquares
+    try:
+        from transitleastsquares import transitleastsquares
+    except ImportError as e:
+        raise ImportError(
+            "Transit detection requires the 'tls' extra. "
+            "Install with: pip install 'bittr-tess-vetter[tls]'"
+        ) from e
 
     # Downsample if requested (for faster coarse search)
     if downsample_factor > 1:
@@ -714,7 +726,13 @@ def search_planets(
     Returns:
         List of detection dictionaries for each planet found.
     """
-    from transitleastsquares import transit_mask
+    try:
+        from transitleastsquares import transit_mask
+    except ImportError as e:
+        raise ImportError(
+            "Transit detection requires the 'tls' extra. "
+            "Install with: pip install 'bittr-tess-vetter[tls]'"
+        ) from e
 
     planets = []
     time_work = time.copy()

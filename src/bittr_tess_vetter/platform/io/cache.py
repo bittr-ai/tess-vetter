@@ -31,16 +31,28 @@ def _default_cache_dir() -> Path:
     Preference order:
     1) `BITTR_TESS_VETTER_CACHE_DIR` (explicit override)
     2) `BITTR_TESS_VETTER_CACHE_ROOT` (repo-local cache root)
-    3) `.bittr-tess-vetter/cache/persistent_cache` under current working directory
+    3) OS-appropriate user cache directory (via platformdirs, if available)
+    4) `.bittr-tess-vetter/cache/persistent_cache` under current working directory
     """
+    # 1. Explicit override
     explicit = os.getenv("BITTR_TESS_VETTER_CACHE_DIR")
     if explicit:
         return Path(explicit).expanduser()
 
+    # 2. Repo-local override
     root = os.getenv("BITTR_TESS_VETTER_CACHE_ROOT")
     if root:
         return Path(root).expanduser() / "persistent_cache"
 
+    # 3. OS-appropriate user cache directory
+    try:
+        from platformdirs import user_cache_dir  # type: ignore[import-not-found]
+
+        return Path(user_cache_dir("bittr-tess-vetter"))
+    except ImportError:
+        pass
+
+    # 4. Fallback to CWD-relative
     return Path.cwd() / ".bittr-tess-vetter" / "cache" / "persistent_cache"
 
 

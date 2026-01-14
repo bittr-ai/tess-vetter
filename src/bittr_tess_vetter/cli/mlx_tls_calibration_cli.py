@@ -16,8 +16,15 @@ import warnings
 from io import StringIO
 
 import numpy as np
-from transitleastsquares import transitleastsquares
-from transitleastsquares.grid import period_grid
+
+try:
+    from transitleastsquares import transitleastsquares
+    from transitleastsquares.grid import period_grid
+except ImportError as e:
+    raise ImportError(
+        "This CLI requires the 'tls' extra. "
+        "Install with: pip install 'bittr-tess-vetter[tls]'"
+    ) from e
 
 from bittr_tess_vetter.api.io import PersistentCache
 from bittr_tess_vetter.compute.detrend import bin_median_trend

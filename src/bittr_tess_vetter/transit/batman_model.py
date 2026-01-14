@@ -540,8 +540,14 @@ def fit_mcmc(
     Returns:
         Tuple of (samples, gelman_rubin_dict, acceptance_rate, labels)
     """
-    import arviz as az
-    import emcee
+    try:
+        import arviz as az
+        import emcee
+    except ImportError as e:
+        raise ImportError(
+            "MCMC fitting requires the 'fit' extra. "
+            "Install with: pip install 'bittr-tess-vetter[fit]'"
+        ) from e
 
     exp_time = detect_exposure_time(time)
 

@@ -47,6 +47,7 @@ Contents
 
    installation
    quickstart
+   stability
 
 .. toctree::
    :maxdepth: 2
