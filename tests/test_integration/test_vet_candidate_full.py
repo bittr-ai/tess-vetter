@@ -125,8 +125,8 @@ class TestVetCandidateBasicWorkflow:
 
         # Check provenance is populated
         assert result.provenance is not None
-        # Provenance should have version info (key name may vary)
-        assert any(k in result.provenance for k in ["version", "vetter_version", "policy_mode"])
+        # Provenance should have version/timing info (key name may vary by version)
+        assert any(k in result.provenance for k in ["version", "vetter_version", "policy_mode", "pipeline_version"])
 
     def test_minimal_ephemeris_passthrough(self) -> None:
         """Basic ephemeris passes through vetting pipeline without errors."""
@@ -181,21 +181,23 @@ class TestVetCandidateErrorPropagation:
         with pytest.raises(ValueError, match="period_days must be positive"):
             Ephemeris(period_days=0.0, t0_btjd=0.0, duration_hours=2.0)
 
-    def test_unknown_check_ids_produce_warnings(self) -> None:
-        """Unknown check IDs in enabled set produce warnings."""
+    def test_unknown_check_ids_raise_error(self) -> None:
+        """Unknown check IDs in checks list raise KeyError.
+
+        Note: The new pipeline strictly validates check IDs and raises an error
+        for unregistered check IDs. Use list_checks() to discover valid IDs.
+        """
         time, flux, flux_err = _make_synthetic_lightcurve(n_cadences=100)
         lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
         eph = Ephemeris(period_days=2.0, t0_btjd=time[0], duration_hours=2.0)
         candidate = Candidate(ephemeris=eph)
 
-        result = vet_candidate(
-            lc,
-            candidate,
-            enabled={"V01", "UNKNOWN_CHECK", "ANOTHER_FAKE"},
-        )
-
-        # Should warn about unknown check IDs
-        assert any("unknown" in w.lower() or "ignored" in w.lower() for w in result.warnings)
+        with pytest.raises(KeyError, match="UNKNOWN_CHECK"):
+            vet_candidate(
+                lc,
+                candidate,
+                checks=["V01", "UNKNOWN_CHECK", "ANOTHER_FAKE"],
+            )
 
 
 # =============================================================================
@@ -230,19 +232,22 @@ class TestVetCandidateConfigPassthrough:
         # When metadata is missing and not explicitly enabled, V06/V07 are not run
         # If they were somehow run, verify they're marked as skipped
         if v06 is not None:
-            assert v06.details.get("status") == "skipped"
+            assert v06.status == "skipped"
         if v07 is not None:
-            assert v07.details.get("status") == "skipped"
+            assert v07.status == "skipped"
 
-    def test_enabled_subset_runs_only_specified_checks(self) -> None:
-        """Passing enabled={...} limits execution to those checks."""
+    def test_checks_subset_runs_only_specified_checks(self) -> None:
+        """Passing checks=[...] limits execution to those checks.
+
+        Note: Updated to use new `checks` parameter instead of old `enabled` set.
+        """
         time, flux, flux_err = _make_synthetic_lightcurve(n_cadences=500)
         lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
         eph = Ephemeris(period_days=2.0, t0_btjd=time[0] + 0.3, duration_hours=2.0)
         candidate = Candidate(ephemeris=eph, depth_ppm=800.0)
 
         # Run only V01 and V02
-        result = vet_candidate(lc, candidate, enabled={"V01", "V02"})
+        result = vet_candidate(lc, candidate, checks=["V01", "V02"])
 
         check_ids = [r.id for r in result.results]
         assert "V01" in check_ids
@@ -253,7 +258,10 @@ class TestVetCandidateConfigPassthrough:
         assert "V05" not in check_ids
 
     def test_stellar_params_enhance_duration_consistency_check(self) -> None:
-        """Providing stellar params should enable V03 to use stellar density."""
+        """Providing stellar params should enable V03 to use stellar density.
+
+        Note: Updated to use new `checks` parameter instead of old `enabled` set.
+        """
         lc, eph = _make_lc_with_transit(
             period_days=5.0,
             duration_hours=3.0,
@@ -268,12 +276,12 @@ class TestVetCandidateConfigPassthrough:
             logg=4.4,
         )
 
-        result = vet_candidate(lc, candidate, stellar=stellar, enabled={"V03"})
+        result = vet_candidate(lc, candidate, stellar=stellar, checks=["V03"])
 
         v03 = result.get_result("V03")
         assert v03 is not None
-        # V03 should have executed with stellar info (check for stellar-related metrics)
-        assert "details" in dir(v03) or hasattr(v03, "details")
+        # V03 should have executed with stellar info (check for metrics)
+        assert v03.status == "ok"
 
 
 # =============================================================================
@@ -314,17 +322,20 @@ class TestVetCandidateMultiCheck:
         assert n_results >= 5  # At least LC-only checks
 
     def test_warnings_list_populated_on_issues(self) -> None:
-        """Warnings list should capture any issues during execution."""
+        """Warnings list should capture any issues during execution.
+
+        Note: Updated to use new `checks` parameter instead of old `enabled` set.
+        """
         time, flux, flux_err = _make_synthetic_lightcurve(n_cadences=100)
         lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
         eph = Ephemeris(period_days=2.0, t0_btjd=time[0], duration_hours=2.0)
         candidate = Candidate(ephemeris=eph)
 
-        # Enable catalog checks without providing metadata (should warn)
+        # Enable catalog checks without providing metadata (should produce skipped results)
         result = vet_candidate(
             lc,
             candidate,
-            enabled={"V06", "V07"},
+            checks=["V06", "V07"],
             network=True,
             ra_deg=None,
             dec_deg=None,
