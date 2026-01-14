@@ -96,7 +96,8 @@ def test_fit_transit_applies_valid_mask_and_computes_t0_offset(
     assert result.t0_offset == pytest.approx(0.123, rel=1e-12)
 
 
-def test_fit_transit_insufficient_points_returns_error() -> None:
+def test_fit_transit_insufficient_points_returns_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "batman", types.ModuleType("batman"))
     time = np.linspace(1500.0, 1501.0, 10, dtype=np.float64)
     flux = np.ones_like(time)
     flux_err = np.full_like(time, 1e-4)

@@ -15,6 +15,7 @@ Test coverage:
 from __future__ import annotations
 
 import contextlib
+from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -46,6 +47,21 @@ def mock_lightkurve():
     """Create a mocked lightkurve module."""
     mock_lk = MagicMock()
     return mock_lk
+
+
+@pytest.fixture
+def mock_astroquery_modules() -> dict[str, ModuleType]:
+    """Provide a minimal `astroquery.mast` module stub for tests.
+
+    These tests patch `astroquery.mast.Catalogs`. On CI, the core test job runs
+    without optional dependencies, so we create a stub module tree to make the
+    patch target resolvable even when astroquery isn't installed.
+    """
+    astroquery = ModuleType("astroquery")
+    mast = ModuleType("astroquery.mast")
+    mast.Catalogs = object()  # patched per-test
+    astroquery.mast = mast
+    return {"astroquery": astroquery, "astroquery.mast": mast}
 
 
 @pytest.fixture
@@ -624,14 +640,16 @@ class TestFluxNormalization:
 class TestGetTargetInfo:
     """Tests for MASTClient.get_target_info()."""
 
-    def test_get_target_info_returns_target(self, mock_lightkurve, mock_tic_catalog_row):
+    def test_get_target_info_returns_target(
+        self, mock_lightkurve, mock_astroquery_modules, mock_tic_catalog_row
+    ):
         """get_target_info() returns Target object."""
         mock_catalog_result = MagicMock()
         mock_catalog_result.__len__ = MagicMock(return_value=1)
         mock_catalog_result.__getitem__ = MagicMock(return_value=mock_tic_catalog_row)
 
         with (
-            patch.dict("sys.modules", {"lightkurve": mock_lightkurve}),
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve, **mock_astroquery_modules}),
             patch("astroquery.mast.Catalogs") as mock_catalogs,
         ):
             mock_catalogs.query_criteria.return_value = mock_catalog_result
@@ -645,14 +663,16 @@ class TestGetTargetInfo:
             assert isinstance(target, Target)
             assert target.tic_id == 261136679
 
-    def test_get_target_info_stellar_parameters(self, mock_lightkurve, mock_tic_catalog_row):
+    def test_get_target_info_stellar_parameters(
+        self, mock_lightkurve, mock_astroquery_modules, mock_tic_catalog_row
+    ):
         """Target has StellarParameters with correct values."""
         mock_catalog_result = MagicMock()
         mock_catalog_result.__len__ = MagicMock(return_value=1)
         mock_catalog_result.__getitem__ = MagicMock(return_value=mock_tic_catalog_row)
 
         with (
-            patch.dict("sys.modules", {"lightkurve": mock_lightkurve}),
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve, **mock_astroquery_modules}),
             patch("astroquery.mast.Catalogs") as mock_catalogs,
         ):
             mock_catalogs.query_criteria.return_value = mock_catalog_result
@@ -670,14 +690,16 @@ class TestGetTargetInfo:
             assert target.stellar.mass == 1.0
             assert target.stellar.tmag == 10.5
 
-    def test_get_target_info_astrometric_data(self, mock_lightkurve, mock_tic_catalog_row):
+    def test_get_target_info_astrometric_data(
+        self, mock_lightkurve, mock_astroquery_modules, mock_tic_catalog_row
+    ):
         """Target has correct astrometric data."""
         mock_catalog_result = MagicMock()
         mock_catalog_result.__len__ = MagicMock(return_value=1)
         mock_catalog_result.__getitem__ = MagicMock(return_value=mock_tic_catalog_row)
 
         with (
-            patch.dict("sys.modules", {"lightkurve": mock_lightkurve}),
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve, **mock_astroquery_modules}),
             patch("astroquery.mast.Catalogs") as mock_catalogs,
         ):
             mock_catalogs.query_criteria.return_value = mock_catalog_result
@@ -694,14 +716,16 @@ class TestGetTargetInfo:
             assert target.pmdec == -5.2
             assert target.distance_pc == 100.0
 
-    def test_get_target_info_cross_match_ids(self, mock_lightkurve, mock_tic_catalog_row):
+    def test_get_target_info_cross_match_ids(
+        self, mock_lightkurve, mock_astroquery_modules, mock_tic_catalog_row
+    ):
         """Target has correct cross-match identifiers."""
         mock_catalog_result = MagicMock()
         mock_catalog_result.__len__ = MagicMock(return_value=1)
         mock_catalog_result.__getitem__ = MagicMock(return_value=mock_tic_catalog_row)
 
         with (
-            patch.dict("sys.modules", {"lightkurve": mock_lightkurve}),
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve, **mock_astroquery_modules}),
             patch("astroquery.mast.Catalogs") as mock_catalogs,
         ):
             mock_catalogs.query_criteria.return_value = mock_catalog_result
@@ -715,10 +739,10 @@ class TestGetTargetInfo:
             assert target.gaia_dr3_id == 12345678901234
             assert target.twomass_id == "12345678+9012345"
 
-    def test_get_target_info_not_found(self, mock_lightkurve):
+    def test_get_target_info_not_found(self, mock_lightkurve, mock_astroquery_modules):
         """get_target_info() raises TargetNotFoundError when target not in TIC."""
         with (
-            patch.dict("sys.modules", {"lightkurve": mock_lightkurve}),
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve, **mock_astroquery_modules}),
             patch("astroquery.mast.Catalogs") as mock_catalogs,
         ):
             mock_catalogs.query_criteria.return_value = None
@@ -730,13 +754,13 @@ class TestGetTargetInfo:
             with pytest.raises(TargetNotFoundError, match="not found in catalog"):
                 client.get_target_info(tic_id=999999999)
 
-    def test_get_target_info_empty_result(self, mock_lightkurve):
+    def test_get_target_info_empty_result(self, mock_lightkurve, mock_astroquery_modules):
         """get_target_info() raises TargetNotFoundError for empty result."""
         mock_catalog_result = MagicMock()
         mock_catalog_result.__len__ = MagicMock(return_value=0)
 
         with (
-            patch.dict("sys.modules", {"lightkurve": mock_lightkurve}),
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve, **mock_astroquery_modules}),
             patch("astroquery.mast.Catalogs") as mock_catalogs,
         ):
             mock_catalogs.query_criteria.return_value = mock_catalog_result
@@ -748,7 +772,7 @@ class TestGetTargetInfo:
             with pytest.raises(TargetNotFoundError, match="not found in catalog"):
                 client.get_target_info(tic_id=999999999)
 
-    def test_get_target_info_missing_params(self, mock_lightkurve):
+    def test_get_target_info_missing_params(self, mock_lightkurve, mock_astroquery_modules):
         """Target handles missing stellar parameters gracefully."""
         # Create a row with some missing parameters
         row = MagicMock()
@@ -764,7 +788,7 @@ class TestGetTargetInfo:
         mock_catalog_result.__getitem__ = MagicMock(return_value=row)
 
         with (
-            patch.dict("sys.modules", {"lightkurve": mock_lightkurve}),
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve, **mock_astroquery_modules}),
             patch("astroquery.mast.Catalogs") as mock_catalogs,
         ):
             mock_catalogs.query_criteria.return_value = mock_catalog_result

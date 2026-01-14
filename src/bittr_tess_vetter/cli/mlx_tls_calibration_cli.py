@@ -17,16 +17,19 @@ from io import StringIO
 
 import numpy as np
 
-try:
-    from transitleastsquares import transitleastsquares
-    from transitleastsquares.grid import period_grid
-except ImportError as e:
-    raise ImportError(
-        "This CLI requires the 'tls' extra. Install with: pip install 'bittr-tess-vetter[tls]'"
-    ) from e
-
 from bittr_tess_vetter.api.io import PersistentCache
 from bittr_tess_vetter.compute.detrend import bin_median_trend
+
+
+def _import_tls() -> tuple[object, object]:
+    try:
+        from transitleastsquares import transitleastsquares  # type: ignore[import-not-found]
+        from transitleastsquares.grid import period_grid  # type: ignore[import-not-found]
+    except ImportError as e:
+        raise ImportError(
+            "This CLI requires the 'tls' extra. Install with: pip install 'bittr-tess-vetter[tls]'"
+        ) from e
+    return transitleastsquares, period_grid
 
 
 def _transit_mask(
@@ -49,6 +52,7 @@ def _phase_diff_days(t_ref: float, t_test: float, period: float) -> float:
 def _choose_oversampling_factor(
     *, time_span_days: float, period_min: float, period_max: float, min_grid: int = 100
 ) -> tuple[int, np.ndarray]:
+    _, period_grid = _import_tls()
     o = 3
     while o <= 320:
         with warnings.catch_warnings():
@@ -101,6 +105,8 @@ def _smooth_box_template_np(
 
 
 def main(argv: list[str] | None = None) -> int:
+    transitleastsquares, _ = _import_tls()
+
     parser = argparse.ArgumentParser(description="Run MLX vs TLS calibration (subprocess-safe).")
     parser.add_argument("data_ref")
     parser.add_argument("period", type=float)
