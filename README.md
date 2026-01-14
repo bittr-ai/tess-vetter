@@ -32,14 +32,14 @@ This package follows a "domain-first" design: array-in/array-out astronomy algor
 
 The `platform/` module is entirely optional and only used when explicitly imported.
 
-## What’s in here
+## What's in here
 
-- Transit detection: TLS/LS periodograms, multi-planet search, candidate merging (`bittr_tess_vetter.api.periodogram`)
-- Vetting pipeline: tiered checks (LC-only, optional catalog, optional pixel, optional Exovetter) (`bittr_tess_vetter.api.vet`)
-- Pixel diagnostics: centroid shift, difference images, WCS-aware localization, aperture dependence (`bittr_tess_vetter.api.pixel`)
-- Transit recovery: detrend + stack + trapezoid fitting for active stars (`bittr_tess_vetter.api.recovery`)
-- FPP (optional): TRICERATOPS+ support with a vendored copy under `src/bittr_tess_vetter/ext/` (`bittr_tess_vetter.api.fpp`)
-- References: many public API entry points carry machine-readable citations (`src/bittr_tess_vetter/api/REFERENCES.md`)
+- **Vetting pipeline**: Extensible `VettingPipeline` with 12 tiered checks (V01-V12), structured `CheckResult` outputs, and batch processing via `vet_many()` (`bittr_tess_vetter.api.vet`)
+- **Transit detection**: TLS/LS periodograms, multi-planet search, candidate merging (`bittr_tess_vetter.api.periodogram`)
+- **Pixel diagnostics**: centroid shift, difference images, WCS-aware localization, aperture dependence (`bittr_tess_vetter.api.pixel`)
+- **Transit recovery**: detrend + stack + trapezoid fitting for active stars (`bittr_tess_vetter.api.recovery`)
+- **FPP (optional)**: TRICERATOPS+ support with a vendored copy under `src/bittr_tess_vetter/ext/` (`bittr_tess_vetter.api.fpp`)
+- **References**: many public API entry points carry machine-readable citations (`src/bittr_tess_vetter/api/REFERENCES.md`)
 
 ## Installation
 
@@ -68,6 +68,11 @@ pip install 'bittr-tess-vetter[batman]'
 ### With external vetter integration (exovetter)
 ```bash
 pip install 'bittr-tess-vetter[exovetter]'
+```
+
+### With false positive probability (TRICERATOPS)
+```bash
+pip install 'bittr-tess-vetter[triceratops]'
 ```
 
 ### With Apple Silicon acceleration (MLX, macOS only)
@@ -105,12 +110,11 @@ The recommended import alias follows patterns from astropy (`import astropy.unit
 import bittr_tess_vetter.api as btv
 ```
 
-Full example:
+### Single candidate vetting
 
 ```python
 import numpy as np
-import bittr_tess_vetter.api as btv
-from bittr_tess_vetter.api import Candidate, Ephemeris, LightCurve, run_periodogram, vet_candidate
+from bittr_tess_vetter.api import Candidate, Ephemeris, LightCurve, vet_candidate
 
 lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
 candidate = Candidate(
@@ -118,12 +122,54 @@ candidate = Candidate(
     depth_ppm=500,
 )
 
-pg = run_periodogram(time=np.asarray(time), flux=np.asarray(flux), flux_err=np.asarray(flux_err))
 bundle = vet_candidate(lc, candidate, network=False)
 
-print(pg.best_period_days)
+# Results use structured schema: status, metrics, flags
 for r in bundle.results:
-    print(r.id, r.name, r.status, r.confidence, r.flags)
+    print(f"{r.id} ({r.name}): {r.status}")
+    print(f"  metrics: {r.metrics}")
+    print(f"  flags: {r.flags}")
+```
+
+### Batch vetting (multiple candidates, one light curve)
+
+```python
+from bittr_tess_vetter.api import vet_many
+
+candidates = [
+    Candidate(ephemeris=Ephemeris(period_days=3.5, t0_btjd=1850.0, duration_hours=2.5)),
+    Candidate(ephemeris=Ephemeris(period_days=7.0, t0_btjd=1852.0, duration_hours=3.0)),
+]
+
+results, summary = vet_many(lc, candidates, network=False)
+
+# summary is a list of dicts with stable columns for sorting/filtering
+for row in summary:
+    print(f"P={row['period_days']:.2f}d: {row['n_ok']} ok, {row['n_skipped']} skipped")
+```
+
+### Pipeline introspection
+
+```python
+from bittr_tess_vetter.api import list_checks, describe_checks
+
+# List all registered checks with their requirements
+checks = list_checks()
+for c in checks:
+    print(f"{c['id']}: {c['name']} (tier={c['tier']}, needs_network={c['requirements'].needs_network})")
+
+# Human-readable summary
+print(describe_checks())
+```
+
+### Custom pipeline with specific checks
+
+```python
+from bittr_tess_vetter.api import VettingPipeline
+
+# Run only LC-only checks (V01-V05)
+pipeline = VettingPipeline(checks=["V01", "V02", "V03", "V04", "V05"])
+bundle = pipeline.run(lc.to_internal(), candidate_internal, network=False)
 ```
 
 ## Network behavior
@@ -163,4 +209,4 @@ Internal working notes live in `working_docs/` (for example `working_docs/api/v1
 
 ## License
 
-MIT.
+BSD-3-Clause. See [LICENSE](LICENSE) for details.
