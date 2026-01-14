@@ -30,8 +30,23 @@ from bittr_tess_vetter.validation.lc_checks import (
     check_v_shape,
     run_all_checks,
 )
+from bittr_tess_vetter.validation.result_schema import (
+    CheckResult,
+    CheckStatus,
+    VettingBundleResult,
+    error_result,
+    ok_result,
+    skipped_result,
+)
 
 __all__ = [
+    # Result schema types
+    "CheckResult",
+    "CheckStatus",
+    "VettingBundleResult",
+    "error_result",
+    "ok_result",
+    "skipped_result",
     # Base utilities
     "bin_phase_curve",
     "count_transits",
