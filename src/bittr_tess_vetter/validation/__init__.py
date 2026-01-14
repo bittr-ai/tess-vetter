@@ -31,17 +31,11 @@ from bittr_tess_vetter.validation.checks_lc_wrapped import (
     register_lc_checks,
 )
 from bittr_tess_vetter.validation.lc_checks import (
-    check_aperture_dependence,
-    check_centroid_shift,
     check_depth_stability,
     check_duration_consistency,
-    check_known_fp_match,
-    check_nearby_eb_search,
     check_odd_even_depth,
-    check_pixel_level_lc,
     check_secondary_eclipse,
     check_v_shape,
-    run_all_checks,
 )
 from bittr_tess_vetter.validation.register_defaults import register_all_defaults
 from bittr_tess_vetter.validation.registry import (
@@ -90,18 +84,12 @@ __all__ = [
     "phase_fold",
     "search_secondary_eclipse",
     "sigma_clip",
-    # Function-based checks (legacy interface)
-    "check_aperture_dependence",
-    "check_centroid_shift",
+    # Function-based checks (V01-V05 LC-only)
     "check_depth_stability",
     "check_duration_consistency",
-    "check_known_fp_match",
-    "check_nearby_eb_search",
     "check_odd_even_depth",
-    "check_pixel_level_lc",
     "check_secondary_eclipse",
     "check_v_shape",
-    "run_all_checks",
     # VettingCheck wrapper classes (V01-V05 LC-only)
     "OddEvenDepthCheck",
     "SecondaryEclipseCheck",

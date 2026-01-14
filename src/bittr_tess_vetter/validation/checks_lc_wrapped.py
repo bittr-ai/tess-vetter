@@ -23,7 +23,6 @@ from bittr_tess_vetter.validation.result_schema import (
     CheckResult,
     error_result,
     ok_result,
-    skipped_result,
 )
 
 
@@ -47,17 +46,6 @@ def _convert_legacy_result(
     # Extract warnings from details
     warnings = details.pop("warnings", [])
     notes = list(warnings) if isinstance(warnings, list) else []
-
-    # Check for deferred/stub status
-    if details.get("deferred") or details.get("stub"):
-        reason = details.get("reason", "NOT_IMPLEMENTED")
-        return skipped_result(
-            check_id,
-            check_name,
-            reason_flag=reason,
-            notes=notes,
-            raw=details,
-        )
 
     # Extract metrics - only keep JSON-serializable scalar values
     metrics: dict[str, float | int | str | bool | None] = {}
