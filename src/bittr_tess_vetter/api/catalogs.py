@@ -5,6 +5,7 @@ Downstream applications should import from `bittr_tess_vetter.api.catalogs` rath
 than deep-importing implementation modules.
 """
 
+from bittr_tess_vetter.platform.catalogs.models import SourceRecord  # noqa: F401
 from bittr_tess_vetter.platform.catalogs.exofop_target_page import (  # noqa: F401
     ExoFOPTargetSummary,
     fetch_exofop_target_summary,
@@ -124,6 +125,7 @@ __all__ = [
     "GaiaTAPError",
     "query_gaia_by_id_sync",
     "query_gaia_by_position_sync",
+    "SourceRecord",
     # SIMBAD
     "SIMBAD_TAP_ENDPOINT",
     "SimbadClient",

@@ -156,6 +156,93 @@ DEFAULT_QUALITY_MASK = (
 )
 
 
+def _extract_flux_array(lc: Any, *, flux_attr: str) -> np.ndarray[Any, np.dtype[np.float64]] | None:
+    """Extract a flux-like Quantity/array attribute from a lightkurve LightCurve."""
+    if not hasattr(lc, flux_attr):
+        return None
+    try:
+        val = getattr(lc, flux_attr)
+        if hasattr(val, "value"):
+            val = val.value
+        return np.asarray(val, dtype=np.float64)
+    except Exception:
+        return None
+
+
+def _select_flux_and_base_valid(
+    *,
+    lc: Any,
+    time: np.ndarray[Any, np.dtype[np.float64]],
+    quality: np.ndarray[Any, np.dtype[np.int32]],
+    mask: int,
+    flux_type: str,
+) -> tuple[
+    np.ndarray[Any, np.dtype[np.float64]],
+    np.ndarray[Any, np.dtype[np.float64]] | None,
+    np.ndarray[Any, np.dtype[np.bool_]],
+    str | None,
+]:
+    """Choose a flux column that yields usable finite samples, with a safe fallback.
+
+    Some products (notably some QLP variants) can have all-NaN in pdcsap_flux/sap_flux
+    while still providing a usable `flux` column. Also, some pipelines use quality flags
+    incompatible with the default SPOC mask. This helper:
+    - tries the requested flux column first
+    - falls back through other common columns
+    - if flux is finite but quality excludes everything, relaxes the quality cut
+      (and records that in the selection_reason).
+    """
+    requested_flux_col = "pdcsap_flux" if flux_type == "pdcsap" else "sap_flux"
+    requested_flux_err_col = f"{requested_flux_col}_err"
+
+    candidates: list[tuple[str, str | None, str]] = [
+        (requested_flux_col, requested_flux_err_col, f"requested:{requested_flux_col}"),
+        ("pdcsap_flux", "pdcsap_flux_err", "fallback:pdcsap_flux"),
+        ("sap_flux", "sap_flux_err", "fallback:sap_flux"),
+        ("flux", "flux_err", "fallback:flux"),
+    ]
+
+    finite_time = np.isfinite(time)
+    finite_quality = (quality & int(mask)) == 0
+
+    best_finite: tuple[
+        np.ndarray[Any, np.dtype[np.float64]],
+        np.ndarray[Any, np.dtype[np.float64]] | None,
+        str,
+    ] | None = None
+
+    for flux_attr, flux_err_attr, label in candidates:
+        flux_raw = _extract_flux_array(lc, flux_attr=flux_attr)
+        if flux_raw is None or flux_raw.shape != time.shape:
+            continue
+        finite_flux = np.isfinite(flux_raw)
+        finite = (finite_time & finite_flux).astype(np.bool_)
+        if not np.any(finite):
+            continue
+
+        flux_err_raw: np.ndarray[Any, np.dtype[np.float64]] | None = None
+        if flux_err_attr is not None:
+            flux_err_raw = _extract_flux_array(lc, flux_attr=flux_err_attr)
+            if flux_err_raw is not None and flux_err_raw.shape != time.shape:
+                flux_err_raw = None
+
+        base_valid = (finite & finite_quality).astype(np.bool_)
+        if np.any(base_valid):
+            reason = None if label.startswith("requested:") else f"flux_fallback={label}"
+            return flux_raw, flux_err_raw, base_valid, reason
+
+        if best_finite is None:
+            best_finite = (flux_raw, flux_err_raw, label)
+
+    if best_finite is None:
+        raise MASTClientError("No finite flux column found in light curve product")
+
+    flux_raw, flux_err_raw, label = best_finite
+    finite = (finite_time & np.isfinite(flux_raw)).astype(np.bool_)
+    base_valid = finite.astype(np.bool_)
+    return flux_raw, flux_err_raw, base_valid, f"quality_mask_relaxed+{label}"
+
+
 @dataclass
 class SearchResult:
     """Result from a light curve search.
@@ -620,28 +707,9 @@ class MASTClient:
             f"Processing light curve data for TIC {tic_id} sector {sector}...",
         )
 
-        # Select flux column
-        flux_col = "pdcsap_flux" if flux_type == "pdcsap" else "sap_flux"
-        flux_err_col = f"{flux_col}_err"
-
         # Extract data arrays
         try:
             time = np.asarray(lc.time.value, dtype=np.float64)
-
-            # Get flux and flux_err from the appropriate column
-            if hasattr(lc, flux_col):
-                flux_raw = np.asarray(getattr(lc, flux_col).value, dtype=np.float64)
-            else:
-                # Fallback to default flux
-                flux_raw = np.asarray(lc.flux.value, dtype=np.float64)
-
-            flux_err_raw: np.ndarray[Any, np.dtype[np.float64]] | None
-            if hasattr(lc, flux_err_col):
-                flux_err_raw = np.asarray(getattr(lc, flux_err_col).value, dtype=np.float64)
-            elif hasattr(lc, "flux_err"):
-                flux_err_raw = np.asarray(lc.flux_err.value, dtype=np.float64)
-            else:
-                flux_err_raw = None
 
             # Quality flags
             if hasattr(lc, "quality"):
@@ -653,10 +721,19 @@ class MASTClient:
             logger.error(f"Failed to extract data from light curve: {e}")
             raise MASTClientError(f"Failed to process light curve data: {e}") from e
 
-        # Base validity mask (ignores flux_err availability).
-        base_valid = (
-            np.isfinite(time) & np.isfinite(flux_raw) & ((quality & mask) == 0)
-        ).astype(np.bool_)
+        flux_raw, flux_err_raw, base_valid, selection_reason_flux = _select_flux_and_base_valid(
+            lc=lc,
+            time=time,
+            quality=quality,
+            mask=int(mask),
+            flux_type=str(flux_type),
+        )
+        if selection_reason_flux is not None:
+            selection_reason = (
+                selection_reason_flux
+                if selection_reason is None
+                else f"{selection_reason};{selection_reason_flux}"
+            )
 
         # Normalize flux to median ~1.0 (based on base_valid points).
         median_flux = None

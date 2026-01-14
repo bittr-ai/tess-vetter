@@ -125,6 +125,7 @@ class TPFFitsRef:
     tic_id: int
     sector: int
     author: str
+    exptime_seconds: int | None = None
 
     PREFIX = "tpf_fits"
 
@@ -140,21 +141,33 @@ class TPFFitsRef:
             raise ValueError(f"author must be one of {sorted(VALID_AUTHORS)}, got {self.author!r}")
         # Force lowercase for consistency (frozen dataclass workaround)
         object.__setattr__(self, "author", normalized_author)
+        if self.exptime_seconds is not None:
+            try:
+                exptime_i = int(self.exptime_seconds)
+            except Exception as e:
+                raise ValueError(f"exptime_seconds must be an integer seconds value, got {self.exptime_seconds!r}") from e
+            if exptime_i <= 0:
+                raise ValueError(f"exptime_seconds must be positive, got {exptime_i}")
+            object.__setattr__(self, "exptime_seconds", exptime_i)
 
     def to_string(self) -> str:
         """Convert to string reference format.
 
         Returns:
-            String in format 'tpf_fits:<tic_id>:<sector>:<author>'
+            String in format 'tpf_fits:<tic_id>:<sector>:<author>' or
+            'tpf_fits:<tic_id>:<sector>:<author>:<exptime_seconds>'.
         """
-        return f"{self.PREFIX}:{self.tic_id}:{self.sector}:{self.author}"
+        if self.exptime_seconds is None:
+            return f"{self.PREFIX}:{self.tic_id}:{self.sector}:{self.author}"
+        return f"{self.PREFIX}:{self.tic_id}:{self.sector}:{self.author}:{int(self.exptime_seconds)}"
 
     @classmethod
     def from_string(cls, ref_str: str) -> TPFFitsRef:
         """Parse a TPF FITS reference string.
 
         Args:
-            ref_str: String in format 'tpf_fits:<tic_id>:<sector>:<author>'
+            ref_str: String in format 'tpf_fits:<tic_id>:<sector>:<author>' or
+                     'tpf_fits:<tic_id>:<sector>:<author>:<exptime_seconds>'.
 
         Returns:
             TPFFitsRef instance.
@@ -163,13 +176,15 @@ class TPFFitsRef:
             ValueError: If the string format is invalid.
         """
         parts = ref_str.split(":")
-        if len(parts) != 4:
+        if len(parts) not in (4, 5):
             raise ValueError(
                 f"Invalid TPF FITS reference format: {ref_str!r}. "
-                f"Expected 'tpf_fits:<tic_id>:<sector>:<author>'"
+                f"Expected 'tpf_fits:<tic_id>:<sector>:<author>' or "
+                f"'tpf_fits:<tic_id>:<sector>:<author>:<exptime_seconds>'"
             )
 
-        prefix, tic_id_str, sector_str, author = parts
+        prefix, tic_id_str, sector_str, author = parts[:4]
+        exptime_str = parts[4] if len(parts) == 5 else None
 
         if prefix != cls.PREFIX:
             raise ValueError(
@@ -189,7 +204,14 @@ class TPFFitsRef:
         if not author:
             raise ValueError("author cannot be empty")
 
-        return cls(tic_id=tic_id, sector=sector, author=author)
+        exptime_seconds: int | None = None
+        if exptime_str is not None:
+            try:
+                exptime_seconds = int(exptime_str)
+            except ValueError as e:
+                raise ValueError(f"Invalid exptime_seconds: {exptime_str!r}") from e
+
+        return cls(tic_id=tic_id, sector=sector, author=author, exptime_seconds=exptime_seconds)
 
     def __str__(self) -> str:
         """Return string representation."""
@@ -387,6 +409,8 @@ class TPFFitsCache:
             Base path for cache files.
         """
         filename = f"tpf_fits_{ref.tic_id}_{ref.sector}_{ref.author}"
+        if ref.exptime_seconds is not None:
+            filename = f"{filename}_exp{int(ref.exptime_seconds)}"
         return self._cache_dir / filename
 
     def _fits_path(self, ref: TPFFitsRef) -> Path:
@@ -701,15 +725,29 @@ class TPFFitsCache:
         refs = []
         for fits_file in self._cache_dir.glob("tpf_fits_*.fits"):
             try:
-                # Parse filename: tpf_fits_<tic_id>_<sector>_<author>.fits
+                # Parse filename:
+                # - tpf_fits_<tic_id>_<sector>_<author>.fits
+                # - tpf_fits_<tic_id>_<sector>_<author>_exp<exptime>.fits
                 stem = fits_file.stem
                 parts = stem.split("_")
                 if len(parts) >= 4:
-                    # tpf, fits, tic_id, sector, author
+                    # tpf, fits, tic_id, sector, author...
                     tic_id = int(parts[2])
                     sector = int(parts[3])
-                    author = "_".join(parts[4:])  # Handle authors with underscores
-                    refs.append(TPFFitsRef(tic_id=tic_id, sector=sector, author=author))
+                    exptime_seconds: int | None = None
+                    tail = parts[4:]
+                    if tail and tail[-1].startswith("exp") and tail[-1][3:].isdigit():
+                        exptime_seconds = int(tail[-1][3:])
+                        tail = tail[:-1]
+                    author = "_".join(tail)  # Handle authors with underscores
+                    refs.append(
+                        TPFFitsRef(
+                            tic_id=tic_id,
+                            sector=sector,
+                            author=author,
+                            exptime_seconds=exptime_seconds,
+                        )
+                    )
             except (ValueError, IndexError):
                 logger.debug("Failed to parse cache filename: %s", fits_file)
         return refs

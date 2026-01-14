@@ -87,6 +87,10 @@ class CalculateFppInput(BaseModel):
         default=None,
         description="Specific sectors to use for aperture modeling",
     )
+    flux_type: str = Field(
+        default="pdcsap",
+        description="Cached flux type to use (default 'pdcsap').",
+    )
 
 
 # =============================================================================
@@ -397,6 +401,7 @@ def _gather_light_curves(
     cache: PersistentCache,
     tic_id: int,
     sectors: list[int] | None,
+    flux_type: str,
 ) -> tuple[dict[str, Any] | None, list[int]]:
     """Gather light curve data from cache.
 
@@ -404,6 +409,7 @@ def _gather_light_curves(
         cache: Persistent cache containing light curve data
         tic_id: TIC identifier
         sectors: Specific sectors to use, or None for all cached
+        flux_type: Cached flux type to include (e.g., "pdcsap", "sap")
 
     Returns:
         Tuple of (light curve data dict, sectors used)
@@ -417,9 +423,12 @@ def _gather_light_curves(
     for key in all_keys:
         if key.startswith(tic_prefix) and "stitched" not in key:
             parts = key.split(":")
-            if len(parts) >= 3:
+            if len(parts) >= 4:
                 try:
                     sector_num = int(parts[2])
+                    key_flux_type = str(parts[3]).split("~", 1)[0]
+                    if key_flux_type != str(flux_type):
+                        continue
                     if sectors is None or sector_num in sectors:
                         matching_keys.append((key, sector_num))
                 except ValueError:
@@ -436,8 +445,11 @@ def _gather_light_curves(
     flux_arrays: list[np.ndarray[Any, np.dtype[np.float64]]] = []
     flux_err_arrays: list[np.ndarray[Any, np.dtype[np.float64]]] = []
     sectors_used: list[int] = []
+    seen_sectors: set[int] = set()
 
     for key, sector_num in matching_keys:
+        if sector_num in seen_sectors:
+            continue
         lc_data = cache.get(key)
         if lc_data is None:
             continue
@@ -447,6 +459,7 @@ def _gather_light_curves(
         flux_arrays.append(lc_data.flux[mask].copy())
         flux_err_arrays.append(lc_data.flux_err[mask].copy())
         sectors_used.append(sector_num)
+        seen_sectors.add(sector_num)
 
     if not time_arrays:
         return None, []
@@ -638,6 +651,10 @@ def _aggregate_replicate_results(
 
     out["fpp"] = round(fpp_median, 6)
     out["nfpp"] = round(nfpp_median, 6)
+    # `out` starts from `best_run` (lowest-FPP) for detailed scenario fields, but
+    # headline quantities should reflect the aggregated/median values.
+    out["disposition"] = _get_disposition(float(out["fpp"]), float(out["nfpp"]))
+    out["sectors_used"] = sorted({int(s) for s in (out.get("sectors_used") or [])})
 
     return out
 
@@ -732,8 +749,20 @@ def _extract_single_run_result(
 
     runtime = time.time() - run_start_time
 
-    prob_planet = float(scenario_prob_sums.get("TP", 0.0))
-    prob_eb = float(scenario_prob_sums.get("EB", 0.0))
+    # TRICERATOPS scenario labels include more than TP/EB/BEB/NEB/NTP, e.g. DTP (diluted
+    # transiting planet) and DEB (diluted eclipsing binary). For reporting/guardrails we
+    # bucket scenarios into planet-like vs EB-like groups.
+    prob_planet = float(
+        scenario_prob_sums.get("TP", 0.0)
+        + scenario_prob_sums.get("DTP", 0.0)
+        + scenario_prob_sums.get("NTP", 0.0)
+    )
+    prob_eb = float(
+        scenario_prob_sums.get("EB", 0.0)
+        + scenario_prob_sums.get("DEB", 0.0)
+        + scenario_prob_sums.get("BEB", 0.0)
+        + scenario_prob_sums.get("NEB", 0.0)
+    )
     prob_beb = float(scenario_prob_sums.get("BEB", 0.0))
     prob_neb = float(scenario_prob_sums.get("NEB", 0.0))
     prob_ntp = float(scenario_prob_sums.get("NTP", 0.0))
@@ -753,7 +782,7 @@ def _extract_single_run_result(
         gaia_query_complete=True,
         aperture_modeled=True,
         tic_id=tic_id,
-        sectors_used=sectors_used,
+        sectors_used=sorted({int(s) for s in sectors_used}),
         runtime_seconds=runtime,
     )
 
@@ -812,6 +841,7 @@ def calculate_fpp_handler(
     depth_ppm: float,
     duration_hours: float | None = None,
     sectors: list[int] | None = None,
+    flux_type: str = "pdcsap",
     stellar_radius: float | None = None,
     stellar_mass: float | None = None,
     tmag: float | None = None,
@@ -847,6 +877,7 @@ def calculate_fpp_handler(
         depth_ppm: Transit depth in parts per million
         duration_hours: Transit duration in hours (estimated if None)
         sectors: Specific sectors to analyze (all cached if None)
+        flux_type: Cached flux type to use for the light curve (default "pdcsap")
         stellar_radius: Stellar radius in solar radii (for duration estimation)
         stellar_mass: Stellar mass in solar masses (for duration estimation)
         tmag: TESS magnitude (for saturation check)
@@ -887,7 +918,7 @@ def calculate_fpp_handler(
         }
 
     # Step 1: Get light curve from cache
-    lc_data, sectors_used = _gather_light_curves(cache, tic_id, sectors)
+    lc_data, sectors_used = _gather_light_curves(cache, tic_id, sectors, flux_type)
     if lc_data is None:
         return _err(
             f"No cached light curves for TIC {tic_id}. Use load_lightcurve first to download sector data.",
