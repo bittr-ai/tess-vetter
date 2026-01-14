@@ -209,7 +209,9 @@ def run_nearby_eb_search(
 
         rows.append({"tic_id": tic, "period_days": per, "ra_deg": ra, "dec_deg": dec})
 
-    candidate_period_days = float(candidate_period_days) if candidate_period_days is not None else None
+    candidate_period_days = (
+        float(candidate_period_days) if candidate_period_days is not None else None
+    )
     match_summaries: list[dict[str, Any]] = []
     min_delta_any = float("inf")
 
@@ -250,7 +252,9 @@ def run_nearby_eb_search(
             "dec": float(dec_deg),
             "candidate_period_days": candidate_period_days,
             "n_ebs_found": int(len(match_summaries)),
-            "min_period_ratio_delta_any": (float(min_delta_any) if min_delta_any != float("inf") else None),
+            "min_period_ratio_delta_any": (
+                float(min_delta_any) if min_delta_any != float("inf") else None
+            ),
             "matches": match_summaries,
         },
     )

@@ -250,4 +250,3 @@ def refine_candidates_numpy(
         for c in candidates
     ]
     return EphemerisRefinementRunResult(n_points_used=int(time.size), refined=refined)
-

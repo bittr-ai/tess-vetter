@@ -15,4 +15,3 @@ __all__ = [
     "estimate_rotation_period",
     "detrend_for_recovery",
 ]
-

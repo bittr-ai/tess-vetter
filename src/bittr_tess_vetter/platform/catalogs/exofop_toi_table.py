@@ -118,7 +118,11 @@ def fetch_exofop_toi_table(
     """
     global _CACHE
     now = time.time()
-    if _CACHE is not None and cache_ttl_seconds > 0 and (now - _CACHE.fetched_at_unix) <= float(cache_ttl_seconds):
+    if (
+        _CACHE is not None
+        and cache_ttl_seconds > 0
+        and (now - _CACHE.fetched_at_unix) <= float(cache_ttl_seconds)
+    ):
         return _CACHE
 
     cache_dir = Path(disk_cache_dir) if disk_cache_dir is not None else _default_cache_dir()
@@ -126,7 +130,9 @@ def fetch_exofop_toi_table(
     cached_text = _read_disk_cache(cache_path, cache_ttl_seconds=int(cache_ttl_seconds))
     if cached_text:
         headers, rows = _parse_pipe_table(cached_text)
-        table = ExoFOPToiTable(fetched_at_unix=float(cache_path.stat().st_mtime), headers=headers, rows=rows)
+        table = ExoFOPToiTable(
+            fetched_at_unix=float(cache_path.stat().st_mtime), headers=headers, rows=rows
+        )
         _CACHE = table
         return table
 

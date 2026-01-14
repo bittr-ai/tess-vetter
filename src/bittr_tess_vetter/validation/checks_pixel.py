@@ -154,7 +154,9 @@ def compute_pixel_level_depths_ppm(
     tpf_data = tpf_data[cadence_mask]
 
     in_mask = get_in_transit_mask(time, period_days, t0_btjd, duration_hours)
-    out_mask = get_out_of_transit_mask(time, period_days, t0_btjd, duration_hours, buffer_factor=3.0)
+    out_mask = get_out_of_transit_mask(
+        time, period_days, t0_btjd, duration_hours, buffer_factor=3.0
+    )
 
     in_flux = tpf_data[in_mask]
     out_flux = tpf_data[out_mask]
@@ -242,7 +244,9 @@ def check_pixel_level_lc_with_tpf(
             t0_btjd=float(candidate.t0),
             duration_hours=float(candidate.duration_hours),
         )
-        metrics = compute_pixel_depth_map_metrics(depth_map_ppm=depth_map, target_pixel=target_pixel)
+        metrics = compute_pixel_depth_map_metrics(
+            depth_map_ppm=depth_map, target_pixel=target_pixel
+        )
         confidence = 0.7
         warnings: list[str] = []
         if not np.isfinite(metrics.distance_to_target_pixels):
@@ -342,7 +346,9 @@ def check_aperture_dependence_with_tpf(
         details={
             "status": "ok",
             "stability_metric": float(result.stability_metric),
-            "depths_by_aperture_ppm": {str(k): float(v) for k, v in result.depths_by_aperture.items()},
+            "depths_by_aperture_ppm": {
+                str(k): float(v) for k, v in result.depths_by_aperture.items()
+            },
             "depth_variance_ppm2": float(result.depth_variance),
             "recommended_aperture_pixels": float(result.recommended_aperture),
             "n_in_transit_cadences": n_in,

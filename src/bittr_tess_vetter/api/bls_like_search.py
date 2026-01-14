@@ -20,4 +20,3 @@ __all__ = [
     "bls_like_search_numpy",
     "bls_like_search_numpy_top_k",
 ]
-

@@ -28,4 +28,3 @@ __all__ = [
     "cap_plots",
     "cap_variant_summaries",
 ]
-

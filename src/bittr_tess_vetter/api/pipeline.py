@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any
 
 from bittr_tess_vetter.validation.registry import (
@@ -105,6 +106,10 @@ class VettingPipeline:
             return False, "NO_COORDINATES"
         if requirements.needs_tic_id and inputs.tic_id is None:
             return False, "NO_TIC_ID"
+        if requirements.optional_deps:
+            for dep in requirements.optional_deps:
+                if not _optional_dep_available(dep):
+                    return False, f"EXTRA_MISSING:{dep}"
         # needs_stellar is soft - we don't skip, just note it
         return True, None
 
@@ -174,7 +179,7 @@ class VettingPipeline:
                     check.id,
                     check.name,
                     reason_flag=reason,
-                    notes=[f"Check skipped: {reason}"],
+                    notes=[_format_skip_note(reason)],
                 )
                 results.append(result)
                 warnings.append(f"{check.id} ({check.name}) skipped: {reason}")
@@ -187,6 +192,7 @@ class VettingPipeline:
             except Exception as e:
                 # Convert exception to error result
                 from bittr_tess_vetter.validation.result_schema import error_result
+
                 result = error_result(
                     check.id,
                     check.name,
@@ -221,6 +227,50 @@ class VettingPipeline:
             },
             inputs_summary=inputs_summary,
         )
+
+    def run_many(
+        self,
+        lc: LightCurveData,
+        candidates: list[TransitCandidate],
+        *,
+        stellar: Any | None = None,
+        tpf: Any | None = None,
+        network: bool = False,
+        ra_deg: float | None = None,
+        dec_deg: float | None = None,
+        tic_id: int | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> tuple[list[VettingBundleResult], list[dict[str, Any]]]:
+        """Run the vetting pipeline for many candidates against one light curve.
+
+        This is the common researcher workflow: evaluate multiple candidate ephemerides
+        (e.g., multi-planet systems or alternate periods) using the same underlying
+        light curve and metadata.
+
+        Returns:
+            (bundles, summary_rows)
+        """
+        bundles: list[VettingBundleResult] = []
+        summary: list[dict[str, Any]] = []
+
+        for i, candidate in enumerate(candidates):
+            bundle = self.run(
+                lc,
+                candidate,
+                stellar=stellar,
+                tpf=tpf,
+                network=network,
+                ra_deg=ra_deg,
+                dec_deg=dec_deg,
+                tic_id=tic_id,
+                context=context,
+            )
+            bundles.append(bundle)
+            summary.append(
+                _bundle_summary_row(candidate_index=i, candidate=candidate, bundle=bundle)
+            )
+
+        return bundles, summary
 
     def describe(
         self,
@@ -269,6 +319,60 @@ class VettingPipeline:
         }
 
 
+def _bundle_summary_row(
+    *,
+    candidate_index: int,
+    candidate: TransitCandidate,
+    bundle: VettingBundleResult,
+) -> dict[str, Any]:
+    flags_top: list[str] = []
+    for r in bundle.results:
+        for f in r.flags:
+            if f not in flags_top:
+                flags_top.append(f)
+        if len(flags_top) >= 10:
+            break
+
+    return {
+        "candidate_index": int(candidate_index),
+        "period_days": float(candidate.period),
+        "t0_btjd": float(candidate.t0),
+        "duration_hours": float(candidate.duration_hours),
+        "depth_ppm": float(candidate.depth) * 1e6,
+        "n_ok": sum(1 for r in bundle.results if r.status == "ok"),
+        "n_skipped": sum(1 for r in bundle.results if r.status == "skipped"),
+        "n_error": sum(1 for r in bundle.results if r.status == "error"),
+        "flags_top": flags_top,
+        "runtime_ms": bundle.provenance.get("duration_ms"),
+    }
+
+
+_EXTRA_TO_MODULES: dict[str, tuple[str, ...]] = {
+    "tls": ("transitleastsquares", "numba"),
+    "fit": ("emcee", "arviz"),
+    "wotan": ("wotan",),
+    "ldtk": ("ldtk",),
+    "triceratops": ("lightkurve", "pytransit"),
+    "mlx": ("mlx",),
+    "exovetter": ("exovetter",),
+}
+
+
+def _optional_dep_available(extra: str) -> bool:
+    modules = _EXTRA_TO_MODULES.get(extra, (extra,))
+    return all(find_spec(m) is not None for m in modules)
+
+
+def _format_skip_note(reason: str) -> str:
+    if reason.startswith("EXTRA_MISSING:"):
+        extra = reason.split(":", 1)[1]
+        return (
+            f"Check skipped: missing optional dependency '{extra}'. "
+            f"Install with: pip install 'bittr-tess-vetter[{extra}]'"
+        )
+    return f"Check skipped: {reason}"
+
+
 def list_checks(registry: CheckRegistry | None = None) -> list[dict[str, Any]]:
     """List all available checks.
 
@@ -315,7 +419,7 @@ def describe_checks(registry: CheckRegistry | None = None) -> str:
     for c in checks:
         lines.append(f"  {c['id']}: {c['name']}")
         lines.append(f"       Tier: {c['tier']}")
-        if c['citations']:
+        if c["citations"]:
             lines.append(f"       Citations: {', '.join(c['citations'])}")
         lines.append("")
 

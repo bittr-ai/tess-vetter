@@ -22,7 +22,6 @@ from bittr_tess_vetter.api import (
     vet_candidate,
 )
 
-
 # =============================================================================
 # Test 1: No stub symbols exported from validation module
 # =============================================================================
@@ -144,10 +143,7 @@ def test_vet_candidate_no_warnings_by_default(
         )
 
         # Filter out unrelated warnings (from numpy, etc.)
-        bittr_warnings = [
-            warning for warning in w
-            if "bittr_tess_vetter" in str(warning.filename)
-        ]
+        bittr_warnings = [warning for warning in w if "bittr_tess_vetter" in str(warning.filename)]
 
         # Should not emit any bittr-tess-vetter warnings
         assert len(bittr_warnings) == 0, (
@@ -203,9 +199,7 @@ def test_deprecated_policy_mode_emits_warning() -> None:
 
         # Should have emitted a FutureWarning
         future_warnings = [warning for warning in w if issubclass(warning.category, FutureWarning)]
-        assert len(future_warnings) >= 1, (
-            "Using deprecated policy_mode should emit FutureWarning"
-        )
+        assert len(future_warnings) >= 1, "Using deprecated policy_mode should emit FutureWarning"
 
 
 # =============================================================================
@@ -232,12 +226,8 @@ def test_no_deferred_status_in_results(
 
         # Metrics should not contain "deferred" or "stub" keys
         metrics = check_result.metrics or {}
-        assert "deferred" not in metrics, (
-            f"Check {check_result.id} has 'deferred' in metrics"
-        )
-        assert "stub" not in metrics, (
-            f"Check {check_result.id} has 'stub' in metrics"
-        )
+        assert "deferred" not in metrics, f"Check {check_result.id} has 'deferred' in metrics"
+        assert "stub" not in metrics, f"Check {check_result.id} has 'stub' in metrics"
 
 
 def test_no_deferred_flags_in_results(

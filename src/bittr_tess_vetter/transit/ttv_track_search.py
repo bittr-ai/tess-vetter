@@ -303,9 +303,7 @@ def score_track_hypothesis(
         if np.any(window_mask & valid):
             per_transit_residuals.append(
                 float(
-                    np.sqrt(
-                        np.mean((flux[window_mask & valid] - model[window_mask & valid]) ** 2)
-                    )
+                    np.sqrt(np.mean((flux[window_mask & valid] - model[window_mask & valid]) ** 2))
                 )
             )
     return score, n_transits, per_transit_residuals
@@ -328,7 +326,9 @@ def generate_track_grid(
     if n_offset_steps == 1:
         single_window_offsets = [0.0]
     else:
-        single_window_offsets = np.linspace(-max_offset_days, max_offset_days, n_offset_steps).tolist()
+        single_window_offsets = np.linspace(
+            -max_offset_days, max_offset_days, n_offset_steps
+        ).tolist()
 
     total = n_offset_steps**n_windows
     if total <= max_tracks:
@@ -364,7 +364,10 @@ def generate_adaptive_track_grid(
         ttv_period = max(2.0, n_windows / (1.0 + i * 0.5))
         phase = i * np.pi / 10.0
         tracks.append(
-            [float(max_offset_days * np.sin(2 * np.pi * w / ttv_period + phase)) for w in range(n_windows)]
+            [
+                float(max_offset_days * np.sin(2 * np.pi * w / ttv_period + phase))
+                for w in range(n_windows)
+            ]
         )
 
     # Linear drift patterns
@@ -383,7 +386,9 @@ def generate_adaptive_track_grid(
             offsets = [0.0]
             for _ in range(n_windows - 1):
                 step = float(rng.uniform(-max_offset_days / 3, max_offset_days / 3))
-                offsets.append(float(np.clip(offsets[-1] + step, -max_offset_days, max_offset_days)))
+                offsets.append(
+                    float(np.clip(offsets[-1] + step, -max_offset_days, max_offset_days))
+                )
             tracks.append(offsets)
         else:
             tracks.append([float(rng.choice(single_offsets)) for _ in range(n_windows)])
@@ -403,7 +408,7 @@ def estimate_search_cost(
     windows = identify_observing_windows(time_btjd, gap_threshold_days=gap_threshold_days)
     n_windows = len(windows)
     period_steps_actual = min(int(period_steps), int(budget.max_period_evaluations))
-    tracks_per_period = min(int(max_tracks_per_period), int(n_offset_steps**max(n_windows, 1)))
+    tracks_per_period = min(int(max_tracks_per_period), int(n_offset_steps ** max(n_windows, 1)))
     theoretical_total = period_steps_actual * tracks_per_period
     budget_limited = min(theoretical_total, int(budget.max_track_hypotheses))
     estimated_seconds = budget_limited / 1000.0  # rough heuristic
@@ -487,7 +492,9 @@ def run_ttv_track_search(
     p_max = float(period_days) * (1.0 + span)
     periods = np.linspace(p_min, p_max, max(period_steps, 1))
 
-    tracks_per_period = min(int(max_tracks_per_period), int(budget.max_track_hypotheses // max(period_steps, 1)))
+    tracks_per_period = min(
+        int(max_tracks_per_period), int(budget.max_track_hypotheses // max(period_steps, 1))
+    )
     candidates: list[TTVTrackCandidate] = []
     n_periods_searched = 0
     n_tracks_evaluated = 0
@@ -495,7 +502,10 @@ def run_ttv_track_search(
 
     for p in periods:
         elapsed = time_module.time() - start_time
-        if elapsed > budget.max_runtime_seconds or n_tracks_evaluated >= budget.max_track_hypotheses:
+        if (
+            elapsed > budget.max_runtime_seconds
+            or n_tracks_evaluated >= budget.max_track_hypotheses
+        ):
             budget_exhausted = True
             break
 
@@ -598,4 +608,3 @@ def run_ttv_track_search(
             "budget": budget.to_dict(),
         },
     )
-

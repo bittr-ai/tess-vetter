@@ -29,7 +29,11 @@ def test_refine_candidates_numpy_structure() -> None:
         time=time,
         flux=flux,
         flux_err=flux_err,
-        candidates=[EphemerisRefinementCandidate(period_days=period, t0_btjd=t0, duration_hours=duration_hours)],
+        candidates=[
+            EphemerisRefinementCandidate(
+                period_days=period, t0_btjd=t0, duration_hours=duration_hours
+            )
+        ],
         config=EphemerisRefinementConfig(steps=5),
     )
 
@@ -42,4 +46,3 @@ def test_refine_candidates_numpy_structure() -> None:
     assert np.isfinite(row.depth_hat_ppm)
     assert np.isfinite(row.score_z)
     assert row.score_z > 0.0
-

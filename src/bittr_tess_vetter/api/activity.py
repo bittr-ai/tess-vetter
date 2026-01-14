@@ -191,7 +191,10 @@ def characterize_activity(
 
 @cites(
     cite(DAVENPORT_2016, "Flare identification and characterization in Kepler light curves"),
-    cite(GILBERT_2021, "Example of flare-heavy TESS light-curve analysis with flares removed/masked prior to modeling"),
+    cite(
+        GILBERT_2021,
+        "Example of flare-heavy TESS light-curve analysis with flares removed/masked prior to modeling",
+    ),
 )
 def mask_flares(
     lc: LightCurve,

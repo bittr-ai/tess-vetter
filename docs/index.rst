@@ -32,11 +32,11 @@ Quick Example
        depth_ppm=500,
    )
 
-   # Run vetting pipeline
-   bundle = btv.vet_candidate(lc, candidate, policy_mode="metrics_only")
+   # Run vetting pipeline (metrics-only results)
+   bundle = btv.vet_candidate(lc, candidate, network=False)
 
    for r in bundle.results:
-       print(f"{r.id} {r.name}: passed={r.passed}")
+       print(f"{r.id} {r.name}: status={r.status} flags={r.flags}")
 
 Contents
 --------

@@ -62,7 +62,9 @@ def test_check_pixel_level_lc_with_tpf_success_includes_status_ok() -> None:
     tpf[0, 1, 1] = 990.0
 
     candidate = TransitCandidate(period=1.0, t0=0.5, duration_hours=2.4, depth=0.01, snr=10.0)
-    result = check_pixel_level_lc_with_tpf(tpf_data=tpf, time=time, candidate=candidate, target_pixel=(1, 1))
+    result = check_pixel_level_lc_with_tpf(
+        tpf_data=tpf, time=time, candidate=candidate, target_pixel=(1, 1)
+    )
 
     assert result.id == "V09"
     assert result.passed is None
@@ -94,4 +96,3 @@ def test_check_aperture_dependence_with_tpf_insufficient_data_is_metrics_only() 
     assert result.id == "V10"
     assert result.passed is None
     assert result.details["status"] in {"insufficient_data", "error"}
-

@@ -127,9 +127,7 @@ class TestVettingPipelineE2E:
             try:
                 json.dumps(check_result.metrics)
             except (TypeError, ValueError) as e:
-                pytest.fail(
-                    f"Check {check_result.id} has non-JSON-serializable metrics: {e}"
-                )
+                pytest.fail(f"Check {check_result.id} has non-JSON-serializable metrics: {e}")
 
     def test_bundle_result_json_serializable(
         self, synthetic_lc: LightCurve, synthetic_candidate: Candidate
@@ -243,9 +241,7 @@ class TestListChecks:
 
         required_fields = {"id", "name", "tier", "requirements", "citations"}
         for check in checks:
-            assert required_fields <= set(check.keys()), (
-                f"Check {check.get('id')} missing fields"
-            )
+            assert required_fields <= set(check.keys()), f"Check {check.get('id')} missing fields"
 
 
 class TestContractTests:

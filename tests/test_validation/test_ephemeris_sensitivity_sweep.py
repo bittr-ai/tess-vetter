@@ -80,4 +80,3 @@ def test_compute_sensitivity_sweep_numpy_deterministic() -> None:
     assert r1.metric_variance == r2.metric_variance
     assert r1.best_variant_id == r2.best_variant_id
     assert r1.worst_variant_id == r2.worst_variant_id
-

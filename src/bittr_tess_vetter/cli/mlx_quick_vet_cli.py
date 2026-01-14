@@ -124,7 +124,9 @@ def _estimate_fwhm_minutes(t0s: np.ndarray, scores: np.ndarray, best_index: int)
     return float(width_days * 24.0 * 60.0)
 
 
-def _load_arrays(*, data_ref: str, max_points: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, int, int, int]:
+def _load_arrays(
+    *, data_ref: str, max_points: int
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, int, int, int]:
     cache = PersistentCache.get_default()
     lc = cache.get(data_ref)
     if lc is None:
@@ -225,9 +227,9 @@ def cmd_local_sensitivity(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError(f"Insufficient data points ({n_used})")
 
     half_span_days = float(args.half_span_minutes) / (24.0 * 60.0)
-    t0s_np = (float(args.t0) + np.linspace(-half_span_days, half_span_days, int(args.n_grid))).astype(
-        np.float64
-    )
+    t0s_np = (
+        float(args.t0) + np.linspace(-half_span_days, half_span_days, int(args.n_grid))
+    ).astype(np.float64)
 
     time = mx.array(time_np.astype(float))
     flux = mx.array(flux_np.astype(float))
@@ -323,9 +325,9 @@ def cmd_score_refined(args: argparse.Namespace) -> dict[str, Any]:
         half_span_minutes = float(min(120.0, max(10.0, 0.5 * float(args.duration_hours) * 60.0)))
 
     half_span_days = float(half_span_minutes) / (24.0 * 60.0)
-    t0s_np = (float(args.t0) + np.linspace(-half_span_days, half_span_days, int(args.n_grid))).astype(
-        np.float64
-    )
+    t0s_np = (
+        float(args.t0) + np.linspace(-half_span_days, half_span_days, int(args.n_grid))
+    ).astype(np.float64)
 
     scores, _, _ = _batched_scores(
         mx=mx,
@@ -443,4 +445,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

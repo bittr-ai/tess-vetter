@@ -426,10 +426,7 @@ def wotan_flatten(
         set break_tolerance appropriately for TESS data gaps (~0.5 days).
     """
     if not WOTAN_AVAILABLE:
-        raise ImportError(
-            "wotan is required for wotan_flatten(). "
-            "Install with: pip install wotan"
-        )
+        raise ImportError("wotan is required for wotan_flatten(). Install with: pip install wotan")
 
     if time.shape != flux.shape:
         raise ValueError(f"time and flux must have same shape, got {time.shape} and {flux.shape}")

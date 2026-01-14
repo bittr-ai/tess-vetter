@@ -17,4 +17,3 @@ __all__ = [
     "compute_reliability_curves",
     "recommend_thresholds",
 ]
-

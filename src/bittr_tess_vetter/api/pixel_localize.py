@@ -24,9 +24,7 @@ from bittr_tess_vetter.api.pixel_prf import (
 )
 from bittr_tess_vetter.api.wcs_localization import compute_difference_image_centroid_diagnostics
 from bittr_tess_vetter.api.wcs_utils import compute_pixel_scale, pixel_to_world, world_to_pixel
-
-if False:  # TYPE_CHECKING
-    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData
+from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData
 
 
 class ReferenceSource(TypedDict, total=False):
@@ -126,7 +124,11 @@ def _compute_tpf_cadence_summary(
 
     n_total = int(time.shape[0])
     n_used = int(diagnostics.get("n_cadences_used", n_total)) if diagnostics else n_total
-    n_dropped = int(diagnostics.get("n_cadences_dropped", max(0, n_total - n_used))) if diagnostics else max(0, n_total - n_used)
+    n_dropped = (
+        int(diagnostics.get("n_cadences_dropped", max(0, n_total - n_used)))
+        if diagnostics
+        else max(0, n_total - n_used)
+    )
     dropped_fraction = float(n_dropped) / float(n_total) if n_total > 0 else float("nan")
 
     return {
@@ -156,7 +158,9 @@ def localize_transit_host_single_sector(
 ) -> PixelLocalizeSectorResult:
     start = _time.perf_counter()
 
-    pixel_scale_arcsec = float(compute_pixel_scale(tpf_fits.wcs)) if getattr(tpf_fits, "wcs", None) else 21.0
+    pixel_scale_arcsec = (
+        float(compute_pixel_scale(tpf_fits.wcs)) if getattr(tpf_fits, "wcs", None) else 21.0
+    )
 
     prf_backend_used: str = prf_backend
     prf_params_obj: PRFParams | None = None
@@ -229,7 +233,9 @@ def localize_transit_host_single_sector(
 
     # Convert centroid to sky coordinates
     try:
-        centroid_ra, centroid_dec = pixel_to_world(tpf_fits.wcs, float(centroid_rc[0]), float(centroid_rc[1]))
+        centroid_ra, centroid_dec = pixel_to_world(
+            tpf_fits.wcs, float(centroid_rc[0]), float(centroid_rc[1])
+        )
     except Exception:
         centroid_ra, centroid_dec = float("nan"), float("nan")
 
@@ -262,7 +268,11 @@ def localize_transit_host_single_sector(
     if len(hyp_for_scoring) == 0:
         ranked = []
     elif prf_backend_used == "prf_lite":
-        ranked = list(score_hypotheses_prf_lite(diff_image.astype(np.float64), hyp_for_scoring, seed=random_seed))
+        ranked = list(
+            score_hypotheses_prf_lite(
+                diff_image.astype(np.float64), hyp_for_scoring, seed=random_seed
+            )
+        )
     else:
         ranked = list(
             score_hypotheses_with_prf(
@@ -289,14 +299,20 @@ def localize_transit_host_single_sector(
             margin = ranked[1].get("delta_loss", 0.0)
         else:
             margin = None
-            warnings.append("Only one hypothesis provided; cannot compute margin-based host preference.")
+            warnings.append(
+                "Only one hypothesis provided; cannot compute margin-based host preference."
+            )
 
         if margin is not None and float(margin) >= float(MARGIN_RESOLVE_THRESHOLD):
-            verdict = "ON_TARGET" if _is_target_best(
-                best_source_id=best_source_id,
-                best_source_name=best_source_name,
-                tpf_fits=tpf_fits,
-            ) else "OFF_TARGET"
+            verdict = (
+                "ON_TARGET"
+                if _is_target_best(
+                    best_source_id=best_source_id,
+                    best_source_name=best_source_name,
+                    tpf_fits=tpf_fits,
+                )
+                else "OFF_TARGET"
+            )
         else:
             verdict = "AMBIGUOUS"
             if margin is not None and float(margin) < float(MARGIN_RESOLVE_THRESHOLD):
@@ -491,7 +507,9 @@ def localize_transit_host_multi_sector(
         per_sector_results.append(r)
 
     consensus = aggregate_multi_sector(per_sector_results)
-    return PixelLocalizeMultiSectorResult(per_sector_results=per_sector_results, consensus=dict(consensus))
+    return PixelLocalizeMultiSectorResult(
+        per_sector_results=per_sector_results, consensus=dict(consensus)
+    )
 
 
 __all__ = [

@@ -252,7 +252,9 @@ def test_all_exports_resolve(name: str) -> None:
     """
     from bittr_tess_vetter import api
 
-    assert hasattr(api, name), f"Export {name!r} declared in __all__ but not accessible on api module"
+    assert hasattr(api, name), (
+        f"Export {name!r} declared in __all__ but not accessible on api module"
+    )
     # Also verify it's not None (indicates failed lazy import)
     obj = getattr(api, name)
     # Some symbols may legitimately be None (e.g., WOTAN_AVAILABLE=False)

@@ -31,7 +31,9 @@ def test_vet_candidate_returns_vetting_bundle_result() -> None:
     flux = np.ones_like(time)
     flux_err = np.full_like(time, 1e-3)
     lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
-    cand = Candidate(ephemeris=Ephemeris(period_days=2.0, t0_btjd=0.5, duration_hours=2.0), depth_ppm=1000.0)
+    cand = Candidate(
+        ephemeris=Ephemeris(period_days=2.0, t0_btjd=0.5, duration_hours=2.0), depth_ppm=1000.0
+    )
 
     # The new API always returns metrics-only results
     out = vet_candidate(lc, cand, checks=["V01"])

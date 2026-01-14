@@ -315,8 +315,12 @@ def compute_odd_even_result(
     else:
         relative_depth_diff_percent = 0.0
 
-    power_ok = int(n_odd) >= int(min_transits_per_parity) and int(n_even) >= int(min_transits_per_parity)
-    is_suspicious = bool(power_ok and relative_depth_diff_percent >= float(relative_threshold_percent))
+    power_ok = int(n_odd) >= int(min_transits_per_parity) and int(n_even) >= int(
+        min_transits_per_parity
+    )
+    is_suspicious = bool(
+        power_ok and relative_depth_diff_percent >= float(relative_threshold_percent)
+    )
     if not power_ok:
         interpretation = "INSUFFICIENT_TRANSITS"
     elif is_suspicious:

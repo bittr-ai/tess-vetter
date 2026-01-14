@@ -150,4 +150,3 @@ def test_calculate_fpp_passes_contrast_curve_to_handler() -> None:
         kwargs = handler.call_args.kwargs
         assert kwargs["contrast_curve"] is not None
         assert kwargs["contrast_curve"].filter == "Ks"
-

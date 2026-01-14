@@ -25,4 +25,3 @@ __all__ = [
     "compute_prf_likeness",
     "compute_spatial_uniformity",
 ]
-

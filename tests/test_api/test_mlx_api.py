@@ -24,4 +24,3 @@ def test_api_root_mlx_exports_guarded() -> None:
         assert not hasattr(api, "score_fixed_period")
         assert not hasattr(api, "smooth_box_template")
         assert not hasattr(api, "integrated_gradients")
-

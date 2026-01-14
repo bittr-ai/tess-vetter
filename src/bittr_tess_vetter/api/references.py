@@ -272,843 +272,977 @@ def reference(ref: Reference) -> Reference:
 # Core Kepler/TESS vetting references (used across multiple modules)
 # -----------------------------------------------------------------------------
 
-THOMPSON_2018 = reference(Reference(
-    id="thompson_2018",
-    bibcode="2018ApJS..235...38T",
-    title=(
-        "Planetary Candidates Observed by Kepler. VIII. A Fully Automated "
-        "Catalog With Measured Completeness and Reliability Based on Data Release 25"
-    ),
-    authors=("Thompson, S.E.", "Coughlin, J.L.", "Hoffman, K."),
-    journal="ApJS 235, 38",
-    year=2018,
-    doi="10.3847/1538-4365/aab4f9",
-    note="DR25 Robovetter: odd/even, secondary eclipse, V-shape, ModShift, SWEET",
-))
+THOMPSON_2018 = reference(
+    Reference(
+        id="thompson_2018",
+        bibcode="2018ApJS..235...38T",
+        title=(
+            "Planetary Candidates Observed by Kepler. VIII. A Fully Automated "
+            "Catalog With Measured Completeness and Reliability Based on Data Release 25"
+        ),
+        authors=("Thompson, S.E.", "Coughlin, J.L.", "Hoffman, K."),
+        journal="ApJS 235, 38",
+        year=2018,
+        doi="10.3847/1538-4365/aab4f9",
+        note="DR25 Robovetter: odd/even, secondary eclipse, V-shape, ModShift, SWEET",
+    )
+)
 
-COUGHLIN_2016 = reference(Reference(
-    id="coughlin_2016",
-    bibcode="2016ApJS..224...12C",
-    title=(
-        "Planetary Candidates Observed by Kepler. VII. The First Fully Uniform "
-        "Catalog Based on the Entire 48-month Data Set (Q1-Q17 DR24)"
-    ),
-    authors=("Coughlin, J.L.", "Mullally, F.", "Thompson, S.E."),
-    journal="ApJS 224, 12",
-    year=2016,
-    doi="10.3847/0067-0049/224/1/12",
-    note="Kepler Robovetter methodology for automated vetting",
-))
+COUGHLIN_2016 = reference(
+    Reference(
+        id="coughlin_2016",
+        bibcode="2016ApJS..224...12C",
+        title=(
+            "Planetary Candidates Observed by Kepler. VII. The First Fully Uniform "
+            "Catalog Based on the Entire 48-month Data Set (Q1-Q17 DR24)"
+        ),
+        authors=("Coughlin, J.L.", "Mullally, F.", "Thompson, S.E."),
+        journal="ApJS 224, 12",
+        year=2016,
+        doi="10.3847/0067-0049/224/1/12",
+        note="Kepler Robovetter methodology for automated vetting",
+    )
+)
 
-GUERRERO_2021 = reference(Reference(
-    id="guerrero_2021",
-    bibcode="2021ApJS..254...39G",
-    title="The TESS Objects of Interest Catalog from the TESS Prime Mission",
-    authors=("Guerrero, N.M.", "Seager, S.", "Huang, C.X."),
-    journal="ApJS 254, 39",
-    year=2021,
-    doi="10.3847/1538-4365/abefe1",
-    note="TESS TOI catalog and vetting procedures",
-))
+GUERRERO_2021 = reference(
+    Reference(
+        id="guerrero_2021",
+        bibcode="2021ApJS..254...39G",
+        title="The TESS Objects of Interest Catalog from the TESS Prime Mission",
+        authors=("Guerrero, N.M.", "Seager, S.", "Huang, C.X."),
+        journal="ApJS 254, 39",
+        year=2021,
+        doi="10.3847/1538-4365/abefe1",
+        note="TESS TOI catalog and vetting procedures",
+    )
+)
 
-TWICKEN_2018 = reference(Reference(
-    id="twicken_2018",
-    bibcode="2018PASP..130f4502T",
-    title=(
-        "Kepler Data Validation I -- Architecture, Diagnostic Tests, and "
-        "Data Products for Vetting Transiting Planet Candidates"
-    ),
-    authors=("Twicken, J.D.", "Catanzarite, J.H.", "Clarke, B.D."),
-    journal="PASP 130, 064502",
-    year=2018,
-    doi="10.1088/1538-3873/aab694",
-    note="Kepler DV pipeline diagnostic tests for transit validation",
-))
+TWICKEN_2018 = reference(
+    Reference(
+        id="twicken_2018",
+        bibcode="2018PASP..130f4502T",
+        title=(
+            "Kepler Data Validation I -- Architecture, Diagnostic Tests, and "
+            "Data Products for Vetting Transiting Planet Candidates"
+        ),
+        authors=("Twicken, J.D.", "Catanzarite, J.H.", "Clarke, B.D."),
+        journal="PASP 130, 064502",
+        year=2018,
+        doi="10.1088/1538-3873/aab694",
+        note="Kepler DV pipeline diagnostic tests for transit validation",
+    )
+)
 
-SEAGER_MALLEN_ORNELAS_2003 = reference(Reference(
-    id="seager_mallen_ornelas_2003",
-    bibcode="2003ApJ...585.1038S",
-    title=(
-        "On the Unique Solution of Planet and Star Parameters from an "
-        "Extrasolar Planet Transit Light Curve"
-    ),
-    authors=("Seager, S.", "Mallen-Ornelas, G."),
-    journal="ApJ 585, 1038",
-    year=2003,
-    doi="10.1086/346105",
-    arxiv="astro-ph/0206228",
-    note="Transit duration-stellar density relationship; transit shape analysis",
-))
+SEAGER_MALLEN_ORNELAS_2003 = reference(
+    Reference(
+        id="seager_mallen_ornelas_2003",
+        bibcode="2003ApJ...585.1038S",
+        title=(
+            "On the Unique Solution of Planet and Star Parameters from an "
+            "Extrasolar Planet Transit Light Curve"
+        ),
+        authors=("Seager, S.", "Mallen-Ornelas, G."),
+        journal="ApJ 585, 1038",
+        year=2003,
+        doi="10.1086/346105",
+        arxiv="astro-ph/0206228",
+        note="Transit duration-stellar density relationship; transit shape analysis",
+    )
+)
 
-PRSA_2011 = reference(Reference(
-    id="prsa_2011",
-    bibcode="2011AJ....141...83P",
-    title=(
-        "Kepler Eclipsing Binary Stars. I. Catalog and Principal "
-        "Characterization of 1879 Eclipsing Binaries in the First Data Release"
-    ),
-    authors=("Prsa, A.", "Batalha, N.", "Slawson, R.W."),
-    journal="AJ 141, 83",
-    year=2011,
-    doi="10.1088/0004-6256/141/3/83",
-    note="EB morphology classification; V-shape vs U-shape distinction",
-))
+PRSA_2011 = reference(
+    Reference(
+        id="prsa_2011",
+        bibcode="2011AJ....141...83P",
+        title=(
+            "Kepler Eclipsing Binary Stars. I. Catalog and Principal "
+            "Characterization of 1879 Eclipsing Binaries in the First Data Release"
+        ),
+        authors=("Prsa, A.", "Batalha, N.", "Slawson, R.W."),
+        journal="AJ 141, 83",
+        year=2011,
+        doi="10.1088/0004-6256/141/3/83",
+        note="EB morphology classification; V-shape vs U-shape distinction",
+    )
+)
 
 # -----------------------------------------------------------------------------
 # LC-only check references (lc_only.py)
 # -----------------------------------------------------------------------------
 
-PONT_2006 = reference(Reference(
-    id="pont_2006",
-    bibcode="2006MNRAS.373..231P",
-    title="The effect of red noise on planetary transit detection",
-    authors=("Pont, F.", "Zucker, S.", "Queloz, D."),
-    journal="MNRAS 373, 231",
-    year=2006,
-    doi="10.1111/j.1365-2966.2006.11012.x",
-    arxiv="astro-ph/0608597",
-    note="Time-correlated (red) noise in transit photometry; binning-based inflation heuristic",
-))
+PONT_2006 = reference(
+    Reference(
+        id="pont_2006",
+        bibcode="2006MNRAS.373..231P",
+        title="The effect of red noise on planetary transit detection",
+        authors=("Pont, F.", "Zucker, S.", "Queloz, D."),
+        journal="MNRAS 373, 231",
+        year=2006,
+        doi="10.1111/j.1365-2966.2006.11012.x",
+        arxiv="astro-ph/0608597",
+        note="Time-correlated (red) noise in transit photometry; binning-based inflation heuristic",
+    )
+)
 
-COUGHLIN_LOPEZ_MORALES_2012 = reference(Reference(
-    id="coughlin_lopez_morales_2012",
-    bibcode="2012AJ....143...39C",
-    title=("A Uniform Search for Secondary Eclipses of Hot Jupiters in Kepler Q2 Light Curves"),
-    authors=("Coughlin, J.L.", "Lopez-Morales, M."),
-    journal="AJ 143, 39",
-    year=2012,
-    doi="10.1088/0004-6256/143/2/39",
-    note="Secondary eclipse detection methodology for hot Jupiters",
-))
+COUGHLIN_LOPEZ_MORALES_2012 = reference(
+    Reference(
+        id="coughlin_lopez_morales_2012",
+        bibcode="2012AJ....143...39C",
+        title=("A Uniform Search for Secondary Eclipses of Hot Jupiters in Kepler Q2 Light Curves"),
+        authors=("Coughlin, J.L.", "Lopez-Morales, M."),
+        journal="AJ 143, 39",
+        year=2012,
+        doi="10.1088/0004-6256/143/2/39",
+        note="Secondary eclipse detection methodology for hot Jupiters",
+    )
+)
 
-FRESSIN_2013 = reference(Reference(
-    id="fressin_2013",
-    bibcode="2013ApJ...766...81F",
-    title="The False Positive Rate of Kepler and the Occurrence of Planets",
-    authors=("Fressin, F.", "Torres, G.", "Charbonneau, D."),
-    journal="ApJ 766, 81",
-    year=2013,
-    doi="10.1088/0004-637X/766/2/81",
-    note="False positive scenarios including EBs and secondary eclipses",
-))
+FRESSIN_2013 = reference(
+    Reference(
+        id="fressin_2013",
+        bibcode="2013ApJ...766...81F",
+        title="The False Positive Rate of Kepler and the Occurrence of Planets",
+        authors=("Fressin, F.", "Torres, G.", "Charbonneau, D."),
+        journal="ApJ 766, 81",
+        year=2013,
+        doi="10.1088/0004-637X/766/2/81",
+        note="False positive scenarios including EBs and secondary eclipses",
+    )
+)
 
-SANTERNE_2013 = reference(Reference(
-    id="santerne_2013",
-    bibcode="2013A&A...557A.139S",
-    title=(
-        "The false positive rate of Kepler and the occurrence of planets: "
-        "eclipsing binary contamination and rejection"
-    ),
-    authors=("Santerne, A.", "Fressin, F.", "Diaz, R.F."),
-    journal="A&A 557, A139",
-    year=2013,
-    doi="10.1051/0004-6361/201321566",
-    arxiv="1307.2003",
-    note="Eccentric orbit secondary eclipse offsets from phase 0.5",
-))
+SANTERNE_2013 = reference(
+    Reference(
+        id="santerne_2013",
+        bibcode="2013A&A...557A.139S",
+        title=(
+            "The false positive rate of Kepler and the occurrence of planets: "
+            "eclipsing binary contamination and rejection"
+        ),
+        authors=("Santerne, A.", "Fressin, F.", "Diaz, R.F."),
+        journal="A&A 557, A139",
+        year=2013,
+        doi="10.1051/0004-6361/201321566",
+        arxiv="1307.2003",
+        note="Eccentric orbit secondary eclipse offsets from phase 0.5",
+    )
+)
 
-WANG_ESPINOZA_2023 = reference(Reference(
-    id="wang_espinoza_2023",
-    bibcode="2023arXiv231102154W",
-    title="Per-transit depth fitting for improved transit depth stability diagnostics",
-    authors=("Wang, J.", "Espinoza, N."),
-    year=2023,
-    arxiv="2311.02154",
-    note="Per-transit box depth fitting methodology with local baselines",
-))
+WANG_ESPINOZA_2023 = reference(
+    Reference(
+        id="wang_espinoza_2023",
+        bibcode="2023arXiv231102154W",
+        title="Per-transit depth fitting for improved transit depth stability diagnostics",
+        authors=("Wang, J.", "Espinoza, N."),
+        year=2023,
+        arxiv="2311.02154",
+        note="Per-transit box depth fitting methodology with local baselines",
+    )
+)
 
 # -----------------------------------------------------------------------------
 # Catalog check references (catalog.py)
 # -----------------------------------------------------------------------------
 
-PRSA_2022 = reference(Reference(
-    id="prsa_2022",
-    bibcode="2022ApJS..258...16P",
-    title=(
-        "TESS Eclipsing Binary Stars. I. Short-cadence Observations of 4584 "
-        "Eclipsing Binaries in Sectors 1-26"
-    ),
-    authors=("Prsa, A.", "Kochoska, A.", "Conroy, K.E."),
-    journal="ApJS 258, 16",
-    year=2022,
-    doi="10.3847/1538-4365/ac324a",
-    note="TESS-EB catalog for nearby eclipsing binary search (V06)",
-))
+PRSA_2022 = reference(
+    Reference(
+        id="prsa_2022",
+        bibcode="2022ApJS..258...16P",
+        title=(
+            "TESS Eclipsing Binary Stars. I. Short-cadence Observations of 4584 "
+            "Eclipsing Binaries in Sectors 1-26"
+        ),
+        authors=("Prsa, A.", "Kochoska, A.", "Conroy, K.E."),
+        journal="ApJS 258, 16",
+        year=2022,
+        doi="10.3847/1538-4365/ac324a",
+        note="TESS-EB catalog for nearby eclipsing binary search (V06)",
+    )
+)
 
 # -----------------------------------------------------------------------------
 # Pixel-level check references (pixel.py)
 # -----------------------------------------------------------------------------
 
-GREISEN_CALABRETTA_2002 = reference(Reference(
-    id="greisen_calabretta_2002",
-    bibcode="2002A&A...395.1061G",
-    title="Representations of world coordinates in FITS",
-    authors=("Greisen, E.W.", "Calabretta, M.R."),
-    journal="A&A 395, 1061",
-    year=2002,
-    arxiv="astro-ph/0207407",
-    note="FITS WCS general framework (Paper I); basis for WCS transforms in pixel utilities",
-))
+GREISEN_CALABRETTA_2002 = reference(
+    Reference(
+        id="greisen_calabretta_2002",
+        bibcode="2002A&A...395.1061G",
+        title="Representations of world coordinates in FITS",
+        authors=("Greisen, E.W.", "Calabretta, M.R."),
+        journal="A&A 395, 1061",
+        year=2002,
+        arxiv="astro-ph/0207407",
+        note="FITS WCS general framework (Paper I); basis for WCS transforms in pixel utilities",
+    )
+)
 
-CALABRETTA_GREISEN_2002 = reference(Reference(
-    id="calabretta_greisen_2002",
-    bibcode="2002A&A...395.1077C",
-    title="Representations of celestial coordinates in FITS",
-    authors=("Calabretta, M.R.", "Greisen, E.W."),
-    journal="A&A 395, 1077",
-    year=2002,
-    arxiv="astro-ph/0207413",
-    note="FITS celestial WCS conventions (Paper II); projections and RA/Dec mappings",
-))
+CALABRETTA_GREISEN_2002 = reference(
+    Reference(
+        id="calabretta_greisen_2002",
+        bibcode="2002A&A...395.1077C",
+        title="Representations of celestial coordinates in FITS",
+        authors=("Calabretta, M.R.", "Greisen, E.W."),
+        journal="A&A 395, 1077",
+        year=2002,
+        arxiv="astro-ph/0207413",
+        note="FITS celestial WCS conventions (Paper II); projections and RA/Dec mappings",
+    )
+)
 
-ASTROPY_COLLAB_2013 = reference(Reference(
-    id="astropy_collab_2013",
-    bibcode="2013A&A...558A..33A",
-    title="Astropy: A Community Python Package for Astronomy",
-    authors=("Astropy Collaboration",),
-    journal="A&A 558, A33",
-    year=2013,
-    doi="10.1051/0004-6361/201322068",
-    arxiv="1307.6212",
-    note="Software reference for astropy.wcs usage in WCS utilities",
-))
+ASTROPY_COLLAB_2013 = reference(
+    Reference(
+        id="astropy_collab_2013",
+        bibcode="2013A&A...558A..33A",
+        title="Astropy: A Community Python Package for Astronomy",
+        authors=("Astropy Collaboration",),
+        journal="A&A 558, A33",
+        year=2013,
+        doi="10.1051/0004-6361/201322068",
+        arxiv="1307.6212",
+        note="Software reference for astropy.wcs usage in WCS utilities",
+    )
+)
 
-BRYSON_2013 = reference(Reference(
-    id="bryson_2013",
-    bibcode="2013PASP..125..889B",
-    title="Identification of Background False Positives from Kepler Data",
-    authors=("Bryson, S.T.", "Jenkins, J.M.", "Gilliland, R.L."),
-    journal="PASP 125, 889",
-    year=2013,
-    doi="10.1086/671767",
-    note="Pixel-level diagnostics for identifying background false positives",
-))
+BRYSON_2013 = reference(
+    Reference(
+        id="bryson_2013",
+        bibcode="2013PASP..125..889B",
+        title="Identification of Background False Positives from Kepler Data",
+        authors=("Bryson, S.T.", "Jenkins, J.M.", "Gilliland, R.L."),
+        journal="PASP 125, 889",
+        year=2013,
+        doi="10.1086/671767",
+        note="Pixel-level diagnostics for identifying background false positives",
+    )
+)
 
-BATALHA_2010 = reference(Reference(
-    id="batalha_2010",
-    bibcode="2010ApJ...713L.109B",
-    title="Selection, Prioritization, and Characteristics of Kepler Target Stars",
-    authors=("Batalha, N.M.", "Borucki, W.J.", "Koch, D.G."),
-    journal="ApJ 713, L109",
-    year=2010,
-    doi="10.1088/2041-8205/713/2/L109",
-    note="Kepler target star selection and stellar classification methodology",
-))
+BATALHA_2010 = reference(
+    Reference(
+        id="batalha_2010",
+        bibcode="2010ApJ...713L.109B",
+        title="Selection, Prioritization, and Characteristics of Kepler Target Stars",
+        authors=("Batalha, N.M.", "Borucki, W.J.", "Koch, D.G."),
+        journal="ApJ 713, L109",
+        year=2010,
+        doi="10.1088/2041-8205/713/2/L109",
+        note="Kepler target star selection and stellar classification methodology",
+    )
+)
 
-TORRES_2011 = reference(Reference(
-    id="torres_2011",
-    bibcode="2011ApJ...727...24T",
-    title=(
-        "Modeling Kepler Transit Light Curves as False Positives: "
-        "Rejection of Blend Scenarios for Kepler-9, and Validation of Kepler-9 d, "
-        "a Super-Earth-size Planet in a Multiple System"
-    ),
-    authors=("Torres, G.", "Fressin, F.", "Batalha, N.M."),
-    journal="ApJ 727, 24",
-    year=2011,
-    doi="10.1088/0004-637X/727/1/24",
-    note="Background blend detection and rejection methodology",
-))
+TORRES_2011 = reference(
+    Reference(
+        id="torres_2011",
+        bibcode="2011ApJ...727...24T",
+        title=(
+            "Modeling Kepler Transit Light Curves as False Positives: "
+            "Rejection of Blend Scenarios for Kepler-9, and Validation of Kepler-9 d, "
+            "a Super-Earth-size Planet in a Multiple System"
+        ),
+        authors=("Torres, G.", "Fressin, F.", "Batalha, N.M."),
+        journal="ApJ 727, 24",
+        year=2011,
+        doi="10.1088/0004-637X/727/1/24",
+        note="Background blend detection and rejection methodology",
+    )
+)
 
-MULLALLY_2015 = reference(Reference(
-    id="mullally_2015",
-    bibcode="2015ApJS..217...31M",
-    title=("Planetary Candidates Observed by Kepler VI: Planet Sample from Q1-Q16 (47 Months)"),
-    authors=("Mullally, F.", "Coughlin, J.L.", "Thompson, S.E."),
-    journal="ApJS 217, 31",
-    year=2015,
-    doi="10.1088/0067-0049/217/2/31",
-    note="Kepler planet candidate catalog with vetting diagnostics",
-))
+MULLALLY_2015 = reference(
+    Reference(
+        id="mullally_2015",
+        bibcode="2015ApJS..217...31M",
+        title=("Planetary Candidates Observed by Kepler VI: Planet Sample from Q1-Q16 (47 Months)"),
+        authors=("Mullally, F.", "Coughlin, J.L.", "Thompson, S.E."),
+        journal="ApJS 217, 31",
+        year=2015,
+        doi="10.1088/0067-0049/217/2/31",
+        note="Kepler planet candidate catalog with vetting diagnostics",
+    )
+)
 
-HIGGINS_BELL_2022 = reference(Reference(
-    id="higgins_bell_2022",
-    bibcode="2022AJ....163..141H",
-    title="Localizing Sources of Variability in Crowded TESS Photometry",
-    authors=("Higgins, M.E.", "Bell, K.J."),
-    journal="AJ 163, 141",
-    year=2022,
-    doi="10.3847/1538-3881/ac4617",
-    arxiv="2204.06020",
-    note="TESS-specific centroid localization methodology for crowded fields",
-))
+HIGGINS_BELL_2022 = reference(
+    Reference(
+        id="higgins_bell_2022",
+        bibcode="2022AJ....163..141H",
+        title="Localizing Sources of Variability in Crowded TESS Photometry",
+        authors=("Higgins, M.E.", "Bell, K.J."),
+        journal="AJ 163, 141",
+        year=2022,
+        doi="10.3847/1538-3881/ac4617",
+        arxiv="2204.06020",
+        note="TESS-specific centroid localization methodology for crowded fields",
+    )
+)
 
-BRYSON_2010 = reference(Reference(
-    id="bryson_2010",
-    bibcode="2010ApJ...713L..97B",
-    title="The Kepler Pixel Response Function",
-    authors=("Bryson, S.T.", "Tenenbaum, P.", "Jenkins, J.M."),
-    journal="ApJ 713, L97",
-    year=2010,
-    doi="10.1088/2041-8205/713/2/L97",
-    arxiv="1001.0331",
-    note="PRF methodology for sub-pixel centroid determination in Kepler",
-))
+BRYSON_2010 = reference(
+    Reference(
+        id="bryson_2010",
+        bibcode="2010ApJ...713L..97B",
+        title="The Kepler Pixel Response Function",
+        authors=("Bryson, S.T.", "Tenenbaum, P.", "Jenkins, J.M."),
+        journal="ApJ 713, L97",
+        year=2010,
+        doi="10.1088/2041-8205/713/2/L97",
+        arxiv="1001.0331",
+        note="PRF methodology for sub-pixel centroid determination in Kepler",
+    )
+)
 
 # -----------------------------------------------------------------------------
 # Transit model fitting references (transit_fit.py)
 # -----------------------------------------------------------------------------
 
-MANDEL_AGOL_2002 = reference(Reference(
-    id="mandel_agol_2002",
-    bibcode="2002ApJ...580L.171M",
-    title="Analytic Light Curves for Planetary Transit Searches",
-    authors=("Mandel, K.", "Agol, E."),
-    journal="ApJ 580, L171",
-    year=2002,
-    doi="10.1086/345520",
-    arxiv="astro-ph/0210099",
-    note="Foundational analytic transit model with limb darkening",
-))
+MANDEL_AGOL_2002 = reference(
+    Reference(
+        id="mandel_agol_2002",
+        bibcode="2002ApJ...580L.171M",
+        title="Analytic Light Curves for Planetary Transit Searches",
+        authors=("Mandel, K.", "Agol, E."),
+        journal="ApJ 580, L171",
+        year=2002,
+        doi="10.1086/345520",
+        arxiv="astro-ph/0210099",
+        note="Foundational analytic transit model with limb darkening",
+    )
+)
 
-KREIDBERG_2015 = reference(Reference(
-    id="kreidberg_2015",
-    bibcode="2015PASP..127.1161K",
-    title="batman: BAsic Transit Model cAlculatioN in Python",
-    authors=("Kreidberg, L.",),
-    journal="PASP 127, 1161",
-    year=2015,
-    doi="10.1086/683602",
-    arxiv="1507.08285",
-    note="Python transit model package used for light curve computation",
-))
+KREIDBERG_2015 = reference(
+    Reference(
+        id="kreidberg_2015",
+        bibcode="2015PASP..127.1161K",
+        title="batman: BAsic Transit Model cAlculatioN in Python",
+        authors=("Kreidberg, L.",),
+        journal="PASP 127, 1161",
+        year=2015,
+        doi="10.1086/683602",
+        arxiv="1507.08285",
+        note="Python transit model package used for light curve computation",
+    )
+)
 
-FOREMAN_MACKEY_2013 = reference(Reference(
-    id="foreman_mackey_2013",
-    bibcode="2013PASP..125..306F",
-    title="emcee: The MCMC Hammer",
-    authors=("Foreman-Mackey, D.", "Hogg, D.W.", "Lang, D.", "Goodman, J."),
-    journal="PASP 125, 306",
-    year=2013,
-    doi="10.1086/670067",
-    arxiv="1202.3665",
-    note="MCMC sampler used for posterior estimation",
-))
+FOREMAN_MACKEY_2013 = reference(
+    Reference(
+        id="foreman_mackey_2013",
+        bibcode="2013PASP..125..306F",
+        title="emcee: The MCMC Hammer",
+        authors=("Foreman-Mackey, D.", "Hogg, D.W.", "Lang, D.", "Goodman, J."),
+        journal="PASP 125, 306",
+        year=2013,
+        doi="10.1086/670067",
+        arxiv="1202.3665",
+        note="MCMC sampler used for posterior estimation",
+    )
+)
 
-CLARET_2018 = reference(Reference(
-    id="claret_2018",
-    bibcode="2018A&A...618A..20C",
-    title="Limb and gravity-darkening coefficients for the TESS satellite",
-    authors=("Claret, A.",),
-    journal="A&A 618, A20",
-    year=2018,
-    doi="10.1051/0004-6361/201833060",
-    arxiv="1804.10295",
-    note="TESS-specific limb darkening coefficients from ATLAS/PHOENIX models",
-))
+CLARET_2018 = reference(
+    Reference(
+        id="claret_2018",
+        bibcode="2018A&A...618A..20C",
+        title="Limb and gravity-darkening coefficients for the TESS satellite",
+        authors=("Claret, A.",),
+        journal="A&A 618, A20",
+        year=2018,
+        doi="10.1051/0004-6361/201833060",
+        arxiv="1804.10295",
+        note="TESS-specific limb darkening coefficients from ATLAS/PHOENIX models",
+    )
+)
 
-PARVIAINEN_2015 = reference(Reference(
-    id="parviainen_2015",
-    bibcode="2015MNRAS.453.3821P",
-    title="LDTk: Limb Darkening Toolkit",
-    authors=("Parviainen, H.", "Aigrain, S."),
-    journal="MNRAS 453, 3821",
-    year=2015,
-    doi="10.1093/mnras/stv1857",
-    arxiv="1508.02634",
-    note="Python package for computing custom limb darkening profiles",
-))
+PARVIAINEN_2015 = reference(
+    Reference(
+        id="parviainen_2015",
+        bibcode="2015MNRAS.453.3821P",
+        title="LDTk: Limb Darkening Toolkit",
+        authors=("Parviainen, H.", "Aigrain, S."),
+        journal="MNRAS 453, 3821",
+        year=2015,
+        doi="10.1093/mnras/stv1857",
+        arxiv="1508.02634",
+        note="Python package for computing custom limb darkening profiles",
+    )
+)
 
-ESPINOZA_JORDAN_2015 = reference(Reference(
-    id="espinoza_jordan_2015",
-    bibcode="2015MNRAS.450.1879E",
-    title="Limb darkening and exoplanets: testing stellar model atmospheres",
-    authors=("Espinoza, N.", "Jordan, A."),
-    journal="MNRAS 450, 1879",
-    year=2015,
-    doi="10.1093/mnras/stv744",
-    arxiv="1503.07020",
-    note="Analysis of limb darkening biases in transit parameters",
-))
+ESPINOZA_JORDAN_2015 = reference(
+    Reference(
+        id="espinoza_jordan_2015",
+        bibcode="2015MNRAS.450.1879E",
+        title="Limb darkening and exoplanets: testing stellar model atmospheres",
+        authors=("Espinoza, N.", "Jordan, A."),
+        journal="MNRAS 450, 1879",
+        year=2015,
+        doi="10.1093/mnras/stv744",
+        arxiv="1503.07020",
+        note="Analysis of limb darkening biases in transit parameters",
+    )
+)
 
-ESPINOZA_JORDAN_2016 = reference(Reference(
-    id="espinoza_jordan_2016",
-    bibcode="2016MNRAS.457.3573E",
-    title="Limb-darkening and exoplanets II: Choosing the Best Law",
-    authors=("Espinoza, N.", "Jordan, A."),
-    journal="MNRAS 457, 3573",
-    year=2016,
-    doi="10.1093/mnras/stw224",
-    arxiv="1601.05485",
-    note="Comparison of limb darkening laws for transit fitting",
-))
+ESPINOZA_JORDAN_2016 = reference(
+    Reference(
+        id="espinoza_jordan_2016",
+        bibcode="2016MNRAS.457.3573E",
+        title="Limb-darkening and exoplanets II: Choosing the Best Law",
+        authors=("Espinoza, N.", "Jordan, A."),
+        journal="MNRAS 457, 3573",
+        year=2016,
+        doi="10.1093/mnras/stw224",
+        arxiv="1601.05485",
+        note="Comparison of limb darkening laws for transit fitting",
+    )
+)
 
-SING_2010 = reference(Reference(
-    id="sing_2010",
-    bibcode="2010A&A...510A..21S",
-    title="Stellar Limb-Darkening Coefficients for CoRot and Kepler",
-    authors=("Sing, D.K.",),
-    journal="A&A 510, A21",
-    year=2010,
-    doi="10.1051/0004-6361/200913675",
-    arxiv="0912.2274",
-    note="Limb darkening coefficients for space missions",
-))
+SING_2010 = reference(
+    Reference(
+        id="sing_2010",
+        bibcode="2010A&A...510A..21S",
+        title="Stellar Limb-Darkening Coefficients for CoRot and Kepler",
+        authors=("Sing, D.K.",),
+        journal="A&A 510, A21",
+        year=2010,
+        doi="10.1051/0004-6361/200913675",
+        arxiv="0912.2274",
+        note="Limb darkening coefficients for space missions",
+    )
+)
 
-CLARET_SOUTHWORTH_2022 = reference(Reference(
-    id="claret_southworth_2022",
-    bibcode="2022A&A...664A..91C",
-    title="Power-2 limb-darkening coefficients for multiple photometric systems",
-    authors=("Claret, A.", "Southworth, J."),
-    journal="A&A 664, A91",
-    year=2022,
-    doi="10.1051/0004-6361/202243820",
-    arxiv="2206.11098",
-    note="Power-2 law limb darkening coefficients including TESS",
-))
+CLARET_SOUTHWORTH_2022 = reference(
+    Reference(
+        id="claret_southworth_2022",
+        bibcode="2022A&A...664A..91C",
+        title="Power-2 limb-darkening coefficients for multiple photometric systems",
+        authors=("Claret, A.", "Southworth, J."),
+        journal="A&A 664, A91",
+        year=2022,
+        doi="10.1051/0004-6361/202243820",
+        arxiv="2206.11098",
+        note="Power-2 law limb darkening coefficients including TESS",
+    )
+)
 
 # -----------------------------------------------------------------------------
 # Transit timing references (timing.py)
 # -----------------------------------------------------------------------------
 
-HOLMAN_MURRAY_2005 = reference(Reference(
-    id="holman_murray_2005",
-    bibcode="2005Sci...307.1288H",
-    title=("The Use of Transit Timing to Detect Terrestrial-Mass Extrasolar Planets"),
-    authors=("Holman, M.J.", "Murray, N.W."),
-    journal="Science 307, 1288",
-    year=2005,
-    doi="10.1126/science.1107822",
-    note="Foundational TTV theory paper - perturbations from additional planets",
-))
+HOLMAN_MURRAY_2005 = reference(
+    Reference(
+        id="holman_murray_2005",
+        bibcode="2005Sci...307.1288H",
+        title=("The Use of Transit Timing to Detect Terrestrial-Mass Extrasolar Planets"),
+        authors=("Holman, M.J.", "Murray, N.W."),
+        journal="Science 307, 1288",
+        year=2005,
+        doi="10.1126/science.1107822",
+        note="Foundational TTV theory paper - perturbations from additional planets",
+    )
+)
 
-AGOL_2005 = reference(Reference(
-    id="agol_2005",
-    bibcode="2005MNRAS.359..567A",
-    title="On detecting terrestrial planets with timing of giant planet transits",
-    authors=("Agol, E.", "Steffen, J.", "Sari, R.", "Clarkson, W."),
-    journal="MNRAS 359, 567",
-    year=2005,
-    doi="10.1111/j.1365-2966.2005.08922.x",
-    note="TTV theory - sensitivity to perturbing planets",
-))
+AGOL_2005 = reference(
+    Reference(
+        id="agol_2005",
+        bibcode="2005MNRAS.359..567A",
+        title="On detecting terrestrial planets with timing of giant planet transits",
+        authors=("Agol, E.", "Steffen, J.", "Sari, R.", "Clarkson, W."),
+        journal="MNRAS 359, 567",
+        year=2005,
+        doi="10.1111/j.1365-2966.2005.08922.x",
+        note="TTV theory - sensitivity to perturbing planets",
+    )
+)
 
-LITHWICK_2012 = reference(Reference(
-    id="lithwick_2012",
-    bibcode="2012ApJ...761..122L",
-    title="Extracting Planet Mass and Eccentricity from TTV Data",
-    authors=("Lithwick, Y.", "Xie, J.", "Wu, Y."),
-    journal="ApJ 761, 122",
-    year=2012,
-    doi="10.1088/0004-637X/761/2/122",
-    arxiv="1207.4192",
-    note="Analytic TTV formulae for near-resonant planet pairs",
-))
+LITHWICK_2012 = reference(
+    Reference(
+        id="lithwick_2012",
+        bibcode="2012ApJ...761..122L",
+        title="Extracting Planet Mass and Eccentricity from TTV Data",
+        authors=("Lithwick, Y.", "Xie, J.", "Wu, Y."),
+        journal="ApJ 761, 122",
+        year=2012,
+        doi="10.1088/0004-637X/761/2/122",
+        arxiv="1207.4192",
+        note="Analytic TTV formulae for near-resonant planet pairs",
+    )
+)
 
-HADDEN_LITHWICK_2016 = reference(Reference(
-    id="hadden_lithwick_2016",
-    bibcode="2017AJ....154....5H",
-    title="Kepler Planet Masses and Eccentricities from TTV Analysis",
-    authors=("Hadden, S.", "Lithwick, Y."),
-    journal="AJ 154, 5",
-    year=2017,
-    doi="10.3847/1538-3881/aa71ef",
-    arxiv="1611.03516",
-    note="Uniform TTV analysis of Kepler multiplanet systems",
-))
+HADDEN_LITHWICK_2016 = reference(
+    Reference(
+        id="hadden_lithwick_2016",
+        bibcode="2017AJ....154....5H",
+        title="Kepler Planet Masses and Eccentricities from TTV Analysis",
+        authors=("Hadden, S.", "Lithwick, Y."),
+        journal="AJ 154, 5",
+        year=2017,
+        doi="10.3847/1538-3881/aa71ef",
+        arxiv="1611.03516",
+        note="Uniform TTV analysis of Kepler multiplanet systems",
+    )
+)
 
-HADDEN_2019 = reference(Reference(
-    id="hadden_2019",
-    bibcode="2019AJ....158..146H",
-    title="Prospects for TTV Detection and Dynamical Constraints with TESS",
-    authors=("Hadden, S.", "Barclay, T.", "Payne, M.J.", "Holman, M.J."),
-    journal="AJ 158, 146",
-    year=2019,
-    doi="10.3847/1538-3881/ab384c",
-    arxiv="1811.01970",
-    note="TTV yield predictions for TESS mission",
-))
+HADDEN_2019 = reference(
+    Reference(
+        id="hadden_2019",
+        bibcode="2019AJ....158..146H",
+        title="Prospects for TTV Detection and Dynamical Constraints with TESS",
+        authors=("Hadden, S.", "Barclay, T.", "Payne, M.J.", "Holman, M.J."),
+        journal="AJ 158, 146",
+        year=2019,
+        doi="10.3847/1538-3881/ab384c",
+        arxiv="1811.01970",
+        note="TTV yield predictions for TESS mission",
+    )
+)
 
-IVSHINA_WINN_2022 = reference(Reference(
-    id="ivshina_winn_2022",
-    bibcode="2022ApJS..259...62I",
-    title="TESS Transit Timing of Hundreds of Hot Jupiters",
-    authors=("Ivshina, E.S.", "Winn, J.N."),
-    journal="ApJS 259, 62",
-    year=2022,
-    doi="10.3847/1538-4365/ac545b",
-    arxiv="2202.03401",
-    note="TESS transit timing database and methods",
-))
+IVSHINA_WINN_2022 = reference(
+    Reference(
+        id="ivshina_winn_2022",
+        bibcode="2022ApJS..259...62I",
+        title="TESS Transit Timing of Hundreds of Hot Jupiters",
+        authors=("Ivshina, E.S.", "Winn, J.N."),
+        journal="ApJS 259, 62",
+        year=2022,
+        doi="10.3847/1538-4365/ac545b",
+        arxiv="2202.03401",
+        note="TESS transit timing database and methods",
+    )
+)
 
-STEFFEN_AGOL_2006 = reference(Reference(
-    id="steffen_agol_2006",
-    bibcode="2007MNRAS.374..941A",
-    title="Developments in Planet Detection using Transit Timing Variations",
-    authors=("Steffen, J.H.", "Agol, E."),
-    journal="MNRAS 374, 941",
-    year=2007,
-    doi="10.1111/j.1365-2966.2006.11216.x",
-    arxiv="astro-ph/0612442",
-    note="TTV detection sensitivity and methods",
-))
+STEFFEN_AGOL_2006 = reference(
+    Reference(
+        id="steffen_agol_2006",
+        bibcode="2007MNRAS.374..941A",
+        title="Developments in Planet Detection using Transit Timing Variations",
+        authors=("Steffen, J.H.", "Agol, E."),
+        journal="MNRAS 374, 941",
+        year=2007,
+        doi="10.1111/j.1365-2966.2006.11216.x",
+        arxiv="astro-ph/0612442",
+        note="TTV detection sensitivity and methods",
+    )
+)
 
-FORD_2012 = reference(Reference(
-    id="ford_2012",
-    bibcode="2012ApJ...750..113F",
-    title=(
-        "Transit Timing Observations from Kepler: VI. Potentially Interesting "
-        "Candidate Systems from Fourier-based Statistical Tests"
-    ),
-    authors=("Ford, E.B.", "Ragozzine, D.", "Rowe, J.F."),
-    journal="ApJ 750, 113",
-    year=2012,
-    doi="10.1088/0004-637X/750/2/113",
-    arxiv="1201.1892",
-    note="Kepler TTV detection methodology",
-))
+FORD_2012 = reference(
+    Reference(
+        id="ford_2012",
+        bibcode="2012ApJ...750..113F",
+        title=(
+            "Transit Timing Observations from Kepler: VI. Potentially Interesting "
+            "Candidate Systems from Fourier-based Statistical Tests"
+        ),
+        authors=("Ford, E.B.", "Ragozzine, D.", "Rowe, J.F."),
+        journal="ApJ 750, 113",
+        year=2012,
+        doi="10.1088/0004-637X/750/2/113",
+        arxiv="1201.1892",
+        note="Kepler TTV detection methodology",
+    )
+)
 
-FABRYCKY_2012 = reference(Reference(
-    id="fabrycky_2012",
-    bibcode="2012ApJ...750..114F",
-    title=(
-        "Transit Timing Observations from Kepler: IV. Confirmation of 4 "
-        "Multiple Planet Systems by Simple Physical Models"
-    ),
-    authors=("Fabrycky, D.C.", "Ford, E.B.", "Steffen, J.H."),
-    journal="ApJ 750, 114",
-    year=2012,
-    doi="10.1088/0004-637X/750/2/114",
-    arxiv="1201.5415",
-    note="Multi-planet TTV confirmation methodology",
-))
+FABRYCKY_2012 = reference(
+    Reference(
+        id="fabrycky_2012",
+        bibcode="2012ApJ...750..114F",
+        title=(
+            "Transit Timing Observations from Kepler: IV. Confirmation of 4 "
+            "Multiple Planet Systems by Simple Physical Models"
+        ),
+        authors=("Fabrycky, D.C.", "Ford, E.B.", "Steffen, J.H."),
+        journal="ApJ 750, 114",
+        year=2012,
+        doi="10.1088/0004-637X/750/2/114",
+        arxiv="1201.5415",
+        note="Multi-planet TTV confirmation methodology",
+    )
+)
 
-RAGOZZINE_HOLMAN_2019 = reference(Reference(
-    id="ragozzine_holman_2019",
-    bibcode="2010ApJ...711..772R",
-    title=("The Value of Systems with Multiple Transiting Planets"),
-    authors=("Ragozzine, D.", "Holman, M.J."),
-    journal="ApJ 711, 772",
-    year=2010,
-    doi="10.1088/0004-637X/711/2/772",
-    arxiv="1006.3727",
-    note="Multi-transiting system analysis methodology",
-))
+RAGOZZINE_HOLMAN_2019 = reference(
+    Reference(
+        id="ragozzine_holman_2019",
+        bibcode="2010ApJ...711..772R",
+        title=("The Value of Systems with Multiple Transiting Planets"),
+        authors=("Ragozzine, D.", "Holman, M.J."),
+        journal="ApJ 711, 772",
+        year=2010,
+        doi="10.1088/0004-637X/711/2/772",
+        arxiv="1006.3727",
+        note="Multi-transiting system analysis methodology",
+    )
+)
 
 # -----------------------------------------------------------------------------
 # Stellar activity references (activity.py)
 # -----------------------------------------------------------------------------
 
-MCQUILLAN_2014 = reference(Reference(
-    id="mcquillan_2014",
-    bibcode="2014ApJS..211...24M",
-    title=(
-        "Rotation Periods of 34,030 Kepler Main-Sequence Stars: The Full Autocorrelation Sample"
-    ),
-    authors=("McQuillan, A.", "Mazeh, T.", "Aigrain, S."),
-    journal="ApJS 211, 24",
-    year=2014,
-    doi="10.1088/0067-0049/211/2/24",
-    arxiv="1402.5694",
-    note="Autocorrelation-based rotation period measurement methodology",
-))
+MCQUILLAN_2014 = reference(
+    Reference(
+        id="mcquillan_2014",
+        bibcode="2014ApJS..211...24M",
+        title=(
+            "Rotation Periods of 34,030 Kepler Main-Sequence Stars: The Full Autocorrelation Sample"
+        ),
+        authors=("McQuillan, A.", "Mazeh, T.", "Aigrain, S."),
+        journal="ApJS 211, 24",
+        year=2014,
+        doi="10.1088/0067-0049/211/2/24",
+        arxiv="1402.5694",
+        note="Autocorrelation-based rotation period measurement methodology",
+    )
+)
 
-MCQUILLAN_2013 = reference(Reference(
-    id="mcquillan_2013",
-    bibcode="2013MNRAS.432.1203M",
-    title="Measuring the rotation period distribution of field M dwarfs with Kepler",
-    authors=("McQuillan, A.", "Aigrain, S.", "Mazeh, T."),
-    journal="MNRAS 432, 1203",
-    year=2013,
-    doi="10.1093/mnras/stt536",
-    arxiv="1303.6787",
-    note="ACF method development for rotation periods",
-))
+MCQUILLAN_2013 = reference(
+    Reference(
+        id="mcquillan_2013",
+        bibcode="2013MNRAS.432.1203M",
+        title="Measuring the rotation period distribution of field M dwarfs with Kepler",
+        authors=("McQuillan, A.", "Aigrain, S.", "Mazeh, T."),
+        journal="MNRAS 432, 1203",
+        year=2013,
+        doi="10.1093/mnras/stt536",
+        arxiv="1303.6787",
+        note="ACF method development for rotation periods",
+    )
+)
 
-DAVENPORT_2016 = reference(Reference(
-    id="davenport_2016",
-    bibcode="2016ApJ...829...23D",
-    title="The Kepler Catalog of Stellar Flares",
-    authors=("Davenport, J.R.A.",),
-    journal="ApJ 829, 23",
-    year=2016,
-    doi="10.3847/0004-637X/829/1/23",
-    arxiv="1607.03494",
-    note="Comprehensive flare detection methodology for Kepler",
-))
+DAVENPORT_2016 = reference(
+    Reference(
+        id="davenport_2016",
+        bibcode="2016ApJ...829...23D",
+        title="The Kepler Catalog of Stellar Flares",
+        authors=("Davenport, J.R.A.",),
+        journal="ApJ 829, 23",
+        year=2016,
+        doi="10.3847/0004-637X/829/1/23",
+        arxiv="1607.03494",
+        note="Comprehensive flare detection methodology for Kepler",
+    )
+)
 
-DAVENPORT_2014 = reference(Reference(
-    id="davenport_2014",
-    bibcode="2014ApJ...797..122D",
-    title="Multi-wavelength Characterization of Stellar Flares on Low-mass Stars",
-    authors=("Davenport, J.R.A.",),
-    journal="ApJ 797, 122",
-    year=2014,
-    doi="10.1088/0004-637X/797/2/122",
-    arxiv="1510.05695",
-    note="Empirical flare template and morphology",
-))
+DAVENPORT_2014 = reference(
+    Reference(
+        id="davenport_2014",
+        bibcode="2014ApJ...797..122D",
+        title="Multi-wavelength Characterization of Stellar Flares on Low-mass Stars",
+        authors=("Davenport, J.R.A.",),
+        journal="ApJ 797, 122",
+        year=2014,
+        doi="10.1088/0004-637X/797/2/122",
+        arxiv="1510.05695",
+        note="Empirical flare template and morphology",
+    )
+)
 
-BASRI_2013 = reference(Reference(
-    id="basri_2013",
-    bibcode="2013ApJ...769...37B",
-    title=(
-        "Photometric Variability in Kepler Target Stars III: "
-        "Comparison with the Sun on Different Timescales"
-    ),
-    authors=("Basri, G.", "Walkowicz, L.", "Reiners, A."),
-    journal="ApJ 769, 37",
-    year=2013,
-    doi="10.1088/0004-637X/769/1/37",
-    arxiv="1304.0136",
-    note="Stellar variability metrics and solar comparison",
-))
+BASRI_2013 = reference(
+    Reference(
+        id="basri_2013",
+        bibcode="2013ApJ...769...37B",
+        title=(
+            "Photometric Variability in Kepler Target Stars III: "
+            "Comparison with the Sun on Different Timescales"
+        ),
+        authors=("Basri, G.", "Walkowicz, L.", "Reiners, A."),
+        journal="ApJ 769, 37",
+        year=2013,
+        doi="10.1088/0004-637X/769/1/37",
+        arxiv="1304.0136",
+        note="Stellar variability metrics and solar comparison",
+    )
+)
 
-NIELSEN_2013 = reference(Reference(
-    id="nielsen_2013",
-    bibcode="2013A&A...557L..10N",
-    title="Rotation periods of 12,000 main-sequence Kepler stars",
-    authors=("Nielsen, M.B.", "Gizon, L.", "Schunker, H.", "Karoff, C."),
-    journal="A&A 557, L10",
-    year=2013,
-    doi="10.1051/0004-6361/201321912",
-    arxiv="1305.5721",
-    note="Alternative rotation period measurement approach",
-))
+NIELSEN_2013 = reference(
+    Reference(
+        id="nielsen_2013",
+        bibcode="2013A&A...557L..10N",
+        title="Rotation periods of 12,000 main-sequence Kepler stars",
+        authors=("Nielsen, M.B.", "Gizon, L.", "Schunker, H.", "Karoff, C."),
+        journal="A&A 557, L10",
+        year=2013,
+        doi="10.1051/0004-6361/201321912",
+        arxiv="1305.5721",
+        note="Alternative rotation period measurement approach",
+    )
+)
 
-REINHOLD_2020 = reference(Reference(
-    id="reinhold_2020",
-    bibcode="2020Sci...368..518R",
-    title="The Sun is less active than other solar-like stars",
-    authors=("Reinhold, T.", "Shapiro, A.I.", "Solanki, S.K."),
-    journal="Science 368, 518",
-    year=2020,
-    doi="10.1126/science.aay3821",
-    note="Solar activity in context of stellar variability",
-))
+REINHOLD_2020 = reference(
+    Reference(
+        id="reinhold_2020",
+        bibcode="2020Sci...368..518R",
+        title="The Sun is less active than other solar-like stars",
+        authors=("Reinhold, T.", "Shapiro, A.I.", "Solanki, S.K."),
+        journal="Science 368, 518",
+        year=2020,
+        doi="10.1126/science.aay3821",
+        note="Solar activity in context of stellar variability",
+    )
+)
 
-DAVENPORT_2019 = reference(Reference(
-    id="davenport_2019",
-    bibcode="2019ApJ...871..241D",
-    title="The Evolution of Flare Activity with Stellar Age",
-    authors=("Davenport, J.R.A.", "Covey, K.R.", "Clarke, R.W."),
-    journal="ApJ 871, 241",
-    year=2019,
-    doi="10.3847/1538-4357/aafb76",
-    arxiv="1901.00890",
-    note="Flare activity vs Rossby number and stellar age",
-))
+DAVENPORT_2019 = reference(
+    Reference(
+        id="davenport_2019",
+        bibcode="2019ApJ...871..241D",
+        title="The Evolution of Flare Activity with Stellar Age",
+        authors=("Davenport, J.R.A.", "Covey, K.R.", "Clarke, R.W."),
+        journal="ApJ 871, 241",
+        year=2019,
+        doi="10.3847/1538-4357/aafb76",
+        arxiv="1901.00890",
+        note="Flare activity vs Rossby number and stellar age",
+    )
+)
 
-TOVAR_MENDOZA_2022 = reference(Reference(
-    id="tovar_mendoza_2022",
-    bibcode="2022ApJ...927...31T",
-    title="Llamaradas Estelares: Modeling the Morphology of White-Light Flares",
-    authors=("Tovar Mendoza, G.", "Davenport, J.R.A.", "Agol, E."),
-    journal="ApJ 927, 31",
-    year=2022,
-    doi="10.3847/1538-4357/ac4584",
-    arxiv="2205.05706",
-    note="Improved analytic flare model",
-))
+TOVAR_MENDOZA_2022 = reference(
+    Reference(
+        id="tovar_mendoza_2022",
+        bibcode="2022ApJ...927...31T",
+        title="Llamaradas Estelares: Modeling the Morphology of White-Light Flares",
+        authors=("Tovar Mendoza, G.", "Davenport, J.R.A.", "Agol, E."),
+        journal="ApJ 927, 31",
+        year=2022,
+        doi="10.3847/1538-4357/ac4584",
+        arxiv="2205.05706",
+        note="Improved analytic flare model",
+    )
+)
 
-GILBERT_2021 = reference(Reference(
-    id="gilbert_2021",
-    title="Flares, Rotation, and Planets of the AU Mic System from TESS Observations",
-    authors=("Gilbert, E.A.", "Barclay, T.", "Quintana, E.V.", "Walkowicz, L.M."),
-    year=2021,
-    arxiv="2109.03924",
-    url="https://arxiv.org/abs/2109.03924",
-    note="Example of flare-heavy TESS light-curve analysis; motivates flare masking prior to transit/rotation modeling",
-))
+GILBERT_2021 = reference(
+    Reference(
+        id="gilbert_2021",
+        title="Flares, Rotation, and Planets of the AU Mic System from TESS Observations",
+        authors=("Gilbert, E.A.", "Barclay, T.", "Quintana, E.V.", "Walkowicz, L.M."),
+        year=2021,
+        arxiv="2109.03924",
+        url="https://arxiv.org/abs/2109.03924",
+        note="Example of flare-heavy TESS light-curve analysis; motivates flare masking prior to transit/rotation modeling",
+    )
+)
 
 # -----------------------------------------------------------------------------
 # Transit recovery references (recovery.py)
 # -----------------------------------------------------------------------------
 
-HIPPKE_2019_WOTAN = reference(Reference(
-    id="hippke_2019_wotan",
-    bibcode="2019AJ....158..143H",
-    title="Wotan: Comprehensive Time-series De-trending in Python",
-    authors=("Hippke, M.", "David, T.J.", "Mulders, G.D.", "Heller, R."),
-    journal="AJ 158, 143",
-    year=2019,
-    doi="10.3847/1538-3881/ab3984",
-    arxiv="1906.00966",
-    note="Stellar detrending methods benchmark and wotan package",
-))
+HIPPKE_2019_WOTAN = reference(
+    Reference(
+        id="hippke_2019_wotan",
+        bibcode="2019AJ....158..143H",
+        title="Wotan: Comprehensive Time-series De-trending in Python",
+        authors=("Hippke, M.", "David, T.J.", "Mulders, G.D.", "Heller, R."),
+        journal="AJ 158, 143",
+        year=2019,
+        doi="10.3847/1538-3881/ab3984",
+        arxiv="1906.00966",
+        note="Stellar detrending methods benchmark and wotan package",
+    )
+)
 
-HIPPKE_HELLER_2019_TLS = reference(Reference(
-    id="hippke_heller_2019_tls",
-    bibcode="2019A&A...623A..39H",
-    title="Optimized transit detection algorithm to search for periodic transits",
-    authors=("Hippke, M.", "Heller, R."),
-    journal="A&A 623, A39",
-    year=2019,
-    doi="10.1051/0004-6361/201834672",
-    arxiv="1901.02015",
-    note="TLS algorithm for transit detection after detrending",
-))
+HIPPKE_HELLER_2019_TLS = reference(
+    Reference(
+        id="hippke_heller_2019_tls",
+        bibcode="2019A&A...623A..39H",
+        title="Optimized transit detection algorithm to search for periodic transits",
+        authors=("Hippke, M.", "Heller, R."),
+        journal="A&A 623, A39",
+        year=2019,
+        doi="10.1051/0004-6361/201834672",
+        arxiv="1901.02015",
+        note="TLS algorithm for transit detection after detrending",
+    )
+)
 
-BARROS_2020 = reference(Reference(
-    id="barros_2020",
-    bibcode="2020A&A...634A..75B",
-    title=(
-        "Improving transit characterisation with Gaussian process modelling of stellar variability"
-    ),
-    authors=("Barros, S.C.C.", "Demangeon, O.", "Diaz, R.F."),
-    journal="A&A 634, A75",
-    year=2020,
-    doi="10.1051/0004-6361/201936086",
-    arxiv="2001.07975",
-    note="GP-based stellar variability modeling for transit recovery",
-))
+BARROS_2020 = reference(
+    Reference(
+        id="barros_2020",
+        bibcode="2020A&A...634A..75B",
+        title=(
+            "Improving transit characterisation with Gaussian process modelling of stellar variability"
+        ),
+        authors=("Barros, S.C.C.", "Demangeon, O.", "Diaz, R.F."),
+        journal="A&A 634, A75",
+        year=2020,
+        doi="10.1051/0004-6361/201936086",
+        arxiv="2001.07975",
+        note="GP-based stellar variability modeling for transit recovery",
+    )
+)
 
-AIGRAIN_2016 = reference(Reference(
-    id="aigrain_2016",
-    bibcode="2016MNRAS.459.2408A",
-    title="K2SC: Flexible systematics correction and detrending of K2 light curves",
-    authors=("Aigrain, S.", "Parviainen, H.", "Pope, B.J.S."),
-    journal="MNRAS 459, 2408",
-    year=2016,
-    doi="10.1093/mnras/stw706",
-    note="GP-based systematics correction for K2",
-))
+AIGRAIN_2016 = reference(
+    Reference(
+        id="aigrain_2016",
+        bibcode="2016MNRAS.459.2408A",
+        title="K2SC: Flexible systematics correction and detrending of K2 light curves",
+        authors=("Aigrain, S.", "Parviainen, H.", "Pope, B.J.S."),
+        journal="MNRAS 459, 2408",
+        year=2016,
+        doi="10.1093/mnras/stw706",
+        note="GP-based systematics correction for K2",
+    )
+)
 
-PETIGURA_2012 = reference(Reference(
-    id="petigura_2012",
-    bibcode="2013ApJ...770...69P",
-    title=("A Plateau in the Planet Population below Twice the Size of Earth"),
-    authors=("Petigura, E.A.", "Marcy, G.W."),
-    journal="ApJ 770, 69",
-    year=2013,
-    doi="10.1088/0004-637X/770/1/69",
-    note="Spline-based detrending methodology",
-))
+PETIGURA_2012 = reference(
+    Reference(
+        id="petigura_2012",
+        bibcode="2013ApJ...770...69P",
+        title=("A Plateau in the Planet Population below Twice the Size of Earth"),
+        authors=("Petigura, E.A.", "Marcy, G.W."),
+        journal="ApJ 770, 69",
+        year=2013,
+        doi="10.1088/0004-637X/770/1/69",
+        note="Spline-based detrending methodology",
+    )
+)
 
-LUGER_2016 = reference(Reference(
-    id="luger_2016",
-    bibcode="2016AJ....152..100L",
-    title="EVEREST: Pixel Level Decorrelation of K2 Light Curves",
-    authors=("Luger, R.", "Agol, E.", "Kruse, E."),
-    journal="AJ 152, 100",
-    year=2016,
-    doi="10.3847/0004-6256/152/4/100",
-    note="Pixel-level decorrelation for systematics removal",
-))
+LUGER_2016 = reference(
+    Reference(
+        id="luger_2016",
+        bibcode="2016AJ....152..100L",
+        title="EVEREST: Pixel Level Decorrelation of K2 Light Curves",
+        authors=("Luger, R.", "Agol, E.", "Kruse, E."),
+        journal="AJ 152, 100",
+        year=2016,
+        doi="10.3847/0004-6256/152/4/100",
+        note="Pixel-level decorrelation for systematics removal",
+    )
+)
 
-KOVACS_2002 = reference(Reference(
-    id="kovacs_2002",
-    bibcode="2002A&A...391..369K",
-    title="A box-fitting algorithm in the search for periodic transits",
-    authors=("Kovacs, G.", "Zucker, S.", "Mazeh, T."),
-    journal="A&A 391, 369",
-    year=2002,
-    doi="10.1051/0004-6361:20020802",
-    note="Original BLS algorithm for transit detection",
-))
+KOVACS_2002 = reference(
+    Reference(
+        id="kovacs_2002",
+        bibcode="2002A&A...391..369K",
+        title="A box-fitting algorithm in the search for periodic transits",
+        authors=("Kovacs, G.", "Zucker, S.", "Mazeh, T."),
+        journal="A&A 391, 369",
+        year=2002,
+        doi="10.1051/0004-6361:20020802",
+        note="Original BLS algorithm for transit detection",
+    )
+)
 
-LOMB_1976 = reference(Reference(
-    id="lomb_1976",
-    bibcode="1976Ap&SS..39..447L",
-    title="Least-Squares Frequency Analysis of Unequally Spaced Data",
-    authors=("Lomb, N.R.",),
-    journal="Ap&SS 39, 447",
-    year=1976,
-    note="Original Lomb periodogram for unevenly spaced time series",
-))
+LOMB_1976 = reference(
+    Reference(
+        id="lomb_1976",
+        bibcode="1976Ap&SS..39..447L",
+        title="Least-Squares Frequency Analysis of Unequally Spaced Data",
+        authors=("Lomb, N.R.",),
+        journal="Ap&SS 39, 447",
+        year=1976,
+        note="Original Lomb periodogram for unevenly spaced time series",
+    )
+)
 
-SCARGLE_1982 = reference(Reference(
-    id="scargle_1982",
-    bibcode="1982ApJ...263..835S",
-    title="Studies in astronomical time series analysis. II. Statistical aspects of spectral analysis of unevenly spaced data.",
-    authors=("Scargle, J.D.",),
-    journal="ApJ 263, 835",
-    year=1982,
-    doi="10.1086/160554",
-    note="Lomb-Scargle periodogram normalization and statistical interpretation",
-))
+SCARGLE_1982 = reference(
+    Reference(
+        id="scargle_1982",
+        bibcode="1982ApJ...263..835S",
+        title="Studies in astronomical time series analysis. II. Statistical aspects of spectral analysis of unevenly spaced data.",
+        authors=("Scargle, J.D.",),
+        journal="ApJ 263, 835",
+        year=1982,
+        doi="10.1086/160554",
+        note="Lomb-Scargle periodogram normalization and statistical interpretation",
+    )
+)
 
-ZECHMEISTER_KURSTER_2009 = reference(Reference(
-    id="zechmeister_kurster_2009",
-    bibcode="2009A&A...496..577Z",
-    title="The generalised Lomb-Scargle periodogram. A new formalism for the floating-mean and Keplerian periodograms",
-    authors=("Zechmeister, M.", "Kurster, M."),
-    journal="A&A 496, 577",
-    year=2009,
-    doi="10.1051/0004-6361:200811296",
-    note="Generalized Lomb-Scargle formalism (floating mean, weights) often used in modern implementations",
-))
+ZECHMEISTER_KURSTER_2009 = reference(
+    Reference(
+        id="zechmeister_kurster_2009",
+        bibcode="2009A&A...496..577Z",
+        title="The generalised Lomb-Scargle periodogram. A new formalism for the floating-mean and Keplerian periodograms",
+        authors=("Zechmeister, M.", "Kurster, M."),
+        journal="A&A 496, 577",
+        year=2009,
+        doi="10.1051/0004-6361:200811296",
+        note="Generalized Lomb-Scargle formalism (floating mean, weights) often used in modern implementations",
+    )
+)
 
-BYRD_1995_LBFGSB = reference(Reference(
-    id="byrd_1995_lbfgsb",
-    bibcode="1995SJSC...16.1190B",
-    title="A Limited Memory Algorithm for Bound Constrained Optimization",
-    authors=("Byrd, R.H.", "Lu, P.", "Nocedal, J.", "Zhu, C."),
-    journal="SIAM Journal on Scientific Computing 16, 1190",
-    year=1995,
-    doi="10.1137/0916069",
-    note="L-BFGS-B bound-constrained optimization algorithm (used via SciPy minimize(method='L-BFGS-B'))",
-))
+BYRD_1995_LBFGSB = reference(
+    Reference(
+        id="byrd_1995_lbfgsb",
+        bibcode="1995SJSC...16.1190B",
+        title="A Limited Memory Algorithm for Bound Constrained Optimization",
+        authors=("Byrd, R.H.", "Lu, P.", "Nocedal, J.", "Zhu, C."),
+        journal="SIAM Journal on Scientific Computing 16, 1190",
+        year=1995,
+        doi="10.1137/0916069",
+        note="L-BFGS-B bound-constrained optimization algorithm (used via SciPy minimize(method='L-BFGS-B'))",
+    )
+)
 
-GOODMAN_WEARE_2010 = reference(Reference(
-    id="goodman_weare_2010",
-    bibcode="2010CAMCS...5...65G",
-    title="Ensemble samplers with affine invariance",
-    authors=("Goodman, J.", "Weare, J."),
-    journal="Communications in Applied Mathematics and Computational Science 5, 65",
-    year=2010,
-    arxiv="1008.4686",
-    note="Affine-invariant ensemble MCMC sampler underlying emcee",
-))
+GOODMAN_WEARE_2010 = reference(
+    Reference(
+        id="goodman_weare_2010",
+        bibcode="2010CAMCS...5...65G",
+        title="Ensemble samplers with affine invariance",
+        authors=("Goodman, J.", "Weare, J."),
+        journal="Communications in Applied Mathematics and Computational Science 5, 65",
+        year=2010,
+        arxiv="1008.4686",
+        note="Affine-invariant ensemble MCMC sampler underlying emcee",
+    )
+)
 
-SUNDARARAJAN_2017 = reference(Reference(
-    id="sundararajan_2017",
-    title="Axiomatic Attribution for Deep Networks",
-    authors=("Sundararajan, M.", "Taly, A.", "Yan, Q."),
-    year=2017,
-    arxiv="1703.01365",
-    url="https://arxiv.org/abs/1703.01365",
-    note="Introduces Integrated Gradients attribution method",
-))
+SUNDARARAJAN_2017 = reference(
+    Reference(
+        id="sundararajan_2017",
+        title="Axiomatic Attribution for Deep Networks",
+        authors=("Sundararajan, M.", "Taly, A.", "Yan, Q."),
+        year=2017,
+        arxiv="1703.01365",
+        url="https://arxiv.org/abs/1703.01365",
+        note="Introduces Integrated Gradients attribution method",
+    )
+)
 
-MORVAN_2020 = reference(Reference(
-    id="morvan_2020",
-    bibcode="2020AJ....159..166M",
-    title="Detrending Exoplanetary Transit Light Curves with Long Short-term Memory Networks",
-    authors=("Morvan, M.", "Nikolaou, N.", "Tsiaras, A.", "Waldmann, I.P."),
-    journal="AJ 159, 166",
-    year=2020,
-    doi="10.3847/1538-3881/ab7140",
-    arxiv="2001.03370",
-    note="Machine learning approach to detrending",
-))
+MORVAN_2020 = reference(
+    Reference(
+        id="morvan_2020",
+        bibcode="2020AJ....159..166M",
+        title="Detrending Exoplanetary Transit Light Curves with Long Short-term Memory Networks",
+        authors=("Morvan, M.", "Nikolaou, N.", "Tsiaras, A.", "Waldmann, I.P."),
+        journal="AJ 159, 166",
+        year=2020,
+        doi="10.3847/1538-3881/ab7140",
+        arxiv="2001.03370",
+        note="Machine learning approach to detrending",
+    )
+)
 
 # -----------------------------------------------------------------------------
 # TRICERATOPS references (triceratops_fpp.py)
 # -----------------------------------------------------------------------------
 
-GIACALONE_2021 = reference(Reference(
-    id="giacalone_2021",
-    bibcode="2021AJ....161...24G",
-    title=(
-        "Vetting of 384 TESS Objects of Interest with TRICERATOPS and "
-        "Statistical Validation of 12 Planet Candidates"
-    ),
-    authors=("Giacalone, S.", "Dressing, C.D.", "Jensen, E.L.N."),
-    journal="AJ 161, 24",
-    year=2021,
-    doi="10.3847/1538-3881/abc6af",
-    arxiv="2002.00691",
-    note="TRICERATOPS: Bayesian FPP calculation for transit candidates",
-))
+GIACALONE_2021 = reference(
+    Reference(
+        id="giacalone_2021",
+        bibcode="2021AJ....161...24G",
+        title=(
+            "Vetting of 384 TESS Objects of Interest with TRICERATOPS and "
+            "Statistical Validation of 12 Planet Candidates"
+        ),
+        authors=("Giacalone, S.", "Dressing, C.D.", "Jensen, E.L.N."),
+        journal="AJ 161, 24",
+        year=2021,
+        doi="10.3847/1538-3881/abc6af",
+        arxiv="2002.00691",
+        note="TRICERATOPS: Bayesian FPP calculation for transit candidates",
+    )
+)
 
-TRICERATOPS_PLUS = reference(Reference(
-    id="triceratops_plus",
-    title="TRICERATOPS+ multi-color transit validation",
-    authors=("Barrientos, J.G.",),
-    year=2025,
-    arxiv="2508.02782",
-    note="TRICERATOPS+ multi-color transit validation",
-))
+TRICERATOPS_PLUS = reference(
+    Reference(
+        id="triceratops_plus",
+        title="TRICERATOPS+ multi-color transit validation",
+        authors=("Barrientos, J.G.",),
+        year=2025,
+        arxiv="2508.02782",
+        note="TRICERATOPS+ multi-color transit validation",
+    )
+)
 
-TRICERATOPS_PLUS_MULTIBAND = reference(Reference(
-    id="triceratops_plus_multiband",
-    title="TRICERATOPS+ multi-band photometry validation",
-    authors=("Greklek-McKeon, M.",),
-    year=2025,
-    arxiv="2512.10007",
-    note="TRICERATOPS+ multi-band photometry validation",
-))
+TRICERATOPS_PLUS_MULTIBAND = reference(
+    Reference(
+        id="triceratops_plus_multiband",
+        title="TRICERATOPS+ multi-band photometry validation",
+        authors=("Greklek-McKeon, M.",),
+        year=2025,
+        arxiv="2512.10007",
+        note="TRICERATOPS+ multi-band photometry validation",
+    )
+)
 
 
 # =============================================================================
@@ -1436,6 +1570,7 @@ __all__ = [
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) > 1 and sys.argv[1] == "--markdown":
         print(generate_bibliography_markdown())
     elif len(sys.argv) > 1 and sys.argv[1] == "--bibtex":

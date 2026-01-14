@@ -36,6 +36,7 @@ def test_t0_tolerance_accepts_negative_reference_period() -> None:
 
 
 def test_default_tolerance_falls_back_to_absolute() -> None:
-    r = check_tolerance("unknown_param", original=1.0, replayed=1.0005, tolerances={"default": {"absolute": 0.001}})
+    r = check_tolerance(
+        "unknown_param", original=1.0, replayed=1.0005, tolerances={"default": {"absolute": 0.001}}
+    )
     assert r.within_tolerance is True
-

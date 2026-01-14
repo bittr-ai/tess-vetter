@@ -15,7 +15,9 @@ def test_characterize_activity_recovers_rotation_period_on_sinusoid() -> None:
     flux_err = np.full_like(time, 2e-4)
 
     lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
-    result = characterize_activity(lc, detect_flares=False, rotation_min_period=1.0, rotation_max_period=10.0)
+    result = characterize_activity(
+        lc, detect_flares=False, rotation_min_period=1.0, rotation_max_period=10.0
+    )
 
     assert abs(result.rotation_period - true_period) / true_period < 0.05
     assert result.variability_ppm > 500
@@ -60,8 +62,9 @@ def test_characterize_activity_is_robust_to_nans_and_unsorted_time() -> None:
     flux_err[789] = np.nan
 
     lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
-    result = characterize_activity(lc, detect_flares=False, rotation_min_period=1.0, rotation_max_period=10.0)
+    result = characterize_activity(
+        lc, detect_flares=False, rotation_min_period=1.0, rotation_max_period=10.0
+    )
 
     assert np.isfinite(result.rotation_period)
     assert np.isfinite(result.activity_index)
-

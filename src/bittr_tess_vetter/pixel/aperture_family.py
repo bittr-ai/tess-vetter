@@ -358,7 +358,9 @@ def compute_aperture_family_depth_curve(
         except Exception:
             pass
 
-    cadence_mask = default_cadence_mask(time=tpf_fits.time, flux=tpf_fits.flux, quality=tpf_fits.quality)
+    cadence_mask = default_cadence_mask(
+        time=tpf_fits.time, flux=tpf_fits.flux, quality=tpf_fits.quality
+    )
     if int(np.sum(cadence_mask)) < int(tpf_fits.time.shape[0]):
         n_dropped = int(tpf_fits.time.shape[0]) - int(np.sum(cadence_mask))
         warnings.append(f"Dropped {n_dropped} cadences (quality!=0 or non-finite)")

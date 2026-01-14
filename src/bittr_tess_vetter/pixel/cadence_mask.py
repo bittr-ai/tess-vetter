@@ -31,4 +31,3 @@ def default_cadence_mask(
 
 
 __all__ = ["default_cadence_mask"]
-

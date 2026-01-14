@@ -44,6 +44,5 @@ class MissingOptionalDependencyError(ImportError):
         self.extra = extra
         self.install_hint = install_hint or f"pip install 'bittr-tess-vetter[{extra}]'"
         super().__init__(
-            f"This feature requires the '{extra}' extra. "
-            f"Install with: {self.install_hint}"
+            f"This feature requires the '{extra}' extra. Install with: {self.install_hint}"
         )

@@ -213,4 +213,3 @@ def run_ttv_track_search_for_candidate(
         normalize_flux=normalize_flux,
         **kwargs,
     )
-

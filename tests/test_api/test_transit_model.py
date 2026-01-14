@@ -78,4 +78,3 @@ def test_compute_transit_model_raises_on_too_few_finite_points() -> None:
             duration_hours=2.0,
             depth_ppm=1000.0,
         )
-

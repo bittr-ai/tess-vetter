@@ -50,4 +50,3 @@ __all__ = [
     "RSUN_TO_REARTH",
     "RSUN_TO_RJUP",
 ]
-

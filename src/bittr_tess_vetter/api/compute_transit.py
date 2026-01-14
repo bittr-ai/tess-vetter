@@ -24,4 +24,3 @@ __all__ = [
     "fold_transit",
     "detect_transit",
 ]
-

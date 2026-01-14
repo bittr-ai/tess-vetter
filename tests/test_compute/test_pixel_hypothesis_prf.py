@@ -87,9 +87,7 @@ class TestScoreHypothesesWithPRF:
             {"source_id": "neighbor", "source_name": "Neighbor", "row": 8.0, "col": 8.0},
         ]
 
-        ranked = score_hypotheses_with_prf(
-            diff_image, hypotheses, prf_backend="prf_lite", seed=42
-        )
+        ranked = score_hypotheses_with_prf(diff_image, hypotheses, prf_backend="prf_lite", seed=42)
 
         assert len(ranked) == 2
         assert ranked[0]["source_id"] == "target"
@@ -144,7 +142,9 @@ class TestScoreHypothesesWithPRF:
 
         with pytest.raises(ValueError, match="Unknown prf_backend"):
             score_hypotheses_with_prf(
-                diff_image, hypotheses, prf_backend="invalid"  # type: ignore[arg-type]
+                diff_image,
+                hypotheses,
+                prf_backend="invalid",  # type: ignore[arg-type]
             )
 
     def test_instrument_backend_not_available(self) -> None:
@@ -155,9 +155,7 @@ class TestScoreHypothesesWithPRF:
         ]
 
         with pytest.raises(ValueError, match="Instrument PRF backend not yet available"):
-            score_hypotheses_with_prf(
-                diff_image, hypotheses, prf_backend="instrument"
-            )
+            score_hypotheses_with_prf(diff_image, hypotheses, prf_backend="instrument")
 
     def test_non_2d_image_raises(self) -> None:
         """Non-2D difference image should raise ValueError."""

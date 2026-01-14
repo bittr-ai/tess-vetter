@@ -26,4 +26,3 @@ def test_sector_consistency_inconsistent() -> None:
     assert cls == "INCONSISTENT"
     assert 3 in outliers
     assert 0.0 <= pval <= 1.0
-

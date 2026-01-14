@@ -471,7 +471,9 @@ def build_index_from_csv(path: Path) -> EphemerisIndex:
             period = float(row["period"])
             t0 = float(row["t0"])
 
-            duration_hours: float | None = float(row["duration_hours"]) if row.get("duration_hours") else None
+            duration_hours: float | None = (
+                float(row["duration_hours"]) if row.get("duration_hours") else None
+            )
             ra_deg: float | None = float(row["ra_deg"]) if row.get("ra_deg") else None
             dec_deg: float | None = float(row["dec_deg"]) if row.get("dec_deg") else None
 
@@ -511,4 +513,3 @@ __all__ = [
     "save_index",
     "wrap_t0",
 ]
-

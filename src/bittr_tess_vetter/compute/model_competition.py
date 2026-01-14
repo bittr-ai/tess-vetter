@@ -558,9 +558,7 @@ def run_model_competition(
 
     # Select winner by BIC (lower is better)
     bic_values: dict[ModelType, float] = {k: v.bic for k, v in fits.items()}
-    sorted_models: list[ModelType] = sorted(
-        bic_values.keys(), key=lambda k: bic_values[k]
-    )
+    sorted_models: list[ModelType] = sorted(bic_values.keys(), key=lambda k: bic_values[k])
     winner: ModelType = sorted_models[0]
     second_best: ModelType = sorted_models[1]
 

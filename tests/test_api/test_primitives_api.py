@@ -12,4 +12,3 @@ def test_list_primitives_filters_unimplemented_by_default() -> None:
 def test_list_primitives_can_include_unimplemented() -> None:
     prims = list_primitives(include_unimplemented=True)
     assert "astro.fold_transit" in prims
-

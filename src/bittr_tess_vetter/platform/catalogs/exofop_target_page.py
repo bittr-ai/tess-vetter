@@ -101,7 +101,9 @@ def _read_disk_cache(path: Path, *, cache_ttl_seconds: int) -> ExoFOPTargetSumma
             fetched_at_unix=float(raw.get("fetched_at_unix") or stat.st_mtime),
             url=str(raw.get("url") or ""),
             grid_badges={str(k): int(v) for k, v in dict(raw.get("grid_badges") or {}).items()},
-            followup_counts={str(k): int(v) for k, v in dict(raw.get("followup_counts") or {}).items()},
+            followup_counts={
+                str(k): int(v) for k, v in dict(raw.get("followup_counts") or {}).items()
+            },
             flags=[str(x) for x in list(raw.get("flags") or [])],
         )
         # Treat "no badges" as a poisoned/invalid cache entry: ExoFOP pages always have

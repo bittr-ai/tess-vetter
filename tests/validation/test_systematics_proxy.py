@@ -125,4 +125,3 @@ def test_valid_mask_drops_nan_points() -> None:
     assert masked is not None
     assert np.isfinite(masked.score)
     assert abs(masked.score - base.score) < 0.25
-

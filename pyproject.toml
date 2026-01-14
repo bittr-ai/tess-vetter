@@ -9,8 +9,22 @@ description = "Domain-only TESS transit detection and vetting library (array-in/
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 authors = [{ name = "bittr-tess-vetter contributors" }]
 keywords = ["tess", "astronomy", "exoplanet", "transit", "vetting"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: BSD License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Astronomy",
+  "Typing :: Typed",
+]
+urls = { Repository = "https://github.com/bittr-ai/bittr-tess-vetter", Issues = "https://github.com/bittr-ai/bittr-tess-vetter/issues" }
 
 dependencies = [
   "numpy>=1.24.0,<2.4.0",
@@ -34,7 +48,19 @@ fit = [
 wotan = [
   "wotan>=1.1",
 ]
-# ldtk is GPL-2.0 licensed; kept optional to maintain MIT compatibility for core package
+# Physical transit model fitting (batman)
+batman = [
+  "batman-package>=2.4.0",
+]
+# Apple Silicon GPU acceleration (MLX)
+mlx = [
+  "mlx>=0.0.0; platform_system == 'Darwin' and platform_machine == 'arm64'",
+]
+# External vetter integration (ModShift/SWEET)
+exovetter = [
+  "exovetter>=0.0.0",
+]
+# ldtk is GPL-2.0 licensed; kept optional to maintain BSD-3-Clause compatibility for core package
 ldtk = [
   "ldtk>=1.8.5",
 ]
@@ -59,11 +85,49 @@ docs = [
   "sphinx-autodoc-typehints",
   "myst-parser",
 ]
-all = ["bittr-tess-vetter[tls,fit,wotan,ldtk,triceratops]"]
+all = ["bittr-tess-vetter[tls,fit,wotan,batman,mlx,exovetter,ldtk,triceratops]"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bittr_tess_vetter"]
 include = ["src/bittr_tess_vetter/py.typed"]
+
+[tool.hatch.build.targets.sdist]
+# Keep the sdist lean and reproducible: ship source + tests + docs, but exclude
+# local caches, build artifacts, and internal working docs.
+only-include = [
+  "src",
+  "tests",
+  "docs",
+  "pyproject.toml",
+  "README.md",
+  "LICENSE",
+  "CITATION.cff",
+  "REFERENCES.md",
+  "THIRD_PARTY_NOTICES.md",
+  "CODE_OF_CONDUCT.md",
+  "CONTRIBUTING.md",
+  "CHANGELOG.md",
+  "RELEASING.md",
+  ".readthedocs.yaml",
+]
+exclude = [
+  ".uv-cache",
+  ".venv",
+  "dist",
+  "build",
+  "working_docs",
+  "persistent_cache",
+  "mplconfig",
+  ".mypy_cache",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".github",
+  "uv.lock",
+  "**/.DS_Store",
+  "**/.ipynb_checkpoints",
+  "docs/_build",
+  "docs/_autosummary",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -184,7 +248,9 @@ ignore_errors = true
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "pre-commit>=4.0.0",
     "ruff>=0.14.10",
     "mypy>=1.0.0",
+    "hatch>=1.16.2",
 ]
-

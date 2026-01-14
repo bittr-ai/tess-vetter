@@ -144,6 +144,62 @@ def vet_candidate(
     )
 
 
+def vet_many(
+    lc: LightCurve,
+    candidates: list[Candidate],
+    *,
+    stellar: StellarParams | None = None,
+    tpf: TPFStamp | None = None,
+    network: bool = False,
+    ra_deg: float | None = None,
+    dec_deg: float | None = None,
+    tic_id: int | None = None,
+    checks: list[str] | None = None,
+    context: dict[str, Any] | None = None,
+) -> tuple[list[VettingBundleResult], list[dict[str, Any]]]:
+    """Run vetting for multiple candidates against one light curve.
+
+    This is the common workflow-building primitive for researchers:
+    run multiple candidate ephemerides (or multi-planet candidates) on the same
+    light curve and get both full bundles and a compact summary table.
+    """
+    from bittr_tess_vetter.api.pipeline import VettingPipeline
+    from bittr_tess_vetter.domain.detection import TransitCandidate
+    from bittr_tess_vetter.validation.register_defaults import register_all_defaults
+    from bittr_tess_vetter.validation.registry import CheckRegistry
+
+    registry = CheckRegistry()
+    register_all_defaults(registry)
+
+    lc_internal = lc.to_internal(tic_id=tic_id or 0)
+
+    candidates_internal: list[TransitCandidate] = []
+    for c in candidates:
+        depth = c.depth if c.depth is not None else 0.001
+        candidates_internal.append(
+            TransitCandidate(
+                period=c.ephemeris.period_days,
+                t0=c.ephemeris.t0_btjd,
+                duration_hours=c.ephemeris.duration_hours,
+                depth=depth,
+                snr=0.0,
+            )
+        )
+
+    pipeline = VettingPipeline(checks=checks, registry=registry)
+    return pipeline.run_many(
+        lc_internal,
+        candidates_internal,
+        stellar=stellar,
+        tpf=tpf,
+        network=network,
+        ra_deg=ra_deg,
+        dec_deg=dec_deg,
+        tic_id=tic_id,
+        context=context,
+    )
+
+
 # Legacy wrapper for backward compatibility with 'enabled' parameter
 def _vet_candidate_legacy(
     lc: LightCurve,

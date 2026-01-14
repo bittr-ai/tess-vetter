@@ -126,7 +126,10 @@ class TestVetCandidateBasicWorkflow:
         # Check provenance is populated
         assert result.provenance is not None
         # Provenance should have version/timing info (key name may vary by version)
-        assert any(k in result.provenance for k in ["version", "vetter_version", "policy_mode", "pipeline_version"])
+        assert any(
+            k in result.provenance
+            for k in ["version", "vetter_version", "policy_mode", "pipeline_version"]
+        )
 
     def test_minimal_ephemeris_passthrough(self) -> None:
         """Basic ephemeris passes through vetting pipeline without errors."""

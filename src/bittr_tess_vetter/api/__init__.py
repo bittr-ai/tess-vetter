@@ -1,3 +1,5 @@
+# ruff: noqa: F401
+
 """bittr-tess-vetter public API.
 
 Golden Path (recommended imports):
@@ -114,6 +116,7 @@ __all__ = [
     # Entry Points
     # -------------------------------------------------------------------------
     "vet_candidate",
+    "vet_many",
     "VettingPipeline",
     "run_periodogram",
     "localize_transit_source",
@@ -592,7 +595,7 @@ if TYPE_CHECKING:
     )
 
     # Main orchestrator
-    from bittr_tess_vetter.api.vet import vet_candidate
+    from bittr_tess_vetter.api.vet import vet_candidate, vet_many
     from bittr_tess_vetter.api.wcs_localization import (
         LocalizationResult,
         LocalizationVerdict,

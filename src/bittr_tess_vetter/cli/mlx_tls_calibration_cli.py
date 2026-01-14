@@ -22,15 +22,16 @@ try:
     from transitleastsquares.grid import period_grid
 except ImportError as e:
     raise ImportError(
-        "This CLI requires the 'tls' extra. "
-        "Install with: pip install 'bittr-tess-vetter[tls]'"
+        "This CLI requires the 'tls' extra. Install with: pip install 'bittr-tess-vetter[tls]'"
     ) from e
 
 from bittr_tess_vetter.api.io import PersistentCache
 from bittr_tess_vetter.compute.detrend import bin_median_trend
 
 
-def _transit_mask(time_np: np.ndarray, period: float, t0: float, duration_hours: float) -> np.ndarray:
+def _transit_mask(
+    time_np: np.ndarray, period: float, t0: float, duration_hours: float
+) -> np.ndarray:
     duration_days = duration_hours / 24.0
     phase = ((time_np - t0) / period) % 1.0
     phase = np.minimum(phase, 1.0 - phase)
@@ -224,7 +225,11 @@ def main(argv: list[str] | None = None) -> int:
 
         # Ephemeris consistency: period close + phase close (modulo P)
         period_ok = np.isfinite(tls_period) and abs(tls_period - period) <= max(0.01 * period, 0.05)
-        phase_diff = _phase_diff_days(t_ref=t0, t_test=tls_t0, period=period) if np.isfinite(tls_t0) else np.nan
+        phase_diff = (
+            _phase_diff_days(t_ref=t0, t_test=tls_t0, period=period)
+            if np.isfinite(tls_t0)
+            else np.nan
+        )
         t0_ok = np.isfinite(phase_diff) and abs(phase_diff) <= t0_tol_days
         eph_ok = bool(period_ok and t0_ok)
         recovered = bool(eph_ok and np.isfinite(tls_snr) and tls_snr >= tls_snr_threshold)

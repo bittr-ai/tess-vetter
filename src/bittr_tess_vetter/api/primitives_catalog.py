@@ -22,4 +22,3 @@ __all__ = [
     "PRIMITIVES_CATALOG",
     "list_primitives",
 ]
-

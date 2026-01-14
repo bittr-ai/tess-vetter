@@ -74,4 +74,3 @@ def test_vet_candidate_v07_missing_tic_id_returns_skipped_result() -> None:
     reason = skip_flag[0].replace("SKIPPED:", "")
     assert reason in ["NO_TIC_ID", "NETWORK_DISABLED"]
     assert any("V07" in w for w in result.warnings)
-

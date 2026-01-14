@@ -62,4 +62,3 @@ __all__ = [
 
 # Keep a small runtime assert for type sanity (numpy is required anyway)
 _ = np.ndarray
-

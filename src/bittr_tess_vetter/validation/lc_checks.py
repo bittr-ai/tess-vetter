@@ -536,7 +536,9 @@ def check_odd_even_depth(
     passed: bool | None = None
 
     # Confidence
-    confidence = _compute_confidence(n_odd_transits, n_even_transits, delta_sigma, len(warnings) > 0)
+    confidence = _compute_confidence(
+        n_odd_transits, n_even_transits, delta_sigma, len(warnings) > 0
+    )
 
     # Convert to ppm for output
     depth_odd_ppm = median_odd * 1e6
@@ -1551,5 +1553,3 @@ def check_v_shape(
             "_metrics_only": True,
         },
     )
-
-

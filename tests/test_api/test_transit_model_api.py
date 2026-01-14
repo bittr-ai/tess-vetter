@@ -30,4 +30,3 @@ def test_compute_transit_model_is_available_via_dedicated_module_and_legacy_path
 
     assert metrics_new["n_in_transit"] > 0
     assert metrics_old["n_in_transit"] == metrics_new["n_in_transit"]
-

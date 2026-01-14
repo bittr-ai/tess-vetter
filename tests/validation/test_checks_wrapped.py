@@ -403,9 +403,9 @@ class TestCheckResultMetrics:
 
             # Verify metrics contain only scalar types
             for key, value in result.metrics.items():
-                assert isinstance(
-                    value, (float, int, str, bool, type(None))
-                ), f"{check.id} metric '{key}' has non-scalar type: {type(value)}"
+                assert isinstance(value, (float, int, str, bool, type(None))), (
+                    f"{check.id} metric '{key}' has non-scalar type: {type(value)}"
+                )
 
 
 # =============================================================================

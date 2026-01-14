@@ -293,7 +293,11 @@ class PersistentCache:
                     if fcntl is not None:
                         fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
-            meta: dict[str, Any] = {"key": key, "created_at": time.time(), "accessed_at": time.time()}
+            meta: dict[str, Any] = {
+                "key": key,
+                "created_at": time.time(),
+                "accessed_at": time.time(),
+            }
             tic_id = getattr(value, "tic_id", None)
             if tic_id is not None:
                 meta["tic_id"] = int(tic_id)
@@ -329,7 +333,11 @@ class PersistentCache:
     def _update_access_time(self, key: str) -> None:
         meta_path = self._meta_path(key)
         try:
-            meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {"key": key}
+            meta = (
+                json.loads(meta_path.read_text(encoding="utf-8"))
+                if meta_path.exists()
+                else {"key": key}
+            )
             meta["accessed_at"] = time.time()
             meta_path.write_text(json.dumps(meta), encoding="utf-8")
         except Exception:

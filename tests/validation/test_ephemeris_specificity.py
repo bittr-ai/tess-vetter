@@ -207,4 +207,3 @@ def test_compute_local_t0_sensitivity_prefers_near_true_t0() -> None:
     )
     assert abs(res.t0_best_btjd - t0_true) < (120.0 / (24.0 * 60.0))
     assert res.score_best >= res.score_at_input
-

@@ -205,11 +205,14 @@ def _select_flux_and_base_valid(
     finite_time = np.isfinite(time)
     finite_quality = (quality & int(mask)) == 0
 
-    best_finite: tuple[
-        np.ndarray[Any, np.dtype[np.float64]],
-        np.ndarray[Any, np.dtype[np.float64]] | None,
-        str,
-    ] | None = None
+    best_finite: (
+        tuple[
+            np.ndarray[Any, np.dtype[np.float64]],
+            np.ndarray[Any, np.dtype[np.float64]] | None,
+            str,
+        ]
+        | None
+    ) = None
 
     for flux_attr, flux_err_attr, label in candidates:
         flux_raw = _extract_flux_array(lc, flux_attr=flux_attr)
@@ -652,7 +655,9 @@ class MASTClient:
             if preferred_author is not None and author_i.lower() == preferred_author.lower():
                 author_match = 0
 
-            exptime_delta = abs(float(exptime_i) - preferred_exptime) if exptime_i is not None else 1e9
+            exptime_delta = (
+                abs(float(exptime_i) - preferred_exptime) if exptime_i is not None else 1e9
+            )
             exptime_val = float(exptime_i) if exptime_i is not None else 1e9
             return (author_match, exptime_delta, author_i, exptime_val, i)
 

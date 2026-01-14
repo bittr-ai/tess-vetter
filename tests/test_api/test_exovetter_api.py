@@ -15,7 +15,9 @@ def _minimal_lc() -> LightCurve:
 
 def test_modshift_disabled_returns_skipped() -> None:
     lc = _minimal_lc()
-    cand = Candidate(ephemeris=Ephemeris(period_days=3.0, t0_btjd=1001.0, duration_hours=2.0), depth_ppm=1000)
+    cand = Candidate(
+        ephemeris=Ephemeris(period_days=3.0, t0_btjd=1001.0, duration_hours=2.0), depth_ppm=1000
+    )
     r = modshift(lc, cand, enabled=False)
     assert isinstance(r, CheckResult)
     assert r.id == "V11"
@@ -62,4 +64,3 @@ def test_modshift_returns_metrics_only_result_when_dependency_missing() -> None:
     assert r.details.get("_metrics_only") is True or "EXOVETTER_IMPORT_ERROR" in (
         r.details.get("warnings", []) or []
     )
-

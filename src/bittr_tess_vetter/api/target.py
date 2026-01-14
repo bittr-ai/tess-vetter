@@ -9,4 +9,3 @@ from __future__ import annotations
 from bittr_tess_vetter.domain.target import StellarParameters, Target
 
 __all__ = ["StellarParameters", "Target"]
-

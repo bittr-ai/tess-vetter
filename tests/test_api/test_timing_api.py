@@ -34,11 +34,18 @@ def test_measure_transit_times_recovers_epochs_on_clean_injection() -> None:
     flux = np.ones_like(time) + rng.normal(0, 2e-4, len(time))
     flux_err = np.full_like(time, 2e-4)
     flux = _inject_box_transits(
-        time, flux, period_days=period_days, t0_btjd=t0_btjd, duration_hours=duration_hours, depth=depth
+        time,
+        flux,
+        period_days=period_days,
+        t0_btjd=t0_btjd,
+        duration_hours=duration_hours,
+        depth=depth,
     )
 
     lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
-    cand = Candidate(ephemeris=Ephemeris(period_days=period_days, t0_btjd=t0_btjd, duration_hours=duration_hours))
+    cand = Candidate(
+        ephemeris=Ephemeris(period_days=period_days, t0_btjd=t0_btjd, duration_hours=duration_hours)
+    )
 
     times = measure_transit_times(lc, cand, min_snr=2.0)
     assert len(times) >= 5
@@ -63,10 +70,19 @@ def test_analyze_ttvs_on_linear_ephemeris_has_small_rms() -> None:
     rng = np.random.default_rng(0)
     flux = np.ones_like(time) + rng.normal(0, 2e-4, len(time))
     flux_err = np.full_like(time, 2e-4)
-    flux = _inject_box_transits(time, flux, period_days=period_days, t0_btjd=t0_btjd, duration_hours=duration_hours, depth=depth)
+    flux = _inject_box_transits(
+        time,
+        flux,
+        period_days=period_days,
+        t0_btjd=t0_btjd,
+        duration_hours=duration_hours,
+        depth=depth,
+    )
 
     lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
-    cand = Candidate(ephemeris=Ephemeris(period_days=period_days, t0_btjd=t0_btjd, duration_hours=duration_hours))
+    cand = Candidate(
+        ephemeris=Ephemeris(period_days=period_days, t0_btjd=t0_btjd, duration_hours=duration_hours)
+    )
     transit_times = measure_transit_times(lc, cand, min_snr=2.0)
 
     ttv = analyze_ttvs(transit_times, period_days=period_days, t0_btjd=t0_btjd)
@@ -87,7 +103,14 @@ def test_measure_transit_times_ignores_nans_via_valid_mask() -> None:
     rng = np.random.default_rng(1)
     flux = np.ones_like(time) + rng.normal(0, 2e-4, len(time))
     flux_err = np.full_like(time, 2e-4)
-    flux = _inject_box_transits(time, flux, period_days=period_days, t0_btjd=t0_btjd, duration_hours=duration_hours, depth=depth)
+    flux = _inject_box_transits(
+        time,
+        flux,
+        period_days=period_days,
+        t0_btjd=t0_btjd,
+        duration_hours=duration_hours,
+        depth=depth,
+    )
 
     # Inject NaNs; api/types LightCurve.to_internal should mask them out.
     time[100] = np.nan
@@ -95,8 +118,9 @@ def test_measure_transit_times_ignores_nans_via_valid_mask() -> None:
     flux_err[300] = np.nan
 
     lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
-    cand = Candidate(ephemeris=Ephemeris(period_days=period_days, t0_btjd=t0_btjd, duration_hours=duration_hours))
+    cand = Candidate(
+        ephemeris=Ephemeris(period_days=period_days, t0_btjd=t0_btjd, duration_hours=duration_hours)
+    )
     times = measure_transit_times(lc, cand, min_snr=2.0)
 
     assert all(np.isfinite(t.tc) for t in times)
-

@@ -97,7 +97,9 @@ def compute_systematics_proxy(
 
     # Default baseline/sigma fallback to global stats if OOT windows are too small.
     oot_flux = flux[out_mask] if n_oot >= 10 else flux
-    baseline = float(np.median(oot_flux[np.isfinite(oot_flux)])) if np.any(np.isfinite(oot_flux)) else 0.0
+    baseline = (
+        float(np.median(oot_flux[np.isfinite(oot_flux)])) if np.any(np.isfinite(oot_flux)) else 0.0
+    )
 
     depth = None
     depth_abs = None

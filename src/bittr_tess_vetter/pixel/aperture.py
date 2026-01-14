@@ -350,7 +350,9 @@ def compute_aperture_dependence(
 
     n_times, n_rows, n_cols = tpf_data.shape
     if n_rows == 0 or n_cols == 0:
-        raise ValueError(f"tpf_data spatial dimensions must be non-zero, got shape {tpf_data.shape}")
+        raise ValueError(
+            f"tpf_data spatial dimensions must be non-zero, got shape {tpf_data.shape}"
+        )
 
     if len(time) != n_times:
         raise ValueError(
@@ -527,7 +529,9 @@ def compute_aperture_dependence(
             oot = ~in_transit_mask
             early = float(np.nanmedian(aperture_flux[oot & (time < mid)]))
             late = float(np.nanmedian(aperture_flux[oot & (time >= mid)]))
-            drift_by_aperture[radius] = float((late - early) / early) if early != 0 else float("nan")
+            drift_by_aperture[radius] = (
+                float((late - early) / early) if early != 0 else float("nan")
+            )
         except Exception:
             drift_by_aperture[radius] = float("nan")
 
@@ -583,7 +587,9 @@ def compute_aperture_dependence(
         background_mode="annulus_median_per_cadence" if n_bg_pixels >= 3 else "none",
         background_annulus_radii_pixels=(float(bg_inner_radius), float(bg_outer_radius)),
         n_background_pixels=int(n_bg_pixels),
-        drift_fraction_recommended=float(drift_rec) if drift_rec is not None and np.isfinite(drift_rec) else None,
+        drift_fraction_recommended=float(drift_rec)
+        if drift_rec is not None and np.isfinite(drift_rec)
+        else None,
         flags=flags,
         notes={
             "center_policy": "tpf_center",

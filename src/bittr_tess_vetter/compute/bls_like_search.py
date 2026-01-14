@@ -39,7 +39,9 @@ def _rolling_mean_circular(x: np.ndarray, window: int) -> np.ndarray:
     return out[: x.size]
 
 
-def _phase_bin_means(time_btjd: np.ndarray, flux: np.ndarray, period: float, nbins: int) -> tuple[np.ndarray, np.ndarray]:
+def _phase_bin_means(
+    time_btjd: np.ndarray, flux: np.ndarray, period: float, nbins: int
+) -> tuple[np.ndarray, np.ndarray]:
     phase = ((time_btjd % period) / period) * nbins
     bins = np.floor(phase).astype(np.int64)
     bins = np.clip(bins, 0, nbins - 1)
@@ -113,7 +115,9 @@ def bls_like_search_numpy(
             k = float(np.round((t_mid - t0_mod) / float(period)))
             t0_guess = float(t0_mod + k * float(period))
 
-            scan_phases = np.linspace(-local_refine_width_phase, local_refine_width_phase, local_refine_steps)
+            scan_phases = np.linspace(
+                -local_refine_width_phase, local_refine_width_phase, local_refine_steps
+            )
             best_local = float("-inf")
             best_t0 = t0_guess
 
@@ -205,7 +209,9 @@ def bls_like_search_numpy_top_k(
             k = float(np.round((t_mid - t0_mod) / float(period)))
             t0_guess = float(t0_mod + k * float(period))
 
-            scan_phases = np.linspace(-local_refine_width_phase, local_refine_width_phase, local_refine_steps)
+            scan_phases = np.linspace(
+                -local_refine_width_phase, local_refine_width_phase, local_refine_steps
+            )
             duration_days = dur_days
             for dphi in scan_phases:
                 t0_try = float(t0_guess + dphi * float(period))
@@ -245,7 +251,11 @@ def bls_like_search_numpy_top_k(
 
     end = time.perf_counter()
 
-    best = candidates[0] if candidates else BlsLikeCandidate(float("nan"), float("nan"), float("nan"), float("-inf"))
+    best = (
+        candidates[0]
+        if candidates
+        else BlsLikeCandidate(float("nan"), float("nan"), float("nan"), float("-inf"))
+    )
     best_res = BlsLikeSearchResult(
         method="numpy_bls_like",
         best_period_days=float(best.period_days),

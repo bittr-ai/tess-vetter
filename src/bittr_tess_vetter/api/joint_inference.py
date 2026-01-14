@@ -22,4 +22,3 @@ __all__ = [
     "create_joint_result_from_sectors",
     "joint_result_to_dict",
 ]
-

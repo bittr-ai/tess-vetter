@@ -3,6 +3,7 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .venv/
+.uv-cache/
 .DS_Store
 .astro-arc/
 .bittr-tess-vetter/
@@ -11,3 +12,6 @@ build/
 *.egg-info/
 docs/_build/
 docs/_autosummary/
+persistent_cache/
+mplconfig/
+.release_smoke_venv/

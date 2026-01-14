@@ -33,4 +33,3 @@ __all__ = [
     "compute_artifact_prior",
     "check_period_alias",
 ]
-

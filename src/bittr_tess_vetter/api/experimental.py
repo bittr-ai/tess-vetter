@@ -11,8 +11,7 @@ from __future__ import annotations
 import warnings
 
 warnings.warn(
-    "bittr_tess_vetter.api.experimental contains unstable APIs. "
-    "These may change without notice.",
+    "bittr_tess_vetter.api.experimental contains unstable APIs. These may change without notice.",
     UserWarning,
     stacklevel=2,
 )

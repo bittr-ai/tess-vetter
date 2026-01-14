@@ -105,7 +105,9 @@ def _refine_one(
         phase = phase - mx.floor(phase + mx.array(0.5))
         dt = mx.abs(phase * period)
 
-        ingress = mx.maximum(duration_days * mx.array(float(ingress_egress_fraction)), mx.array(1e-6))
+        ingress = mx.maximum(
+            duration_days * mx.array(float(ingress_egress_fraction)), mx.array(1e-6)
+        )
         k = mx.array(float(sharpness)) / ingress
         template = mx.sigmoid(k * (half_duration - dt))
         template = mx.clip(template, 0.0, 1.0)
@@ -153,7 +155,9 @@ def _refine_one(
 
     depth_ppm = float(depth_hat.item()) * 1_000_000.0
     depth_sigma_ppm = float(depth_sigma.item()) * 1_000_000.0
-    t0_shift_cycles = float((t0_final.item() - float(candidate.t0_btjd)) / float(candidate.period_days))
+    t0_shift_cycles = float(
+        (t0_final.item() - float(candidate.t0_btjd)) / float(candidate.period_days)
+    )
     t0_shift_cycles_wrapped = ((t0_shift_cycles + 0.5) % 1.0) - 0.5
     dur_ratio = float(dur_final_h.item()) / max(float(candidate.duration_hours), 1e-9)
 
@@ -180,7 +184,9 @@ def _refine_one(
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Refine transit candidates using MLX (subprocess-safe).")
+    ap = argparse.ArgumentParser(
+        description="Refine transit candidates using MLX (subprocess-safe)."
+    )
     ap.add_argument("data_ref")
     ap.add_argument("candidates_json")
     ap.add_argument("steps", type=int)
@@ -267,7 +273,9 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(out))
         return 0
     except Exception as e:
-        print(json.dumps({"error": "mlx_refine_failed", "message": str(e), "data_ref": args.data_ref}))
+        print(
+            json.dumps({"error": "mlx_refine_failed", "message": str(e), "data_ref": args.data_ref})
+        )
         return 0
 
 
@@ -280,4 +288,3 @@ if __name__ == "__main__":
     else:
         args = sys.argv[1:]
     raise SystemExit(main(args))
-

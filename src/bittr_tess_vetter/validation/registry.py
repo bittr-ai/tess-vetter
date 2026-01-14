@@ -12,17 +12,19 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from bittr_tess_vetter.domain.detection import TransitCandidate
+    from bittr_tess_vetter.domain.lightcurve import LightCurveData
     from bittr_tess_vetter.validation.result_schema import CheckResult
 
 
 class CheckTier(Enum):
     """Classification of check types by their data requirements."""
 
-    LC_ONLY = "lc_only"      # Only needs light curve + ephemeris
-    CATALOG = "catalog"      # Needs network access for catalog queries
-    PIXEL = "pixel"          # Needs TPF/pixel data
+    LC_ONLY = "lc_only"  # Only needs light curve + ephemeris
+    CATALOG = "catalog"  # Needs network access for catalog queries
+    PIXEL = "pixel"  # Needs TPF/pixel data
     EXOVETTER = "exovetter"  # External vetter integration
-    AUX = "aux"              # Auxiliary/optional checks
+    AUX = "aux"  # Auxiliary/optional checks
 
 
 @dataclass(frozen=True)
@@ -53,8 +55,8 @@ class CheckInputs:
     Checks receive this container and extract what they need.
     """
 
-    lc: Any  # LightCurve
-    candidate: Any  # Candidate
+    lc: LightCurveData
+    candidate: TransitCandidate
     stellar: Any | None = None
     tpf: Any | None = None
     network: bool = False

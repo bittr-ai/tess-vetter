@@ -261,9 +261,7 @@ class TestFitTransitOnly:
         flux = make_box_transit(time_array, period, t0, duration_hours, true_depth)
         flux += rng.normal(0, 50e-6, len(flux))
 
-        result = fit_transit_only(
-            time_array, flux, flux_err, period, t0, duration_hours
-        )
+        result = fit_transit_only(time_array, flux, flux_err, period, t0, duration_hours)
 
         assert result.model_type == "transit_only"
         assert result.n_params == 1
@@ -300,9 +298,7 @@ class TestFitTransitOnly:
         flux = np.ones(100)
         flux_err = np.full(100, 100e-6)
 
-        result = fit_transit_only(
-            time, flux, flux_err, period=10.0, t0=990.0, duration_hours=1.0
-        )
+        result = fit_transit_only(time, flux, flux_err, period=10.0, t0=990.0, duration_hours=1.0)
 
         # Should return zero depth without error
         assert result.fitted_params["depth"] == 0.0
@@ -400,9 +396,7 @@ class TestFitTransitSinusoid:
         flux += make_sinusoid(time_array, period, sin_amplitude)
         flux += rng.normal(0, 50e-6, len(flux))
 
-        result_transit = fit_transit_only(
-            time_array, flux, flux_err, period, t0, duration_hours
-        )
+        result_transit = fit_transit_only(time_array, flux, flux_err, period, t0, duration_hours)
         result_sinusoid = fit_transit_sinusoid(
             time_array, flux, flux_err, period, t0, duration_hours
         )
@@ -432,14 +426,10 @@ class TestFitEbLike:
         depth_odd = 0.002
         depth_even = 0.001
 
-        flux = make_eb_odd_even(
-            time_array, period, t0, duration_hours, depth_odd, depth_even
-        )
+        flux = make_eb_odd_even(time_array, period, t0, duration_hours, depth_odd, depth_even)
         flux += rng.normal(0, 50e-6, len(flux))
 
-        result = fit_eb_like(
-            time_array, flux, flux_err, period, t0, duration_hours
-        )
+        result = fit_eb_like(time_array, flux, flux_err, period, t0, duration_hours)
 
         assert result.model_type == "eb_like"
         assert result.n_params == 3  # depth_odd, depth_even, depth_secondary
@@ -461,14 +451,11 @@ class TestFitEbLike:
         depth_secondary = 0.0008
 
         flux = make_eb_odd_even(
-            time_array, period, t0, duration_hours,
-            depth_primary, depth_primary, depth_secondary
+            time_array, period, t0, duration_hours, depth_primary, depth_primary, depth_secondary
         )
         flux += rng.normal(0, 50e-6, len(flux))
 
-        result = fit_eb_like(
-            time_array, flux, flux_err, period, t0, duration_hours
-        )
+        result = fit_eb_like(time_array, flux, flux_err, period, t0, duration_hours)
 
         # Should detect secondary eclipse
         assert result.fitted_params["depth_secondary"] > 0.0005
@@ -489,14 +476,10 @@ class TestFitEbLike:
         flux = make_box_transit(time_array, period, t0, duration_hours, true_depth)
         flux += rng.normal(0, 50e-6, len(flux))
 
-        result = fit_eb_like(
-            time_array, flux, flux_err, period, t0, duration_hours
-        )
+        result = fit_eb_like(time_array, flux, flux_err, period, t0, duration_hours)
 
         # Odd and even depths should be similar
-        depth_diff = abs(
-            result.fitted_params["depth_odd"] - result.fitted_params["depth_even"]
-        )
+        depth_diff = abs(result.fitted_params["depth_odd"] - result.fitted_params["depth_even"])
         assert depth_diff < 0.0003
 
 
@@ -523,9 +506,7 @@ class TestRunModelCompetition:
         flux = make_box_transit(time_array, period, t0, duration_hours, true_depth)
         flux += rng.normal(0, 50e-6, len(flux))
 
-        result = run_model_competition(
-            time_array, flux, flux_err, period, t0, duration_hours
-        )
+        result = run_model_competition(time_array, flux, flux_err, period, t0, duration_hours)
 
         assert result.winner == "transit_only"
         assert result.model_competition_label == "TRANSIT"
@@ -549,9 +530,7 @@ class TestRunModelCompetition:
         flux += make_box_transit(time_array, period, t0, duration_hours, 0.0001) - 1.0
         flux += rng.normal(0, 50e-6, len(flux))
 
-        result = run_model_competition(
-            time_array, flux, flux_err, period, t0, duration_hours
-        )
+        result = run_model_competition(time_array, flux, flux_err, period, t0, duration_hours)
 
         assert result.winner == "transit_sinusoid"
         assert result.model_competition_label == "SINUSOID"
@@ -571,14 +550,10 @@ class TestRunModelCompetition:
         depth_odd = 0.003
         depth_even = 0.001
 
-        flux = make_eb_odd_even(
-            time_array, period, t0, duration_hours, depth_odd, depth_even
-        )
+        flux = make_eb_odd_even(time_array, period, t0, duration_hours, depth_odd, depth_even)
         flux += rng.normal(0, 50e-6, len(flux))
 
-        result = run_model_competition(
-            time_array, flux, flux_err, period, t0, duration_hours
-        )
+        result = run_model_competition(time_array, flux, flux_err, period, t0, duration_hours)
 
         assert result.winner == "eb_like"
         assert result.model_competition_label == "EB_LIKE"
@@ -596,8 +571,13 @@ class TestRunModelCompetition:
         flux = np.ones_like(time_array) + rng.normal(0, 100e-6, len(time_array))
 
         result = run_model_competition(
-            time_array, flux, flux_err, period=3.5, t0=1001.0, duration_hours=2.5,
-            bic_threshold=10.0
+            time_array,
+            flux,
+            flux_err,
+            period=3.5,
+            t0=1001.0,
+            duration_hours=2.5,
+            bic_threshold=10.0,
         )
 
         # With weak signal, margin likely small
@@ -622,14 +602,12 @@ class TestRunModelCompetition:
 
         # Very high threshold should make result ambiguous
         result_high = run_model_competition(
-            time_array, flux, flux_err, period, t0, duration_hours,
-            bic_threshold=1000.0
+            time_array, flux, flux_err, period, t0, duration_hours, bic_threshold=1000.0
         )
 
         # Low threshold should give clear winner
         result_low = run_model_competition(
-            time_array, flux, flux_err, period, t0, duration_hours,
-            bic_threshold=0.1
+            time_array, flux, flux_err, period, t0, duration_hours, bic_threshold=0.1
         )
 
         assert result_high.model_competition_label == "AMBIGUOUS"
@@ -651,8 +629,7 @@ class TestRunModelCompetition:
         flux += rng.normal(0, 50e-6, len(flux))
 
         result = run_model_competition(
-            time_array, flux, flux_err, period, t0, duration_hours,
-            n_harmonics=3
+            time_array, flux, flux_err, period, t0, duration_hours, n_harmonics=3
         )
 
         # Check sinusoid model has more parameters
@@ -673,9 +650,7 @@ class TestRunModelCompetition:
         flux = make_box_transit(time_array, period, t0, duration_hours, true_depth)
         flux += rng.normal(0, 50e-6, len(flux))
 
-        result = run_model_competition(
-            time_array, flux, flux_err, period, t0, duration_hours
-        )
+        result = run_model_competition(time_array, flux, flux_err, period, t0, duration_hours)
 
         d = result.to_dict()
         assert "fits" in d
@@ -722,9 +697,7 @@ class TestCheckPeriodAlias:
     def test_custom_known_periods(self):
         """Test with custom list of known periods."""
         custom_periods = [1.234, 5.678]
-        is_alias, closest, frac_diff = check_period_alias(
-            1.234, known_periods=custom_periods
-        )
+        is_alias, closest, frac_diff = check_period_alias(1.234, known_periods=custom_periods)
         assert is_alias is True
         assert closest == 1.234
 
@@ -778,15 +751,9 @@ class TestComputeArtifactPrior:
     def test_quality_flags_increase_risk(self):
         """Test that quality flags increase risk."""
         prior_clean = compute_artifact_prior(5.0, quality_flags=None)
-        prior_scattered = compute_artifact_prior(
-            5.0, quality_flags={"scattered_light": True}
-        )
-        prior_background = compute_artifact_prior(
-            5.0, quality_flags={"high_background": True}
-        )
-        prior_momentum = compute_artifact_prior(
-            5.0, quality_flags={"momentum_dump": True}
-        )
+        prior_scattered = compute_artifact_prior(5.0, quality_flags={"scattered_light": True})
+        prior_background = compute_artifact_prior(5.0, quality_flags={"high_background": True})
+        prior_momentum = compute_artifact_prior(5.0, quality_flags={"momentum_dump": True})
 
         assert prior_scattered.sector_quality_risk == 0.5
         assert prior_background.sector_quality_risk == 0.3
@@ -800,7 +767,7 @@ class TestComputeArtifactPrior:
             quality_flags={
                 "scattered_light": True,
                 "high_background": True,
-            }
+            },
         )
         # scattered_light (0.5) > high_background (0.3), so max is 0.5
         assert prior.sector_quality_risk == 0.5
@@ -874,9 +841,7 @@ class TestModelCompetitionIntegration:
         flux += rng.normal(0, 50e-6, len(flux))
 
         # Run model competition
-        result = run_model_competition(
-            time_array, flux, flux_err, period, t0, duration_hours
-        )
+        result = run_model_competition(time_array, flux, flux_err, period, t0, duration_hours)
 
         # Check artifact prior
         prior = compute_artifact_prior(period)
@@ -903,9 +868,7 @@ class TestModelCompetitionIntegration:
         flux += rng.normal(0, 50e-6, len(flux))
 
         # Run model competition
-        run_model_competition(
-            time_array, flux, flux_err, period, t0, duration_hours
-        )
+        run_model_competition(time_array, flux, flux_err, period, t0, duration_hours)
 
         # Check artifact prior
         prior = compute_artifact_prior(period)

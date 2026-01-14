@@ -81,7 +81,9 @@ def recover_transit_timeseries(
     if median_oot > 0:
         detrended_flux = detrended_flux / median_oot
 
-    residual_scatter_ppm = float(np.std(detrended_flux[oot_mask]) * 1e6) if np.any(oot_mask) else 0.0
+    residual_scatter_ppm = (
+        float(np.std(detrended_flux[oot_mask]) * 1e6) if np.any(oot_mask) else 0.0
+    )
 
     stacked = stack_transits(
         time,

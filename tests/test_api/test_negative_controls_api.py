@@ -76,4 +76,3 @@ def test_generate_control_dispatches() -> None:
     assert len(t) == len(time)
     assert len(f) == len(time)
     assert len(e) == len(time)
-

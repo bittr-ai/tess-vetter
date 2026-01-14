@@ -107,9 +107,7 @@ class TestVettingPipeline:
         assert result.results[0].id == "V01"
         assert result.results[0].status == "ok"
 
-    def test_run_skips_when_requirements_not_met(
-        self, mock_lc: Any, mock_candidate: Any
-    ) -> None:
+    def test_run_skips_when_requirements_not_met(self, mock_lc: Any, mock_candidate: Any) -> None:
         registry = CheckRegistry()
         registry.register(
             MockCheck(
@@ -127,6 +125,25 @@ class TestVettingPipeline:
         assert result.results[0].status == "skipped"
         assert "SKIPPED:NO_TPF" in result.results[0].flags
 
+    def test_run_skips_when_optional_dep_missing(self, mock_lc: Any, mock_candidate: Any) -> None:
+        registry = CheckRegistry()
+        registry.register(
+            MockCheck(
+                "V11",
+                "OptionalDepCheck",
+                tier=CheckTier.AUX,
+                requirements=CheckRequirements(optional_deps=("definitely_not_installed_foo",)),
+            )
+        )
+
+        pipeline = VettingPipeline(registry=registry)
+        result = pipeline.run(mock_lc, mock_candidate)
+
+        assert len(result.results) == 1
+        assert result.results[0].status == "skipped"
+        assert "SKIPPED:EXTRA_MISSING:definitely_not_installed_foo" in result.results[0].flags
+        assert result.results[0].notes
+
     def test_run_with_tpf(self, mock_lc: Any, mock_candidate: Any) -> None:
         registry = CheckRegistry()
         registry.register(
@@ -142,9 +159,7 @@ class TestVettingPipeline:
 
         assert result.results[0].status == "ok"
 
-    def test_run_handles_check_error(
-        self, mock_lc: Any, mock_candidate: Any
-    ) -> None:
+    def test_run_handles_check_error(self, mock_lc: Any, mock_candidate: Any) -> None:
         registry = CheckRegistry()
         registry.register(MockCheck("V01", "Failing Check", should_raise=True))
 
@@ -217,6 +232,32 @@ class TestDescribe:
         assert len(desc["will_run"]) == 1
         assert len(desc["will_skip"]) == 1
         assert desc["will_skip"][0]["reason"] == "NO_TPF"
+
+
+class TestRunMany:
+    def test_run_many_preserves_order_and_returns_summary(self, mock_lc: Any) -> None:
+        registry = CheckRegistry()
+        registry.register(MockCheck("V01", "Check 1"))
+
+        pipeline = VettingPipeline(registry=registry)
+
+        def make_candidate(period: float, t0: float) -> Any:
+            c = MagicMock()
+            c.period = period
+            c.t0 = t0
+            c.duration_hours = 2.0
+            c.depth = 0.001
+            return c
+
+        candidates = [make_candidate(3.0, 1.0), make_candidate(5.0, 2.0)]
+        bundles, summary = pipeline.run_many(mock_lc, candidates)
+
+        assert len(bundles) == 2
+        assert len(summary) == 2
+        assert summary[0]["candidate_index"] == 0
+        assert summary[1]["candidate_index"] == 1
+        assert summary[0]["period_days"] == 3.0
+        assert summary[1]["period_days"] == 5.0
 
 
 class TestListChecks:

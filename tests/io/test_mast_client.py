@@ -392,7 +392,9 @@ class TestDownloadLightcurve:
 
     def test_download_error_handling(self, mock_lightkurve, mock_search_result):
         """download_lightcurve() raises MASTClientError on download failure."""
-        mock_search_result.__getitem__.return_value.download.side_effect = Exception("Download failed")
+        mock_search_result.__getitem__.return_value.download.side_effect = Exception(
+            "Download failed"
+        )
         mock_lightkurve.search_lightcurve.return_value = mock_search_result
 
         with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):

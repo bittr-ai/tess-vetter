@@ -181,9 +181,7 @@ def stitch_lightcurves(
             normalized_flux = flux / norm_factor
             normalized_flux_err = flux_err / norm_factor
         else:
-            normalization_warning = (
-                f"Invalid normalization factor ({norm_factor}); using unnormalized flux for this sector."
-            )
+            normalization_warning = f"Invalid normalization factor ({norm_factor}); using unnormalized flux for this sector."
             normalized_flux = flux
             normalized_flux_err = flux_err
 
@@ -233,6 +231,7 @@ def stitch_lightcurves(
         normalization_policy_version=normalization_policy_version,
     )
 
+
 def stitch_lightcurve_data(
     lightcurves: list[LightCurveData],
     *,
@@ -263,7 +262,9 @@ def stitch_lightcurve_data(
             }
         )
 
-    stitched = stitch_lightcurves(lc_list, normalization_policy_version=normalization_policy_version)
+    stitched = stitch_lightcurves(
+        lc_list, normalization_policy_version=normalization_policy_version
+    )
 
     valid_mask = (
         (stitched.quality == 0)

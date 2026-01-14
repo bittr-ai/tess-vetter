@@ -27,6 +27,7 @@ class CheckResult(BaseModel):
         provenance: Minimal provenance info (versions, parameters used).
         raw: Optional unstructured data for backwards compatibility.
     """
+
     id: str
     name: str
     status: CheckStatus
@@ -49,6 +50,7 @@ class VettingBundleResult(BaseModel):
         provenance: Pipeline-level provenance (versions, timing, config).
         inputs_summary: Summary of what inputs were provided.
     """
+
     results: list[CheckResult] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     provenance: dict[str, Any] = Field(default_factory=dict)

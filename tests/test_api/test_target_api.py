@@ -274,4 +274,3 @@ class TestTargetFromTicResponse:
         assert target.stellar == StellarParameters()
         assert target.ra is None
         assert target.dec is None
-

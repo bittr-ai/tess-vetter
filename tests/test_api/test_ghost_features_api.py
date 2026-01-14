@@ -74,4 +74,3 @@ def test_ghost_like_score_high_for_uniform_signal() -> None:
 
     assert 0.0 <= features.spatial_uniformity <= 1.0
     assert features.ghost_like_score > 0.5
-

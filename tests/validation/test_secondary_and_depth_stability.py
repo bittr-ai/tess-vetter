@@ -33,12 +33,12 @@ def _make_lc_with_primary_and_optional_secondary(
     phase = ((time - t0_btjd) / period_days) % 1.0
     d_to_primary = np.minimum(phase, 1.0 - phase)
     in_primary = d_to_primary < half_phase
-    flux[in_primary] *= (1.0 - depth_primary)
+    flux[in_primary] *= 1.0 - depth_primary
 
     if depth_secondary > 0:
         d_to_secondary = np.abs(phase - 0.5)
         in_secondary = d_to_secondary < half_phase
-        flux[in_secondary] *= (1.0 - depth_secondary)
+        flux[in_secondary] *= 1.0 - depth_secondary
 
     return LightCurveData(
         time=time,
