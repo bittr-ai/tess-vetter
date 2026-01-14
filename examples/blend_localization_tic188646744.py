@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,13 @@ class CandidateEphemeris:
 
 def _require_lightkurve() -> Any:
     try:
+        # lightkurve can emit a noisy warning about an optional PRF submodule
+        # (oktopus/autograd). This example does not require that submodule.
+        warnings.filterwarnings(
+            "ignore",
+            message=r".*tpfmodel submodule is not available without oktopus installed.*",
+            category=UserWarning,
+        )
         import lightkurve as lk  # type: ignore[import-not-found]
     except ImportError as e:
         raise SystemExit(
@@ -125,7 +133,7 @@ def _build_reference_sources_from_gaia(
 
 def _print_dilution_plausibility(
     *, tic_id: int, ra: float, dec: float, radius_arcsec: float, observed_depth_ppm: float
-) -> None:
+) -> list[str]:
     gaia = query_gaia_by_position_sync(ra, dec, radius_arcsec=radius_arcsec, timeout=90)
     primary_g = gaia.source.phot_g_mean_mag if gaia.source is not None else None
     companions = [
@@ -147,16 +155,20 @@ def _print_dilution_plausibility(
     )
 
     print("\nDilution plausibility (depth-only):")
+    depth_feasible: list[str] = []
     for s in scenarios[:12]:
         frac = s.host.estimated_flux_fraction
         true_ppm = s.true_depth_ppm
         impossible = true_ppm > 1_000_000.0
         tag = "IMPOSSIBLE (>100%)" if impossible else ""
+        if not impossible:
+            depth_feasible.append(s.host.name)
         print(
             f'- {s.host.name} sep={s.host.separation_arcsec:5.1f}" '
             f"G={s.host.g_mag if s.host.g_mag is not None else float('nan'):.2f} "
             f"flux_frac={frac:.3e} true_depth={true_ppm:9.0f} ppm {tag}"
         )
+    return depth_feasible
 
 
 def main() -> int:
@@ -270,7 +282,7 @@ def main() -> int:
         print(f"- recommended_aperture_px: {ap.recommended_aperture_px}")
 
     if first_ra_dec is not None:
-        _print_dilution_plausibility(
+        depth_feasible = _print_dilution_plausibility(
             tic_id=tic_id,
             ra=first_ra_dec[0],
             dec=first_ra_dec[1],
@@ -278,15 +290,24 @@ def main() -> int:
             observed_depth_ppm=eph.depth_ppm,
         )
     else:
+        depth_feasible = []
         print("\nSkipping Gaia/dilution step (could not read RA_OBJ/DEC_OBJ from TPF headers).")
 
+    if depth_feasible:
+        print("\nPlausibility-filtered host candidates remaining (depth-only):")
+        for name in depth_feasible:
+            print(f"- {name}")
+        print(
+            "All other Gaia hypotheses in the cone are ruled out by dilution physics (>100% true depth)."
+        )
+
     print("\nInterpretation guide:")
+    print("- Centroid-only localization can be unstable for very bright/saturated targets.")
     print(
-        "- OFF_TARGET to a very faint Gaia source is often a red flag, but can also be a failure mode"
+        "- Dilution plausibility is a fast filter for ruling out physically impossible faint hosts."
     )
-    print("  for saturated targets; use dilution plausibility to rule out impossible hosts.")
     print(
-        "- If multiple sectors disagree, treat host attribution as ambiguous and plan resolved follow-up."
+        "- If ambiguity remains after filtering, the next step is resolved follow-up (imaging/photometry)."
     )
     return 0
 
