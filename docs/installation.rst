@@ -37,7 +37,7 @@ for development:
 
    git clone https://github.com/bittr-ai/bittr-tess-vetter.git
    cd bittr-tess-vetter
-   uv sync
+   uv sync --all-extras --group dev
 
 Optional Dependencies
 ---------------------
@@ -146,7 +146,7 @@ Using uv:
 
 .. code-block:: bash
 
-   uv sync --all-extras
+   uv sync --all-extras --group dev
 
 Platform Support
 ----------------
@@ -164,10 +164,11 @@ After installation, verify that the package is working:
 
 .. code-block:: python
 
+   import bittr_tess_vetter
    import bittr_tess_vetter.api as btv
 
    # Check version
-   print(btv.__doc__)
+   print(bittr_tess_vetter.__version__)
 
    # List available functions
    print(dir(btv))

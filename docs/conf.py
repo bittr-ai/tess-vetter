@@ -45,7 +45,9 @@ extensions = [
 
 # Autosummary settings
 autosummary_generate = True
-autosummary_imported_members = True
+# We list the public surface explicitly in `docs/api.rst`; avoid pulling in
+# imported members automatically (it can create duplicate/unstable pages).
+autosummary_imported_members = False
 
 # Napoleon settings (Google-style docstrings)
 napoleon_google_docstring = True
@@ -56,7 +58,10 @@ napoleon_include_special_with_doc = True
 napoleon_use_admonition_for_examples = True
 napoleon_use_admonition_for_notes = True
 napoleon_use_admonition_for_references = False
-napoleon_use_ivar = False
+# Render attribute documentation as `:ivar:` fields rather than creating
+# separate domain objects. This avoids duplicate-object warnings for dataclass/
+# pydantic model fields when combined with autosummary.
+napoleon_use_ivar = True
 napoleon_use_param = True
 napoleon_use_rtype = True
 napoleon_preprocess_types = False
@@ -65,8 +70,11 @@ napoleon_attr_annotations = True
 
 # Autodoc settings
 autodoc_default_options = {
-    "members": True,
-    "undoc-members": True,
+    # Keep autosummary pages concise; our public API listing lives in api.rst.
+    # Documenting members on large schema classes generates many duplicate
+    # object descriptions (Class.field) and noisy docutils warnings.
+    "members": False,
+    "undoc-members": False,
     "show-inheritance": True,
     "member-order": "bysource",
 }

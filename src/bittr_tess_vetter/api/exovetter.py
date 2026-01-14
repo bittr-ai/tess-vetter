@@ -116,13 +116,12 @@ def modshift(
     an unexpected phase (not 0.5). This catches EBs that would be missed by
     the standard secondary eclipse search at phase 0.5.
 
-    Key metrics:
-    - primary_signal: Main transit/eclipse signal strength
-    - secondary_signal: Secondary eclipse signal at any phase
-    - secondary_primary_ratio: sec/pri ratio of ModShift *signal metrics* (not a depth ratio);
-      can become unstable when primary_signal is very small, so corroborate with a depth-style
-      secondary eclipse measurement (phase~0.5) and pixel/localization evidence.
-    - fred: Red noise level affecting reliability
+    Key metrics include primary/secondary signal strength, a secondary/primary
+    ratio (of ModShift signal metrics, not a depth ratio), and an estimate of
+    red-noise impact on reliability. The secondary/primary ratio can become
+    unstable when the primary signal is very small, so corroborate with a
+    depth-style secondary eclipse measurement (phase ~0.5) and pixel/localization
+    evidence.
 
     Args:
         lc: Light curve data

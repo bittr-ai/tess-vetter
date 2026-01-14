@@ -78,7 +78,7 @@ class VettingPipeline:
             registry: Check registry to use. Defaults to global registry.
             config: Pipeline configuration.
         """
-        self._registry = registry or get_default_registry()
+        self._registry = get_default_registry() if registry is None else registry
         self._config = config or PipelineConfig()
         self._check_ids = checks  # None means "all"
 
@@ -382,7 +382,7 @@ def list_checks(registry: CheckRegistry | None = None) -> list[dict[str, Any]]:
     Returns:
         List of check info dicts.
     """
-    reg = registry or get_default_registry()
+    reg = get_default_registry() if registry is None else registry
     return [
         {
             "id": c.id,

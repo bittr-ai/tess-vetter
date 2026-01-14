@@ -113,6 +113,15 @@ These checks analyze pixel-level data:
 - **V09 difference_image_localization**: Locate transit source
 - **V10 aperture_dependence**: Check depth vs aperture size
 
+Exovetter Checks (V11-V12)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+These checks integrate with `exovetter <https://github.com/spacetelescope/exovetter>`_
+(requires the ``exovetter`` extra):
+
+- **V11 modshift**: Modshift transit/secondary significance checks
+- **V12 sweet**: SWEET test for periodic out-of-transit variability
+
 Using Aliases
 -------------
 
@@ -148,8 +157,8 @@ otherwise those checks return skipped results.
        lc,
        candidate,
        network=True,
-       ra=123.456,
-       dec=-12.345,
+       ra_deg=123.456,
+       dec_deg=-12.345,
        tic_id=123456789,
    )
 

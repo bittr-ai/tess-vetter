@@ -37,7 +37,7 @@ class ToleranceResult(FrozenModel):
         within_tolerance: Whether the replayed value is within tolerance.
         delta: Absolute difference between original and replayed values.
         tolerance_used: Description of the tolerance type and threshold used.
-        relative_error: Relative error (|delta| / |original|), or None if
+        relative_error: Relative error (``abs(delta) / abs(original)``), or None if
             original is zero or tolerance type doesn't use relative error.
     """
 
@@ -287,20 +287,9 @@ def check_tolerance(
         original: Original/reference value.
         replayed: Replayed/computed value to check.
         tolerances: Dict mapping parameter names to tolerance configs.
-            Example:
-            {
-                "period_days": {"relative": 0.01, "harmonics": True},
-                "t0_btjd": {"phase_fraction": 0.1, "reference_period": 2.5},
-                "depth": {"relative": 0.1},
-                "default": {"absolute": 0.001}
-            }
 
     Returns:
-        ToleranceResult with:
-        - within_tolerance: True if replayed is within tolerance of original
-        - delta: Signed difference (replayed - original)
-        - tolerance_used: Description of tolerance type and threshold
-        - relative_error: Relative error if applicable, None otherwise
+        ToleranceResult describing whether the value is within tolerance.
 
     Example:
         >>> tolerances = {

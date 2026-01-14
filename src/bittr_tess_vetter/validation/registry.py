@@ -212,4 +212,10 @@ def get_default_registry() -> CheckRegistry:
     Returns:
         The default CheckRegistry instance.
     """
+    # Lazy-load default checks so API helpers like `list_checks()` work
+    # without requiring callers to remember to register defaults.
+    if len(DEFAULT_REGISTRY) == 0:
+        from bittr_tess_vetter.validation.register_defaults import register_all_defaults
+
+        register_all_defaults(DEFAULT_REGISTRY)
     return DEFAULT_REGISTRY

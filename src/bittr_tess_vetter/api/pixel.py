@@ -258,6 +258,7 @@ def aperture_dependence(
     """V10: Check if transit depth varies with aperture size.
 
     Measures transit depth at multiple aperture radii centered on the target.
+
     Args:
         tpf: Target Pixel File data (TPFStamp)
         candidate: Transit candidate with ephemeris and depth
@@ -266,12 +267,8 @@ def aperture_dependence(
         config: Optional algorithm configuration overrides (currently unused).
 
     Returns:
-        CheckResult with aperture dependence analysis including:
-        - stability_metric: 0-1 metric of depth consistency
-        - depths_by_aperture_ppm: {radius: depth} mapping
-        - depth_variance_ppm2: variance of depths across apertures
-        - recommended_aperture_pixels: optimal aperture from analysis
-        - relative_variation: depth range / mean depth
+        CheckResult with aperture dependence analysis. The returned metrics
+        include depth-vs-aperture behavior and a coarse stability assessment.
 
     Novelty: standard
 

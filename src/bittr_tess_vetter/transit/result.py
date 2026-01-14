@@ -103,7 +103,7 @@ class OddEvenResult:
     Attributes:
         depth_odd_ppm: Mean transit depth for odd epochs (ppm)
         depth_even_ppm: Mean transit depth for even epochs (ppm)
-        depth_diff_ppm: Absolute difference |odd - even| (ppm)
+        depth_diff_ppm: Absolute difference ``abs(odd - even)`` (ppm)
         relative_depth_diff_percent: Relative difference as percentage of mean depth
         significance_sigma: Statistical significance of the difference (sigma)
         is_suspicious: True if relative depth difference exceeds threshold

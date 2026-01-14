@@ -15,8 +15,12 @@ These functions are designed to work with pre-validated numpy arrays.
 
 from __future__ import annotations
 
+from typing import TypeAlias
+
 import numpy as np
 from numpy.typing import NDArray
+
+BoolArray: TypeAlias = NDArray[np.bool_]
 
 __all__ = [
     "build_prf_model",
@@ -153,7 +157,7 @@ def build_prf_model_at_pixels(
 
 def evaluate_prf_weights(
     model: NDArray[np.float64],
-    aperture_mask: NDArray[np.bool_],
+    aperture_mask: BoolArray,
 ) -> float:
     """Evaluate the flux fraction captured within an aperture mask.
 
@@ -165,7 +169,7 @@ def evaluate_prf_weights(
     ----------
     model : NDArray[np.float64]
         2D array containing the normalized PRF model (should sum to ~1.0).
-    aperture_mask : NDArray[np.bool_]
+    aperture_mask : NDArray[bool]
         2D boolean array of the same shape as model. True indicates pixels
         included in the aperture.
 

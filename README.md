@@ -21,7 +21,7 @@
 
 # bittr-tess-vetter
 
-Domain library for TESS transit detection + vetting (array-in/array-out).
+Domain-first Python library for TESS transit detection + vetting (array-in/array-out).
 
 This package follows a "domain-first" design: array-in/array-out astronomy algorithms with optional platform helpers. The core `api/`, `compute/`, and `validation/` modules are pure functions; the `platform/` module provides opt-in I/O and network clients when needed.
 
@@ -34,12 +34,12 @@ The `platform/` module is entirely optional and only used when explicitly import
 
 ## What's in here
 
-- **Vetting pipeline**: Extensible `VettingPipeline` with 12 tiered checks (V01-V12), structured `CheckResult` outputs, and batch processing via `vet_many()` (`bittr_tess_vetter.api.vet`)
+- **Vetting pipeline**: 12 checks (V01-V12) with structured `CheckResult` outputs and batch vetting via `vet_many()` (`bittr_tess_vetter.api.vet`)
 - **Transit detection**: TLS/LS periodograms, multi-planet search, candidate merging (`bittr_tess_vetter.api.periodogram`)
 - **Pixel diagnostics**: centroid shift, difference images, WCS-aware localization, aperture dependence (`bittr_tess_vetter.api.pixel`)
 - **Transit recovery**: detrend + stack + trapezoid fitting for active stars (`bittr_tess_vetter.api.recovery`)
 - **FPP (optional)**: TRICERATOPS+ support with a vendored copy under `src/bittr_tess_vetter/ext/` (`bittr_tess_vetter.api.fpp`)
-- **References**: many public API entry points carry machine-readable citations (`src/bittr_tess_vetter/api/REFERENCES.md`)
+- **Citations**: many public API entry points carry machine-readable literature references (see `REFERENCES.md` and `bittr_tess_vetter.api.references`)
 
 ## Installation
 
@@ -63,6 +63,16 @@ pip install 'bittr-tess-vetter[fit]'
 ### With physical transit model fitting (batman)
 ```bash
 pip install 'bittr-tess-vetter[batman]'
+```
+
+### With advanced detrending (wotan)
+```bash
+pip install 'bittr-tess-vetter[wotan]'
+```
+
+### With limb darkening coefficients (ldtk)
+```bash
+pip install 'bittr-tess-vetter[ldtk]'
 ```
 
 ### With external vetter integration (exovetter)
@@ -124,11 +134,12 @@ candidate = Candidate(
 
 bundle = vet_candidate(lc, candidate, network=False)
 
-# Results use structured schema: status, metrics, flags
+# Results are structured: status, metrics, flags, citations
 for r in bundle.results:
     print(f"{r.id} ({r.name}): {r.status}")
     print(f"  metrics: {r.metrics}")
     print(f"  flags: {r.flags}")
+    print(f"  citations: {r.citations}")
 ```
 
 ### Batch vetting (multiple candidates, one light curve)
@@ -141,7 +152,7 @@ candidates = [
     Candidate(ephemeris=Ephemeris(period_days=7.0, t0_btjd=1852.0, duration_hours=3.0)),
 ]
 
-results, summary = vet_many(lc, candidates, network=False)
+bundles, summary = vet_many(lc, candidates, network=False)
 
 # summary is a list of dicts with stable columns for sorting/filtering
 for row in summary:
@@ -156,25 +167,29 @@ from bittr_tess_vetter.api import list_checks, describe_checks
 # List all registered checks with their requirements
 checks = list_checks()
 for c in checks:
-    print(f"{c['id']}: {c['name']} (tier={c['tier']}, needs_network={c['requirements'].needs_network})")
+    req = c["requirements"]
+    print(f"{c['id']}: {c['name']} (tier={c['tier']}, needs_network={req['needs_network']})")
 
 # Human-readable summary
 print(describe_checks())
 ```
 
-### Custom pipeline with specific checks
+### Running a subset of checks
 
 ```python
-from bittr_tess_vetter.api import VettingPipeline
+from bittr_tess_vetter.api import vet_candidate
 
 # Run only LC-only checks (V01-V05)
-pipeline = VettingPipeline(checks=["V01", "V02", "V03", "V04", "V05"])
-bundle = pipeline.run(lc.to_internal(), candidate_internal, network=False)
+bundle = vet_candidate(lc, candidate, checks=["V01", "V02", "V03", "V04", "V05"])
 ```
 
 ## Network behavior
 
 Catalog-backed checks are always opt-in. You must pass `network=True` (and provide metadata like RA/Dec and TIC ID) to enable external queries; otherwise those checks return skipped results.
+
+## Citations
+
+Many public API entry points and vetting checks include a list of literature references in their results. The full reference list lives in `REFERENCES.md` (and is also available programmatically via `bittr_tess_vetter.api.references`).
 
 ## Code map
 
@@ -198,14 +213,18 @@ Catalog-backed checks are always opt-in. You must pass `network=True` (and provi
 ```bash
 uv run pytest
 uv run ruff check .
-# Optional (type-checking): install the `dev` extra, then:
-# uv sync --extra dev
-# uv run mypy src
+uv run mypy src/bittr_tess_vetter
 ```
 
 ## Docs
 
-Internal working notes live in `working_docs/` (for example `working_docs/api/v1_spec.md`).
+User-facing docs are built with Sphinx from `docs/`:
+
+```bash
+uv run sphinx-build -b html -W docs docs/_build/html
+```
+
+Internal working notes live in `working_docs/` and are not part of the stable API.
 
 ## License
 

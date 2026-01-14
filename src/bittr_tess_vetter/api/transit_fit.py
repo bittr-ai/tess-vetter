@@ -299,7 +299,18 @@ def fit_transit(
         [3] Claret 2018, A&A 618, A20 (2018A&A...618A..20C)
             Tables 1-5: TESS limb darkening coefficients
     """
-    # Check for batman dependency
+    # Normalize + apply valid_mask/finite filtering.
+    internal_lc = lc.to_internal()
+    time = internal_lc.time[internal_lc.valid_mask]
+    flux = internal_lc.flux[internal_lc.valid_mask]
+    flux_err = internal_lc.flux_err[internal_lc.valid_mask]
+
+    if len(time) < 20:
+        return _make_error_result(
+            f"Insufficient usable points for transit fit (need >=20, got {len(time)})"
+        )
+
+    # Check for batman dependency (only after validating inputs)
     try:
         import batman  # noqa: F401
     except ImportError:
@@ -317,17 +328,6 @@ def fit_transit(
                 "Install with: pip install 'bittr-tess-vetter[fit]'"
             )
             actual_method = "optimize"
-
-    # Normalize + apply valid_mask/finite filtering.
-    internal_lc = lc.to_internal()
-    time = internal_lc.time[internal_lc.valid_mask]
-    flux = internal_lc.flux[internal_lc.valid_mask]
-    flux_err = internal_lc.flux_err[internal_lc.valid_mask]
-
-    if len(time) < 20:
-        return _make_error_result(
-            f"Insufficient usable points for transit fit (need >=20, got {len(time)})"
-        )
 
     # Extract ephemeris
     period = candidate.ephemeris.period_days
