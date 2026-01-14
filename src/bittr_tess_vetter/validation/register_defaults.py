@@ -10,7 +10,7 @@ Usage:
     >>> registry = get_default_registry()
     >>> register_all_defaults(registry)
     >>> registry.list_ids()
-    ['V01', 'V02', 'V03', 'V04', 'V05', 'V06', 'V07']
+    ['V01', 'V02', 'V03', 'V04', 'V05', 'V06', 'V07', 'V08', 'V09', 'V10', 'V11', 'V12']
 """
 
 from __future__ import annotations
@@ -49,12 +49,44 @@ def register_catalog_checks(registry: CheckRegistry) -> None:
     _register(registry)
 
 
+def register_pixel_checks(registry: CheckRegistry) -> None:
+    """Register pixel checks V08-V10.
+
+    These checks require TPF (pixel) data.
+
+    Args:
+        registry: CheckRegistry to register checks with.
+    """
+    from bittr_tess_vetter.validation.checks_pixel_wrapped import (
+        register_pixel_checks as _register,
+    )
+
+    _register(registry)
+
+
+def register_exovetter_checks(registry: CheckRegistry) -> None:
+    """Register exovetter checks V11-V12.
+
+    These checks use external vetting algorithms.
+
+    Args:
+        registry: CheckRegistry to register checks with.
+    """
+    from bittr_tess_vetter.validation.checks_exovetter_wrapped import (
+        register_exovetter_checks as _register,
+    )
+
+    _register(registry)
+
+
 def register_all_defaults(registry: CheckRegistry) -> None:
-    """Register all default vetting checks V01-V07.
+    """Register all default vetting checks V01-V12.
 
     This registers:
     - V01-V05: LC-only checks (always available)
     - V06-V07: Catalog checks (need network + metadata)
+    - V08-V10: Pixel checks (need TPF data)
+    - V11-V12: Exovetter checks (external algorithms)
 
     Args:
         registry: CheckRegistry to register checks with.
@@ -65,14 +97,18 @@ def register_all_defaults(registry: CheckRegistry) -> None:
         >>> registry = get_default_registry()
         >>> register_all_defaults(registry)
         >>> len(registry)
-        7
+        12
     """
     register_lc_only_checks(registry)
     register_catalog_checks(registry)
+    register_pixel_checks(registry)
+    register_exovetter_checks(registry)
 
 
 __all__ = [
     "register_lc_only_checks",
     "register_catalog_checks",
+    "register_pixel_checks",
+    "register_exovetter_checks",
     "register_all_defaults",
 ]

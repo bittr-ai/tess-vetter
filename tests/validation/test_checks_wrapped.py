@@ -354,8 +354,9 @@ class TestRegisterFunctions:
         registry = CheckRegistry()
         register_all_defaults(registry)
 
-        assert len(registry) == 7
-        assert registry.list_ids() == ["V01", "V02", "V03", "V04", "V05", "V06", "V07"]
+        assert len(registry) == 12
+        expected_ids = [f"V{i:02d}" for i in range(1, 13)]
+        assert registry.list_ids() == expected_ids
 
     def test_registered_checks_are_valid(self) -> None:
         registry = CheckRegistry()
@@ -363,7 +364,7 @@ class TestRegisterFunctions:
 
         for check in registry.list():
             assert isinstance(check, VettingCheck)
-            assert check.id.startswith("V0")
+            assert check.id.startswith("V")
             assert check.name
             assert isinstance(check.tier, CheckTier)
 
@@ -795,9 +796,7 @@ class TestFullRegistryWithAllChecks:
 
     def test_register_all_checks(self) -> None:
         registry = CheckRegistry()
-        register_all_defaults(registry)  # V01-V07
-        register_pixel_checks(registry)  # V08-V10
-        register_exovetter_checks(registry)  # V11-V12
+        register_all_defaults(registry)  # V01-V12
 
         assert len(registry) == 12
         expected_ids = [f"V{i:02d}" for i in range(1, 13)]
@@ -805,18 +804,14 @@ class TestFullRegistryWithAllChecks:
 
     def test_all_checks_implement_protocol(self) -> None:
         registry = CheckRegistry()
-        register_all_defaults(registry)
-        register_pixel_checks(registry)
-        register_exovetter_checks(registry)
+        register_all_defaults(registry)  # V01-V12
 
         for check in registry.list():
             assert isinstance(check, VettingCheck)
 
     def test_tier_distribution(self) -> None:
         registry = CheckRegistry()
-        register_all_defaults(registry)
-        register_pixel_checks(registry)
-        register_exovetter_checks(registry)
+        register_all_defaults(registry)  # V01-V12
 
         lc_checks = registry.list_by_tier(CheckTier.LC_ONLY)
         catalog_checks = registry.list_by_tier(CheckTier.CATALOG)

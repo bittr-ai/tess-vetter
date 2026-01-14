@@ -230,8 +230,8 @@ class TestListChecks:
         checks = list_checks(registry)
 
         check_ids = {c["id"] for c in checks}
-        # V01-V05 LC-only, V06-V07 catalog (7 checks total)
-        expected_ids = {f"V{i:02d}" for i in range(1, 8)}
+        # V01-V05 LC-only, V06-V07 catalog, V08-V10 pixel, V11-V12 exovetter (12 checks total)
+        expected_ids = {f"V{i:02d}" for i in range(1, 13)}
         assert check_ids == expected_ids
 
     def test_list_checks_has_required_fields(self) -> None:
