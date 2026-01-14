@@ -38,7 +38,15 @@ def _make_sector(
     )
 
 
-def _inject_transit(time: np.ndarray, flux: np.ndarray, *, period: float, t0: float, duration_hours: float, depth: float) -> np.ndarray:
+def _inject_transit(
+    time: np.ndarray,
+    flux: np.ndarray,
+    *,
+    period: float,
+    t0: float,
+    duration_hours: float,
+    depth: float,
+) -> np.ndarray:
     out = flux.copy()
     duration_days = duration_hours / 24.0
     phase = ((time - t0) / period + 0.5) % 1.0 - 0.5
@@ -63,7 +71,9 @@ def test_prepare_recovery_inputs_sorts_concat_time() -> None:
         time = (t_start + np.arange(n) * cad_days).astype(np.float64)
         flux = np.ones(n, dtype=np.float64) + rng.normal(0, 2e-4, n)
         flux_err = np.full(n, 2e-4, dtype=np.float64)
-        flux = _inject_transit(time, flux, period=period, t0=t0, duration_hours=duration_hours, depth=0.01)
+        flux = _inject_transit(
+            time, flux, period=period, t0=t0, duration_hours=duration_hours, depth=0.01
+        )
         sectors.append(
             _make_sector(
                 t_start=t_start,
@@ -99,10 +109,14 @@ def test_recover_transit_two_sectors_with_gap_recovers_depth_order() -> None:
     flux += rng.normal(0, 2e-4, len(time))
     flux_err = np.full_like(time, 2e-4)
 
-    flux = _inject_transit(time, flux, period=period, t0=t0, duration_hours=duration_hours, depth=depth)
+    flux = _inject_transit(
+        time, flux, period=period, t0=t0, duration_hours=duration_hours, depth=depth
+    )
 
     lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
-    cand = Candidate(ephemeris=Ephemeris(period_days=period, t0_btjd=t0, duration_hours=duration_hours))
+    cand = Candidate(
+        ephemeris=Ephemeris(period_days=period, t0_btjd=t0, duration_hours=duration_hours)
+    )
 
     result = recover_transit(
         lc,
@@ -130,4 +144,3 @@ def test_recover_transit_requires_rotation_period_for_harmonic() -> None:
 
     with pytest.raises(ValueError, match="rotation_period is required"):
         recover_transit(lc, cand, detrend_method="harmonic", rotation_period=None)
-

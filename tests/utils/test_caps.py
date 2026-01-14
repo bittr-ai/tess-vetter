@@ -22,4 +22,3 @@ def test_cap_plots_uses_first_n() -> None:
     items = [{"i": i} for i in range(10)]
     out = cap_plots(items, max_items=3)
     assert out == [{"i": 0}, {"i": 1}, {"i": 2}]
-

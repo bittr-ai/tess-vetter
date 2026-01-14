@@ -26,9 +26,7 @@ def _make_synthetic_ttv_lc(
     duration_days = duration_hours / 24.0
 
     # Create transits with per-window offsets.
-    for w_idx, (t_start, t_end) in enumerate(
-        [(995.0, 1025.0), (1045.0, 1075.0), (1095.0, 1125.0)]
-    ):
+    for w_idx, (t_start, t_end) in enumerate([(995.0, 1025.0), (1045.0, 1075.0), (1095.0, 1125.0)]):
         # expected linear transit times near this window
         n_min = int(np.floor((t_start - t0_btjd) / period_days)) - 1
         n_max = int(np.ceil((t_end - t0_btjd) / period_days)) + 1
@@ -77,7 +75,9 @@ def test_run_ttv_track_search_finds_improvement() -> None:
         n_offset_steps=5,
         max_tracks_per_period=200,
         min_score_improvement=0.5,  # keep test robust across noise
-        budget=TTVSearchBudget(max_runtime_seconds=5.0, max_period_evaluations=10, max_track_hypotheses=5000),
+        budget=TTVSearchBudget(
+            max_runtime_seconds=5.0, max_period_evaluations=10, max_track_hypotheses=5000
+        ),
         random_seed=42,
     )
 
@@ -102,11 +102,15 @@ def test_run_ttv_track_search_deterministic() -> None:
         "n_offset_steps": 5,
         "max_tracks_per_period": 200,
         "min_score_improvement": 0.5,
-        "budget": TTVSearchBudget(max_runtime_seconds=5.0, max_period_evaluations=10, max_track_hypotheses=5000),
+        "budget": TTVSearchBudget(
+            max_runtime_seconds=5.0, max_period_evaluations=10, max_track_hypotheses=5000
+        ),
     }
     r1 = run_ttv_track_search(time, flux, flux_err, random_seed=123, **kwargs)
     r2 = run_ttv_track_search(time, flux, flux_err, random_seed=123, **kwargs)
 
     assert r1.candidates and r2.candidates
-    assert r1.candidates[0].best_track.window_offsets_days == r2.candidates[0].best_track.window_offsets_days
-
+    assert (
+        r1.candidates[0].best_track.window_offsets_days
+        == r2.candidates[0].best_track.window_offsets_days
+    )

@@ -88,7 +88,10 @@ def test_run_exofop_toi_lookup_can_filter_by_toi() -> None:
             {"tic_id": "123", "toi": "101.01", "tfopwg_disposition": "FP"},
         ],
     )
-    with patch("bittr_tess_vetter.platform.catalogs.exofop_toi_table.fetch_exofop_toi_table", return_value=table):
+    with patch(
+        "bittr_tess_vetter.platform.catalogs.exofop_toi_table.fetch_exofop_toi_table",
+        return_value=table,
+    ):
         result = run_exofop_toi_lookup(tic_id=123, toi=101.01, http_get=None)
     assert result.id == "V07"
     assert result.details["status"] == "ok"

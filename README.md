@@ -60,6 +60,21 @@ pip install 'bittr-tess-vetter[tls]'
 pip install 'bittr-tess-vetter[fit]'
 ```
 
+### With physical transit model fitting (batman)
+```bash
+pip install 'bittr-tess-vetter[batman]'
+```
+
+### With external vetter integration (exovetter)
+```bash
+pip install 'bittr-tess-vetter[exovetter]'
+```
+
+### With Apple Silicon acceleration (MLX, macOS only)
+```bash
+pip install 'bittr-tess-vetter[mlx]'
+```
+
 ### Full install
 ```bash
 pip install 'bittr-tess-vetter[all]'
@@ -104,11 +119,11 @@ candidate = Candidate(
 )
 
 pg = run_periodogram(time=np.asarray(time), flux=np.asarray(flux), flux_err=np.asarray(flux_err))
-bundle = vet_candidate(lc, candidate, policy_mode="metrics_only", network=False)
+bundle = vet_candidate(lc, candidate, network=False)
 
 print(pg.best_period_days)
 for r in bundle.results:
-    print(r.id, r.name, r.passed, r.confidence)
+    print(r.id, r.name, r.status, r.confidence, r.flags)
 ```
 
 ## Network behavior

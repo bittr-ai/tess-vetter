@@ -154,9 +154,7 @@ def compute_localization_diagnostics(
     n_in = int(np.sum(in_mask))
     n_out = int(np.sum(out_mask))
     if n_in == 0 or n_out == 0:
-        raise ValueError(
-            f"Need both in- and out-of-transit cadences (n_in={n_in}, n_out={n_out})."
-        )
+        raise ValueError(f"Need both in- and out-of-transit cadences (n_in={n_in}, n_out={n_out}).")
 
     in_img = np.nanmedian(tpf_data[in_mask], axis=0)
     out_img = np.nanmedian(tpf_data[out_mask], axis=0)

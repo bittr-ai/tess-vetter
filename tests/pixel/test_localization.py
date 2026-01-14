@@ -32,7 +32,9 @@ def test_proxy_localization_returns_images_and_metrics() -> None:
     params = TransitParams(period=3.0, t0=1.5, duration=0.2)
     tpf = _inject_transit(_make_simple_tpf(), time, params, depth=0.05)
 
-    result, images = compute_localization_diagnostics(tpf_data=tpf, time=time, transit_params=params)
+    result, images = compute_localization_diagnostics(
+        tpf_data=tpf, time=time, transit_params=params
+    )
 
     assert result.shape == (200, 11, 11)
     assert result.n_in_transit > 0
@@ -68,4 +70,3 @@ def test_proxy_localization_raises_if_all_invalid() -> None:
 
     with pytest.raises(ValueError, match="Insufficient valid cadences"):
         compute_localization_diagnostics(tpf_data=tpf, time=time, transit_params=params)
-

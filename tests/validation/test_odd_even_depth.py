@@ -38,11 +38,13 @@ def _make_lightcurve_with_box_transits(
     if depth_frac_even is None:
         depth_by_epoch = {int(e): depth_frac for e in np.unique(epoch)}
     else:
-        depth_by_epoch = {int(e): (depth_frac_even if (e % 2 == 0) else depth_frac) for e in np.unique(epoch)}
+        depth_by_epoch = {
+            int(e): (depth_frac_even if (e % 2 == 0) else depth_frac) for e in np.unique(epoch)
+        }
 
     for e, dep in depth_by_epoch.items():
         m = in_transit & (epoch == e)
-        flux[m] *= (1.0 - float(dep))
+        flux[m] *= 1.0 - float(dep)
 
     return LightCurveData(
         time=time,

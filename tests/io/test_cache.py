@@ -106,9 +106,9 @@ class TestPersistentCache:
             meta_files = list((Path(td) / "meta").glob("*.json"))
             assert len(meta_files) == 1
             meta = meta_files[0].read_text(encoding="utf-8")
-            assert "\"key\"" in meta
-            assert "\"tic_id\": 123" in meta
-            assert "\"sector\": 7" in meta
+            assert '"key"' in meta
+            assert '"tic_id": 123' in meta
+            assert '"sector": 7' in meta
 
     def test_eviction_prefers_oldest_accessed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Use deterministic timestamps so accessed_at ordering is stable.

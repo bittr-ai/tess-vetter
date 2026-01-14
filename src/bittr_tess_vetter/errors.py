@@ -30,3 +30,19 @@ class ErrorEnvelope(BaseModel):
 
 def make_error(error_type: ErrorType, message: str, **context: Any) -> ErrorEnvelope:
     return ErrorEnvelope(type=error_type, message=message, context=dict(context))
+
+
+class MissingOptionalDependencyError(ImportError):
+    """Raised when an optional dependency is required but not installed.
+
+    Attributes:
+        extra: The pip extra that provides the dependency (e.g., "tls", "fit").
+        install_hint: Installation command hint.
+    """
+
+    def __init__(self, extra: str, install_hint: str | None = None) -> None:
+        self.extra = extra
+        self.install_hint = install_hint or f"pip install 'bittr-tess-vetter[{extra}]'"
+        super().__init__(
+            f"This feature requires the '{extra}' extra. Install with: {self.install_hint}"
+        )

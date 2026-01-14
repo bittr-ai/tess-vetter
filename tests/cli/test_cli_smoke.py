@@ -120,7 +120,9 @@ class TestCLIEntryPoints:
         )
         # argparse typically exits with code 2 when required args are missing
         # Some modules may output JSON error instead
-        assert result.returncode in (0, 2), f"Unexpected exit: {result.returncode}, stderr: {result.stderr}"
+        assert result.returncode in (0, 2), (
+            f"Unexpected exit: {result.returncode}, stderr: {result.stderr}"
+        )
 
     @pytest.mark.skipif(not TLS_AVAILABLE, reason="transitleastsquares not installed")
     def test_tls_calibration_cli_runnable(self) -> None:
@@ -131,7 +133,9 @@ class TestCLIEntryPoints:
             text=True,
             timeout=30,
         )
-        assert result.returncode in (0, 2), f"Unexpected exit: {result.returncode}, stderr: {result.stderr}"
+        assert result.returncode in (0, 2), (
+            f"Unexpected exit: {result.returncode}, stderr: {result.stderr}"
+        )
 
 
 # =============================================================================

@@ -268,7 +268,9 @@ class TestComputeOddEvenResult:
         flux = np.ones_like(time)
         flux_err = np.full_like(time, 1e-3)
 
-        result = compute_odd_even_result(time, flux, flux_err, period=-1.0, t0=0.0, duration_hours=2.0)
+        result = compute_odd_even_result(
+            time, flux, flux_err, period=-1.0, t0=0.0, duration_hours=2.0
+        )
         assert result.n_odd == 0
         assert result.n_even == 0
         assert result.depth_diff_ppm == 0.0

@@ -291,9 +291,7 @@ class TestTPFCache:
         """get returns None for empty cache."""
         assert cache.get(sample_ref) is None
 
-    def test_put_and_get(
-        self, cache: TPFCache, sample_ref: TPFRef, sample_data: TPFData
-    ) -> None:
+    def test_put_and_get(self, cache: TPFCache, sample_ref: TPFRef, sample_data: TPFData) -> None:
         """put stores data that can be retrieved with get."""
         cache.put(sample_data)
 
@@ -373,9 +371,7 @@ class TestTPFCache:
         for ref in refs:
             assert not cache.has(ref)
 
-    def test_multiple_refs_isolated(
-        self, cache: TPFCache, sample_data: TPFData
-    ) -> None:
+    def test_multiple_refs_isolated(self, cache: TPFCache, sample_data: TPFData) -> None:
         """Different TPFRefs are cached independently."""
         ref1 = TPFRef(tic_id=1, sector=1, camera=1, ccd=1)
         ref2 = TPFRef(tic_id=2, sector=2, camera=2, ccd=2)
@@ -438,9 +434,7 @@ class MockTPFHandler(TPFHandler):
 class TestTPFHandler:
     """Tests for TPFHandler abstract interface."""
 
-    def test_mock_handler_returns_data(
-        self, sample_ref: TPFRef, sample_data: TPFData
-    ) -> None:
+    def test_mock_handler_returns_data(self, sample_ref: TPFRef, sample_data: TPFData) -> None:
         """MockTPFHandler returns configured data."""
         handler = MockTPFHandler(data={sample_ref: sample_data})
         result = handler.fetch(sample_ref)

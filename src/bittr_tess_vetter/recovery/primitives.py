@@ -164,8 +164,7 @@ def detrend_for_recovery(
 
         if not WOTAN_AVAILABLE:
             raise ImportError(
-                f"wotan is required for {method} detrending. "
-                "Install with: pip install wotan"
+                f"wotan is required for {method} detrending. Install with: pip install wotan"
             )
 
         # Extract wotan method name: "wotan_biweight" -> "biweight", "wotan_gp" -> "gp"

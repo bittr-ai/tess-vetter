@@ -498,6 +498,7 @@ class TestIntegration:
             pytest.skip("transitleastsquares not available")
 
         from transitleastsquares import transit_mask
+
         time = synthetic_active_star_lc["time"]
         flux = synthetic_active_star_lc["flux"]
         flux_err = synthetic_active_star_lc["flux_err"]

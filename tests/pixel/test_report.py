@@ -38,8 +38,13 @@ def test_generate_pixel_vet_report_bundles_metrics() -> None:
     assert isinstance(report, PixelVetReport)
     assert report.manifest_ref == "man:1"
     assert report.centroid is not None and report.centroid["centroid_shift_pixels"] == 0.3
-    assert report.difference_image is not None and report.difference_image["localization_score"] == 0.9
-    assert report.aperture_dependence is not None and report.aperture_dependence["stability_metric"] == 0.95
+    assert (
+        report.difference_image is not None and report.difference_image["localization_score"] == 0.9
+    )
+    assert (
+        report.aperture_dependence is not None
+        and report.aperture_dependence["stability_metric"] == 0.95
+    )
     assert "LOW_TRANSIT_COUNT" in report.quality_flags
     assert "low_n_in_transit_cadences" in report.quality_flags
 
@@ -49,4 +54,3 @@ def test_generate_pixel_vet_report_missing_inputs_adds_flags() -> None:
     assert "MISSING_CENTROID_RESULT" in report.quality_flags
     assert "MISSING_DIFFERENCE_IMAGE_RESULT" in report.quality_flags
     assert "MISSING_APERTURE_DEPENDENCE_RESULT" in report.quality_flags
-

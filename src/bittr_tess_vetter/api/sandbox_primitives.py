@@ -16,4 +16,3 @@ from bittr_tess_vetter.compute.primitives import (  # noqa: F401
     fold,
     periodogram,
 )
-

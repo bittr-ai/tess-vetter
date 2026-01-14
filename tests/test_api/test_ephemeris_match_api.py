@@ -86,4 +86,3 @@ def test_ephemeris_index_save_load_roundtrip(tmp_path: Path) -> None:
     assert len(loaded) == 1
     assert loaded.entries[0].source_id == "TOI-1"
     assert loaded.entries[0].metadata["tic_id"] == "123"
-

@@ -46,7 +46,9 @@ compute_batman_model = cites(
     cite(KREIDBERG_2015, "batman implementation"),
 )(compute_batman_model)
 
-fit_optimize = cites(cite(BYRD_1995_LBFGSB, "L-BFGS-B bound-constrained optimization"))(fit_optimize)
+fit_optimize = cites(cite(BYRD_1995_LBFGSB, "L-BFGS-B bound-constrained optimization"))(
+    fit_optimize
+)
 
 fit_mcmc = cites(
     cite(FOREMAN_MACKEY_2013, "emcee sampler implementation"),

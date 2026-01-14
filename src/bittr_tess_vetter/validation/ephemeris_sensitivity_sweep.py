@@ -315,9 +315,20 @@ def _celerite2_sho_variant(
                 return 1e10
 
         x0 = np.array([sigma_init, rho_init, tau_init, jitter_init], dtype=np.float64)
-        bounds = [(sigma_min, sigma_max), (rho_min, rho_max), (tau_min, tau_max), (jitter_min, jitter_max)]
+        bounds = [
+            (sigma_min, sigma_max),
+            (rho_min, rho_max),
+            (tau_min, tau_max),
+            (jitter_min, jitter_max),
+        ]
 
-        fit_result: dict[str, Any] = {"converged": False, "params": None, "loss_value": None, "n_iterations": 0, "message": ""}
+        fit_result: dict[str, Any] = {
+            "converged": False,
+            "params": None,
+            "loss_value": None,
+            "n_iterations": 0,
+            "message": "",
+        }
         fit_exc: list[Exception] = []
         timeout_event = threading.Event()
 
@@ -487,7 +498,9 @@ def compute_sensitivity_sweep_numpy(
                 if row.status == "failed":
                     notes.append(f"celerite2_sho variant failed: {row.failure_reason}")
                 sweep_table.append(
-                    SweepRow(**{**row.to_dict(), "runtime_seconds": float(time_module.time() - start)})
+                    SweepRow(
+                        **{**row.to_dict(), "runtime_seconds": float(time_module.time() - start)}
+                    )
                 )
                 continue
 
@@ -512,7 +525,9 @@ def compute_sensitivity_sweep_numpy(
                     )
             if len(t_var) < 50:
                 base_row["status"] = "failed"
-                base_row["failure_reason"] = f"Insufficient points after transforms ({len(t_var)} < 50)"
+                base_row["failure_reason"] = (
+                    f"Insufficient points after transforms ({len(t_var)} < 50)"
+                )
             else:
                 score, depth_hat_ppm, depth_err_ppm = _score_variant(
                     time=t_var,
@@ -589,4 +604,3 @@ def compute_sensitivity_sweep_numpy(
         notes=notes,
         sweep_table=sweep_table,
     )
-

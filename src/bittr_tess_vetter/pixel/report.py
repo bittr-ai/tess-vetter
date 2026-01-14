@@ -87,4 +87,3 @@ def generate_pixel_vet_report(
 
 
 __all__ = ["PixelVetReport", "generate_pixel_vet_report"]
-

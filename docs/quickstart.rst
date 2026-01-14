@@ -73,13 +73,12 @@ Once you have a candidate, run the vetting pipeline:
    bundle = btv.vet_candidate(
        lc,
        candidate,
-       policy_mode="metrics_only",
        network=False,
    )
 
    # Review results
    for check in bundle.results:
-       print(f"{check.id} {check.name}: passed={check.passed} (confidence={check.confidence:.2f})")
+       print(f"{check.id} {check.name}: status={check.status} flags={check.flags}")
 
 Vetting Check Categories
 ------------------------

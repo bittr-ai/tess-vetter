@@ -56,4 +56,3 @@ def test_localize_transit_host_multi_sector_returns_consensus_and_labels() -> No
     assert out["per_sector_results"][0]["sector"] in (1, 2)
     assert "cadence_summary" in out["per_sector_results"][0]
     assert out["consensus"].get("n_sectors_total") == 2
-

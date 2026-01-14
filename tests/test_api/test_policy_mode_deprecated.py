@@ -21,14 +21,21 @@ def test_lc_only_policy_mode_is_deprecated_and_ignored() -> None:
     assert r.details.get("_metrics_only") is True
 
 
-def test_vet_candidate_policy_mode_is_deprecated_and_provenance_records_request() -> None:
-    time = np.array([0.0, 1.0, 2.0], dtype=np.float64)
+def test_vet_candidate_returns_vetting_bundle_result() -> None:
+    """Test that vet_candidate returns a VettingBundleResult.
+
+    Note: The old API with `enabled` and `policy_mode` parameters has been removed
+    in v0.1.0. Use VettingPipeline directly for advanced configuration.
+    """
+    time = np.linspace(0.0, 10.0, 500, dtype=np.float64)
     flux = np.ones_like(time)
     flux_err = np.full_like(time, 1e-3)
     lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
-    cand = Candidate(ephemeris=Ephemeris(period_days=2.0, t0_btjd=0.0, duration_hours=2.0), depth_ppm=1000.0)
+    cand = Candidate(
+        ephemeris=Ephemeris(period_days=2.0, t0_btjd=0.5, duration_hours=2.0), depth_ppm=1000.0
+    )
 
-    with pytest.warns(FutureWarning, match="policy_mode"):
-        out = vet_candidate(lc, cand, enabled={"V01"}, policy_mode="not_supported")
-    assert out.provenance["policy_mode"] == "metrics_only"
-    assert out.provenance["policy_mode_requested"] == "not_supported"
+    # The new API always returns metrics-only results
+    out = vet_candidate(lc, cand, checks=["V01"])
+    assert hasattr(out, "results")
+    assert hasattr(out, "provenance")

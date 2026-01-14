@@ -121,4 +121,3 @@ def canonical_hash_prefix(obj: Any, *, length: int = 12) -> str:
     if int(length) < 1 or int(length) > 64:
         raise ValueError("length must be between 1 and 64")
     return canonical_hash(obj)[: int(length)]
-

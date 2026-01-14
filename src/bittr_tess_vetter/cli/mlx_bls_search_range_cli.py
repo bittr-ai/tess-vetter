@@ -138,7 +138,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(out))
         return 0
     except Exception as e:
-        print(json.dumps({"error": "mlx_bls_range_failed", "message": str(e), "data_ref": req.data_ref}))
+        print(
+            json.dumps(
+                {"error": "mlx_bls_range_failed", "message": str(e), "data_ref": req.data_ref}
+            )
+        )
         return 0
 
 
@@ -151,4 +155,3 @@ if __name__ == "__main__":
     else:
         args = sys.argv[1:]
     raise SystemExit(main(args))
-

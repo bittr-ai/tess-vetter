@@ -63,4 +63,3 @@ def test_compute_reliability_regime_numpy_smoke() -> None:
     assert 0.0 <= res.phase_shift_null.p_value_one_sided <= 1.0
     assert isinstance(res.warnings, list)
     assert isinstance(res.label, str)
-

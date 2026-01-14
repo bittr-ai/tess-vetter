@@ -12,7 +12,9 @@ from bittr_tess_vetter.platform.catalogs.exofop_toi_table import fetch_exofop_to
 def test_exofop_toi_table_uses_disk_cache(tmp_path: Path) -> None:
     cache_path = tmp_path / "exofop" / "toi_table.pipe"
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text("tic_id|toi|tfopwg_disposition|comments\n1|123.01|PC|\n", encoding="utf-8")
+    cache_path.write_text(
+        "tic_id|toi|tfopwg_disposition|comments\n1|123.01|PC|\n", encoding="utf-8"
+    )
 
     with patch("bittr_tess_vetter.platform.catalogs.exofop_toi_table.requests.get") as get:
         get.side_effect = RuntimeError("network should not be called")
@@ -31,7 +33,9 @@ def test_exofop_target_page_uses_disk_cache(tmp_path: Path) -> None:
 
     with patch("bittr_tess_vetter.platform.catalogs.exofop_target_page.requests.get") as get:
         get.side_effect = RuntimeError("network should not be called")
-        summary = fetch_exofop_target_summary(tic_id=42, cache_ttl_seconds=999999, disk_cache_dir=tmp_path)
+        summary = fetch_exofop_target_summary(
+            tic_id=42, cache_ttl_seconds=999999, disk_cache_dir=tmp_path
+        )
 
     assert summary.tic_id == 42
     assert summary.followup_counts["files"] == 7

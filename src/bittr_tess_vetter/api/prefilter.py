@@ -14,4 +14,3 @@ from bittr_tess_vetter.validation.prefilter import (  # noqa: F401
 )
 
 __all__ = ["compute_depth_over_depth_err_snr", "compute_phase_coverage"]
-

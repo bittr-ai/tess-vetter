@@ -1,73 +1,51 @@
-"""Public API for bittr-tess-vetter.
+# ruff: noqa: F401
 
-This module provides the user-facing API for transit candidate vetting.
+"""bittr-tess-vetter public API.
 
-Types (v2):
-- Ephemeris: Transit ephemeris (period, t0, duration)
-- LightCurve: Simplified light curve container
-- StellarParams: Stellar parameters from TIC
-- CheckResult: Vetting check result
-- Candidate: Transit candidate container (NEW in v2)
-- TPFStamp: Target Pixel File data container (NEW in v2)
-- VettingBundleResult: Orchestrator output with provenance (NEW in v2)
+Golden Path (recommended imports):
+    from bittr_tess_vetter.api import (
+        # Core types
+        LightCurve, Ephemeris, Candidate, CheckResult, VettingBundleResult,
+        # Entry points
+        vet_candidate, VettingPipeline, run_periodogram,
+        # Introspection
+        list_checks, describe_checks,
+    )
 
-Types (v3):
-- TransitFitResult: Physical transit model fit result
-- TransitTime: Single transit timing measurement
-- TTVResult: Transit timing variation analysis summary
-- OddEvenResult: Odd/even depth comparison for EB vetting
-- ActivityResult: Stellar activity characterization
-- Flare: Individual flare detection
-- StackedTransit: Stacked transit light curve data
-- TrapezoidFit: Trapezoid model fit parameters
-- RecoveryResult: Transit recovery result from active star
+Advanced Usage:
+    from bittr_tess_vetter.api.primitives import fold, detrend, check_odd_even_depth
+    from bittr_tess_vetter.api.experimental import ...
 
-Main Entry Point (v2):
-- vet_candidate: Run complete tiered vetting pipeline
+For custom pipelines:
+    from bittr_tess_vetter.api import (
+        CheckRegistry, VettingCheck, CheckTier, CheckRequirements,
+    )
+    from bittr_tess_vetter.validation.register_defaults import register_all_defaults
 
-Transit Primitives:
-- odd_even_result: Odd/even depth comparison for EB detection
+Core Types:
+    - LightCurve: Light curve data container
+    - Ephemeris: Transit ephemeris (period, t0, duration)
+    - Candidate: Transit candidate container
+    - CheckResult: Vetting check result
+    - VettingBundleResult: Aggregated pipeline output with provenance
 
-LC-Only Checks (V01-V05):
-- odd_even_depth: V01 - Compare depth of odd vs even transits
-- secondary_eclipse: V02 - Search for secondary eclipse
-- duration_consistency: V03 - Check duration vs stellar density
-- depth_stability: V04 - Check depth consistency across transits
-- v_shape: V05 - Distinguish U-shaped vs V-shaped transits
-- vet_lc_only: Orchestrator for all LC-only checks
+Entry Points:
+    - vet_candidate: Run complete vetting pipeline (convenience wrapper)
+    - VettingPipeline: Full pipeline with custom check selection
+    - run_periodogram: Detect periodic signals in light curves
+    - localize_transit_source: WCS-aware transit source localization
+    - fit_transit: Fit physical transit model
+    - calculate_fpp: Calculate false positive probability
 
-Catalog Checks (V06-V07):
-- nearby_eb_search: V06 - Search for nearby eclipsing binaries
-- exofop_disposition: V07 - Check ExoFOP TOI dispositions
-- vet_catalog: Orchestrator for catalog checks
+Introspection:
+    - list_checks: List available vetting checks
+    - describe_checks: Human-readable check descriptions
 
-Pixel Checks (V08-V10):
-- centroid_shift: V08 - Detect centroid motion during transit
-- difference_image_localization: V09 - Locate transit source
-- aperture_dependence: V10 - Check depth vs aperture size
-- vet_pixel: Orchestrator for pixel checks
-
-Exovetter Checks (V11-V12):
-- modshift: V11 - ModShift test for secondary eclipse detection
-- sweet: V12 - SWEET test for stellar variability
-- vet_exovetter: Orchestrator for exovetter checks
-
-v3 Transit Fitting:
-- fit_transit: Fit physical transit model using batman
-- quick_estimate: Fast analytic parameter estimation
-
-v3 Timing Analysis:
-- measure_transit_times: Measure mid-times for all transits
-- analyze_ttvs: Compute O-C residuals and TTV statistics
-
-v3 Activity Characterization:
-- characterize_activity: Full stellar activity characterization
-- mask_flares: Remove flare events from light curves
-
-v3 Transit Recovery:
-- recover_transit: Recover transit signal from active star
-- detrend: Detrend light curve while preserving transits
-- stack_transits: Phase-fold and stack all transits
+Registry Types (for extensibility):
+    - CheckRegistry: Registry for vetting checks
+    - VettingCheck: Protocol for implementing checks
+    - CheckTier: Check tier classification
+    - CheckRequirements: Data requirements for checks
 
 Example:
     >>> import numpy as np
@@ -85,7 +63,7 @@ Example:
     >>> # Run complete vetting pipeline
     >>> result = vet_candidate(lc, candidate)
     >>> for r in result.results:
-    ...     print(f"{r.id} {r.name}: passed={r.passed} (confidence={r.confidence:.2f})")
+    ...     print(f"{r.id} {r.name}: status={r.status}")
 """
 
 from __future__ import annotations
@@ -117,268 +95,55 @@ _MLX_GUARDED_EXPORTS: set[str] = {
     "integrated_gradients",
 }
 
+# =============================================================================
+# Golden Path Exports (documented, recommended)
+# =============================================================================
+# These are the primary exports for researcher-facing use.
+# All other exports are still accessible via lazy loading but not advertised.
+
 __all__ = [
-    # Types (v2)
-    "Ephemeris",
+    # -------------------------------------------------------------------------
+    # Core Types
+    # -------------------------------------------------------------------------
     "LightCurve",
-    "StellarParams",
-    "CheckResult",
+    "Ephemeris",
     "Candidate",
-    "TPFStamp",
+    "CheckResult",
     "VettingBundleResult",
-    # Types (v3)
-    "TransitFitResult",
-    "TransitTime",
-    "TTVResult",
-    "OddEvenResult",
-    "ActivityResult",
-    "Flare",
-    "StackedTransit",
-    "TrapezoidFit",
-    "RecoveryResult",
-    # Main orchestrator (v2)
+    "StellarParams",
+    "TPFStamp",
+    # -------------------------------------------------------------------------
+    # Entry Points
+    # -------------------------------------------------------------------------
     "vet_candidate",
-    # Preferred short aliases (non-breaking)
-    "vet",
-    "periodogram",
-    "localize",
-    "aperture_family_depth_curve",
-    # Evidence helpers
-    "checks_to_evidence_items",
-    # Generic evidence contracts
-    "EvidenceEnvelope",
-    "EvidenceProvenance",
-    "compute_evidence_code_hash",
-    "load_evidence",
-    "save_evidence",
-    # Prefilters (PFxx)
-    "compute_depth_over_depth_err_snr",
-    "compute_phase_coverage",
-    # Cadence / aperture helpers (host-facing)
-    "default_cadence_mask",
-    "create_circular_aperture_mask",
-    # Utilities
-    "DEFAULT_TOP_K_CAP",
-    "DEFAULT_VARIANT_SUMMARIES_CAP",
-    "DEFAULT_NEIGHBORS_CAP",
-    "DEFAULT_PLOTS_CAP",
-    "cap_top_k",
-    "cap_neighbors",
-    "cap_plots",
-    "cap_variant_summaries",
-    "ToleranceResult",
-    "HARMONIC_RATIOS",
-    "check_tolerance",
-    # Ephemeris matching
-    "EphemerisEntry",
-    "EphemerisIndex",
-    "EphemerisMatch",
-    "EphemerisMatchResult",
-    "MatchClass",
-    "build_index_from_csv",
-    "classify_matches",
-    "compute_harmonic_match",
-    "compute_match_score",
-    "load_index",
-    "run_ephemeris_matching",
-    "save_index",
-    "wrap_t0",
-    # Transit primitives
-    "odd_even_result",
-    # Low-level primitives (host-facing)
-    "PerformancePreset",
-    "PeriodogramPeak",
-    "PeriodogramResult",
+    "vet_many",
+    "VettingPipeline",
     "run_periodogram",
-    "auto_periodogram",
-    "ls_periodogram",
-    "tls_search",
-    "tls_search_per_sector",
-    "search_planets",
-    "refine_period",
-    "compute_transit_model",
-    "compute_bls_model",
-    "detect_sector_gaps",
-    "split_by_sectors",
-    "merge_candidates",
-    # Primitive catalog (host-facing)
-    "PrimitiveInfo",
-    "PRIMITIVES_CATALOG",
-    "list_primitives",
-    # Pixel/PRF facade (host-facing)
-    "PRFParams",
-    "PRFFitResult",
-    "BackgroundParams",
-    "PRFModel",
-    "PRFBackend",
-    "HypothesisScore",
-    "MultiSectorConsensus",
-    "ApertureHypothesisFit",
-    "AperturePrediction",
-    "ApertureConflict",
-    "TransitWindow",
-    "PixelTimeseriesFit",
-    "TimeseriesEvidence",
-    "TimeseriesDiagnostics",
-    "build_prf_model",
-    "build_prf_model_at_pixels",
-    "evaluate_prf_weights",
-    "prf_params_to_dict",
-    "prf_params_from_dict",
-    "fit_result_to_dict",
-    "fit_result_from_dict",
-    "get_prf_model",
-    "score_hypotheses_prf_lite",
-    "aggregate_multi_sector",
-    "fit_aperture_hypothesis",
-    "score_hypotheses_with_prf",
-    "predict_depth_vs_aperture",
-    "predict_all_hypotheses",
-    "propagate_aperture_uncertainty",
-    "detect_aperture_conflict",
-    "compute_aperture_chi2",
-    "extract_transit_windows",
-    "fit_transit_amplitude_wls",
-    "fit_all_hypotheses_timeseries",
-    "aggregate_timeseries_evidence",
-    "select_best_hypothesis_timeseries",
-    "compute_timeseries_diagnostics",
-    "assess_sector_quality",
-    "compute_sector_weights",
-    "compute_joint_log_likelihood",
-    "compute_all_hypotheses_joint",
-    "select_best_hypothesis_joint",
-    "MARGIN_RESOLVE_THRESHOLD",
-    "FLIP_RATE_MIXED_THRESHOLD",
-    "FLIP_RATE_UNSTABLE_THRESHOLD",
-    "get_in_transit_mask",
-    "get_out_of_transit_mask",
-    "get_out_of_transit_mask_windowed",
-    "get_odd_even_transit_indices",
-    "measure_transit_depth",
-    "count_transits",
-    "SmoothTemplateConfig",
-    "SmoothTemplateScoreResult",
-    "PhaseShiftNullResult",
-    "ConcentrationMetrics",
-    "LocalT0SensitivityResult",
-    "downsample_evenly",
-    "smooth_box_template_numpy",
-    "score_fixed_period_numpy",
-    "phase_shift_t0s",
-    "scores_for_t0s_numpy",
-    "compute_phase_shift_null",
-    "compute_concentration_metrics",
-    "compute_local_t0_sensitivity_numpy",
-    "SystematicsProxyResult",
-    "compute_systematics_proxy",
-    # Alias diagnostics extras
-    "PhaseShiftEvent",
-    "classify_alias",
-    "compute_harmonic_scores",
-    "compute_secondary_significance",
-    "detect_phase_shift_events",
-    # Ghost features
-    "GhostFeatures",
-    "compute_aperture_contrast",
-    "compute_difference_image",
-    "compute_edge_gradient",
-    "compute_ghost_features",
-    "compute_prf_likeness",
-    "compute_spatial_uniformity",
-    # Negative controls
-    "ControlType",
-    "generate_control",
-    "generate_flux_invert",
-    "generate_null_inject",
-    "generate_phase_scramble",
-    "generate_time_scramble",
-    # Reliability curves
-    "compute_conditional_rates",
-    "compute_reliability_curves",
-    "recommend_thresholds",
-    # Sector consistency
-    "ConsistencyClass",
-    "SectorMeasurement",
-    "compute_sector_consistency",
-    # LC-only checks (V01-V05)
-    "odd_even_depth",
-    "secondary_eclipse",
-    "duration_consistency",
-    "depth_stability",
-    "v_shape",
-    "vet_lc_only",
-    # Catalog checks (V06-V07)
-    "nearby_eb_search",
-    "exofop_disposition",
-    "vet_catalog",
-    # Pixel checks (V08-V10)
-    "centroid_shift",
-    "difference_image_localization",
-    "aperture_dependence",
-    "vet_pixel",
-    # Exovetter checks (V11-V12)
-    "modshift",
-    "sweet",
-    "vet_exovetter",
-    # v3 modules
-    "transit_fit",
-    "timing",
-    "activity",
-    "recovery",
-    # v3 transit fitting functions
-    "fit_transit",
-    "quick_estimate",
-    # v3 timing analysis functions
-    "measure_transit_times",
-    "analyze_ttvs",
-    # v3 TTV track search
-    "TTVSearchBudget",
-    "TTVTrackSearchResult",
-    "estimate_search_cost",
-    "identify_observing_windows",
-    "run_ttv_track_search",
-    "run_ttv_track_search_for_candidate",
-    "should_run_ttv_search",
-    # v3 activity characterization functions
-    "characterize_activity",
-    "mask_flares",
-    # v3 transit recovery functions
-    "recover_transit",
-    "recover_transit_timeseries",
-    "detrend",
-    "stack_transits",
-    # FPP (TRICERATOPS)
-    "calculate_fpp",
-    "TriceratopsFppPreset",
-    "FAST_PRESET",
-    "STANDARD_PRESET",
-    # WCS-aware / pixel report tools (v0.2)
     "localize_transit_source",
-    "LocalizationVerdict",
-    "ReferenceSource",
-    "LocalizationResult",
-    "compute_aperture_family_depth_curve",
-    "ApertureFamilyResult",
-    "DEFAULT_RADII_PX",
-    "compute_pixel_scale",
-    "extract_wcs_from_header",
-    "wcs_sanity_check",
-    "pixel_to_world",
-    "pixel_to_world_batch",
-    "world_to_pixel",
-    "world_to_pixel_batch",
-    "compute_localization_diagnostics",
-    "LocalizationDiagnostics",
-    "LocalizationImages",
-    "TransitParams",
-    "generate_pixel_vet_report",
-    "PixelVetReport",
-    # Pixel localize facade (host-facing)
-    "localize_transit_host_single_sector",
-    "localize_transit_host_single_sector_with_baseline_check",
-    "localize_transit_host_multi_sector",
+    "fit_transit",
+    "calculate_fpp",
+    # -------------------------------------------------------------------------
+    # Introspection
+    # -------------------------------------------------------------------------
+    "list_checks",
+    "describe_checks",
+    # -------------------------------------------------------------------------
+    # Registry Types (for extensibility)
+    # -------------------------------------------------------------------------
+    "CheckRegistry",
+    "VettingCheck",
+    "CheckTier",
+    "CheckRequirements",
+    "PipelineConfig",
+    # -------------------------------------------------------------------------
+    # Short Aliases (convenience)
+    # -------------------------------------------------------------------------
+    "vet",  # -> vet_candidate
+    "periodogram",  # -> run_periodogram
+    "localize",  # -> localize_transit_source
+    # -------------------------------------------------------------------------
     # Optional MLX (guarded)
+    # -------------------------------------------------------------------------
     "MLX_AVAILABLE",
 ]
 
@@ -402,7 +167,12 @@ if TYPE_CHECKING:
     # 2) Acts as the single source of truth for the lazy-export resolver, which parses
     #    these `from ... import ...` statements from the module source.
 
+    # =========================================================================
+    # Golden Path: Pipeline and Registry (v0.1.0)
+    # =========================================================================
+    # =========================================================================
     # Types (v2)
+    # =========================================================================
     # v3 modules
     from bittr_tess_vetter.api import activity, recovery, timing, transit_fit
 
@@ -600,6 +370,12 @@ if TYPE_CHECKING:
         split_by_sectors,
         tls_search,
         tls_search_per_sector,
+    )
+    from bittr_tess_vetter.api.pipeline import (  # noqa: F401
+        PipelineConfig,
+        VettingPipeline,
+        describe_checks,
+        list_checks,
     )
 
     # Pixel checks (V08-V10)
@@ -819,7 +595,7 @@ if TYPE_CHECKING:
     )
 
     # Main orchestrator
-    from bittr_tess_vetter.api.vet import vet_candidate
+    from bittr_tess_vetter.api.vet import vet_candidate, vet_many
     from bittr_tess_vetter.api.wcs_localization import (
         LocalizationResult,
         LocalizationVerdict,
@@ -834,6 +610,12 @@ if TYPE_CHECKING:
         wcs_sanity_check,
         world_to_pixel,
         world_to_pixel_batch,
+    )
+    from bittr_tess_vetter.validation.registry import (  # noqa: F401
+        CheckRegistry,
+        CheckRequirements,
+        CheckTier,
+        VettingCheck,
     )
 
 

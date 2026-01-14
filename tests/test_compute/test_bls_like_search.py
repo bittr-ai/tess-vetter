@@ -199,9 +199,7 @@ class TestBlsScoreFromBinnedFlux:
         """Test that function returns score and index."""
         binned_flux = np.ones(100) - 0.01 * (np.arange(100) == 50).astype(float)
         binned_counts = np.ones(100, dtype=np.int64) * 10
-        score, min_idx = _bls_score_from_binned_flux(
-            binned_flux, binned_counts, duration_bins=5
-        )
+        score, min_idx = _bls_score_from_binned_flux(binned_flux, binned_counts, duration_bins=5)
         assert isinstance(score, float)
         assert isinstance(min_idx, int)
 
@@ -214,9 +212,7 @@ class TestBlsScoreFromBinnedFlux:
         binned_flux[transit_bin - 2 : transit_bin + 3] = 0.99
         binned_counts = np.ones(nbins, dtype=np.int64) * 10
 
-        score, min_idx = _bls_score_from_binned_flux(
-            binned_flux, binned_counts, duration_bins=5
-        )
+        score, min_idx = _bls_score_from_binned_flux(binned_flux, binned_counts, duration_bins=5)
 
         # Min index should be near transit location
         assert abs(min_idx - transit_bin) < 5
@@ -228,9 +224,7 @@ class TestBlsScoreFromBinnedFlux:
         binned_flux[45:55] = 0.99  # Transit dip
         binned_counts = np.ones(nbins, dtype=np.int64) * 10
 
-        score, min_idx = _bls_score_from_binned_flux(
-            binned_flux, binned_counts, duration_bins=10
-        )
+        score, min_idx = _bls_score_from_binned_flux(binned_flux, binned_counts, duration_bins=10)
 
         assert score > 0
 
@@ -241,9 +235,7 @@ class TestBlsScoreFromBinnedFlux:
         binned_counts = np.zeros(nbins, dtype=np.int64)
         binned_counts[:3] = 1  # Only 3 valid bins
 
-        score, min_idx = _bls_score_from_binned_flux(
-            binned_flux, binned_counts, duration_bins=5
-        )
+        score, min_idx = _bls_score_from_binned_flux(binned_flux, binned_counts, duration_bins=5)
 
         assert score == float("-inf")
 
@@ -262,9 +254,7 @@ class TestBlsScoreFromBinnedFlux:
         # Deep transit
         flux_deep = np.ones(nbins)
         flux_deep[45:55] = 0.99
-        score_deep, _ = _bls_score_from_binned_flux(
-            flux_deep, binned_counts, duration_bins=10
-        )
+        score_deep, _ = _bls_score_from_binned_flux(flux_deep, binned_counts, duration_bins=10)
 
         assert score_deep > score_shallow
 
@@ -710,9 +700,7 @@ class TestBlsLikeSearchIntegration:
         true_duration = 3.0
         true_depth = 0.0015
 
-        flux = make_box_transit(
-            time_array, true_period, true_t0, true_duration, true_depth
-        )
+        flux = make_box_transit(time_array, true_period, true_t0, true_duration, true_depth)
         flux += rng.normal(0, 40e-6, len(flux))
 
         # Search with fine period grid

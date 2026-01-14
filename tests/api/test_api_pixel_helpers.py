@@ -29,7 +29,9 @@ def test_create_circular_aperture_mask_matches_internal() -> None:
     m1 = create_circular_aperture_mask(
         shape, center_row=center_row, center_col=center_col, radius_px=radius_px
     )
-    m2 = _create_circular_aperture_mask(shape=shape, radius=radius_px, center=(center_row, center_col))
+    m2 = _create_circular_aperture_mask(
+        shape=shape, radius=radius_px, center=(center_row, center_col)
+    )
 
     assert m1.shape == shape
     assert m1.dtype == bool

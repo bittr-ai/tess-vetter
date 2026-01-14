@@ -304,9 +304,7 @@ class TestScoreFixedPeriod:
         flux_err_mx = mx.array(flux_err_np)
 
         # Shallow transit
-        flux_shallow = make_box_transit_np(
-            time_array_np, period, t0, duration_hours, 0.0005
-        )
+        flux_shallow = make_box_transit_np(time_array_np, period, t0, duration_hours, 0.0005)
         flux_shallow += rng.normal(0, 50e-6, len(flux_shallow))
         score_shallow = score_fixed_period(
             time=time_mx,
@@ -318,9 +316,7 @@ class TestScoreFixedPeriod:
         )
 
         # Deep transit
-        flux_deep = make_box_transit_np(
-            time_array_np, period, t0, duration_hours, 0.002
-        )
+        flux_deep = make_box_transit_np(time_array_np, period, t0, duration_hours, 0.002)
         flux_deep += rng.normal(0, 50e-6, len(flux_deep))
         score_deep = score_fixed_period(
             time=time_mx,
@@ -447,9 +443,7 @@ class TestScoreTopKPeriods:
         duration_hours = 2.5
         depth = 0.002
 
-        flux_np = make_box_transit_np(
-            time_array_np, true_period, t0, duration_hours, depth
-        )
+        flux_np = make_box_transit_np(time_array_np, true_period, t0, duration_hours, depth)
         flux_np += rng.normal(0, 50e-6, len(flux_np))
 
         time_mx = mx.array(time_array_np)
@@ -721,9 +715,7 @@ class TestScoreFixedPeriodRefineT0:
         duration_hours = 2.5
         depth = 0.002
 
-        flux_np = make_box_transit_np(
-            time_array_np, period, true_t0, duration_hours, depth
-        )
+        flux_np = make_box_transit_np(time_array_np, period, true_t0, duration_hours, depth)
         flux_np += rng.normal(0, 30e-6, len(flux_np))
 
         time_mx = mx.array(time_array_np)
@@ -900,9 +892,7 @@ class TestMlxDetectionIntegration:
         duration_hours = 2.5
         depth = 0.002
 
-        flux_np = make_box_transit_np(
-            time_array_np, true_period, true_t0, duration_hours, depth
-        )
+        flux_np = make_box_transit_np(time_array_np, true_period, true_t0, duration_hours, depth)
         flux_np += rng.normal(0, 40e-6, len(flux_np))
 
         time_mx = mx.array(time_array_np)

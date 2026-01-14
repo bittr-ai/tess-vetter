@@ -19,4 +19,3 @@ __all__ = [
     "SweepVariant",
     "compute_sensitivity_sweep_numpy",
 ]
-

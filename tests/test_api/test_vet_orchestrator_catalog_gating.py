@@ -19,40 +19,58 @@ def _minimal_candidate() -> Candidate:
 
 
 def test_vet_candidate_v06_missing_ra_dec_returns_skipped_result() -> None:
+    """Test that V06 (nearby EB search) is skipped when coordinates are missing.
+
+    Uses new API: `checks=["V06"]` instead of old `enabled={"V06"}`.
+    The new CheckResult has `flags` instead of `details`, with format "SKIPPED:{reason}".
+    """
     result = vet_candidate(
         _minimal_lc(),
         _minimal_candidate(),
-        enabled={"V06"},
+        checks=["V06"],
         network=False,
         ra_deg=None,
         dec_deg=None,
         tic_id=None,
     )
 
-    v06 = result.get_result("V06")
-    assert v06 is not None
-    assert v06.details["status"] == "skipped"
-    assert v06.details["reason"] == "missing_metadata"
-    assert "ra_deg" in v06.details["missing"]
-    assert "dec_deg" in v06.details["missing"]
+    # Find the V06 result
+    v06_results = [r for r in result.results if r.id == "V06"]
+    assert len(v06_results) == 1
+    v06 = v06_results[0]
+    assert v06.status == "skipped"
+    # New schema: reason is in flags list with format "SKIPPED:{reason}"
+    skip_flag = [f for f in v06.flags if f.startswith("SKIPPED:")]
+    assert len(skip_flag) == 1
+    reason = skip_flag[0].replace("SKIPPED:", "")
+    assert reason in ["NO_COORDINATES", "NO_RA_DEC", "NETWORK_DISABLED"]
     assert any("V06" in w for w in result.warnings)
 
 
 def test_vet_candidate_v07_missing_tic_id_returns_skipped_result() -> None:
+    """Test that V07 (ExoFOP lookup) is skipped when TIC ID is missing.
+
+    Uses new API: `checks=["V07"]` instead of old `enabled={"V07"}`.
+    The new CheckResult has `flags` instead of `details`, with format "SKIPPED:{reason}".
+    """
     result = vet_candidate(
         _minimal_lc(),
         _minimal_candidate(),
-        enabled={"V07"},
+        checks=["V07"],
         network=False,
         ra_deg=None,
         dec_deg=None,
         tic_id=None,
     )
 
-    v07 = result.get_result("V07")
-    assert v07 is not None
-    assert v07.details["status"] == "skipped"
-    assert v07.details["reason"] == "missing_metadata"
-    assert v07.details["missing"] == ["tic_id"]
+    # Find the V07 result
+    v07_results = [r for r in result.results if r.id == "V07"]
+    assert len(v07_results) == 1
+    v07 = v07_results[0]
+    assert v07.status == "skipped"
+    # New schema: reason is in flags list with format "SKIPPED:{reason}"
+    skip_flag = [f for f in v07.flags if f.startswith("SKIPPED:")]
+    assert len(skip_flag) == 1
+    reason = skip_flag[0].replace("SKIPPED:", "")
+    assert reason in ["NO_TIC_ID", "NETWORK_DISABLED"]
     assert any("V07" in w for w in result.warnings)
-

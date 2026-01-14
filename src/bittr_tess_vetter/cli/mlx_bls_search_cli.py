@@ -20,7 +20,9 @@ def _try_import_mlx() -> Any:
     try:
         import mlx.core as mx  # type: ignore[import-not-found]
     except Exception as e:  # pragma: no cover
-        raise ImportError("MLX is not installed or failed to import. Install (Apple Silicon): `pip install mlx`.") from e
+        raise ImportError(
+            "MLX is not installed or failed to import. Install (Apple Silicon): `pip install mlx`."
+        ) from e
     return mx
 
 
@@ -138,9 +140,9 @@ def bls_like_search_mlx(
     t_mid_mx = mx.array(float(np.nanmedian(time_btjd)), dtype=mx.float32)
 
     durations = [float(d) for d in duration_hours_grid]
-    scan_phases = np.linspace(-local_refine_width_phase, local_refine_width_phase, local_refine_steps).astype(
-        np.float32
-    )
+    scan_phases = np.linspace(
+        -local_refine_width_phase, local_refine_width_phase, local_refine_steps
+    ).astype(np.float32)
     scan_phases_mx = mx.array(scan_phases)
 
     if top_k <= 0:

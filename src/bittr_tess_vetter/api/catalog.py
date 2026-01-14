@@ -299,9 +299,7 @@ def vet_catalog(
                 missing.append("dec_deg")
             if missing:
                 results.append(
-                    _make_missing_metadata_result(
-                        "V06", "nearby_eb_search", missing=missing
-                    )
+                    _make_missing_metadata_result("V06", "nearby_eb_search", missing=missing)
                 )
                 continue
             assert ra_deg is not None
@@ -320,9 +318,7 @@ def vet_catalog(
         elif check_id == "V07":
             if tic_id is None:
                 results.append(
-                    _make_missing_metadata_result(
-                        "V07", "exofop_disposition", missing=["tic_id"]
-                    )
+                    _make_missing_metadata_result("V07", "exofop_disposition", missing=["tic_id"])
                 )
                 continue
             assert tic_id is not None

@@ -210,9 +210,7 @@ def detect_transit(
 
     duration_days = float(duration_hours) / 24.0
     if duration_days >= period:
-        raise ValueError(
-            f"Duration_days ({duration_days}) must be less than period ({period})"
-        )
+        raise ValueError(f"Duration_days ({duration_days}) must be less than period ({period})")
 
     # Get transit mask
     in_transit_mask = get_transit_mask(time, period, t0, duration_hours)

@@ -20,4 +20,3 @@ def test_auto_periodogram_is_exposed_via_api() -> None:
     assert isinstance(result, PeriodogramResult)
     assert result.method == "ls"
     assert result.best_period > 0
-

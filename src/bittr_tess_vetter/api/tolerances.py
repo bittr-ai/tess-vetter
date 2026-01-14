@@ -26,4 +26,3 @@ __all__ = [
     "_check_default_tolerance",
     "_format_ratio",
 ]
-

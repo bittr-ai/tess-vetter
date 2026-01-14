@@ -19,4 +19,3 @@ __all__ = [
     "PeriodNeighborhoodResult",
     "compute_reliability_regime_numpy",
 ]
-

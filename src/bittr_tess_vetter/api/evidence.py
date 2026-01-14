@@ -50,4 +50,3 @@ def checks_to_evidence_items(checks: list[CheckResult]) -> list[dict[str, Any]]:
             }
         )
     return items
-

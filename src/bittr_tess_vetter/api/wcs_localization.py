@@ -27,6 +27,7 @@ from bittr_tess_vetter.api.references import (
     cites,
 )
 from bittr_tess_vetter.pixel.cadence_mask import default_cadence_mask
+from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData
 from bittr_tess_vetter.pixel.wcs_localization import (
     LocalizationResult,
     LocalizationVerdict,
@@ -43,9 +44,6 @@ from bittr_tess_vetter.pixel.wcs_localization import (
 from bittr_tess_vetter.pixel.wcs_localization import (
     localize_transit_source as _localize_transit_source,
 )
-
-if False:  # TYPE_CHECKING
-    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData
 
 
 class ReferenceSource(TypedDict, total=False):
@@ -141,7 +139,9 @@ def compute_difference_image_centroid_diagnostics(
 
     Delegates to `bittr_tess_vetter.pixel.wcs_localization.compute_difference_image_centroid`.
     """
-    cadence_mask = default_cadence_mask(time=tpf_fits.time, flux=tpf_fits.flux, quality=tpf_fits.quality)
+    cadence_mask = default_cadence_mask(
+        time=tpf_fits.time, flux=tpf_fits.flux, quality=tpf_fits.quality
+    )
     time = np.asarray(tpf_fits.time[cadence_mask], dtype=np.float64)
     duration_days = float(duration_hours) / 24.0
 

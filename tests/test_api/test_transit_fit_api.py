@@ -39,7 +39,9 @@ def test_fit_transit_missing_batman_returns_error(monkeypatch: pytest.MonkeyPatc
     assert "batman not installed" in (result.error_message or "")
 
 
-def test_fit_transit_applies_valid_mask_and_computes_t0_offset(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fit_transit_applies_valid_mask_and_computes_t0_offset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Provide a fake batman module so the wrapper doesn't short-circuit.
     monkeypatch.setitem(sys.modules, "batman", types.ModuleType("batman"))
 

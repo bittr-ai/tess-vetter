@@ -249,17 +249,23 @@ def evaluate_physics_flags(scenarios: list[DilutionScenario], host_ambiguous: bo
 
     rationale_parts: list[str] = []
     if host_ambiguous:
-        rationale_parts.append("Host ambiguous within 1 TESS pixel; cannot determine true transit source")
+        rationale_parts.append(
+            "Host ambiguous within 1 TESS pixel; cannot determine true transit source"
+        )
 
     if primary_inconsistent:
         r_jup = primary.implied_companion_radius_rjup
         r_str = f"{r_jup:.2f}" if r_jup is not None else "unknown"
-        rationale_parts.append(f"Primary host scenario implies R = {r_str} R_Jup (> 2 R_Jup planetary limit)")
+        rationale_parts.append(
+            f"Primary host scenario implies R = {r_str} R_Jup (> 2 R_Jup planetary limit)"
+        )
 
     if primary_stellar:
         r_sun = primary.implied_companion_radius_rsun
         r_str = f"{r_sun:.3f}" if r_sun is not None else "unknown"
-        rationale_parts.append(f"Primary host scenario implies R = {r_str} R_Sun (stellar-sized companion)")
+        rationale_parts.append(
+            f"Primary host scenario implies R = {r_str} R_Sun (stellar-sized companion)"
+        )
 
     if any_planet_consistent and (primary_inconsistent or host_ambiguous):
         rationale_parts.append("At least one dilution scenario is consistent with a planet")

@@ -1135,15 +1135,17 @@ def compute_centroid_shift(
         )
     elif significance_method == "permutation":
         rng = np.random.default_rng(bootstrap_seed) if bootstrap_seed is not None else None
-        significance, p_value, shift_se, ci_lower, ci_upper = _compute_shift_significance_permutation(
-            tpf_data,
-            in_transit_mask,
-            out_of_transit_mask,
-            shift,
-            n_permutations=n_bootstrap,
-            rng=rng,
-            centroid_method=centroid_method,
-            outlier_sigma=outlier_sigma,
+        significance, p_value, shift_se, ci_lower, ci_upper = (
+            _compute_shift_significance_permutation(
+                tpf_data,
+                in_transit_mask,
+                out_of_transit_mask,
+                shift,
+                n_permutations=n_bootstrap,
+                rng=rng,
+                centroid_method=centroid_method,
+                outlier_sigma=outlier_sigma,
+            )
         )
         if np.isfinite(p_value):
             warnings.append(f"permutation_p={p_value:.3g}")

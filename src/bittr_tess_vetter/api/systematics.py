@@ -15,7 +15,10 @@ from bittr_tess_vetter.validation.systematics_proxy import (  # noqa: F401
 )
 
 compute_systematics_proxy = cites(
-    cite(PONT_2006, "Time-correlated (red) noise as a transit false-alarm driver; motivates simple red-noise proxies"),
+    cite(
+        PONT_2006,
+        "Time-correlated (red) noise as a transit false-alarm driver; motivates simple red-noise proxies",
+    ),
 )(compute_systematics_proxy)
 
 __all__ = ["SystematicsProxyResult", "compute_systematics_proxy"]

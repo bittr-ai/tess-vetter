@@ -34,12 +34,12 @@ def _make_box_transit_lc(
     epoch = np.floor((time - t0_btjd + period_days / 2.0) / period_days).astype(int)
 
     if depth_frac_even is None:
-        flux[in_transit] *= (1.0 - depth_frac)
+        flux[in_transit] *= 1.0 - depth_frac
     else:
         for e in np.unique(epoch):
             dep = depth_frac_even if (int(e) % 2 == 0) else depth_frac
             m = in_transit & (epoch == e)
-            flux[m] *= (1.0 - dep)
+            flux[m] *= 1.0 - dep
 
     return time, flux, flux_err
 

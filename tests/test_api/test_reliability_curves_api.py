@@ -37,4 +37,3 @@ def test_recommend_thresholds_picks_high_edge_when_far_met() -> None:
     rec = recommend_thresholds(far, target_far=0.01)
     assert rec["score_threshold"] == 10.0
     assert rec["achieved_far"] == 0.0
-

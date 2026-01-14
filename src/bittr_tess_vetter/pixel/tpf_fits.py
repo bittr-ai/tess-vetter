@@ -146,7 +146,9 @@ class TPFFitsRef:
             try:
                 exptime_i = int(self.exptime_seconds)
             except Exception as e:
-                raise ValueError(f"exptime_seconds must be an integer seconds value, got {self.exptime_seconds!r}") from e
+                raise ValueError(
+                    f"exptime_seconds must be an integer seconds value, got {self.exptime_seconds!r}"
+                ) from e
             if exptime_i <= 0:
                 raise ValueError(f"exptime_seconds must be positive, got {exptime_i}")
             object.__setattr__(self, "exptime_seconds", exptime_i)
@@ -160,7 +162,9 @@ class TPFFitsRef:
         """
         if self.exptime_seconds is None:
             return f"{self.PREFIX}:{self.tic_id}:{self.sector}:{self.author}"
-        return f"{self.PREFIX}:{self.tic_id}:{self.sector}:{self.author}:{int(self.exptime_seconds)}"
+        return (
+            f"{self.PREFIX}:{self.tic_id}:{self.sector}:{self.author}:{int(self.exptime_seconds)}"
+        )
 
     @classmethod
     def from_string(cls, ref_str: str) -> TPFFitsRef:

@@ -45,7 +45,7 @@ def _make_trapezoid_transit_lc(
     if np.any(ramp):
         dep[ramp] = depth_frac * (half - dt[ramp]) / max(1e-12, (half - flat_half))
 
-    flux[in_total] *= (1.0 - dep[in_total])
+    flux[in_total] *= 1.0 - dep[in_total]
 
     return LightCurveData(
         time=time,
@@ -75,4 +75,3 @@ def test_v_shape_metrics_only_u_like_vs_v_like_ratio() -> None:
     ratio_u = float(r_u.details["tflat_ttotal_ratio"])
     ratio_v = float(r_v.details["tflat_ttotal_ratio"])
     assert ratio_u > ratio_v
-

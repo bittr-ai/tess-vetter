@@ -5,8 +5,7 @@ Requirements
 ------------
 
 - Python 3.11 or 3.12
-- NumPy, SciPy, Astropy, Pydantic
-- transitleastsquares, emcee, arviz
+- NumPy, SciPy, Astropy, Pydantic (installed with the base package)
 
 Basic Installation
 ------------------
@@ -45,6 +44,33 @@ Optional Dependencies
 
 The package has several optional dependency groups for extended functionality:
 
+TLS (Transit Least Squares)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For transit searches using Transit Least Squares:
+
+.. code-block:: bash
+
+   pip install "bittr-tess-vetter[tls]"
+
+Fitting (MCMC)
+^^^^^^^^^^^^^^
+
+For MCMC fitting utilities (emcee + arviz):
+
+.. code-block:: bash
+
+   pip install "bittr-tess-vetter[fit]"
+
+Batman (physical transit model)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For limb-darkened transit modeling using ``batman``:
+
+.. code-block:: bash
+
+   pip install "bittr-tess-vetter[batman]"
+
 Wotan (detrending)
 ^^^^^^^^^^^^^^^^^^
 
@@ -66,7 +92,16 @@ For limb darkening coefficient estimation:
 .. note::
 
    LDTK is GPL-2.0 licensed. This optional dependency is kept separate to maintain
-   MIT license compatibility for the core package.
+   BSD-3-Clause license compatibility for the core package.
+
+MLX (Apple Silicon acceleration)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For GPU-accelerated detection on Apple Silicon (macOS):
+
+.. code-block:: bash
+
+   pip install "bittr-tess-vetter[mlx]"
 
 TRICERATOPS (FPP)
 ^^^^^^^^^^^^^^^^^
@@ -76,6 +111,15 @@ For false positive probability estimation using TRICERATOPS+:
 .. code-block:: bash
 
    pip install "bittr-tess-vetter[triceratops]"
+
+Exovetter (ModShift/SWEET)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For integration with the external ``exovetter`` package (V11-V12 checks):
+
+.. code-block:: bash
+
+   pip install "bittr-tess-vetter[exovetter]"
 
 All extras
 ^^^^^^^^^^

@@ -8,7 +8,7 @@ Stability Tiers
 
 **Stable** - Will not change in backwards-incompatible ways without a major version bump:
 
-* Core types: ``Candidate``, ``Ephemeris``, ``CheckResult``, ``LightCurve``, ``VettingResult``
+* Core types: ``Candidate``, ``Ephemeris``, ``CheckResult``, ``LightCurve``, ``VettingBundleResult``
 * Main entry point: ``vet_candidate()``
 * Check IDs: V01-V12
 

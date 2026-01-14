@@ -264,7 +264,9 @@ def compute_reliability_regime_numpy(
         drop = float((base_abs - abs(s_masked)) / max(base_abs, 1e-12))
         drop = float(max(drop, 0.0))
         ablation_drops.append(drop)
-        ablation.append(AblationResult(n_removed=n_remove, score=s_masked, score_drop_fraction=drop))
+        ablation.append(
+            AblationResult(n_removed=n_remove, score=s_masked, score_drop_fraction=drop)
+        )
 
     max_ablation_drop = float(np.max(np.asarray(ablation_drops))) if ablation_drops else 0.0
 
@@ -327,4 +329,3 @@ def compute_reliability_regime_numpy(
         label=label,
         warnings=warnings,
     )
-

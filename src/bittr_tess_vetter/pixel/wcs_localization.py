@@ -388,7 +388,9 @@ def compute_difference_image_centroid(
     Raises:
         ValueError: If insufficient in-transit or out-of-transit data.
     """
-    cadence_mask = default_cadence_mask(time=tpf_fits.time, flux=tpf_fits.flux, quality=tpf_fits.quality)
+    cadence_mask = default_cadence_mask(
+        time=tpf_fits.time, flux=tpf_fits.flux, quality=tpf_fits.quality
+    )
     time = tpf_fits.time[cadence_mask]
     flux = tpf_fits.flux[cadence_mask]
     duration_days = duration_hours / 24.0
@@ -537,7 +539,9 @@ def bootstrap_centroid_uncertainty(
             - pa_deg: Position angle of ellipse (E of N)
     """
     rng = np.random.default_rng(seed)
-    cadence_mask = default_cadence_mask(time=tpf_fits.time, flux=tpf_fits.flux, quality=tpf_fits.quality)
+    cadence_mask = default_cadence_mask(
+        time=tpf_fits.time, flux=tpf_fits.flux, quality=tpf_fits.quality
+    )
     time = tpf_fits.time[cadence_mask]
     flux = tpf_fits.flux[cadence_mask]
     duration_days = duration_hours / 24.0
@@ -859,10 +863,11 @@ def _determine_verdict(
                 closest_other_name = name
 
         if (closest_other_name is None) or not (
-            np.isfinite(closest_other_dist) and (closest_other_dist + margin_arcsec) < target_distance
+            np.isfinite(closest_other_dist)
+            and (closest_other_dist + margin_arcsec) < target_distance
         ):
             rationale.append(
-                f'OFF_TARGET downgraded: centroid is within 1 pixel ({one_pixel_arcsec:.1f}\") of target '
+                f'OFF_TARGET downgraded: centroid is within 1 pixel ({one_pixel_arcsec:.1f}") of target '
                 "and no clearly closer alternative source is present."
             )
             verdict = LocalizationVerdict.AMBIGUOUS
@@ -938,7 +943,9 @@ def localize_transit_source(
     warnings: list[str] = []
     extra: dict[str, Any] = {}
 
-    cadence_mask = default_cadence_mask(time=tpf_fits.time, flux=tpf_fits.flux, quality=tpf_fits.quality)
+    cadence_mask = default_cadence_mask(
+        time=tpf_fits.time, flux=tpf_fits.flux, quality=tpf_fits.quality
+    )
     n_total = int(tpf_fits.time.shape[0])
     n_used = int(np.sum(cadence_mask))
     extra["n_cadences_total"] = n_total
@@ -1045,7 +1052,12 @@ def localize_transit_source(
 
     extra["diff_peak_pixel_rc"] = [int(peak_row), int(peak_col)]
     extra["diff_peak_value"] = peak_value
-    if np.isfinite(peak_value) and np.isfinite(diff_median) and np.isfinite(diff_sigma_robust) and diff_sigma_robust > 0:
+    if (
+        np.isfinite(peak_value)
+        and np.isfinite(diff_median)
+        and np.isfinite(diff_sigma_robust)
+        and diff_sigma_robust > 0
+    ):
         extra["diff_peak_snr"] = float((peak_value - diff_median) / diff_sigma_robust)
     else:
         extra["diff_peak_snr"] = float("nan")
@@ -1069,11 +1081,16 @@ def localize_transit_source(
             in_std = _robust_std(in_pix)
             out_std = _robust_std(out_pix)
             depth_err = float(
-                np.sqrt((in_std / np.sqrt(max(1, in_pix.size))) ** 2 + (out_std / np.sqrt(max(1, out_pix.size))) ** 2)
+                np.sqrt(
+                    (in_std / np.sqrt(max(1, in_pix.size))) ** 2
+                    + (out_std / np.sqrt(max(1, out_pix.size))) ** 2
+                )
             )
             extra["peak_pixel_depth"] = float(depth)
             extra["peak_pixel_depth_err"] = float(depth_err)
-            extra["peak_pixel_depth_sigma"] = float(depth / depth_err) if depth_err > 0 else float("nan")
+            extra["peak_pixel_depth_sigma"] = (
+                float(depth / depth_err) if depth_err > 0 else float("nan")
+            )
         else:
             extra["peak_pixel_depth"] = float("nan")
             extra["peak_pixel_depth_err"] = float("nan")

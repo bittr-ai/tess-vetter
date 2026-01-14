@@ -17,21 +17,63 @@ from bittr_tess_vetter.validation.base import (
     search_secondary_eclipse,
     sigma_clip,
 )
+from bittr_tess_vetter.validation.checks_catalog_wrapped import (
+    ExoFOPTOILookupCheck,
+    NearbyEBSearchCheck,
+    register_catalog_checks,
+)
+from bittr_tess_vetter.validation.checks_lc_wrapped import (
+    DepthStabilityCheck,
+    DurationConsistencyCheck,
+    OddEvenDepthCheck,
+    SecondaryEclipseCheck,
+    VShapeCheck,
+    register_lc_checks,
+)
 from bittr_tess_vetter.validation.lc_checks import (
-    check_aperture_dependence,
-    check_centroid_shift,
     check_depth_stability,
     check_duration_consistency,
-    check_known_fp_match,
-    check_nearby_eb_search,
     check_odd_even_depth,
-    check_pixel_level_lc,
     check_secondary_eclipse,
     check_v_shape,
-    run_all_checks,
+)
+from bittr_tess_vetter.validation.register_defaults import register_all_defaults
+from bittr_tess_vetter.validation.registry import (
+    DEFAULT_REGISTRY,
+    CheckConfig,
+    CheckInputs,
+    CheckRegistry,
+    CheckRequirements,
+    CheckTier,
+    VettingCheck,
+    get_default_registry,
+)
+from bittr_tess_vetter.validation.result_schema import (
+    CheckResult,
+    CheckStatus,
+    VettingBundleResult,
+    error_result,
+    ok_result,
+    skipped_result,
 )
 
 __all__ = [
+    # Result schema types
+    "CheckResult",
+    "CheckStatus",
+    "VettingBundleResult",
+    "error_result",
+    "ok_result",
+    "skipped_result",
+    # Registry types
+    "CheckConfig",
+    "CheckInputs",
+    "CheckRegistry",
+    "CheckRequirements",
+    "CheckTier",
+    "VettingCheck",
+    "DEFAULT_REGISTRY",
+    "get_default_registry",
     # Base utilities
     "bin_phase_curve",
     "count_transits",
@@ -42,16 +84,23 @@ __all__ = [
     "phase_fold",
     "search_secondary_eclipse",
     "sigma_clip",
-    # Function-based checks
-    "check_aperture_dependence",
-    "check_centroid_shift",
+    # Function-based checks (V01-V05 LC-only)
     "check_depth_stability",
     "check_duration_consistency",
-    "check_known_fp_match",
-    "check_nearby_eb_search",
     "check_odd_even_depth",
-    "check_pixel_level_lc",
     "check_secondary_eclipse",
     "check_v_shape",
-    "run_all_checks",
+    # VettingCheck wrapper classes (V01-V05 LC-only)
+    "OddEvenDepthCheck",
+    "SecondaryEclipseCheck",
+    "DurationConsistencyCheck",
+    "DepthStabilityCheck",
+    "VShapeCheck",
+    # VettingCheck wrapper classes (V06-V07 catalog)
+    "NearbyEBSearchCheck",
+    "ExoFOPTOILookupCheck",
+    # Registration functions
+    "register_lc_checks",
+    "register_catalog_checks",
+    "register_all_defaults",
 ]

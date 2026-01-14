@@ -1100,7 +1100,10 @@ class TestCentroidResultNewFields:
     """Tests for new CentroidResult fields in V08 v2."""
 
     def test_result_has_arcsec_shift(
-        self, centered_star_tpf: np.ndarray, simple_time: np.ndarray, simple_transit_params: TransitParams
+        self,
+        centered_star_tpf: np.ndarray,
+        simple_time: np.ndarray,
+        simple_transit_params: TransitParams,
     ) -> None:
         """Result includes centroid_shift_arcsec field."""
         result = compute_centroid_shift(centered_star_tpf, simple_time, simple_transit_params)
@@ -1110,35 +1113,57 @@ class TestCentroidResultNewFields:
         )
 
     def test_result_has_pixel_scale(
-        self, centered_star_tpf: np.ndarray, simple_time: np.ndarray, simple_transit_params: TransitParams
+        self,
+        centered_star_tpf: np.ndarray,
+        simple_time: np.ndarray,
+        simple_transit_params: TransitParams,
     ) -> None:
         """Result includes pixel_scale_arcsec field."""
         result = compute_centroid_shift(centered_star_tpf, simple_time, simple_transit_params)
         assert result.pixel_scale_arcsec == TESS_PIXEL_SCALE_ARCSEC
 
     def test_result_has_shift_uncertainty(
-        self, centered_star_tpf: np.ndarray, simple_time: np.ndarray, simple_transit_params: TransitParams
+        self,
+        centered_star_tpf: np.ndarray,
+        simple_time: np.ndarray,
+        simple_transit_params: TransitParams,
     ) -> None:
         """Result includes shift_uncertainty_pixels field."""
         result = compute_centroid_shift(
-            centered_star_tpf, simple_time, simple_transit_params, significance_method="bootstrap", n_bootstrap=100
+            centered_star_tpf,
+            simple_time,
+            simple_transit_params,
+            significance_method="bootstrap",
+            n_bootstrap=100,
         )
         assert hasattr(result, "shift_uncertainty_pixels")
         # Should be finite for bootstrap method
-        assert np.isfinite(result.shift_uncertainty_pixels) or np.isnan(result.shift_uncertainty_pixels)
+        assert np.isfinite(result.shift_uncertainty_pixels) or np.isnan(
+            result.shift_uncertainty_pixels
+        )
 
     def test_result_has_confidence_interval(
-        self, centered_star_tpf: np.ndarray, simple_time: np.ndarray, simple_transit_params: TransitParams
+        self,
+        centered_star_tpf: np.ndarray,
+        simple_time: np.ndarray,
+        simple_transit_params: TransitParams,
     ) -> None:
         """Result includes confidence interval fields for bootstrap."""
         result = compute_centroid_shift(
-            centered_star_tpf, simple_time, simple_transit_params, significance_method="bootstrap", n_bootstrap=100
+            centered_star_tpf,
+            simple_time,
+            simple_transit_params,
+            significance_method="bootstrap",
+            n_bootstrap=100,
         )
         assert hasattr(result, "shift_ci_lower_pixels")
         assert hasattr(result, "shift_ci_upper_pixels")
 
     def test_result_has_saturation_risk(
-        self, centered_star_tpf: np.ndarray, simple_time: np.ndarray, simple_transit_params: TransitParams
+        self,
+        centered_star_tpf: np.ndarray,
+        simple_time: np.ndarray,
+        simple_transit_params: TransitParams,
     ) -> None:
         """Result includes saturation_risk field."""
         result = compute_centroid_shift(centered_star_tpf, simple_time, simple_transit_params)
@@ -1146,7 +1171,10 @@ class TestCentroidResultNewFields:
         assert isinstance(result.saturation_risk, bool)
 
     def test_result_has_max_flux_fraction(
-        self, centered_star_tpf: np.ndarray, simple_time: np.ndarray, simple_transit_params: TransitParams
+        self,
+        centered_star_tpf: np.ndarray,
+        simple_time: np.ndarray,
+        simple_transit_params: TransitParams,
     ) -> None:
         """Result includes max_flux_fraction field."""
         result = compute_centroid_shift(centered_star_tpf, simple_time, simple_transit_params)
@@ -1154,7 +1182,10 @@ class TestCentroidResultNewFields:
         assert result.max_flux_fraction >= 0
 
     def test_result_has_n_outliers_rejected(
-        self, centered_star_tpf: np.ndarray, simple_time: np.ndarray, simple_transit_params: TransitParams
+        self,
+        centered_star_tpf: np.ndarray,
+        simple_time: np.ndarray,
+        simple_transit_params: TransitParams,
     ) -> None:
         """Result includes n_outliers_rejected field."""
         result = compute_centroid_shift(
@@ -1164,7 +1195,10 @@ class TestCentroidResultNewFields:
         assert result.n_outliers_rejected >= 0
 
     def test_result_has_warnings(
-        self, centered_star_tpf: np.ndarray, simple_time: np.ndarray, simple_transit_params: TransitParams
+        self,
+        centered_star_tpf: np.ndarray,
+        simple_time: np.ndarray,
+        simple_transit_params: TransitParams,
     ) -> None:
         """Result includes warnings tuple."""
         result = compute_centroid_shift(centered_star_tpf, simple_time, simple_transit_params)
@@ -1172,11 +1206,18 @@ class TestCentroidResultNewFields:
         assert isinstance(result.warnings, tuple)
 
     def test_result_has_method_metadata(
-        self, centered_star_tpf: np.ndarray, simple_time: np.ndarray, simple_transit_params: TransitParams
+        self,
+        centered_star_tpf: np.ndarray,
+        simple_time: np.ndarray,
+        simple_transit_params: TransitParams,
     ) -> None:
         """Result includes centroid_method and significance_method."""
         result = compute_centroid_shift(
-            centered_star_tpf, simple_time, simple_transit_params, centroid_method="median", significance_method="bootstrap"
+            centered_star_tpf,
+            simple_time,
+            simple_transit_params,
+            centroid_method="median",
+            significance_method="bootstrap",
         )
         assert result.centroid_method == "median"
         assert result.significance_method == "bootstrap"
@@ -1191,7 +1232,10 @@ class TestCentroidMethods:
     """Tests for different centroid aggregation methods."""
 
     def test_median_method(
-        self, centered_star_tpf: np.ndarray, simple_time: np.ndarray, simple_transit_params: TransitParams
+        self,
+        centered_star_tpf: np.ndarray,
+        simple_time: np.ndarray,
+        simple_transit_params: TransitParams,
     ) -> None:
         """Median method produces valid result."""
         result = compute_centroid_shift(
@@ -1201,7 +1245,10 @@ class TestCentroidMethods:
         assert not math.isnan(result.centroid_shift_pixels)
 
     def test_mean_method(
-        self, centered_star_tpf: np.ndarray, simple_time: np.ndarray, simple_transit_params: TransitParams
+        self,
+        centered_star_tpf: np.ndarray,
+        simple_time: np.ndarray,
+        simple_transit_params: TransitParams,
     ) -> None:
         """Mean method produces valid result."""
         result = compute_centroid_shift(
@@ -1211,7 +1258,10 @@ class TestCentroidMethods:
         assert not math.isnan(result.centroid_shift_pixels)
 
     def test_huber_method(
-        self, centered_star_tpf: np.ndarray, simple_time: np.ndarray, simple_transit_params: TransitParams
+        self,
+        centered_star_tpf: np.ndarray,
+        simple_time: np.ndarray,
+        simple_transit_params: TransitParams,
     ) -> None:
         """Huber method produces valid result (falls back to median if scipy not available)."""
         result = compute_centroid_shift(
@@ -1269,17 +1319,27 @@ class TestBootstrapConfidenceIntervals:
     """Tests for bootstrap confidence interval calculation."""
 
     def test_ci_bounds_order(
-        self, centered_star_tpf: np.ndarray, simple_time: np.ndarray, simple_transit_params: TransitParams
+        self,
+        centered_star_tpf: np.ndarray,
+        simple_time: np.ndarray,
+        simple_transit_params: TransitParams,
     ) -> None:
         """CI lower bound is less than or equal to upper bound."""
         result = compute_centroid_shift(
-            centered_star_tpf, simple_time, simple_transit_params, significance_method="bootstrap", n_bootstrap=100
+            centered_star_tpf,
+            simple_time,
+            simple_transit_params,
+            significance_method="bootstrap",
+            n_bootstrap=100,
         )
         if np.isfinite(result.shift_ci_lower_pixels) and np.isfinite(result.shift_ci_upper_pixels):
             assert result.shift_ci_lower_pixels <= result.shift_ci_upper_pixels
 
     def test_analytic_no_ci(
-        self, centered_star_tpf: np.ndarray, simple_time: np.ndarray, simple_transit_params: TransitParams
+        self,
+        centered_star_tpf: np.ndarray,
+        simple_time: np.ndarray,
+        simple_transit_params: TransitParams,
     ) -> None:
         """Analytic method does not produce CI bounds."""
         result = compute_centroid_shift(
@@ -1298,10 +1358,15 @@ class TestConfigObjectUsage:
     """Tests for using CentroidShiftConfig object."""
 
     def test_config_overrides_parameters(
-        self, centered_star_tpf: np.ndarray, simple_time: np.ndarray, simple_transit_params: TransitParams
+        self,
+        centered_star_tpf: np.ndarray,
+        simple_time: np.ndarray,
+        simple_transit_params: TransitParams,
     ) -> None:
         """Config object overrides individual parameters."""
-        config = CentroidShiftConfig(centroid_method="mean", significance_method="analytic", n_bootstrap=50)
+        config = CentroidShiftConfig(
+            centroid_method="mean", significance_method="analytic", n_bootstrap=50
+        )
 
         result = compute_centroid_shift(
             centered_star_tpf,

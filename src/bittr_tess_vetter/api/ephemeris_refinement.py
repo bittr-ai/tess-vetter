@@ -27,4 +27,3 @@ __all__ = [
     "refine_one_candidate_numpy",
     "refine_candidates_numpy",
 ]
-

@@ -149,4 +149,3 @@ __all__ = [
     "generate_phase_scramble",
     "generate_time_scramble",
 ]
-

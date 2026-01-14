@@ -15,4 +15,3 @@ __all__ = [
     "TRICERATOPS_INIT_TIMEOUT",
     "network_timeout",
 ]
-

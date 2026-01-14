@@ -35,7 +35,9 @@ PersistentCache = Any
 ExternalLCFilter = Literal["g", "r", "i", "z", "J", "H", "K"]
 
 # Module-level references for programmatic access (generated from central registry)
-REFERENCES = [ref.to_dict() for ref in [GIACALONE_2021, TRICERATOPS_PLUS, TRICERATOPS_PLUS_MULTIBAND]]
+REFERENCES = [
+    ref.to_dict() for ref in [GIACALONE_2021, TRICERATOPS_PLUS, TRICERATOPS_PLUS_MULTIBAND]
+]
 
 
 @dataclass(frozen=True)

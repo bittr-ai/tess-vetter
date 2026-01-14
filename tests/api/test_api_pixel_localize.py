@@ -38,4 +38,3 @@ def test_localize_transit_host_single_sector_one_hypothesis_margin_none() -> Non
     assert res["margin"] is None
     assert res["verdict"] == "AMBIGUOUS"
     assert any("Only one hypothesis provided" in w for w in res.get("warnings", []))
-

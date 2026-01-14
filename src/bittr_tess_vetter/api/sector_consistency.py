@@ -17,4 +17,3 @@ __all__ = [
     "SectorMeasurement",
     "compute_sector_consistency",
 ]
-

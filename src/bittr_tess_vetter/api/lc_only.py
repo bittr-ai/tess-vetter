@@ -417,6 +417,8 @@ def vet_lc_only(
                 depth_stability(lc, ephemeris, config=config.get("V04"), policy_mode=policy_mode)
             )
         elif check_id == "V05":
-            results.append(v_shape(lc, ephemeris, config=config.get("V05"), policy_mode=policy_mode))
+            results.append(
+                v_shape(lc, ephemeris, config=config.get("V05"), policy_mode=policy_mode)
+            )
 
     return results

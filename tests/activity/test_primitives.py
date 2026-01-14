@@ -128,7 +128,9 @@ class TestDetectFlares:
         # Inject a 2-point flare so it can be grouped (gap <= 3 cadences).
         flux[50:52] += 0.01
 
-        flares = detect_flares(time, flux, flux_err, sigma_threshold=3.0, baseline_window_hours=24.0)
+        flares = detect_flares(
+            time, flux, flux_err, sigma_threshold=3.0, baseline_window_hours=24.0
+        )
         assert isinstance(flares, list)
 
 

@@ -45,4 +45,3 @@ def test_dilution_scenario_uses_depth_correction_factor() -> None:
     s = scenarios[0]
     assert s.depth_correction_factor == pytest.approx(2.0)
     assert s.true_depth_ppm == pytest.approx(200.0)
-

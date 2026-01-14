@@ -3,11 +3,8 @@
 This module provides `vet_candidate`, the main entry point for running
 a complete vetting pipeline on a transit candidate.
 
-Tiers:
-- LC-only (V01-V05): Always run, require only light curve
-- Catalog (V06-V07): Run if network=True and coordinates/TIC ID provided
-- Pixel (V08-V10): Run if TPF data provided
-- Exovetter (V11-V12): Run if exovetter available
+For batch processing, custom check selection, or pipeline extensibility,
+use `VettingPipeline` directly from `bittr_tess_vetter.api.pipeline`.
 
 Novelty: standard (orchestration of established vetting checks)
 
@@ -22,7 +19,6 @@ References:
 
 from __future__ import annotations
 
-import importlib.metadata
 import warnings
 from typing import Any
 
@@ -35,31 +31,14 @@ from bittr_tess_vetter.api.references import (
 )
 from bittr_tess_vetter.api.types import (
     Candidate,
-    CheckResult,
     LightCurve,
     StellarParams,
     TPFStamp,
-    VettingBundleResult,
 )
+from bittr_tess_vetter.validation.result_schema import VettingBundleResult
 
 # Module-level references for programmatic access (generated from central registry)
 REFERENCES = [ref.to_dict() for ref in [COUGHLIN_2016, THOMPSON_2018, GUERRERO_2021]]
-
-
-# Default check sets per tier
-_LC_ONLY_CHECKS = {"V01", "V02", "V03", "V04", "V05"}
-_CATALOG_CHECKS = {"V06", "V07"}
-_PIXEL_CHECKS = {"V08", "V09", "V10"}
-_EXOVETTER_CHECKS = {"V11", "V12"}
-_ALL_CHECKS = _LC_ONLY_CHECKS | _CATALOG_CHECKS | _PIXEL_CHECKS | _EXOVETTER_CHECKS
-
-
-def _get_package_version() -> str:
-    """Get bittr-tess-vetter package version for provenance."""
-    try:
-        return importlib.metadata.version("bittr-tess-vetter")
-    except importlib.metadata.PackageNotFoundError:
-        return "unknown"
 
 
 @cites(
@@ -68,6 +47,161 @@ def _get_package_version() -> str:
     cite(GUERRERO_2021, "TESS TOI vetting procedures context"),
 )
 def vet_candidate(
+    lc: LightCurve,
+    candidate: Candidate,
+    *,
+    stellar: StellarParams | None = None,
+    tpf: TPFStamp | None = None,
+    network: bool = False,
+    ra_deg: float | None = None,
+    dec_deg: float | None = None,
+    tic_id: int | None = None,
+    checks: list[str] | None = None,
+    context: dict[str, Any] | None = None,
+) -> VettingBundleResult:
+    """Run vetting checks on a transit candidate.
+
+    This is a convenience wrapper around VettingPipeline for single-candidate
+    vetting. For batch processing or custom check selection, use VettingPipeline
+    directly.
+
+    Args:
+        lc: Light curve data.
+        candidate: Transit candidate with ephemeris.
+        stellar: Optional stellar parameters.
+        tpf: Optional TPF data for pixel-level checks.
+        network: Whether to allow network access for catalog checks.
+        ra_deg: Right ascension in degrees.
+        dec_deg: Declination in degrees.
+        tic_id: TIC identifier.
+        checks: Optional list of check IDs to run. If None, runs all registered.
+        context: Additional context for checks.
+
+    Returns:
+        VettingBundleResult with all check results.
+
+    Example:
+        >>> from bittr_tess_vetter.api import (
+        ...     LightCurve, Ephemeris, Candidate, vet_candidate
+        ... )
+        >>> import numpy as np
+        >>> lc = LightCurve(
+        ...     time=np.linspace(0, 27, 1000),
+        ...     flux=np.ones(1000),
+        ...     flux_err=np.ones(1000) * 0.001,
+        ... )
+        >>> eph = Ephemeris(period_days=3.5, t0_btjd=1.0, duration_hours=2.0)
+        >>> candidate = Candidate(ephemeris=eph)
+        >>> result = vet_candidate(lc, candidate, network=False)
+        >>> print(f"Ran {len(result.results)} checks")
+
+    Novelty: standard
+
+    References:
+        [1] Coughlin et al. 2016, ApJS 224, 12 (2016ApJS..224...12C)
+            Kepler Robovetter tiered architecture
+        [2] Thompson et al. 2018, ApJS 235, 38 (2018ApJS..235...38T)
+            Section 3: Check execution ordering and aggregation
+    """
+    from bittr_tess_vetter.api.pipeline import VettingPipeline
+    from bittr_tess_vetter.domain.detection import TransitCandidate
+    from bittr_tess_vetter.validation.register_defaults import register_all_defaults
+    from bittr_tess_vetter.validation.registry import CheckRegistry
+
+    # Create registry with default checks
+    registry = CheckRegistry()
+    register_all_defaults(registry)
+
+    # Convert public API types to internal types
+    lc_internal = lc.to_internal(tic_id=tic_id or 0)
+
+    # Convert Candidate to TransitCandidate
+    # Use depth if provided, otherwise default to a small depth for metrics-only mode
+    depth = candidate.depth if candidate.depth is not None else 0.001
+    # Use a default SNR of 0.0 - this is metrics-only mode
+    snr = 0.0
+
+    candidate_internal = TransitCandidate(
+        period=candidate.ephemeris.period_days,
+        t0=candidate.ephemeris.t0_btjd,
+        duration_hours=candidate.ephemeris.duration_hours,
+        depth=depth,
+        snr=snr,
+    )
+
+    # Create and run pipeline
+    pipeline = VettingPipeline(checks=checks, registry=registry)
+    return pipeline.run(
+        lc_internal,
+        candidate_internal,
+        stellar=stellar,
+        tpf=tpf,
+        network=network,
+        ra_deg=ra_deg,
+        dec_deg=dec_deg,
+        tic_id=tic_id,
+        context=context,
+    )
+
+
+def vet_many(
+    lc: LightCurve,
+    candidates: list[Candidate],
+    *,
+    stellar: StellarParams | None = None,
+    tpf: TPFStamp | None = None,
+    network: bool = False,
+    ra_deg: float | None = None,
+    dec_deg: float | None = None,
+    tic_id: int | None = None,
+    checks: list[str] | None = None,
+    context: dict[str, Any] | None = None,
+) -> tuple[list[VettingBundleResult], list[dict[str, Any]]]:
+    """Run vetting for multiple candidates against one light curve.
+
+    This is the common workflow-building primitive for researchers:
+    run multiple candidate ephemerides (or multi-planet candidates) on the same
+    light curve and get both full bundles and a compact summary table.
+    """
+    from bittr_tess_vetter.api.pipeline import VettingPipeline
+    from bittr_tess_vetter.domain.detection import TransitCandidate
+    from bittr_tess_vetter.validation.register_defaults import register_all_defaults
+    from bittr_tess_vetter.validation.registry import CheckRegistry
+
+    registry = CheckRegistry()
+    register_all_defaults(registry)
+
+    lc_internal = lc.to_internal(tic_id=tic_id or 0)
+
+    candidates_internal: list[TransitCandidate] = []
+    for c in candidates:
+        depth = c.depth if c.depth is not None else 0.001
+        candidates_internal.append(
+            TransitCandidate(
+                period=c.ephemeris.period_days,
+                t0=c.ephemeris.t0_btjd,
+                duration_hours=c.ephemeris.duration_hours,
+                depth=depth,
+                snr=0.0,
+            )
+        )
+
+    pipeline = VettingPipeline(checks=checks, registry=registry)
+    return pipeline.run_many(
+        lc_internal,
+        candidates_internal,
+        stellar=stellar,
+        tpf=tpf,
+        network=network,
+        ra_deg=ra_deg,
+        dec_deg=dec_deg,
+        tic_id=tic_id,
+        context=context,
+    )
+
+
+# Legacy wrapper for backward compatibility with 'enabled' parameter
+def _vet_candidate_legacy(
     lc: LightCurve,
     candidate: Candidate,
     *,
@@ -82,53 +216,7 @@ def vet_candidate(
     tic_id: int | None = None,
     context: dict[str, Any] | None = None,
 ) -> VettingBundleResult:
-    """Run a complete vetting pipeline on a transit candidate.
-
-    This is the main entry point for researcher-facing vetting. It runs
-    checks in tiers based on available data:
-
-    Tier 1 (LC-only, V01-V05): Always run
-    Tier 2 (Catalog, V06-V07): Run if network=True and metadata available
-    Tier 3 (Pixel, V08-V10): Run if tpf provided
-    Tier 4 (Exovetter, V11-V12): Run if exovetter package available
-
-    Args:
-        lc: Light curve data
-        candidate: Transit candidate with ephemeris and optional depth
-        stellar: Stellar parameters (optional, improves V03)
-        tpf: Target Pixel File data (optional, enables V08-V10)
-        enabled: Set of check IDs to run. If None, runs default tiered set.
-            Pass specific IDs like {"V01", "V03", "V08"} to filter.
-        config: Per-check configuration dict. Keys are check IDs (e.g., "V01"),
-            values are config dicts passed to individual checks.
-        policy_mode: Deprecated and ignored (always metrics-only).
-        network: If True and metadata available, run catalog checks (V06-V07)
-        ra_deg: Right ascension in degrees (for V06)
-        dec_deg: Declination in degrees (for V06)
-        tic_id: TIC identifier (for V07)
-        context: Additional context dict stored in provenance
-
-    Returns:
-        VettingBundleResult with all check results and provenance metadata
-
-    Example:
-        >>> from bittr_tess_vetter.api import (
-        ...     LightCurve, Ephemeris, Candidate, vet_candidate
-        ... )
-        >>> lc = LightCurve(time=time, flux=flux)
-        >>> eph = Ephemeris(period_days=3.5, t0_btjd=1850.0, duration_hours=2.5)
-        >>> candidate = Candidate(ephemeris=eph, depth_ppm=500)
-        >>> result = vet_candidate(lc, candidate)
-        >>> print(f"Passed: {result.n_passed}/{len(result.results)}")
-
-    Novelty: standard
-
-    References:
-        [1] Coughlin et al. 2016, ApJS 224, 12 (2016ApJS..224...12C)
-            Kepler Robovetter tiered architecture
-        [2] Thompson et al. 2018, ApJS 235, 38 (2018ApJS..235...38T)
-            Section 3: Check execution ordering and aggregation
-    """
+    """Legacy vet_candidate with deprecated parameters."""
     if policy_mode != "metrics_only":
         warnings.warn(
             "`policy_mode` is deprecated and ignored; bittr-tess-vetter always returns metrics-only "
@@ -136,135 +224,26 @@ def vet_candidate(
             category=FutureWarning,
             stacklevel=2,
         )
-        policy_mode_requested = policy_mode
-        policy_mode = "metrics_only"
-    else:
-        policy_mode_requested = None
-
-    config = config or {}
-    results: list[CheckResult] = []
-    run_warnings: list[str] = []
-
-    # Determine which checks to run
-    if enabled is None:
-        # Default: LC-only always, others based on available data
-        checks_to_run = set(_LC_ONLY_CHECKS)
-
-        # Catalog checks are enabled only when their required metadata is present.
-        if network and ra_deg is not None and dec_deg is not None:
-            checks_to_run.add("V06")
-        if network and tic_id is not None:
-            checks_to_run.add("V07")
-
-        # Warn when network=False skips catalog checks
-        if not network:
-            warnings.warn(
-                "Catalog cross-match checks skipped (network=False). "
-                "Enable network access for ExoFOP/Gaia validation.",
-                UserWarning,
-                stacklevel=2,
-            )
-
-        if tpf is not None:
-            checks_to_run |= _PIXEL_CHECKS
-        else:
-            # Warn when pixel data is missing
-            warnings.warn(
-                "Pixel-level checks skipped (no TPF provided). "
-                "Provide tpf argument for centroid shift and difference image analysis.",
-                UserWarning,
-                stacklevel=2,
-            )
-
-        # Always try exovetter checks (they handle missing dependency)
-        checks_to_run |= _EXOVETTER_CHECKS
-    else:
-        checks_to_run = enabled & _ALL_CHECKS
-        unknown = enabled - _ALL_CHECKS
-        if unknown:
-            run_warnings.append(f"Unknown check IDs ignored: {sorted(unknown)}")
-
-    # Run LC-only checks (V01-V05)
-    lc_checks_to_run = checks_to_run & _LC_ONLY_CHECKS
-    if lc_checks_to_run:
-        from bittr_tess_vetter.api.lc_only import vet_lc_only
-
-        lc_results = vet_lc_only(
-            lc,
-            candidate.ephemeris,
-            stellar=stellar,
-            enabled=lc_checks_to_run,
-            config={k: v for k, v in config.items() if k in _LC_ONLY_CHECKS},
-            policy_mode=policy_mode,
+    if config is not None:
+        warnings.warn(
+            "`config` parameter is deprecated. Use VettingPipeline with PipelineConfig for advanced "
+            "configuration.",
+            category=FutureWarning,
+            stacklevel=2,
         )
-        results.extend(lc_results)
 
-    # Run catalog checks (V06-V07) if enabled.
-    catalog_checks_to_run = checks_to_run & _CATALOG_CHECKS
-    if catalog_checks_to_run:
-        if "V06" in catalog_checks_to_run and (ra_deg is None or dec_deg is None):
-            run_warnings.append("Catalog check V06 requested but ra_deg/dec_deg missing; skipping")
-        if "V07" in catalog_checks_to_run and tic_id is None:
-            run_warnings.append("Catalog check V07 requested but tic_id missing; skipping")
+    # Convert enabled set to checks list
+    checks_list = list(enabled) if enabled is not None else None
 
-        from bittr_tess_vetter.api.catalog import vet_catalog
-
-        catalog_results = vet_catalog(
-            candidate,
-            ra_deg=ra_deg,
-            dec_deg=dec_deg,
-            tic_id=tic_id,
-            network=network,
-            enabled=catalog_checks_to_run,
-        )
-        results.extend(catalog_results)
-
-    # Run pixel checks (V08-V10) if TPF provided
-    pixel_checks_to_run = checks_to_run & _PIXEL_CHECKS
-    if pixel_checks_to_run and tpf is not None:
-        from bittr_tess_vetter.api.pixel import vet_pixel
-
-        pixel_results = vet_pixel(
-            tpf,
-            candidate,
-            enabled=pixel_checks_to_run,
-            config={k: v for k, v in config.items() if k in _PIXEL_CHECKS},
-        )
-        results.extend(pixel_results)
-    elif pixel_checks_to_run and tpf is None:
-        run_warnings.append("Pixel checks requested but no TPF provided; skipping V08-V10")
-
-    # Run exovetter checks (V11-V12)
-    exovetter_checks_to_run = checks_to_run & _EXOVETTER_CHECKS
-    if exovetter_checks_to_run:
-        from bittr_tess_vetter.api.exovetter import vet_exovetter
-
-        exovetter_results = vet_exovetter(
-            lc,
-            candidate,
-            enabled=exovetter_checks_to_run,
-            config={k: v for k, v in config.items() if k in _EXOVETTER_CHECKS},
-        )
-        results.extend(exovetter_results)
-
-    # Build provenance metadata
-    provenance: dict[str, Any] = {
-        "package_version": _get_package_version(),
-        "checks_requested": sorted(checks_to_run),
-        "checks_executed": sorted(r.id for r in results),
-        "config": config,
-        "policy_mode": policy_mode,
-        "network_enabled": network,
-        "tpf_provided": tpf is not None,
-        "stellar_provided": stellar is not None,
-    }
-    if policy_mode_requested is not None:
-        provenance["policy_mode_requested"] = policy_mode_requested
-    if context:
-        provenance["context"] = context
-
-    return VettingBundleResult(
-        results=results,
-        provenance=provenance,
-        warnings=run_warnings,
+    return vet_candidate(
+        lc,
+        candidate,
+        stellar=stellar,
+        tpf=tpf,
+        network=network,
+        ra_deg=ra_deg,
+        dec_deg=dec_deg,
+        tic_id=tic_id,
+        checks=checks_list,
+        context=context,
     )
