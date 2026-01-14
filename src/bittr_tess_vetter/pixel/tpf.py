@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
 from bittr_tess_vetter.errors import ErrorType, make_error
 
 logger = logging.getLogger(__name__)

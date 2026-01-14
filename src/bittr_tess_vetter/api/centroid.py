@@ -5,7 +5,13 @@ Delegates to `bittr_tess_vetter.pixel.centroid`.
 
 from __future__ import annotations
 
-from bittr_tess_vetter.api.references import BRYSON_2010, BRYSON_2013, HIGGINS_BELL_2022, cite, cites
+from bittr_tess_vetter.api.references import (
+    BRYSON_2010,
+    BRYSON_2013,
+    HIGGINS_BELL_2022,
+    cite,
+    cites,
+)
 from bittr_tess_vetter.pixel.centroid import (
     WINDOW_POLICIES,
     CentroidResult,

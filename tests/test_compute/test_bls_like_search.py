@@ -26,7 +26,6 @@ from bittr_tess_vetter.compute.bls_like_search import (
     bls_like_search_numpy_top_k,
 )
 
-
 # =============================================================================
 # Test Fixtures
 # =============================================================================
@@ -760,7 +759,7 @@ class TestBlsLikeSearchIntegration:
         # Should have multiple candidates at different periods
         periods = [c.period_days for c in candidates]
         # Check that we have some diversity (not all same period)
-        assert len(set([round(p, 1) for p in periods])) > 1 or len(candidates) == 1
+        assert len({round(p, 1) for p in periods}) > 1 or len(candidates) == 1
 
     def test_determinism(
         self,

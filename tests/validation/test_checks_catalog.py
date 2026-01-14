@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from unittest.mock import patch
 
-from bittr_tess_vetter.validation.checks_catalog import run_exofop_toi_lookup, run_nearby_eb_search
 from bittr_tess_vetter.platform.catalogs.exofop_toi_table import ExoFOPToiTable
+from bittr_tess_vetter.validation.checks_catalog import run_exofop_toi_lookup, run_nearby_eb_search
 
 
 @dataclass

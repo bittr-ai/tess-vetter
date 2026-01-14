@@ -34,8 +34,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-import numpy as np
-
 from bittr_tess_vetter.api.references import (
     CLARET_2018,
     CLARET_SOUTHWORTH_2022,

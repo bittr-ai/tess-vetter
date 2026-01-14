@@ -26,7 +26,6 @@ if TYPE_CHECKING:
 
 from bittr_tess_vetter.pixel.cadence_mask import default_cadence_mask
 
-
 # Default aperture radii to test (in pixels)
 DEFAULT_APERTURE_RADII: tuple[float, ...] = (1.0, 1.5, 2.0, 2.5, 3.0)
 

@@ -12,14 +12,25 @@ but hosts should import from `bittr_tess_vetter.api.*` only.
 
 from __future__ import annotations
 
-from bittr_tess_vetter.validation.triceratops_fpp import (  # noqa: F401
-    CalculateFppInput,
-    FppResult,
-    _estimate_transit_duration as estimate_transit_duration,
-    _load_cached_triceratops_target as load_cached_triceratops_target,
-    _prefetch_trilegal_csv as prefetch_trilegal_csv,
-    _save_cached_triceratops_target as save_cached_triceratops_target,
-)
+from bittr_tess_vetter.validation import triceratops_fpp as _fpp
+
+# Re-export public API
+CalculateFppInput = _fpp.CalculateFppInput
+FppResult = _fpp.FppResult
+estimate_transit_duration = _fpp._estimate_transit_duration
+load_cached_triceratops_target = _fpp._load_cached_triceratops_target
+prefetch_trilegal_csv = _fpp._prefetch_trilegal_csv
+save_cached_triceratops_target = _fpp._save_cached_triceratops_target
+
+__all__ = [
+    "CalculateFppInput",
+    "FppResult",
+    "estimate_transit_duration",
+    "get_disposition",
+    "load_cached_triceratops_target",
+    "prefetch_trilegal_csv",
+    "save_cached_triceratops_target",
+]
 
 
 def get_disposition(fpp: float, nfpp: float) -> str:

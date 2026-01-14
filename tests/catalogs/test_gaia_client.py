@@ -20,7 +20,6 @@ from pydantic import ValidationError
 from bittr_tess_vetter.platform.catalogs.gaia_client import (
     RUWE_ELEVATED_THRESHOLD,
     GaiaAstrophysicalParams,
-    GaiaClient,
     GaiaNeighbor,
     GaiaQueryResult,
     GaiaSourceRecord,

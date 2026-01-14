@@ -29,7 +29,6 @@ from bittr_tess_vetter.compute.model_competition import (
     run_model_competition,
 )
 
-
 # =============================================================================
 # Test Fixtures
 # =============================================================================
@@ -904,7 +903,7 @@ class TestModelCompetitionIntegration:
         flux += rng.normal(0, 50e-6, len(flux))
 
         # Run model competition
-        result = run_model_competition(
+        run_model_competition(
             time_array, flux, flux_err, period, t0, duration_hours
         )
 

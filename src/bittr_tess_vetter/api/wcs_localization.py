@@ -30,9 +30,17 @@ from bittr_tess_vetter.pixel.cadence_mask import default_cadence_mask
 from bittr_tess_vetter.pixel.wcs_localization import (
     LocalizationResult,
     LocalizationVerdict,
+)
+from bittr_tess_vetter.pixel.wcs_localization import (
     _compute_out_of_transit_mask as _compute_out_of_transit_mask_windowed,
+)
+from bittr_tess_vetter.pixel.wcs_localization import (
     _compute_transit_mask as _compute_transit_mask_windowed,
+)
+from bittr_tess_vetter.pixel.wcs_localization import (
     compute_difference_image_centroid as _compute_difference_image_centroid,
+)
+from bittr_tess_vetter.pixel.wcs_localization import (
     localize_transit_source as _localize_transit_source,
 )
 
@@ -84,7 +92,7 @@ REFERENCES = [
 )
 def localize_transit_source(
     *,
-    tpf_fits: "TPFFitsData",
+    tpf_fits: TPFFitsData,
     period: float,
     t0: float,
     duration_hours: float,
@@ -117,7 +125,7 @@ def localize_transit_source(
 )
 def compute_difference_image_centroid_diagnostics(
     *,
-    tpf_fits: "TPFFitsData",
+    tpf_fits: TPFFitsData,
     period: float,
     t0: float,
     duration_hours: float,

@@ -36,7 +36,7 @@ class LightCurveRef(FrozenModel):
     quality_flags_present: list[int]
 
     @classmethod
-    def from_data(cls, data: LightCurveData, flux_type: str = "pdcsap") -> "LightCurveRef":
+    def from_data(cls, data: LightCurveData, flux_type: str = "pdcsap") -> LightCurveRef:
         return cls(
             data_ref=make_data_ref(data.tic_id, data.sector, flux_type),
             tic_id=data.tic_id,

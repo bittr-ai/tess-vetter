@@ -14,7 +14,7 @@ Key guarantees:
 - Human-readable: Format is designed for debugging and logging
 
 Usage:
-    >>> from astro_arc.catalogs.snapshot_id import (
+    >>> from bittr_tess_vetter.platform.catalogs.snapshot_id import (
     ...     generate_snapshot_id,
     ...     parse_snapshot_id,
     ...     validate_snapshot_id,

@@ -6,7 +6,7 @@ Gaia source_id, or sky position, and returns source data along with
 astrophysical parameters and nearby neighbors from cone searches.
 
 Usage:
-    >>> from astro_arc.catalogs.gaia_client import GaiaClient
+    >>> from bittr_tess_vetter.platform.catalogs.gaia_client import GaiaClient
     >>> client = GaiaClient()
     >>> result = await client.query_by_tic(261136679)  # Pi Mensae
     >>> print(f"Gaia source: {result.source.source_id}")

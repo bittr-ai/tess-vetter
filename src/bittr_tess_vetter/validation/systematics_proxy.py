@@ -134,7 +134,7 @@ def compute_systematics_proxy(
             few_point_top5_fraction = 0.0
 
     # Step/discontinuity proxy: max consecutive step in units of oot robust sigma.
-    sigma = _robust_sigma(oot_flux)
+    _robust_sigma(oot_flux)
     max_step_sigma: float | None = None
     if int(np.sum(out_mask)) >= 10:
         # Step/discontinuity proxy should not be dominated by real transit edges.

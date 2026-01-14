@@ -81,7 +81,7 @@ class TestTransitParams:
     def test_transit_params_is_frozen(self) -> None:
         """TransitParams is immutable."""
         params = TransitParams(period=2.0, t0=0.0, duration=0.1)
-        with pytest.raises(Exception):
+        with pytest.raises((AttributeError, TypeError)):
             params.period = 3.0  # type: ignore
 
 
@@ -114,7 +114,7 @@ class TestApertureDependenceResult:
             recommended_aperture=1.0,
             depth_variance=0.0,
         )
-        with pytest.raises(Exception):
+        with pytest.raises((AttributeError, TypeError)):
             result.stability_metric = 0.5  # type: ignore
 
 

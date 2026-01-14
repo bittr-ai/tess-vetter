@@ -15,8 +15,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 from astropy.wcs import WCS
-from bittr_tess_vetter.errors import ErrorType
 
+from bittr_tess_vetter.errors import ErrorType
 from bittr_tess_vetter.pixel.tpf_fits import (
     VALID_AUTHORS,
     TPFFitsCache,
@@ -221,7 +221,7 @@ class TestTPFFitsRefSerialization:
             ("tpf_fits", "Invalid TPF FITS reference format"),
             ("tpf_fits:123456789", "Invalid TPF FITS reference format"),
             ("tpf_fits:123456789:15", "Invalid TPF FITS reference format"),
-            ("tpf_fits:123456789:15:spoc:extra", "Invalid TPF FITS reference format"),
+            ("tpf_fits:123456789:15:spoc:extra", "Invalid exptime_seconds"),
             ("tpf:123456789:15:spoc", "Invalid TPF FITS reference prefix"),
             ("TPF_FITS:123456789:15:spoc", "Invalid TPF FITS reference prefix"),
             ("tpf_fits:abc:15:spoc", "Invalid tic_id"),

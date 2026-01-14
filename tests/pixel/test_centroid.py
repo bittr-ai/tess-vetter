@@ -172,7 +172,7 @@ class TestCentroidResultModel:
             n_in_transit_cadences=10,
             n_out_transit_cadences=90,
         )
-        with pytest.raises(Exception):
+        with pytest.raises((AttributeError, TypeError)):
             result.centroid_shift_pixels = 0.5  # type: ignore
 
     def test_centroid_result_handles_nan(self) -> None:
@@ -207,7 +207,7 @@ class TestTransitParamsModel:
     def test_transit_params_is_frozen(self) -> None:
         """TransitParams is immutable."""
         params = TransitParams(period=2.5, t0=1000.5, duration=3.0)
-        with pytest.raises(Exception):
+        with pytest.raises((AttributeError, TypeError)):
             params.period = 5.0  # type: ignore
 
 
@@ -789,7 +789,7 @@ class TestDeterministicWindowing:
         buffer_half_width = duration_days / 2.0 + k_buffer * duration_days
 
         # Find gap in out-of-transit near first transit at t0=2.5
-        out_times = time[out_mask]
+        time[out_mask]
         near_transit = (time > 2.5 - 2 * buffer_half_width) & (time < 2.5 + 2 * buffer_half_width)
         gap = ~out_mask & near_transit
 
@@ -913,7 +913,7 @@ class TestCentroidShiftConfig:
     def test_config_is_frozen(self) -> None:
         """Config is immutable."""
         config = CentroidShiftConfig()
-        with pytest.raises(Exception):
+        with pytest.raises((AttributeError, TypeError)):
             config.n_bootstrap = 500  # type: ignore[misc]
 
 

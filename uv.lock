@@ -245,7 +245,6 @@ dependencies = [
     { name = "arviz" },
     { name = "astropy" },
     { name = "emcee" },
-    { name = "ldtk" },
     { name = "numba" },
     { name = "numpy" },
     { name = "pydantic" },
@@ -257,39 +256,29 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
-    { name = "arviz" },
     { name = "astroquery" },
     { name = "celerite" },
     { name = "corner" },
-    { name = "emcee" },
+    { name = "ldtk" },
     { name = "lightkurve" },
     { name = "matplotlib" },
     { name = "mechanicalsoup" },
-    { name = "mypy" },
-    { name = "numba" },
     { name = "pandas" },
     { name = "pyrr" },
-    { name = "pytest" },
     { name = "pytransit" },
-    { name = "ruff" },
     { name = "seaborn" },
     { name = "wotan" },
 ]
-dev = [
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "ruff" },
+ldtk = [
+    { name = "ldtk" },
 ]
 triceratops = [
-    { name = "arviz" },
     { name = "astroquery" },
     { name = "celerite" },
     { name = "corner" },
-    { name = "emcee" },
     { name = "lightkurve" },
     { name = "matplotlib" },
     { name = "mechanicalsoup" },
-    { name = "numba" },
     { name = "pandas" },
     { name = "pyrr" },
     { name = "pytransit" },
@@ -301,6 +290,7 @@ wotan = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "mypy" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -308,39 +298,34 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "arviz", specifier = ">=0.23.0" },
-    { name = "arviz", marker = "extra == 'triceratops'", specifier = ">=0.12.1" },
     { name = "astropy", specifier = ">=5.0.0" },
     { name = "astroquery", marker = "extra == 'triceratops'", specifier = ">=0.4.6" },
-    { name = "bittr-tess-vetter", extras = ["wotan", "triceratops", "dev"], marker = "extra == 'all'" },
+    { name = "bittr-tess-vetter", extras = ["wotan", "ldtk", "triceratops"], marker = "extra == 'all'" },
     { name = "celerite", marker = "extra == 'triceratops'", specifier = ">=0.4.0" },
     { name = "corner", marker = "extra == 'triceratops'", specifier = ">=2.2.1" },
     { name = "emcee", specifier = ">=3.1.6" },
-    { name = "emcee", marker = "extra == 'triceratops'", specifier = ">=3.0.2" },
-    { name = "ldtk", specifier = ">=1.8.5" },
+    { name = "ldtk", marker = "extra == 'ldtk'", specifier = ">=1.8.5" },
     { name = "lightkurve", marker = "extra == 'triceratops'", specifier = ">=2.0.0" },
     { name = "matplotlib", marker = "extra == 'triceratops'", specifier = ">=3.5.1" },
-    { name = "mechanicalsoup", marker = "extra == 'triceratops'", specifier = ">=0.12.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "mechanicalsoup", marker = "extra == 'triceratops'", specifier = ">=1.0.0" },
     { name = "numba", specifier = ">=0.63.0" },
-    { name = "numba", marker = "extra == 'triceratops'", specifier = ">=0.52.0" },
     { name = "numpy", specifier = ">=1.24.0,<2.4.0" },
-    { name = "pandas", marker = "extra == 'triceratops'", specifier = ">=0.23.4" },
-    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pandas", marker = "extra == 'triceratops'", specifier = ">=2.0.0" },
+    { name = "pydantic", specifier = ">=2.4.0" },
     { name = "pyrr", marker = "extra == 'triceratops'", specifier = ">=0.10.3" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytransit", marker = "extra == 'triceratops'", specifier = ">=2.2" },
-    { name = "requests", specifier = ">=2.31.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "requests", specifier = ">=2.32.4" },
     { name = "scipy", specifier = ">=1.10.0" },
-    { name = "seaborn", marker = "extra == 'triceratops'", specifier = ">=0.11.1" },
-    { name = "setuptools", specifier = ">=70.0.0" },
+    { name = "seaborn", marker = "extra == 'triceratops'", specifier = ">=0.13.0" },
+    { name = "setuptools", specifier = ">=78.1.1" },
     { name = "transitleastsquares", specifier = ">=1.32" },
     { name = "wotan", marker = "extra == 'wotan'", specifier = ">=1.1" },
 ]
-provides-extras = ["wotan", "triceratops", "dev", "all"]
+provides-extras = ["wotan", "ldtk", "triceratops", "all"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "mypy", specifier = ">=1.0.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "ruff", specifier = ">=0.14.10" },
 ]

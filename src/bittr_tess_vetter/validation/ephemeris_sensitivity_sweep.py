@@ -7,7 +7,10 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from bittr_tess_vetter.validation.ephemeris_specificity import SmoothTemplateConfig, score_fixed_period_numpy
+from bittr_tess_vetter.validation.ephemeris_specificity import (
+    SmoothTemplateConfig,
+    score_fixed_period_numpy,
+)
 
 # Optional dependency for "deep" preset. Kept optional on purpose.
 try:

@@ -8,12 +8,11 @@ All results are metrics-only: `passed=None` and `details["_metrics_only"]=True`.
 
 from __future__ import annotations
 
-import csv
-import io
 import logging
 import math
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 from xml.etree import ElementTree as ET
 
 import requests

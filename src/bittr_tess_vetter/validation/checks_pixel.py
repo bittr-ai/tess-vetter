@@ -17,10 +17,10 @@ import numpy as np
 from numpy.typing import NDArray
 
 from bittr_tess_vetter.domain.detection import TransitCandidate, VetterCheckResult
-from bittr_tess_vetter.pixel.aperture import compute_aperture_dependence
 from bittr_tess_vetter.pixel.aperture import TransitParams as ApertureTransitParams
-from bittr_tess_vetter.pixel.centroid import compute_centroid_shift
+from bittr_tess_vetter.pixel.aperture import compute_aperture_dependence
 from bittr_tess_vetter.pixel.centroid import TransitParams as CentroidTransitParams
+from bittr_tess_vetter.pixel.centroid import compute_centroid_shift
 from bittr_tess_vetter.validation.base import (
     get_in_transit_mask,
     get_out_of_transit_mask,

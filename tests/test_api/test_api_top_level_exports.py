@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 
 def test_api_top_level_exports_import() -> None:
     # This test ensures host applications can avoid deep imports into
@@ -43,4 +45,35 @@ def test_api_top_level_exports_import() -> None:
         load_index,
         refine_candidates_numpy,
         refine_one_candidate_numpy,
+    )
+
+
+# =============================================================================
+# Exhaustive Export Resolution Test
+# =============================================================================
+
+
+def _get_api_all() -> list[str]:
+    """Get the __all__ list from api module."""
+    from bittr_tess_vetter import api
+
+    return list(api.__all__)
+
+
+@pytest.mark.parametrize("name", _get_api_all())
+def test_all_exports_resolve(name: str) -> None:
+    """Verify every symbol in __all__ is actually accessible on the api module.
+
+    This test ensures that all 229+ symbols declared in api.__all__ can actually
+    be accessed via getattr(api, name), catching any typos or missing imports.
+    """
+    from bittr_tess_vetter import api
+
+    assert hasattr(api, name), f"Export {name!r} declared in __all__ but not accessible on api module"
+    # Also verify it's not None (indicates failed lazy import)
+    obj = getattr(api, name)
+    # Some symbols may legitimately be None (e.g., WOTAN_AVAILABLE=False)
+    # but the attribute should exist
+    assert obj is not None or name.endswith("_AVAILABLE") or name.startswith("WOTAN"), (
+        f"Export {name!r} resolved to None - check import path"
     )

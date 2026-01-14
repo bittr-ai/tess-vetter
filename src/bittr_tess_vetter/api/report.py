@@ -5,11 +5,17 @@ Delegates to `bittr_tess_vetter.pixel.report`.
 
 from __future__ import annotations
 
+from bittr_tess_vetter.api.references import (
+    BRYSON_2013,
+    HIGGINS_BELL_2022,
+    TWICKEN_2018,
+    cite,
+    cites,
+)
 from bittr_tess_vetter.pixel.report import (
     PixelVetReport,
     generate_pixel_vet_report,
 )
-from bittr_tess_vetter.api.references import BRYSON_2013, HIGGINS_BELL_2022, TWICKEN_2018, cite, cites
 
 # Attach citations to the API surface callable (no wrapping; adds __references__ metadata).
 generate_pixel_vet_report = cites(

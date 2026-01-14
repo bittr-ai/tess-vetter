@@ -675,7 +675,7 @@ class MASTClient:
         def _looks_like_lightcurve(obj: Any) -> bool:
             """Best-effort guard for mocked/invalid download results."""
             try:
-                t = getattr(getattr(obj, "time"), "value")
+                t = obj.time.value
                 arr = np.asarray(t)
                 return arr.ndim == 1 and arr.size > 0 and np.isfinite(arr).any()
             except Exception:
@@ -690,10 +690,7 @@ class MASTClient:
                 lc_result = search_result.download()
             # Check if result is a LightCurveCollection (multiple light curves)
             # vs a single LightCurve. Don't use len() - LightCurve has len = n_points
-            if type(lc_result).__name__ == "LightCurveCollection":
-                lc = lc_result[0]  # Deterministic after selecting a single product row.
-            else:
-                lc = lc_result  # Single light curve
+            lc = lc_result[0] if type(lc_result).__name__ == "LightCurveCollection" else lc_result
         except Exception as e:
             logger.error(f"Download failed for {target} sector {sector}: {e}")
             raise MASTClientError(
@@ -767,10 +764,7 @@ class MASTClient:
                 sigma = 1e-3
             flux_err = np.full_like(flux, sigma, dtype=np.float64)
         else:
-            if median_flux is not None:
-                flux_err = flux_err_raw / median_flux
-            else:
-                flux_err = flux_err_raw
+            flux_err = flux_err_raw / median_flux if median_flux is not None else flux_err_raw
 
         # Final validity mask (requires finite flux_err).
         valid_mask = (base_valid & np.isfinite(flux_err)).astype(np.bool_)

@@ -15,6 +15,5 @@ def test_make_error_envelope() -> None:
 
 def test_network_timeout_rejects_non_positive_seconds_when_supported(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("bittr_tess_vetter.platform.network.timeout._is_timeout_supported", lambda: True)
-    with pytest.raises(ValueError):
-        with network_timeout(0, operation="x"):
-            pass
+    with pytest.raises(ValueError), network_timeout(0, operation="x"):
+        pass

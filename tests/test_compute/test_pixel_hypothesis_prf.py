@@ -63,7 +63,7 @@ class TestScoreHypothesesWithPRF:
         )
 
         # Without background fitting (use prf_lite which doesn't have gradient fitting)
-        ranked_prf_lite = score_hypotheses_with_prf(
+        score_hypotheses_with_prf(
             diff_image, hypotheses, prf_backend="prf_lite", fit_background=True, seed=42
         )
 

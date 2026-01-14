@@ -45,6 +45,7 @@ from typing import Any
 import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
+
 from bittr_tess_vetter.errors import ErrorType, make_error
 
 logger = logging.getLogger(__name__)
@@ -345,7 +346,7 @@ def _extract_header_subset(header: fits.Header) -> dict[str, Any]:
 
     # Include any column unit keywords (e.g., TUNIT1, TUNIT2, ...) to preserve
     # time/flux units when present in the FITS table header.
-    for key in header.keys():
+    for key in header:
         if not isinstance(key, str):
             continue
         if not key.startswith("TUNIT"):

@@ -50,13 +50,13 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 from scipy.optimize import minimize
 
+from bittr_tess_vetter.pixel.cadence_mask import default_cadence_mask
 from bittr_tess_vetter.pixel.wcs_utils import (
     compute_pixel_scale,
     compute_source_distances,
     get_reference_source_pixel_positions,
     pixel_to_world,
 )
-from bittr_tess_vetter.pixel.cadence_mask import default_cadence_mask
 
 if TYPE_CHECKING:
     from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData

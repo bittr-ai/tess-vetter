@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import time
 from dataclasses import dataclass
@@ -117,9 +118,8 @@ def fetch_exofop_toi_table(
     """
     global _CACHE
     now = time.time()
-    if _CACHE is not None and cache_ttl_seconds > 0:
-        if (now - _CACHE.fetched_at_unix) <= float(cache_ttl_seconds):
-            return _CACHE
+    if _CACHE is not None and cache_ttl_seconds > 0 and (now - _CACHE.fetched_at_unix) <= float(cache_ttl_seconds):
+        return _CACHE
 
     cache_dir = Path(disk_cache_dir) if disk_cache_dir is not None else _default_cache_dir()
     cache_path = _toi_cache_path(cache_dir)
@@ -151,11 +151,9 @@ def fetch_exofop_toi_table(
         raise last_exc or RuntimeError("ExoFOP fetch failed")
 
     # Persist to disk so MCP subprocess-based clients don't redownload on every call.
-    try:
+    # Cache failures should never block analysis.
+    with contextlib.suppress(Exception):
         _write_disk_cache(cache_path, response.text)
-    except Exception:
-        # Cache failures should never block analysis.
-        pass
 
     headers, rows = _parse_pipe_table(response.text)
     table = ExoFOPToiTable(fetched_at_unix=now, headers=headers, rows=rows)

@@ -17,7 +17,7 @@ def test_top_level_aliases_import_and_resolve() -> None:
     assert callable(aperture_family_depth_curve)
 
 
-def test_facade_imports() -> None:
+def test_api_surface_imports() -> None:
     # Canonical surface is `bittr_tess_vetter.api` (full surface is first-class).
     from bittr_tess_vetter.api import (  # noqa: F401
         Candidate,

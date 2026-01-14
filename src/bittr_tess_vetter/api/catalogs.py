@@ -5,15 +5,6 @@ Downstream applications should import from `bittr_tess_vetter.api.catalogs` rath
 than deep-importing implementation modules.
 """
 
-from bittr_tess_vetter.platform.catalogs.models import SourceRecord  # noqa: F401
-from bittr_tess_vetter.platform.catalogs.exofop_target_page import (  # noqa: F401
-    ExoFOPTargetSummary,
-    fetch_exofop_target_summary,
-)
-from bittr_tess_vetter.platform.catalogs.exofop_toi_table import (  # noqa: F401
-    ExoFOPToiTable,
-    fetch_exofop_toi_table,
-)
 from bittr_tess_vetter.platform.catalogs import (  # noqa: F401
     GAIA_TAP_ENDPOINT,
     RUWE_ELEVATED_THRESHOLD,
@@ -70,6 +61,15 @@ from bittr_tess_vetter.platform.catalogs import (  # noqa: F401
     query_simbad_by_position_sync,
     validate_snapshot_id,
 )
+from bittr_tess_vetter.platform.catalogs.exofop_target_page import (  # noqa: F401
+    ExoFOPTargetSummary,
+    fetch_exofop_target_summary,
+)
+from bittr_tess_vetter.platform.catalogs.exofop_toi_table import (  # noqa: F401
+    ExoFOPToiTable,
+    fetch_exofop_toi_table,
+)
+from bittr_tess_vetter.platform.catalogs.models import SourceRecord  # noqa: F401
 
 __all__ = [
     # ExoFOP (TOI table + target pages)

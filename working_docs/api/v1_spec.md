@@ -17,7 +17,7 @@ Extraction is incremental: for each module moved, `astro-arc-tess` swaps its imp
 
 ### Goals
 - **Incremental migration**: move code in small, testable PRs while keeping `astro-arc-tess` behavior stable.
-- **Hard boundary**: `bittr-tess-vetter` contains no MCP server, no persistent store, no tool manifests/evidence packets, and no `bittr-reason-core` dependency.
+- **Hard boundary**: `bittr-tess-vetter` contains no MCP server, no persistent store, and no tool manifests/evidence packets. It is a standalone library with no external bittr-* dependencies.
 - **Stable Python API**: provide a clear set of library entry points used by `astro-arc-tess` tool handlers.
 - **Determinism & reproducibility hooks**: library functions accept explicit seeds and return sufficient metadata to support manifests in `astro-arc-tess`.
 - **Optional accelerators**: MLX, batman, triceratops, numpyro are optional extras, not hard deps.

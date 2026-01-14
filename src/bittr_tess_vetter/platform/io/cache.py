@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import hashlib
 import json
@@ -190,7 +191,7 @@ class PersistentCache:
     - `get_default()` returns a process-global singleton instance
     """
 
-    _default_instance: ClassVar["PersistentCache" | None] = None
+    _default_instance: ClassVar[PersistentCache | None] = None
     _instance_lock: ClassVar[Lock] = Lock()
 
     DEFAULT_MAX_ENTRIES: ClassVar[int] = 100
@@ -204,7 +205,7 @@ class PersistentCache:
         (self.cache_dir / "meta").mkdir(exist_ok=True)
 
     @classmethod
-    def get_default(cls) -> "PersistentCache":
+    def get_default(cls) -> PersistentCache:
         if cls._default_instance is None:
             with cls._instance_lock:
                 if cls._default_instance is None:
@@ -279,10 +280,8 @@ class PersistentCache:
             if sector is not None:
                 meta["sector"] = int(sector)
 
-            try:
+            with contextlib.suppress(Exception):
                 meta_path.write_text(json.dumps(meta), encoding="utf-8")
-            except Exception:
-                pass
 
     def has(self, key: str) -> bool:
         return self._data_path(key).exists()

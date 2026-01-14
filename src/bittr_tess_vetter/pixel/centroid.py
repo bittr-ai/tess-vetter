@@ -14,10 +14,10 @@ References:
 
 from __future__ import annotations
 
+import warnings as _warnings
 from dataclasses import dataclass
 from typing import Literal
 
-import warnings as _warnings
 import numpy as np
 from numpy.typing import NDArray
 from scipy.stats import norm
@@ -1012,10 +1012,7 @@ def compute_centroid_shift(
     )
     n_total = int(time.shape[0])
     n_used = int(np.sum(cadence_mask))
-    if n_used < n_total:
-        warnings_dropped = n_total - n_used
-    else:
-        warnings_dropped = 0
+    warnings_dropped = n_total - n_used if n_used < n_total else 0
     if n_used < 3:
         # Keep behavior consistent with the rest of the module: return NaNs with warnings rather than crash.
         return CentroidResult(

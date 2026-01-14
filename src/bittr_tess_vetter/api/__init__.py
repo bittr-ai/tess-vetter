@@ -408,12 +408,114 @@ if TYPE_CHECKING:
 
     # v3 activity characterization
     from bittr_tess_vetter.api.activity import characterize_activity, mask_flares
+    from bittr_tess_vetter.api.alias_diagnostics import (  # noqa: F401
+        PhaseShiftEvent,
+        classify_alias,
+        compute_harmonic_scores,
+        compute_secondary_significance,
+        detect_phase_shift_events,
+    )
+
+    # Cadence / aperture helpers (host-facing)
+    from bittr_tess_vetter.api.aperture import create_circular_aperture_mask
+
+    # WCS-aware pixel tools (v0.2 supported surface)
+    from bittr_tess_vetter.api.aperture_family import (
+        DEFAULT_RADII_PX,
+        ApertureFamilyResult,
+        compute_aperture_family_depth_curve,
+    )
+    from bittr_tess_vetter.api.cadence_mask import default_cadence_mask
+
+    # Utilities
+    from bittr_tess_vetter.api.caps import (  # noqa: F401
+        DEFAULT_NEIGHBORS_CAP,
+        DEFAULT_PLOTS_CAP,
+        DEFAULT_TOP_K_CAP,
+        DEFAULT_VARIANT_SUMMARIES_CAP,
+        cap_neighbors,
+        cap_plots,
+        cap_top_k,
+        cap_variant_summaries,
+    )
 
     # Catalog checks (V06-V07)
     from bittr_tess_vetter.api.catalog import (
         exofop_disposition,
         nearby_eb_search,
         vet_catalog,
+    )
+
+    # Detection/periodogram model contract (host-facing)
+    from bittr_tess_vetter.api.detection import (  # noqa: F401
+        Detection,
+        PeriodogramPeak,
+        PeriodogramResult,
+        TransitCandidate,
+        VetterCheckResult,
+    )
+
+    # Detrending (host-facing)
+    from bittr_tess_vetter.api.detrend import (  # noqa: F401
+        WOTAN_AVAILABLE,
+        flatten,
+        flatten_with_wotan,
+        median_detrend,
+        normalize_flux,
+        sigma_clip,
+        wotan_flatten,
+    )
+    from bittr_tess_vetter.api.ephemeris_match import (  # noqa: F401
+        EphemerisEntry,
+        EphemerisIndex,
+        EphemerisMatch,
+        EphemerisMatchResult,
+        MatchClass,
+        build_index_from_csv,
+        classify_matches,
+        compute_harmonic_match,
+        compute_match_score,
+        load_index,
+        run_ephemeris_matching,
+        save_index,
+        wrap_t0,
+    )
+    from bittr_tess_vetter.api.ephemeris_refinement import (  # noqa: F401
+        EphemerisRefinementCandidate,
+        EphemerisRefinementCandidateResult,
+        EphemerisRefinementConfig,
+        EphemerisRefinementRunResult,
+        refine_candidates_numpy,
+        refine_one_candidate_numpy,
+    )
+
+    # Low-level primitives (host-facing)
+    from bittr_tess_vetter.api.ephemeris_specificity import (  # noqa: F401
+        ConcentrationMetrics,
+        LocalT0SensitivityResult,
+        PhaseShiftNullResult,
+        SmoothTemplateConfig,
+        SmoothTemplateScoreResult,
+        compute_concentration_metrics,
+        compute_local_t0_sensitivity_numpy,
+        compute_phase_shift_null,
+        downsample_evenly,
+        phase_shift_t0s,
+        score_fixed_period_numpy,
+        scores_for_t0s_numpy,
+        smooth_box_template_numpy,
+    )
+
+    # Evidence helpers
+    from bittr_tess_vetter.api.evidence import checks_to_evidence_items
+    from bittr_tess_vetter.api.evidence_contracts import (  # noqa: F401
+        EvidenceEnvelope,
+        EvidenceProvenance,
+        load_evidence,
+        save_evidence,
+    )
+    from bittr_tess_vetter.api.evidence_contracts import (
+        compute_code_hash as compute_evidence_code_hash,
     )
 
     # Exovetter checks (V11-V12)
@@ -430,37 +532,14 @@ if TYPE_CHECKING:
         TriceratopsFppPreset,
         calculate_fpp,
     )
-
-    # TRICERATOPS cache helpers (host-facing)
-    from bittr_tess_vetter.api.triceratops_cache import (  # noqa: F401
-        CalculateFppInput,
-        FppResult,
-        estimate_transit_duration,
-        load_cached_triceratops_target,
-        prefetch_trilegal_csv,
-        save_cached_triceratops_target,
-    )
-
-    # Light curve cache contract (host-facing)
-    from bittr_tess_vetter.api.lightcurve import (  # noqa: F401
-        LightCurveData,
-        LightCurveRef,
-        make_data_ref,
-    )
-
-    # Target model contract (host-facing)
-    from bittr_tess_vetter.api.target import (  # noqa: F401
-        StellarParameters,
-        Target,
-    )
-
-    # Detection/periodogram model contract (host-facing)
-    from bittr_tess_vetter.api.detection import (  # noqa: F401
-        Detection,
-        PeriodogramPeak,
-        PeriodogramResult,
-        TransitCandidate,
-        VetterCheckResult,
+    from bittr_tess_vetter.api.ghost_features import (  # noqa: F401
+        GhostFeatures,
+        compute_aperture_contrast,
+        compute_difference_image,
+        compute_edge_gradient,
+        compute_ghost_features,
+        compute_prf_likeness,
+        compute_spatial_uniformity,
     )
 
     # LC-only checks (V01-V05)
@@ -473,72 +552,45 @@ if TYPE_CHECKING:
         vet_lc_only,
     )
 
-    # Pixel checks (V08-V10)
-    from bittr_tess_vetter.api.pixel import (
-        aperture_dependence,
-        centroid_shift,
-        difference_image_localization,
-        vet_pixel,
+    # Light curve cache contract (host-facing)
+    from bittr_tess_vetter.api.lightcurve import (  # noqa: F401
+        LightCurveData,
+        LightCurveRef,
+        make_data_ref,
+    )
+    from bittr_tess_vetter.api.localization import (
+        LocalizationDiagnostics,
+        LocalizationImages,
+        TransitParams,
+        compute_localization_diagnostics,
     )
 
-    # v3 transit recovery
-    from bittr_tess_vetter.api.recovery import (  # noqa: F401
-        PreparedRecoveryInputs,
-        RecoveryResult,
-        detrend,
-        recover_transit,
-        prepare_recovery_inputs,
-        recover_transit_timeseries,
-        stack_transits,
+    # Optional MLX (guarded)
+    from bittr_tess_vetter.api.mlx import (  # noqa: F401
+        MlxT0RefinementResult,
+        MlxTopKScoreResult,
+        integrated_gradients,
+        score_fixed_period,
+        score_fixed_period_refine_t0,
+        score_top_k_periods,
+        smooth_box_template,
     )
-
-    # v3 timing analysis
-    from bittr_tess_vetter.api.timing import analyze_ttvs, measure_transit_times
-
-    # v3 TTV track search (detection aid)
-    from bittr_tess_vetter.api.ttv_track_search import (  # noqa: F401
-        TTVSearchBudget,
-        TTVTrackSearchResult,
-        estimate_search_cost,
-        identify_observing_windows,
-        run_ttv_track_search,
-        run_ttv_track_search_for_candidate,
-        should_run_ttv_search,
+    from bittr_tess_vetter.api.negative_controls import (  # noqa: F401
+        ControlType,
+        generate_control,
+        generate_flux_invert,
+        generate_null_inject,
+        generate_phase_scramble,
+        generate_time_scramble,
     )
-
-    # Stellar dilution / implied-size physics (metrics-only)
-    from bittr_tess_vetter.api.stellar_dilution import (  # noqa: F401
-        DilutionScenario,
-        HostHypothesis,
-        PhysicsFlags,
-        build_host_hypotheses_from_profile,
-        compute_depth_correction_factor_from_flux_fraction,
-        compute_dilution_scenarios,
-        compute_flux_fraction_from_mag_list,
-        compute_implied_radius,
-        compute_target_flux_fraction_from_neighbor_mags,
-        evaluate_physics_flags,
-    )
-
-    # v3 transit fitting
-    from bittr_tess_vetter.api.transit_fit import TransitFitResult, fit_transit, quick_estimate
-
-    # Transit primitives
-    from bittr_tess_vetter.api.transit_primitives import odd_even_result
-
-    # Cadence / aperture helpers (host-facing)
-    from bittr_tess_vetter.api.aperture import create_circular_aperture_mask
-    from bittr_tess_vetter.api.cadence_mask import default_cadence_mask
-    from bittr_tess_vetter.api.transit_masks import get_out_of_transit_mask_windowed
 
     # Periodogram facade (host-facing)
     from bittr_tess_vetter.api.periodogram import (  # noqa: F401
         PerformancePreset,
-        PeriodogramPeak,
-        PeriodogramResult,
+        # PeriodogramPeak and PeriodogramResult imported from detection above
         auto_periodogram,
-        compute_transit_model,
         compute_bls_model,
+        compute_transit_model,
         detect_sector_gaps,
         ls_periodogram,
         merge_candidates,
@@ -550,21 +602,17 @@ if TYPE_CHECKING:
         tls_search_per_sector,
     )
 
-    # Transit model facade (host-facing)
-    from bittr_tess_vetter.api.transit_model import compute_transit_model  # noqa: F401
-
-    # Light curve stitching (host-facing)
-    from bittr_tess_vetter.api.stitch import (  # noqa: F401
-        SectorDiagnostics,
-        StitchedLC,
-        stitch_lightcurves,
+    # Pixel checks (V08-V10)
+    from bittr_tess_vetter.api.pixel import (
+        aperture_dependence,
+        centroid_shift,
+        difference_image_localization,
+        vet_pixel,
     )
-
-    # Primitive catalog (host-facing)
-    from bittr_tess_vetter.api.primitives import (  # noqa: F401
-        PRIMITIVES_CATALOG,
-        PrimitiveInfo,
-        list_primitives,
+    from bittr_tess_vetter.api.pixel_localize import (
+        localize_transit_host_multi_sector,
+        localize_transit_host_single_sector,
+        localize_transit_host_single_sector_with_baseline_check,
     )
 
     # Pixel/PRF compute facade (host-facing)
@@ -607,90 +655,56 @@ if TYPE_CHECKING:
         get_prf_model,
         predict_all_hypotheses,
         predict_depth_vs_aperture,
-        propagate_aperture_uncertainty,
         prf_params_from_dict,
         prf_params_to_dict,
+        propagate_aperture_uncertainty,
         score_hypotheses_prf_lite,
         score_hypotheses_with_prf,
         select_best_hypothesis_joint,
         select_best_hypothesis_timeseries,
     )
 
-    # Low-level primitives (host-facing)
-    from bittr_tess_vetter.api.ephemeris_specificity import (  # noqa: F401
-        ConcentrationMetrics,
-        LocalT0SensitivityResult,
-        PhaseShiftNullResult,
-        SmoothTemplateConfig,
-        SmoothTemplateScoreResult,
-        compute_concentration_metrics,
-        compute_local_t0_sensitivity_numpy,
-        compute_phase_shift_null,
-        downsample_evenly,
-        phase_shift_t0s,
-        score_fixed_period_numpy,
-        scores_for_t0s_numpy,
-        smooth_box_template_numpy,
+    # Prefilters (PFxx)
+    from bittr_tess_vetter.api.prefilter import (  # noqa: F401
+        compute_depth_over_depth_err_snr,
+        compute_phase_coverage,
     )
-    from bittr_tess_vetter.api.ephemeris_refinement import (  # noqa: F401
-        EphemerisRefinementCandidate,
-        EphemerisRefinementCandidateResult,
-        EphemerisRefinementConfig,
-        EphemerisRefinementRunResult,
-        refine_candidates_numpy,
-        refine_one_candidate_numpy,
+
+    # Primitive catalog (host-facing)
+    from bittr_tess_vetter.api.primitives import (  # noqa: F401
+        PRIMITIVES_CATALOG,
+        PrimitiveInfo,
+        list_primitives,
     )
-    from bittr_tess_vetter.api.systematics import SystematicsProxyResult, compute_systematics_proxy
-    from bittr_tess_vetter.api.transit_masks import (  # noqa: F401
-        count_transits,
-        get_in_transit_mask,
-        get_odd_even_transit_indices,
-        get_out_of_transit_mask,
-        measure_transit_depth,
-    )
-    from bittr_tess_vetter.api.ephemeris_match import (  # noqa: F401
-        EphemerisEntry,
-        EphemerisIndex,
-        EphemerisMatch,
-        EphemerisMatchResult,
-        MatchClass,
-        build_index_from_csv,
-        classify_matches,
-        compute_harmonic_match,
-        compute_match_score,
-        load_index,
-        run_ephemeris_matching,
-        save_index,
-        wrap_t0,
-    )
-    from bittr_tess_vetter.api.alias_diagnostics import (  # noqa: F401
-        PhaseShiftEvent,
-        classify_alias,
-        compute_harmonic_scores,
-        compute_secondary_significance,
-        detect_phase_shift_events,
-    )
-    from bittr_tess_vetter.api.ghost_features import (  # noqa: F401
-        GhostFeatures,
-        compute_aperture_contrast,
-        compute_difference_image,
-        compute_edge_gradient,
-        compute_ghost_features,
-        compute_prf_likeness,
-        compute_spatial_uniformity,
-    )
-    from bittr_tess_vetter.api.negative_controls import (  # noqa: F401
-        ControlType,
-        generate_control,
-        generate_flux_invert,
-        generate_null_inject,
-        generate_phase_scramble,
-        generate_time_scramble,
+
+    # v3 transit recovery
+    from bittr_tess_vetter.api.recovery import (  # noqa: F401
+        PreparedRecoveryInputs,
+        RecoveryResult,
+        detrend,
+        prepare_recovery_inputs,
+        recover_transit,
+        recover_transit_timeseries,
+        stack_transits,
     )
     from bittr_tess_vetter.api.reliability_curves import (  # noqa: F401
         compute_conditional_rates,
         compute_reliability_curves,
         recommend_thresholds,
+    )
+    from bittr_tess_vetter.api.report import PixelVetReport, generate_pixel_vet_report
+
+    # Sandbox compute primitives (host-facing)
+    from bittr_tess_vetter.api.sandbox_primitives import (  # noqa: F401
+        AstroPrimitives,
+        astro,
+        box_model,
+        # detrend imported from recovery above
+        fold,
+        periodogram,
+    )
+    from bittr_tess_vetter.api.sandbox_primitives import (
+        detrend as sandbox_detrend,  # noqa: F401
     )
     from bittr_tess_vetter.api.sector_consistency import (  # noqa: F401
         ConsistencyClass,
@@ -698,25 +712,40 @@ if TYPE_CHECKING:
         compute_sector_consistency,
     )
 
-    # Detrending (host-facing)
-    from bittr_tess_vetter.api.detrend import (  # noqa: F401
-        WOTAN_AVAILABLE,
-        flatten,
-        flatten_with_wotan,
-        median_detrend,
-        normalize_flux,
-        sigma_clip,
-        wotan_flatten,
+    # Stellar dilution / implied-size physics (metrics-only)
+    from bittr_tess_vetter.api.stellar_dilution import (  # noqa: F401
+        DilutionScenario,
+        HostHypothesis,
+        PhysicsFlags,
+        build_host_hypotheses_from_profile,
+        compute_depth_correction_factor_from_flux_fraction,
+        compute_dilution_scenarios,
+        compute_flux_fraction_from_mag_list,
+        compute_implied_radius,
+        compute_target_flux_fraction_from_neighbor_mags,
+        evaluate_physics_flags,
     )
 
-    # Sandbox compute primitives (host-facing)
-    from bittr_tess_vetter.api.sandbox_primitives import (  # noqa: F401
-        AstroPrimitives,
-        astro,
-        box_model,
-        detrend,
-        fold,
-        periodogram,
+    # Light curve stitching (host-facing)
+    from bittr_tess_vetter.api.stitch import (  # noqa: F401
+        SectorDiagnostics,
+        StitchedLC,
+        stitch_lightcurves,
+    )
+    from bittr_tess_vetter.api.systematics import SystematicsProxyResult, compute_systematics_proxy
+
+    # Target model contract (host-facing)
+    from bittr_tess_vetter.api.target import (  # noqa: F401
+        StellarParameters,
+        Target,
+    )
+
+    # v3 timing analysis
+    from bittr_tess_vetter.api.timing import analyze_ttvs, measure_transit_times
+    from bittr_tess_vetter.api.tolerances import (  # noqa: F401
+        HARMONIC_RATIOS,
+        ToleranceResult,
+        check_tolerance,
     )
 
     # TPF cache facades (host-facing)
@@ -732,6 +761,43 @@ if TYPE_CHECKING:
         TPFFitsData,
         TPFFitsNotFoundError,
         TPFFitsRef,
+    )
+
+    # v3 transit fitting
+    from bittr_tess_vetter.api.transit_fit import TransitFitResult, fit_transit, quick_estimate
+    from bittr_tess_vetter.api.transit_masks import (  # noqa: F401
+        count_transits,
+        get_in_transit_mask,
+        get_odd_even_transit_indices,
+        get_out_of_transit_mask,
+        get_out_of_transit_mask_windowed,
+        measure_transit_depth,
+    )
+
+    # Transit model facade (host-facing)
+    # compute_transit_model is available from periodogram import above (re-exported)
+    # Transit primitives
+    from bittr_tess_vetter.api.transit_primitives import odd_even_result
+
+    # TRICERATOPS cache helpers (host-facing)
+    from bittr_tess_vetter.api.triceratops_cache import (  # noqa: F401
+        CalculateFppInput,
+        FppResult,
+        estimate_transit_duration,
+        load_cached_triceratops_target,
+        prefetch_trilegal_csv,
+        save_cached_triceratops_target,
+    )
+
+    # v3 TTV track search (detection aid)
+    from bittr_tess_vetter.api.ttv_track_search import (  # noqa: F401
+        TTVSearchBudget,
+        TTVTrackSearchResult,
+        estimate_search_cost,
+        identify_observing_windows,
+        run_ttv_track_search,
+        run_ttv_track_search_for_candidate,
+        should_run_ttv_search,
     )
 
     # Types (v3) - re-exported from types.py
@@ -754,30 +820,6 @@ if TYPE_CHECKING:
 
     # Main orchestrator
     from bittr_tess_vetter.api.vet import vet_candidate
-
-    # Evidence helpers
-    from bittr_tess_vetter.api.evidence import checks_to_evidence_items
-    from bittr_tess_vetter.api.evidence_contracts import (  # noqa: F401
-        EvidenceEnvelope,
-        EvidenceProvenance,
-        compute_code_hash as compute_evidence_code_hash,
-        load_evidence,
-        save_evidence,
-    )
-
-    # WCS-aware pixel tools (v0.2 supported surface)
-    from bittr_tess_vetter.api.aperture_family import (
-        ApertureFamilyResult,
-        DEFAULT_RADII_PX,
-        compute_aperture_family_depth_curve,
-    )
-    from bittr_tess_vetter.api.localization import (
-        LocalizationDiagnostics,
-        LocalizationImages,
-        TransitParams,
-        compute_localization_diagnostics,
-    )
-    from bittr_tess_vetter.api.report import PixelVetReport, generate_pixel_vet_report
     from bittr_tess_vetter.api.wcs_localization import (
         LocalizationResult,
         LocalizationVerdict,
@@ -792,45 +834,6 @@ if TYPE_CHECKING:
         wcs_sanity_check,
         world_to_pixel,
         world_to_pixel_batch,
-    )
-    from bittr_tess_vetter.api.pixel_localize import (
-        localize_transit_host_single_sector,
-        localize_transit_host_single_sector_with_baseline_check,
-        localize_transit_host_multi_sector,
-    )
-
-    # Prefilters (PFxx)
-    from bittr_tess_vetter.api.prefilter import (  # noqa: F401
-        compute_depth_over_depth_err_snr,
-        compute_phase_coverage,
-    )
-
-    # Utilities
-    from bittr_tess_vetter.api.caps import (  # noqa: F401
-        DEFAULT_NEIGHBORS_CAP,
-        DEFAULT_PLOTS_CAP,
-        DEFAULT_TOP_K_CAP,
-        DEFAULT_VARIANT_SUMMARIES_CAP,
-        cap_neighbors,
-        cap_plots,
-        cap_top_k,
-        cap_variant_summaries,
-    )
-    from bittr_tess_vetter.api.tolerances import (  # noqa: F401
-        HARMONIC_RATIOS,
-        ToleranceResult,
-        check_tolerance,
-    )
-
-    # Optional MLX (guarded)
-    from bittr_tess_vetter.api.mlx import (  # noqa: F401
-        MlxTopKScoreResult,
-        MlxT0RefinementResult,
-        integrated_gradients,
-        score_fixed_period,
-        score_fixed_period_refine_t0,
-        score_top_k_periods,
-        smooth_box_template,
     )
 
 

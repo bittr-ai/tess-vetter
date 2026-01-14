@@ -14,6 +14,7 @@ Test coverage:
 
 from __future__ import annotations
 
+import contextlib
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -21,10 +22,8 @@ import pytest
 
 # Import astroquery early to initialize its logger before pytest captures warnings
 # This avoids conflicts between astropy's logger and pytest's warning capture
-try:
+with contextlib.suppress(ImportError):
     import astroquery.mast  # noqa: F401
-except ImportError:
-    pass  # astroquery not installed - tests will skip
 
 from bittr_tess_vetter.api.lightcurve import LightCurveData
 from bittr_tess_vetter.api.target import StellarParameters, Target
@@ -629,18 +628,20 @@ class TestGetTargetInfo:
         mock_catalog_result.__len__ = MagicMock(return_value=1)
         mock_catalog_result.__getitem__ = MagicMock(return_value=mock_tic_catalog_row)
 
-        with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
-            with patch("astroquery.mast.Catalogs") as mock_catalogs:
-                mock_catalogs.query_criteria.return_value = mock_catalog_result
+        with (
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve}),
+            patch("astroquery.mast.Catalogs") as mock_catalogs,
+        ):
+            mock_catalogs.query_criteria.return_value = mock_catalog_result
 
-                client = MASTClient()
-                client._lk = mock_lightkurve
-                client._lk_imported = True
+            client = MASTClient()
+            client._lk = mock_lightkurve
+            client._lk_imported = True
 
-                target = client.get_target_info(tic_id=261136679)
+            target = client.get_target_info(tic_id=261136679)
 
-                assert isinstance(target, Target)
-                assert target.tic_id == 261136679
+            assert isinstance(target, Target)
+            assert target.tic_id == 261136679
 
     def test_get_target_info_stellar_parameters(self, mock_lightkurve, mock_tic_catalog_row):
         """Target has StellarParameters with correct values."""
@@ -648,22 +649,24 @@ class TestGetTargetInfo:
         mock_catalog_result.__len__ = MagicMock(return_value=1)
         mock_catalog_result.__getitem__ = MagicMock(return_value=mock_tic_catalog_row)
 
-        with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
-            with patch("astroquery.mast.Catalogs") as mock_catalogs:
-                mock_catalogs.query_criteria.return_value = mock_catalog_result
+        with (
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve}),
+            patch("astroquery.mast.Catalogs") as mock_catalogs,
+        ):
+            mock_catalogs.query_criteria.return_value = mock_catalog_result
 
-                client = MASTClient()
-                client._lk = mock_lightkurve
-                client._lk_imported = True
+            client = MASTClient()
+            client._lk = mock_lightkurve
+            client._lk_imported = True
 
-                target = client.get_target_info(tic_id=261136679)
+            target = client.get_target_info(tic_id=261136679)
 
-                assert isinstance(target.stellar, StellarParameters)
-                assert target.stellar.teff == 5800.0
-                assert target.stellar.logg == 4.4
-                assert target.stellar.radius == 1.0
-                assert target.stellar.mass == 1.0
-                assert target.stellar.tmag == 10.5
+            assert isinstance(target.stellar, StellarParameters)
+            assert target.stellar.teff == 5800.0
+            assert target.stellar.logg == 4.4
+            assert target.stellar.radius == 1.0
+            assert target.stellar.mass == 1.0
+            assert target.stellar.tmag == 10.5
 
     def test_get_target_info_astrometric_data(self, mock_lightkurve, mock_tic_catalog_row):
         """Target has correct astrometric data."""
@@ -671,21 +674,23 @@ class TestGetTargetInfo:
         mock_catalog_result.__len__ = MagicMock(return_value=1)
         mock_catalog_result.__getitem__ = MagicMock(return_value=mock_tic_catalog_row)
 
-        with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
-            with patch("astroquery.mast.Catalogs") as mock_catalogs:
-                mock_catalogs.query_criteria.return_value = mock_catalog_result
+        with (
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve}),
+            patch("astroquery.mast.Catalogs") as mock_catalogs,
+        ):
+            mock_catalogs.query_criteria.return_value = mock_catalog_result
 
-                client = MASTClient()
-                client._lk = mock_lightkurve
-                client._lk_imported = True
+            client = MASTClient()
+            client._lk = mock_lightkurve
+            client._lk_imported = True
 
-                target = client.get_target_info(tic_id=261136679)
+            target = client.get_target_info(tic_id=261136679)
 
-                assert target.ra == 120.5
-                assert target.dec == -30.2
-                assert target.pmra == 10.5
-                assert target.pmdec == -5.2
-                assert target.distance_pc == 100.0
+            assert target.ra == 120.5
+            assert target.dec == -30.2
+            assert target.pmra == 10.5
+            assert target.pmdec == -5.2
+            assert target.distance_pc == 100.0
 
     def test_get_target_info_cross_match_ids(self, mock_lightkurve, mock_tic_catalog_row):
         """Target has correct cross-match identifiers."""
@@ -693,47 +698,53 @@ class TestGetTargetInfo:
         mock_catalog_result.__len__ = MagicMock(return_value=1)
         mock_catalog_result.__getitem__ = MagicMock(return_value=mock_tic_catalog_row)
 
-        with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
-            with patch("astroquery.mast.Catalogs") as mock_catalogs:
-                mock_catalogs.query_criteria.return_value = mock_catalog_result
+        with (
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve}),
+            patch("astroquery.mast.Catalogs") as mock_catalogs,
+        ):
+            mock_catalogs.query_criteria.return_value = mock_catalog_result
 
-                client = MASTClient()
-                client._lk = mock_lightkurve
-                client._lk_imported = True
+            client = MASTClient()
+            client._lk = mock_lightkurve
+            client._lk_imported = True
 
-                target = client.get_target_info(tic_id=261136679)
+            target = client.get_target_info(tic_id=261136679)
 
-                assert target.gaia_dr3_id == 12345678901234
-                assert target.twomass_id == "12345678+9012345"
+            assert target.gaia_dr3_id == 12345678901234
+            assert target.twomass_id == "12345678+9012345"
 
     def test_get_target_info_not_found(self, mock_lightkurve):
         """get_target_info() raises TargetNotFoundError when target not in TIC."""
-        with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
-            with patch("astroquery.mast.Catalogs") as mock_catalogs:
-                mock_catalogs.query_criteria.return_value = None
+        with (
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve}),
+            patch("astroquery.mast.Catalogs") as mock_catalogs,
+        ):
+            mock_catalogs.query_criteria.return_value = None
 
-                client = MASTClient()
-                client._lk = mock_lightkurve
-                client._lk_imported = True
+            client = MASTClient()
+            client._lk = mock_lightkurve
+            client._lk_imported = True
 
-                with pytest.raises(TargetNotFoundError, match="not found in catalog"):
-                    client.get_target_info(tic_id=999999999)
+            with pytest.raises(TargetNotFoundError, match="not found in catalog"):
+                client.get_target_info(tic_id=999999999)
 
     def test_get_target_info_empty_result(self, mock_lightkurve):
         """get_target_info() raises TargetNotFoundError for empty result."""
         mock_catalog_result = MagicMock()
         mock_catalog_result.__len__ = MagicMock(return_value=0)
 
-        with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
-            with patch("astroquery.mast.Catalogs") as mock_catalogs:
-                mock_catalogs.query_criteria.return_value = mock_catalog_result
+        with (
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve}),
+            patch("astroquery.mast.Catalogs") as mock_catalogs,
+        ):
+            mock_catalogs.query_criteria.return_value = mock_catalog_result
 
-                client = MASTClient()
-                client._lk = mock_lightkurve
-                client._lk_imported = True
+            client = MASTClient()
+            client._lk = mock_lightkurve
+            client._lk_imported = True
 
-                with pytest.raises(TargetNotFoundError, match="not found in catalog"):
-                    client.get_target_info(tic_id=999999999)
+            with pytest.raises(TargetNotFoundError, match="not found in catalog"):
+                client.get_target_info(tic_id=999999999)
 
     def test_get_target_info_missing_params(self, mock_lightkurve):
         """Target handles missing stellar parameters gracefully."""
@@ -750,19 +761,21 @@ class TestGetTargetInfo:
         mock_catalog_result.__len__ = MagicMock(return_value=1)
         mock_catalog_result.__getitem__ = MagicMock(return_value=row)
 
-        with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
-            with patch("astroquery.mast.Catalogs") as mock_catalogs:
-                mock_catalogs.query_criteria.return_value = mock_catalog_result
+        with (
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve}),
+            patch("astroquery.mast.Catalogs") as mock_catalogs,
+        ):
+            mock_catalogs.query_criteria.return_value = mock_catalog_result
 
-                client = MASTClient()
-                client._lk = mock_lightkurve
-                client._lk_imported = True
+            client = MASTClient()
+            client._lk = mock_lightkurve
+            client._lk_imported = True
 
-                target = client.get_target_info(tic_id=261136679)
+            target = client.get_target_info(tic_id=261136679)
 
-                assert target.stellar.teff == 5800.0
-                assert target.stellar.radius is None
-                assert target.stellar.mass is None
+            assert target.stellar.teff == 5800.0
+            assert target.stellar.radius is None
+            assert target.stellar.mass is None
 
 
 # -----------------------------------------------------------------------------
@@ -788,10 +801,12 @@ class TestErrorHandling:
             del sys.modules["lightkurve"]
 
         try:
-            with patch.dict("sys.modules", {"lightkurve": None}):
-                with patch("builtins.__import__", side_effect=ImportError("No module")):
-                    with pytest.raises(MASTClientError, match="lightkurve is required"):
-                        client._ensure_lightkurve()
+            with (
+                patch.dict("sys.modules", {"lightkurve": None}),
+                patch("builtins.__import__", side_effect=ImportError("No module")),
+                pytest.raises(MASTClientError, match="lightkurve is required"),
+            ):
+                client._ensure_lightkurve()
         finally:
             # Restore original modules
             sys.modules.update(original_modules)

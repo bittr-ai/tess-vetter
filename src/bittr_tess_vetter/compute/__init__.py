@@ -147,11 +147,11 @@ except ImportError:
 # =============================================================================
 # Importing mlx_detection does not require MLX to be installed; only calling its
 # functions requires `mlx.core`. Expose MLX_AVAILABLE based on dependency presence.
-import importlib.util as _importlib_util
+import importlib.util as _importlib_util  # noqa: E402
 
 MLX_AVAILABLE = _importlib_util.find_spec("mlx") is not None
 
-from .mlx_detection import (  # noqa: E402
+from .mlx_detection import (  # noqa: E402, F401
     MlxT0RefinementResult,
     MlxTopKScoreResult,
     integrated_gradients,

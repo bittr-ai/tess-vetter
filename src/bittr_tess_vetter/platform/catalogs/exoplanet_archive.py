@@ -6,7 +6,7 @@ TIC ID or target name, and returns ephemeris data in BTJD format suitable for us
 with TESS light curve analysis tools.
 
 Usage:
-    >>> from astro_arc.catalogs.exoplanet_archive import ExoplanetArchiveClient
+    >>> from bittr_tess_vetter.platform.catalogs.exoplanet_archive import ExoplanetArchiveClient
     >>> client = ExoplanetArchiveClient()
     >>> result = client.get_known_planets(tic_id=150428135)
     >>> print(result.n_planets)

@@ -7,10 +7,10 @@ cache types used by host applications.
 from __future__ import annotations
 
 from bittr_tess_vetter.pixel.tpf_fits import (  # noqa: F401
+    VALID_AUTHORS,
     TPFFitsCache,
     TPFFitsData,
     TPFFitsNotFoundError,
     TPFFitsRef,
-    VALID_AUTHORS,
     _compute_wcs_checksum,
 )

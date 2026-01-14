@@ -36,11 +36,6 @@ from bittr_tess_vetter.transit.timing import (
     measure_all_transit_times,
     measure_single_transit,
 )
-from bittr_tess_vetter.transit.vetting import (
-    compare_odd_even_depths,
-    compute_odd_even_result,
-    split_odd_even,
-)
 from bittr_tess_vetter.transit.ttv_track_search import (
     TTVSearchBudget,
     TTVTrackCandidate,
@@ -52,6 +47,11 @@ from bittr_tess_vetter.transit.ttv_track_search import (
     score_periodic_model,
     score_track_hypothesis,
     should_run_ttv_search,
+)
+from bittr_tess_vetter.transit.vetting import (
+    compare_odd_even_depths,
+    compute_odd_even_result,
+    split_odd_even,
 )
 
 __all__ = [

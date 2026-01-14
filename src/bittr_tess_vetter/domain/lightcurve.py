@@ -8,8 +8,7 @@ This module provides:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict

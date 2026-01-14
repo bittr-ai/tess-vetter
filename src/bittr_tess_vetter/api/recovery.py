@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
+from bittr_tess_vetter.api.lightcurve import LightCurveData
 from bittr_tess_vetter.api.references import (
     AIGRAIN_2016,
     BARROS_2020,
@@ -37,10 +38,10 @@ from bittr_tess_vetter.api.references import (
     cite,
     cites,
 )
+from bittr_tess_vetter.api.transit_masks import count_transits
 from bittr_tess_vetter.api.types import Candidate, LightCurve
 from bittr_tess_vetter.compute.detrend import WOTAN_AVAILABLE
-from bittr_tess_vetter.api.lightcurve import LightCurveData
-from bittr_tess_vetter.api.transit_masks import count_transits
+from bittr_tess_vetter.recovery import pipeline as _pipeline
 from bittr_tess_vetter.recovery.primitives import (
     compute_detection_snr,
     detrend_for_recovery,
@@ -49,7 +50,9 @@ from bittr_tess_vetter.recovery.primitives import (
 from bittr_tess_vetter.recovery.primitives import (
     stack_transits as _stack_transits,
 )
-from bittr_tess_vetter.recovery.pipeline import recover_transit_timeseries
+
+# Re-export for public API
+recover_transit_timeseries = _pipeline.recover_transit_timeseries
 
 if TYPE_CHECKING:
     from bittr_tess_vetter.activity.result import ActivityResult

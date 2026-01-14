@@ -9,7 +9,6 @@ This module provides:
 
 from __future__ import annotations
 
-from enum import Enum
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator

@@ -16,9 +16,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from bittr_tess_vetter.platform.catalogs.models import SourceRecord
 from bittr_tess_vetter.platform.catalogs.simbad_client import (
-    SIMBAD_TAP_ENDPOINT,
-    SimbadClient,
     SimbadIdentifiers,
     SimbadObjectType,
     SimbadQueryResult,
@@ -26,8 +25,6 @@ from bittr_tess_vetter.platform.catalogs.simbad_client import (
     classify_object_type,
     parse_spectral_type,
 )
-from bittr_tess_vetter.platform.catalogs.models import SourceRecord
-
 
 # Fixture directory
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "simbad"

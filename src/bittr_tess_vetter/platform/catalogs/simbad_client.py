@@ -5,7 +5,7 @@ object types (star, binary, variable), and spectral classifications. It supports
 querying by any identifier (TIC, HD, HIP, Gaia DR3, etc.) or by position.
 
 Usage:
-    >>> from astro_arc.catalogs.simbad_client import SimbadClient
+    >>> from bittr_tess_vetter.platform.catalogs.simbad_client import SimbadClient
     >>> client = SimbadClient()
     >>> result = await client.query_by_id("TIC 261136679")  # Pi Mensae
     >>> print(f"Main ID: {result.identifiers.main_id}")

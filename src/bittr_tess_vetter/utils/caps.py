@@ -189,7 +189,7 @@ def cap_plots(
 
 
 # =============================================================================
-# Tests (run with: python -m pytest src/astro_arc/utils/caps.py -v)
+# Tests (run with: python -m pytest src/bittr_tess_vetter/utils/caps.py -v)
 # =============================================================================
 
 if __name__ == "__main__":

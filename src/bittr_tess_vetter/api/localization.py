@@ -15,13 +15,15 @@ from typing import TYPE_CHECKING, TypeAlias
 
 from bittr_tess_vetter.pixel.localization import (
     LocalizationDiagnosticsResult as LocalizationDiagnostics,
+)
+from bittr_tess_vetter.pixel.localization import (
     TransitParams,
     compute_localization_diagnostics,
 )
 
 if TYPE_CHECKING:
-    from numpy.typing import NDArray
     import numpy as np
+    from numpy.typing import NDArray
 
 LocalizationImages: TypeAlias = dict[str, "NDArray[np.floating]"]
 

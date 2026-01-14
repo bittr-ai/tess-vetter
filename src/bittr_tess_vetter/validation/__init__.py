@@ -17,7 +17,6 @@ from bittr_tess_vetter.validation.base import (
     search_secondary_eclipse,
     sigma_clip,
 )
-
 from bittr_tess_vetter.validation.lc_checks import (
     check_aperture_dependence,
     check_centroid_shift,

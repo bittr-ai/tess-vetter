@@ -15,9 +15,17 @@ from bittr_tess_vetter.api.types import Candidate, LightCurve
 from bittr_tess_vetter.transit.ttv_track_search import (
     TTVSearchBudget,
     TTVTrackSearchResult,
+)
+from bittr_tess_vetter.transit.ttv_track_search import (
     estimate_search_cost as _estimate_search_cost,
+)
+from bittr_tess_vetter.transit.ttv_track_search import (
     identify_observing_windows as _identify_observing_windows,
+)
+from bittr_tess_vetter.transit.ttv_track_search import (
     run_ttv_track_search as _run_ttv_track_search,
+)
+from bittr_tess_vetter.transit.ttv_track_search import (
     should_run_ttv_search as _should_run_ttv_search,
 )
 
@@ -87,15 +95,47 @@ def run_ttv_track_search(
 ) -> TTVTrackSearchResult:
     """Run a TTV track search around a known ephemeris.
 
+    This function implements a RIVERS-like "track search" that can recover transit
+    signals with large transit timing variations (TTVs) that periodic-only BLS/TLS
+    can miss. It searches over bounded timing offsets per observing window and
+    scores each offset "track" by the improvement of a simple box transit model
+    vs. a periodic-only model.
+
     Args:
-        time_btjd: Time array in BTJD
-        flux: Flux array (will be normalized to ~1 by median if normalize_flux=True)
-        flux_err: Flux uncertainty array (scaled consistently with flux normalization)
-        period_days: Base period
-        t0_btjd: Base epoch
-        duration_hours: Transit duration
-        normalize_flux: If True, divides flux and flux_err by nanmedian(flux)
-        **kwargs: Passed through to the internal implementation.
+        time_btjd: Time array in Barycentric TESS Julian Date (BTJD = BJD - 2457000).
+        flux: Flux array. Will be normalized to ~1 by median if normalize_flux=True.
+        flux_err: Flux uncertainty array. Scaled consistently with flux normalization.
+        period_days: Base orbital period in days to search around.
+        t0_btjd: Base transit epoch in BTJD.
+        duration_hours: Transit duration in hours.
+        normalize_flux: If True, divides flux and flux_err by nanmedian(flux).
+            Default is True.
+        **kwargs: Additional parameters passed to the internal implementation,
+            including:
+            - budget (TTVSearchBudget): Runtime/evaluation budget controls.
+            - n_offset_steps (int): Number of timing offset steps per window.
+            - max_tracks_per_period (int): Maximum tracks to evaluate per period.
+
+    Returns:
+        TTVTrackSearchResult containing:
+            - candidates: List of TTVTrackCandidate objects with best tracks found.
+            - n_periods_searched: Number of period values searched.
+            - n_tracks_evaluated: Total number of track hypotheses evaluated.
+            - runtime_seconds: Total search runtime.
+            - budget_exhausted: Whether the search was terminated due to budget.
+
+    Example:
+        >>> import numpy as np
+        >>> from bittr_tess_vetter.api import run_ttv_track_search
+        >>> result = run_ttv_track_search(
+        ...     time_btjd=time,
+        ...     flux=flux,
+        ...     flux_err=flux_err,
+        ...     period_days=3.5,
+        ...     t0_btjd=1850.0,
+        ...     duration_hours=2.5,
+        ... )
+        >>> print(f"Found {len(result.candidates)} candidate(s)")
     """
     time_btjd = np.asarray(time_btjd, dtype=float)
     flux = np.asarray(flux, dtype=float)
@@ -123,7 +163,40 @@ def run_ttv_track_search_for_candidate(
     normalize_flux: bool = True,
     **kwargs: object,
 ) -> TTVTrackSearchResult:
-    """Convenience wrapper: run track search using a Candidate ephemeris."""
+    """Run TTV track search using a Candidate's ephemeris.
+
+    This is a convenience wrapper around run_ttv_track_search that extracts
+    the ephemeris parameters (period, t0, duration) from a Candidate object
+    and applies them to a LightCurve.
+
+    Args:
+        lc: LightCurve object containing time, flux, and flux_err arrays.
+            Invalid data points (NaN/Inf) are automatically masked.
+        candidate: Candidate object containing the ephemeris to search around.
+            The ephemeris provides period_days, t0_btjd, and duration_hours.
+        normalize_flux: If True, divides flux and flux_err by nanmedian(flux).
+            Default is True.
+        **kwargs: Additional parameters passed to run_ttv_track_search,
+            including budget controls and search parameters.
+
+    Returns:
+        TTVTrackSearchResult containing candidate tracks and search metadata.
+        See run_ttv_track_search for full result structure.
+
+    Example:
+        >>> from bittr_tess_vetter.api import (
+        ...     LightCurve, Candidate, Ephemeris,
+        ...     run_ttv_track_search_for_candidate
+        ... )
+        >>> lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+        >>> candidate = Candidate(
+        ...     ephemeris=Ephemeris(period_days=3.5, t0_btjd=1850.0, duration_hours=2.5),
+        ...     depth_ppm=500,
+        ... )
+        >>> result = run_ttv_track_search_for_candidate(lc, candidate)
+        >>> for track_candidate in result.candidates:
+        ...     print(f"Score improvement: {track_candidate.best_track.score_improvement:.3f}")
+    """
     internal = lc.to_internal()
     mask = internal.valid_mask
     time = internal.time[mask]

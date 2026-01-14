@@ -8,7 +8,7 @@ The crossmatch function uses the CatalogSnapshotStore to load versioned catalog
 snapshots, ensuring reproducible results tied to specific catalog versions.
 
 Usage:
-    >>> from astro_arc.catalogs.crossmatch import crossmatch
+    >>> from bittr_tess_vetter.platform.catalogs.crossmatch import crossmatch
     >>> report = crossmatch(
     ...     ra=120.5,
     ...     dec=-45.3,
@@ -537,7 +537,7 @@ def crossmatch(
         SnapshotNotFoundError: If a catalog snapshot cannot be loaded.
 
     Example:
-        >>> from astro_arc.catalogs.crossmatch import crossmatch
+        >>> from bittr_tess_vetter.platform.catalogs.crossmatch import crossmatch
         >>> report = crossmatch(
         ...     ra=120.5,
         ...     dec=-45.3,

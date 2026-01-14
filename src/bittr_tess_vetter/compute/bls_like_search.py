@@ -96,10 +96,7 @@ def bls_like_search_numpy(
         "dur_h": float("nan"),
     }
 
-    if flux_err is not None:
-        w = 1.0 / np.maximum(flux_err * flux_err, 1e-12)
-    else:
-        w = None
+    w = 1.0 / np.maximum(flux_err * flux_err, 1e-12) if flux_err is not None else None
 
     for period in period_grid:
         bmeans, bcounts = _phase_bin_means(time_btjd, flux, float(period), nbins)
@@ -185,10 +182,7 @@ def bls_like_search_numpy_top_k(
 
     start = time.perf_counter()
 
-    if flux_err is not None:
-        w = 1.0 / np.maximum(flux_err * flux_err, 1e-12)
-    else:
-        w = None
+    w = 1.0 / np.maximum(flux_err * flux_err, 1e-12) if flux_err is not None else None
 
     candidates: list[BlsLikeCandidate] = []
 

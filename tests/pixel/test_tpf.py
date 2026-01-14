@@ -12,12 +12,11 @@ Tests the TPF (Target Pixel File) handling including:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pytest
-from bittr_tess_vetter.errors import ErrorType
 
+from bittr_tess_vetter.errors import ErrorType
 from bittr_tess_vetter.pixel import (
     CachedTPFHandler,
     TPFCache,

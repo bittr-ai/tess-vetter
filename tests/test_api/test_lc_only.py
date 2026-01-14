@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.api.lc_only import odd_even_depth, secondary_eclipse, vet_lc_only, v_shape
+from bittr_tess_vetter.api.lc_only import odd_even_depth, secondary_eclipse, v_shape, vet_lc_only
 from bittr_tess_vetter.api.transit_primitives import odd_even_result
 from bittr_tess_vetter.api.types import Ephemeris, LightCurve
 

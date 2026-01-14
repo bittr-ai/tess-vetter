@@ -16,6 +16,7 @@ that have been loaded and cleaned in the handler layer.
 from __future__ import annotations
 
 import logging
+import types
 
 import numpy as np
 from numpy.typing import NDArray

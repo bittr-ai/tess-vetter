@@ -15,9 +15,9 @@ from typing import Any, Literal, TypedDict
 import numpy as np
 
 from bittr_tess_vetter.api.pixel_prf import (
-    aggregate_multi_sector,
     MARGIN_RESOLVE_THRESHOLD,
     PRFParams,
+    aggregate_multi_sector,
     prf_params_from_dict,
     score_hypotheses_prf_lite,
     score_hypotheses_with_prf,
@@ -89,16 +89,14 @@ def _is_target_best(
     *,
     best_source_id: str | None,
     best_source_name: str | None,
-    tpf_fits: "TPFFitsData",
+    tpf_fits: TPFFitsData,
 ) -> bool:
     if best_source_id is None and best_source_name is None:
         return False
     target_ids = {"target", f"tic:{int(getattr(tpf_fits.ref, 'tic_id', -1))}"}
     if best_source_id in target_ids:
         return True
-    if best_source_name and "target" in best_source_name.lower():
-        return True
-    return False
+    return bool(best_source_name and "target" in best_source_name.lower())
 
 
 def _cadence_label(cadence_seconds: float) -> str:
@@ -112,7 +110,7 @@ def _cadence_label(cadence_seconds: float) -> str:
 
 
 def _compute_tpf_cadence_summary(
-    tpf_fits: "TPFFitsData",
+    tpf_fits: TPFFitsData,
     diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     time = np.asarray(getattr(tpf_fits, "time", []), dtype=np.float64)
@@ -144,7 +142,7 @@ def _compute_tpf_cadence_summary(
 
 def localize_transit_host_single_sector(
     *,
-    tpf_fits: "TPFFitsData",
+    tpf_fits: TPFFitsData,
     period_days: float,
     t0_btjd: float,
     duration_hours: float,
@@ -345,7 +343,7 @@ def localize_transit_host_single_sector(
 
 def localize_transit_host_single_sector_with_baseline_check(
     *,
-    tpf_fits: "TPFFitsData",
+    tpf_fits: TPFFitsData,
     period_days: float,
     t0_btjd: float,
     duration_hours: float,
@@ -452,7 +450,7 @@ def localize_transit_host_single_sector_with_baseline_check(
 
 def localize_transit_host_multi_sector(
     *,
-    tpf_fits_list: list["TPFFitsData"],
+    tpf_fits_list: list[TPFFitsData],
     period_days: float,
     t0_btjd: float,
     duration_hours: float,
@@ -486,7 +484,7 @@ def localize_transit_host_multi_sector(
         # Attach lightweight metadata so callers don't need to loop just to label sectors.
         try:
             r["sector"] = int(getattr(tpf.ref, "sector", 0))
-            r["tpf_fits_ref"] = str(getattr(tpf.ref, "to_string")())
+            r["tpf_fits_ref"] = str(tpf.ref.to_string())
         except Exception:
             pass
         r["cadence_summary"] = _compute_tpf_cadence_summary(tpf, r.get("diagnostics"))

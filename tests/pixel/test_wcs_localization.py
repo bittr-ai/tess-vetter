@@ -516,17 +516,17 @@ class TestLocalizeTransitSource:
 
     def test_peak_pixel_depth_sigma_increases_with_injected_depth(self) -> None:
         """Deeper injected transits should increase peak-pixel depth significance (in expectation)."""
-        common_kwargs = dict(
-            shape=(800, 11, 11),
-            stars=[StarSpec(row=5.0, col=5.0, flux=200000.0)],
-            period=5.0,
-            t0=2458001.0,
-            duration_days=0.2,
-            wcs_crval=(120.0, -50.0),
-            pixel_scale_arcsec=21.0,
-            noise_level=50.0,
-            seed=123,
-        )
+        common_kwargs = {
+            "shape": (800, 11, 11),
+            "stars": [StarSpec(row=5.0, col=5.0, flux=200000.0)],
+            "period": 5.0,
+            "t0": 2458001.0,
+            "duration_days": 0.2,
+            "wcs_crval": (120.0, -50.0),
+            "pixel_scale_arcsec": 21.0,
+            "noise_level": 50.0,
+            "seed": 123,
+        }
 
         tpf_shallow = make_synthetic_tpf_fits(
             shape=common_kwargs["shape"],

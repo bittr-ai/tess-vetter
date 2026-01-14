@@ -82,7 +82,6 @@ def test_prepare_recovery_inputs_sorts_concat_time() -> None:
 
 
 def test_recover_transit_two_sectors_with_gap_recovers_depth_order() -> None:
-    tic_id = 999
     cadence_seconds = 120.0
     period = 3.5
     t0 = 0.5

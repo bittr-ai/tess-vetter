@@ -17,7 +17,6 @@ from typing import Any
 import numpy as np
 
 
-
 def phase_fold(
     time: np.ndarray,
     flux: np.ndarray,

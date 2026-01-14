@@ -12,7 +12,7 @@ def test_api_root_mlx_exports_guarded() -> None:
     from bittr_tess_vetter import api
 
     expected_available = importlib.util.find_spec("mlx") is not None
-    assert api.MLX_AVAILABLE == expected_available
+    assert expected_available == api.MLX_AVAILABLE
 
     if expected_available:
         # When MLX is installed, these should be available from the root surface.

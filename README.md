@@ -23,7 +23,14 @@
 
 Domain library for TESS transit detection + vetting (array-in/array-out).
 
-This package is intentionally “domain-only”: array-in/array-out astronomy algorithms without any platform-specific tooling (stores, manifests, agent frameworks, etc.).
+This package is intentionally "domain-only": array-in/array-out astronomy algorithms without any platform-specific tooling (stores, manifests, agent frameworks, etc.).
+
+**Package structure:**
+
+- **Pure domain logic** (no I/O, no network): `api/`, `compute/`, `validation/`, `transit/`, `recovery/`, `activity/`
+- **Opt-in infrastructure** (network clients, caching, disk I/O): `platform/`
+
+The `platform/` module is entirely optional and only used when explicitly imported.
 
 ## What’s in here
 
@@ -54,12 +61,20 @@ python -m pip install -e ".[dev]"
 python -m pip install -e ".[all]"
 ```
 
-Note: `uv` is configured to use a local editable dependency for `bittr-reason-core` at `../bittr-reason-core` (see `pyproject.toml`).
 
 ## Quickstart
 
+The recommended import alias follows patterns from astropy (`import astropy.units as u`):
+
+```python
+import bittr_tess_vetter.api as btv
+```
+
+Full example:
+
 ```python
 import numpy as np
+import bittr_tess_vetter.api as btv
 from bittr_tess_vetter.api import Candidate, Ephemeris, LightCurve, run_periodogram, vet_candidate
 
 lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
@@ -87,8 +102,15 @@ Catalog-backed checks are always opt-in. You must pass `network=True` (and provi
 - `src/bittr_tess_vetter/validation/`: check implementations and aggregation primitives
 - `src/bittr_tess_vetter/pixel/`: pixel-level and WCS-aware diagnostics
 - `src/bittr_tess_vetter/recovery/`, `src/bittr_tess_vetter/transit/`, `src/bittr_tess_vetter/activity/`: domain modules
-- `src/bittr_tess_vetter/io/`, `src/bittr_tess_vetter/catalogs/`: optional I/O and catalog helpers
+- `src/bittr_tess_vetter/platform/io/`, `src/bittr_tess_vetter/platform/catalogs/`: optional I/O and catalog helpers
 - `src/bittr_tess_vetter/ext/triceratops_plus_vendor/`: vendored TRICERATOPS+ (see `THIRD_PARTY_NOTICES.md`)
+
+## Platform Support
+
+- **macOS / Linux**: First-class support. All features work as expected.
+- **Windows**: Best-effort support. Some platform-specific features may have limitations:
+  - Cache file locking uses `fcntl` (Unix-only); graceful fallback on Windows.
+  - Network timeouts use `SIGALRM` which may not work on all platforms.
 
 ## Development
 

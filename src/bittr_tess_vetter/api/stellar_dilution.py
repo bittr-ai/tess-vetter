@@ -10,15 +10,15 @@ Naming conventions:
 from __future__ import annotations
 
 from bittr_tess_vetter.validation.stellar_dilution import (  # noqa: F401
+    PLANET_MAX_RADIUS_RJUP,
+    R_EARTH_TO_RSUN,
+    R_JUP_TO_RSUN,
+    RSUN_TO_REARTH,
+    RSUN_TO_RJUP,
+    STELLAR_MIN_RADIUS_RSUN,
     DilutionScenario,
     HostHypothesis,
     PhysicsFlags,
-    PLANET_MAX_RADIUS_RJUP,
-    RSUN_TO_REARTH,
-    RSUN_TO_RJUP,
-    R_EARTH_TO_RSUN,
-    R_JUP_TO_RSUN,
-    STELLAR_MIN_RADIUS_RSUN,
     build_host_hypotheses_from_profile,
     compute_depth_correction_factor_from_flux_fraction,
     compute_dilution_scenarios,

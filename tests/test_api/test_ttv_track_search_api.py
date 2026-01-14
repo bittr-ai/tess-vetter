@@ -92,18 +92,18 @@ def test_run_ttv_track_search_deterministic() -> None:
 
     time, flux, flux_err = _make_synthetic_ttv_lc()
 
-    kwargs = dict(
-        period_days=10.0,
-        t0_btjd=1000.0,
-        duration_hours=4.0,
-        period_span_fraction=0.0,
-        period_steps=1,
-        max_offset_days=0.1,
-        n_offset_steps=5,
-        max_tracks_per_period=200,
-        min_score_improvement=0.5,
-        budget=TTVSearchBudget(max_runtime_seconds=5.0, max_period_evaluations=10, max_track_hypotheses=5000),
-    )
+    kwargs = {
+        "period_days": 10.0,
+        "t0_btjd": 1000.0,
+        "duration_hours": 4.0,
+        "period_span_fraction": 0.0,
+        "period_steps": 1,
+        "max_offset_days": 0.1,
+        "n_offset_steps": 5,
+        "max_tracks_per_period": 200,
+        "min_score_improvement": 0.5,
+        "budget": TTVSearchBudget(max_runtime_seconds=5.0, max_period_evaluations=10, max_track_hypotheses=5000),
+    }
     r1 = run_ttv_track_search(time, flux, flux_err, random_seed=123, **kwargs)
     r2 = run_ttv_track_search(time, flux, flux_err, random_seed=123, **kwargs)
 

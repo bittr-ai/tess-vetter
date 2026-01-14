@@ -37,7 +37,7 @@ def test_transit_fit_primitives_exports_have_references_metadata() -> None:
     ]
     for fn in decorated:
         assert hasattr(fn, "__references__"), f"missing __references__ on {fn.__name__}"
-        refs = getattr(fn, "__references__")
+        refs = fn.__references__
         assert isinstance(refs, (list, tuple))
         assert len(refs) >= 1
 

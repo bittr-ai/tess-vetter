@@ -20,8 +20,8 @@ import importlib.util
 from bittr_tess_vetter.api.references import KOVACS_2002, SUNDARARAJAN_2017, cite, cites
 from bittr_tess_vetter.compute import mlx_detection as _mlx_detection
 from bittr_tess_vetter.compute.mlx_detection import (
-    MlxTopKScoreResult,
     MlxT0RefinementResult,
+    MlxTopKScoreResult,
 )
 
 

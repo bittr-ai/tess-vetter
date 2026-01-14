@@ -19,7 +19,7 @@ Key features:
 - Checksum verification for data integrity
 
 Usage:
-    >>> from astro_arc.catalogs.store import CatalogSnapshotStore
+    >>> from bittr_tess_vetter.platform.catalogs.store import CatalogSnapshotStore
     >>> store = CatalogSnapshotStore("/path/to/storage")
     >>> snapshot_id = store.install("my_catalog", "1.0.0", "https://example.com/catalog.json")
     >>> catalog = store.load(snapshot_id)

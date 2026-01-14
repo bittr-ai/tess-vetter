@@ -44,6 +44,8 @@ from bittr_tess_vetter.validation.lc_checks import (
     OddEvenConfig,
     SecondaryEclipseConfig,
     VShapeConfig,
+)
+from bittr_tess_vetter.validation.lc_checks import (
     check_depth_stability as _check_depth_stability,
 )
 from bittr_tess_vetter.validation.lc_checks import (

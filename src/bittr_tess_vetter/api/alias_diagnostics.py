@@ -8,8 +8,8 @@ host applications.
 from __future__ import annotations
 
 from bittr_tess_vetter.validation.alias_diagnostics import (  # noqa: F401
-    AliasClass,
     HARMONIC_LABELS,
+    AliasClass,
     HarmonicScore,
     PhaseShiftEvent,
     classify_alias,

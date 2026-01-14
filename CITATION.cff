@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "bittr-tess-vetter"
+version: 0.0.1
+date-released: 2026-01-14
+license: MIT
+repository-code: "https://github.com/bittr-ai/bittr-tess-vetter"
+url: "https://github.com/bittr-ai/bittr-tess-vetter"
+abstract: "Domain-only TESS transit detection and vetting library providing array-in/array-out algorithms for exoplanet candidate validation."
+keywords:
+  - tess
+  - astronomy
+  - exoplanet
+  - transit
+  - vetting
+  - astrophysics
+authors:
+  - name: "bittr-tess-vetter contributors"

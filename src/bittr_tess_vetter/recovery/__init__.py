@@ -14,6 +14,7 @@ bittr_tess_vetter.compute.transit.get_transit_mask()).
 
 from __future__ import annotations
 
+from bittr_tess_vetter.recovery.pipeline import recover_transit_timeseries
 from bittr_tess_vetter.recovery.primitives import (
     count_transits,
     detrend_for_recovery,
@@ -22,7 +23,6 @@ from bittr_tess_vetter.recovery.primitives import (
     remove_stellar_variability,
     stack_transits,
 )
-from bittr_tess_vetter.recovery.pipeline import recover_transit_timeseries
 from bittr_tess_vetter.recovery.result import StackedTransit, TrapezoidFit
 
 __all__ = [

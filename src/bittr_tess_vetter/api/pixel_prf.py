@@ -9,30 +9,33 @@ All exports are pure compute (array-in/array-out). No I/O and no network.
 
 from __future__ import annotations
 
-# PRF-lite
-from bittr_tess_vetter.compute.pixel_prf_lite import (  # noqa: F401
-    build_prf_model,
-    build_prf_model_at_pixels,
-    evaluate_prf_weights,
+from bittr_tess_vetter.api.references import (
+    BRYSON_2010,
+    BRYSON_2013,
+    HIGGINS_BELL_2022,
+    TORRES_2011,
+    cite,
+    cites,
 )
 
-# PRF schemas + PSF model
-from bittr_tess_vetter.compute.prf_schemas import (  # noqa: F401
-    BackgroundParams,
-    PRFFitResult,
-    PRFParams,
-    fit_result_from_dict,
-    fit_result_to_dict,
-    prf_params_from_json,
-    prf_params_from_dict,
-    prf_params_to_dict,
-    prf_params_to_json,
+# Aperture prediction + conflict detection
+from bittr_tess_vetter.compute.aperture_prediction import (  # noqa: F401
+    ApertureConflict,
+    AperturePrediction,
+    compute_aperture_chi2,
+    detect_aperture_conflict,
+    predict_all_hypotheses,
+    predict_depth_vs_aperture,
+    propagate_aperture_uncertainty,
 )
-from bittr_tess_vetter.compute.prf_psf import (  # noqa: F401
-    AVAILABLE_BACKENDS,
-    PRFModel,
-    ParametricPSF,
-    get_prf_model,
+
+# Joint likelihood (multi-sector inference)
+from bittr_tess_vetter.compute.joint_likelihood import (  # noqa: F401
+    assess_sector_quality,
+    compute_all_hypotheses_joint,
+    compute_joint_log_likelihood,
+    compute_sector_weights,
+    select_best_hypothesis_joint,
 )
 
 # Hypothesis scoring
@@ -52,15 +55,11 @@ from bittr_tess_vetter.compute.pixel_hypothesis_prf import (  # noqa: F401
     score_hypotheses_with_prf,
 )
 
-# Aperture prediction + conflict detection
-from bittr_tess_vetter.compute.aperture_prediction import (  # noqa: F401
-    ApertureConflict,
-    AperturePrediction,
-    compute_aperture_chi2,
-    detect_aperture_conflict,
-    predict_all_hypotheses,
-    predict_depth_vs_aperture,
-    propagate_aperture_uncertainty,
+# PRF-lite
+from bittr_tess_vetter.compute.pixel_prf_lite import (  # noqa: F401
+    build_prf_model,
+    build_prf_model_at_pixels,
+    evaluate_prf_weights,
 )
 
 # Time-series inference on pixels
@@ -80,23 +79,24 @@ from bittr_tess_vetter.compute.pixel_timeseries import (  # noqa: F401
     fit_transit_amplitude_wls,
     select_best_hypothesis_timeseries,
 )
-
-# Joint likelihood (multi-sector inference)
-from bittr_tess_vetter.compute.joint_likelihood import (  # noqa: F401
-    assess_sector_quality,
-    compute_all_hypotheses_joint,
-    compute_joint_log_likelihood,
-    compute_sector_weights,
-    select_best_hypothesis_joint,
+from bittr_tess_vetter.compute.prf_psf import (  # noqa: F401
+    AVAILABLE_BACKENDS,
+    ParametricPSF,
+    PRFModel,
+    get_prf_model,
 )
 
-from bittr_tess_vetter.api.references import (
-    BRYSON_2010,
-    BRYSON_2013,
-    HIGGINS_BELL_2022,
-    TORRES_2011,
-    cite,
-    cites,
+# PRF schemas + PSF model
+from bittr_tess_vetter.compute.prf_schemas import (  # noqa: F401
+    BackgroundParams,
+    PRFFitResult,
+    PRFParams,
+    fit_result_from_dict,
+    fit_result_to_dict,
+    prf_params_from_dict,
+    prf_params_from_json,
+    prf_params_to_dict,
+    prf_params_to_json,
 )
 
 # Attach citations to imported callables (no wrapping; adds __references__ metadata).
