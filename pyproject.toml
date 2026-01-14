@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bittr-tess-vetter"
-version = "0.0.1"
+version = "0.1.0"
 description = "Domain-only TESS transit detection and vetting library (array-in/array-out)"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"

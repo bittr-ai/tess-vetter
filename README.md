@@ -23,7 +23,7 @@
 
 Domain library for TESS transit detection + vetting (array-in/array-out).
 
-This package is intentionally "domain-only": array-in/array-out astronomy algorithms without any platform-specific tooling (stores, manifests, agent frameworks, etc.).
+This package follows a "domain-first" design: array-in/array-out astronomy algorithms with optional platform helpers. The core `api/`, `compute/`, and `validation/` modules are pure functions; the `platform/` module provides opt-in I/O and network clients when needed.
 
 **Package structure:**
 
@@ -57,8 +57,13 @@ Using `pip`:
 
 ```bash
 python -m pip install -e .
-python -m pip install -e ".[dev]"
 python -m pip install -e ".[all]"
+```
+
+For development (tests, linting, type-checking), this project uses `uv` dependency groups:
+
+```bash
+uv sync --group dev
 ```
 
 

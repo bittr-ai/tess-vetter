@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import hashlib
 import json
 import os
 import pickle
+import sys
 import time
+
+if sys.platform != "win32":
+    import fcntl
+else:
+    fcntl = None  # type: ignore[assignment]
 from collections import OrderedDict
 from collections.abc import Callable
 from pathlib import Path
@@ -244,11 +249,13 @@ class PersistentCache:
         with self._lock:
             try:
                 with open(data_path, "rb") as f:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+                    if fcntl is not None:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_SH)
                     try:
                         value = pickle.load(f)  # noqa: S301
                     finally:
-                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                        if fcntl is not None:
+                            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
             except Exception:
                 self._remove_entry(key)
                 return None
@@ -266,11 +273,13 @@ class PersistentCache:
             meta_path = self._meta_path(key)
 
             with open(data_path, "wb") as f:
-                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                if fcntl is not None:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
                 try:
                     pickle.dump(value, f)  # noqa: S301
                 finally:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                    if fcntl is not None:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
             meta: dict[str, Any] = {"key": key, "created_at": time.time(), "accessed_at": time.time()}
             tic_id = getattr(value, "tic_id", None)
