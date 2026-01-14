@@ -133,7 +133,7 @@ def _build_reference_sources_from_gaia(
 
 def _print_dilution_plausibility(
     *, tic_id: int, ra: float, dec: float, radius_arcsec: float, observed_depth_ppm: float
-) -> list[str]:
+) -> list[tuple[str, float]]:
     gaia = query_gaia_by_position_sync(ra, dec, radius_arcsec=radius_arcsec, timeout=90)
     primary_g = gaia.source.phot_g_mean_mag if gaia.source is not None else None
     companions = [
@@ -155,7 +155,7 @@ def _print_dilution_plausibility(
     )
 
     print("\nDilution plausibility (depth-only; necessary condition, not validation):")
-    depth_feasible: list[str] = []
+    depth_feasible: list[tuple[str, float]] = []
     tested = 0
     ruled_out = 0
     for s in scenarios[:12]:
@@ -165,7 +165,7 @@ def _print_dilution_plausibility(
         impossible = true_ppm > 1_000_000.0
         tag = "IMPOSSIBLE (>100%)" if impossible else ""
         if not impossible:
-            depth_feasible.append(s.host.name)
+            depth_feasible.append((s.host.name, float(true_ppm)))
         else:
             ruled_out += 1
         print(
@@ -263,6 +263,7 @@ def main() -> int:
 
         print(f"\nSector {sector} localization:")
         print(f"- verdict: {loc.verdict}")
+        print(f"- centroid_sigma_arcsec: {loc.uncertainty_semimajor_arcsec:.2f}")
         if isinstance(target_sep_arcsec, (int, float)) and np.isfinite(float(target_sep_arcsec)):
             print(f"- target_separation_arcsec: {float(target_sep_arcsec):.2f}")
         if nearest_name is not None and nearest_sep_arcsec is not None:
@@ -303,8 +304,9 @@ def main() -> int:
 
     if depth_feasible:
         print("\nRemaining depth-feasible hosts (after dilution physics):")
-        for name in depth_feasible:
-            print(f"- {name}")
+        for name, true_ppm in depth_feasible:
+            pct = true_ppm / 1e4  # ppm -> percent
+            print(f"- {name}: true_depth≈{true_ppm:,.0f} ppm ({pct:.3f}%)")
         print(
             "All other Gaia hypotheses in the cone are ruled out by dilution physics (>100% true depth)."
         )
