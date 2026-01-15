@@ -71,9 +71,12 @@ def test_odd_even_depth_check_result_metrics_only() -> None:
     eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
 
     r = odd_even_depth(lc, eph)
-    assert r.passed is None
-    assert r.details.get("_metrics_only") is True
-    assert float(r.details["rel_diff"]) > 0.1
+    # New schema: status="ok" -> passed=True via backward-compat property
+    # All results are metrics-only by design (the interpretation is left to host)
+    assert r.status == "ok"
+    assert r.passed is True
+    # Check for metrics in new location
+    assert float(r.metrics["rel_diff"]) > 0.1
 
 
 def test_secondary_eclipse_check_result_metrics_only() -> None:
@@ -84,9 +87,10 @@ def test_secondary_eclipse_check_result_metrics_only() -> None:
     eph = Ephemeris(period_days=5.0, t0_btjd=1.0, duration_hours=3.0)
 
     r = secondary_eclipse(lc, eph)
-    assert r.passed is None
-    assert r.details.get("_metrics_only") is True
-    assert "secondary_depth_sigma" in r.details
+    # New schema: status="ok" -> passed=True via backward-compat property
+    assert r.status == "ok"
+    assert r.passed is True
+    assert "secondary_depth_sigma" in r.metrics
 
 
 def test_v_shape_check_metrics_only() -> None:
@@ -97,9 +101,10 @@ def test_v_shape_check_metrics_only() -> None:
     eph = Ephemeris(period_days=5.0, t0_btjd=1.0, duration_hours=3.0)
 
     r = v_shape(lc, eph)
-    assert r.passed is None
-    assert r.details.get("_metrics_only") is True
-    assert "tflat_ttotal_ratio" in r.details
+    # New schema: status="ok" -> passed=True via backward-compat property
+    assert r.status == "ok"
+    assert r.passed is True
+    assert "tflat_ttotal_ratio" in r.metrics
 
 
 def test_vet_lc_only_order_and_ids() -> None:
@@ -111,4 +116,7 @@ def test_vet_lc_only_order_and_ids() -> None:
 
     results = vet_lc_only(lc, eph)
     assert [r.id for r in results] == ["V01", "V02", "V03", "V04", "V05"]
-    assert all(r.passed is None for r in results)
+    # New schema: all results use status-based semantics
+    # status="ok" maps to passed=True
+    assert all(r.status == "ok" for r in results)
+    assert all(r.passed is True for r in results)

@@ -98,12 +98,14 @@ class ExoFopClient:
         target_dir.mkdir(parents=True, exist_ok=True)
         out_path = target_dir / "filelist.csv"
         if out_path.exists() and not force_refresh:
-            return self._parse_filelist_csv(out_path.read_text(encoding="utf-8", errors="replace"))
+            return self._parse_filelist_csv(
+                out_path.read_text(encoding="utf-8", errors="replace"), fallback_tic_id=int(tic_id)
+            )
 
         url = self._url("download_filelist.php")
         text = self._get_text(url, params={"id": str(int(tic_id)), "output": "csv"})
         self._write_text_atomic(out_path, text)
-        return self._parse_filelist_csv(text)
+        return self._parse_filelist_csv(text, fallback_tic_id=int(tic_id))
 
     def index_target(
         self,
@@ -309,7 +311,7 @@ class ExoFopClient:
     # Parsing / filtering
     # -----------------------------------------------------------------------------
 
-    def _parse_filelist_csv(self, text: str) -> list[ExoFopFileRow]:
+    def _parse_filelist_csv(self, text: str, *, fallback_tic_id: int | None = None) -> list[ExoFopFileRow]:
         # ExoFOP uses CSV when output=csv; tolerate stray BOM or whitespace.
         buf = io.StringIO(text.lstrip("\ufeff"))
         reader = csv.DictReader(buf)
@@ -321,6 +323,9 @@ class ExoFopClient:
             if not filename:
                 continue
             file_id_raw = (r.get("File ID") or r.get("FileID") or r.get("file_id") or "").strip()
+            # ExoFOP filelist schemas vary. Some exports include a TIC/TIC ID column, while
+            # others omit it entirely when querying by TIC id. In the latter case, fall back
+            # to the caller-provided tic_id.
             tic_raw = (r.get("TIC") or r.get("TIC ID") or r.get("tic") or "").strip()
             toi = (r.get("TOI") or r.get("toi") or "").strip() or None
             typ = (r.get("Type") or r.get("type") or "").strip() or "Unknown"
@@ -334,10 +339,16 @@ class ExoFopClient:
                 file_id = int(float(file_id_raw))
             except Exception:
                 continue
-            try:
-                tic_id = int(float(tic_raw))
-            except Exception:
-                # Some rows may omit TIC; treat as unknown and skip (we want deterministic paths).
+            if tic_raw:
+                try:
+                    tic_id = int(float(tic_raw))
+                except Exception:
+                    tic_id = int(fallback_tic_id) if fallback_tic_id is not None else 0
+            else:
+                tic_id = int(fallback_tic_id) if fallback_tic_id is not None else 0
+
+            if tic_id <= 0:
+                # Without a TIC, we can't reliably associate the entry to a target.
                 continue
 
             rows.append(
@@ -492,4 +503,3 @@ class ExoFopClient:
             "errors": [],
         }
         self._write_text_atomic(manifest_path, json.dumps(payload, indent=2, sort_keys=True))
-

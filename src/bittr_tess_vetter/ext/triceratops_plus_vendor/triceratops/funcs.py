@@ -184,22 +184,22 @@ def flux_relation(Masses: np.array, filt: str = "TESS"):
                               a ~1 Solar mass star.
     """
     if (filt == "TESS") or (filt == "Vis"):
-        fluxes = 10**flux_spline(Masses)
-    if filt == "J":
-        fluxes = 10**flux_spline_J(Masses)
-    if filt == "H":
-        fluxes = 10**flux_spline_H(Masses)
-    if filt == "K":
-        fluxes = 10**flux_spline_K(Masses)
-    if filt == "g":
-        fluxes = 10**flux_spline_g(Masses)
-    if filt == "r":
-        fluxes = 10**flux_spline_r(Masses)
-    if filt == "i":
-        fluxes = 10**flux_spline_i(Masses)
-    if filt == "z":
-        fluxes = 10**flux_spline_z(Masses)
-    return fluxes
+        return 10**flux_spline(Masses)
+    elif filt == "J":
+        return 10**flux_spline_J(Masses)
+    elif filt == "H":
+        return 10**flux_spline_H(Masses)
+    elif filt == "K":
+        return 10**flux_spline_K(Masses)
+    elif filt == "g":
+        return 10**flux_spline_g(Masses)
+    elif filt == "r":
+        return 10**flux_spline_r(Masses)
+    elif filt == "i":
+        return 10**flux_spline_i(Masses)
+    elif filt == "z":
+        return 10**flux_spline_z(Masses)
+    raise ValueError(f"Unsupported filter for flux_relation: {filt!r}")
 
 
 def color_Teff_relations(V, Ks):

@@ -140,12 +140,12 @@ def test_primitives_submodule_exists() -> None:
     from bittr_tess_vetter.api.primitives import (  # noqa: F401
         check_odd_even_depth,
         check_secondary_eclipse,
-        detrend,
         fold,
+        median_detrend,
     )
 
     assert fold is not None
-    assert detrend is not None
+    assert median_detrend is not None
     assert check_odd_even_depth is not None
     assert check_secondary_eclipse is not None
 

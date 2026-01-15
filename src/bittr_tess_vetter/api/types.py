@@ -4,10 +4,10 @@ This module provides user-facing types for the API facade:
 - Ephemeris: Transit ephemeris (period, t0, duration)
 - LightCurve: Simplified light curve container with dtype normalization
 - StellarParams: Alias for internal StellarParameters
-- CheckResult: Vetting check result (id, name, passed, confidence, details)
+- CheckResult: Vetting check result (canonical Pydantic type from validation)
 - Candidate: Transit candidate container (v2)
 - TPFStamp: Target Pixel File data container (v2)
-- VettingBundleResult: Orchestrator output with provenance (v2)
+- VettingBundleResult: Orchestrator output with provenance (canonical Pydantic type)
 
 v3 type re-exports:
 - TransitFitResult: Physical transit model fit result
@@ -23,7 +23,7 @@ v3 type re-exports:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -35,11 +35,22 @@ from bittr_tess_vetter.domain.target import StellarParameters
 from bittr_tess_vetter.recovery.result import StackedTransit, TrapezoidFit
 from bittr_tess_vetter.transit.result import OddEvenResult, TransitTime, TTVResult
 
+# Canonical result types from validation module (single source of truth)
+from bittr_tess_vetter.validation.result_schema import (
+    CheckResult,
+    CheckStatus,
+    VettingBundleResult,
+    error_result,
+    ok_result,
+    skipped_result,
+)
+
 # Re-export v3 types for public API
 __all__ = [
     "ActivityResult",
     "Candidate",
     "CheckResult",
+    "CheckStatus",
     "Ephemeris",
     "Flare",
     "LightCurve",
@@ -51,6 +62,10 @@ __all__ = [
     "TrapezoidFit",
     "TTVResult",
     "VettingBundleResult",
+    # Helper functions for creating results
+    "error_result",
+    "ok_result",
+    "skipped_result",
 ]
 
 if TYPE_CHECKING:
@@ -207,61 +222,6 @@ class LightCurve:
 
 
 @dataclass(frozen=True)
-class CheckResult:
-    """Result of a single vetting check.
-
-    Attributes:
-        id: Check identifier (e.g., "V01", "V02")
-        name: Human-readable check name (e.g., "odd_even_depth")
-        passed: Whether the check passed, or None for metrics-only mode
-        confidence: Confidence in the result (0.0 to 1.0)
-        details: Check-specific details dictionary
-    """
-
-    id: str
-    name: str
-    passed: bool | None
-    confidence: float
-    details: dict[str, Any]
-
-    def __post_init__(self) -> None:
-        """Validate check result fields."""
-        if not 0.0 <= self.confidence <= 1.0:
-            raise ValueError(f"confidence must be in [0, 1], got {self.confidence}")
-
-    @property
-    def status(self) -> str:
-        """Normalized status string for the check.
-
-        The v2/v3 pipeline schema uses explicit statuses (e.g. 'skipped').
-        The legacy API stores these values in `details`; expose them here for
-        compatibility with newer tests and callers.
-        """
-        raw = self.details.get("status")
-        if isinstance(raw, str) and raw:
-            return raw
-        # Fallback heuristics for older call sites
-        if self.passed is None:
-            return "metrics_only"
-        return "passed" if self.passed else "failed"
-
-    @property
-    def flags(self) -> list[str]:
-        """Structured flags emitted by the check (may be empty)."""
-        raw = self.details.get("flags")
-        if isinstance(raw, list):
-            return [str(x) for x in raw]
-        return []
-
-    @property
-    def notes(self) -> list[str]:
-        raw = self.details.get("notes")
-        if isinstance(raw, list):
-            return [str(x) for x in raw]
-        return []
-
-
-@dataclass(frozen=True)
 class Candidate:
     """Transit candidate container for vetting.
 
@@ -357,56 +317,3 @@ class TPFStamp:
         return (self.flux.shape[1], self.flux.shape[2])
 
 
-@dataclass
-class VettingBundleResult:
-    """Structured output from the vetting orchestrator.
-
-    Wraps check results with provenance metadata for reproducibility
-    and audit trails.
-
-    Attributes:
-        results: List of CheckResult from all enabled checks
-        provenance: Metadata dict with versions, thresholds, citations
-        warnings: List of warning messages from checks
-    """
-
-    results: list[CheckResult]
-    provenance: dict[str, Any] = field(default_factory=dict)
-    warnings: list[str] = field(default_factory=list)
-
-    @property
-    def n_passed(self) -> int:
-        """Count of passed checks."""
-        return sum(1 for r in self.results if r.passed is True)
-
-    @property
-    def n_failed(self) -> int:
-        """Count of failed checks."""
-        return sum(1 for r in self.results if r.passed is False)
-
-    @property
-    def n_unknown(self) -> int:
-        """Count of checks with `passed=None` (metrics-only / unknown)."""
-        return sum(1 for r in self.results if r.passed is None)
-
-    @property
-    def all_passed(self) -> bool:
-        """True if all checks passed."""
-        return all(r.passed is True for r in self.results)
-
-    @property
-    def failed_check_ids(self) -> list[str]:
-        """List of IDs for failed checks."""
-        return [r.id for r in self.results if r.passed is False]
-
-    @property
-    def unknown_check_ids(self) -> list[str]:
-        """List of IDs for metrics-only/unknown checks."""
-        return [r.id for r in self.results if r.passed is None]
-
-    def get_result(self, check_id: str) -> CheckResult | None:
-        """Get result by check ID."""
-        for r in self.results:
-            if r.id == check_id:
-                return r
-        return None

@@ -12,11 +12,7 @@ from bittr_tess_vetter.compute.primitives import (  # noqa: F401
     AstroPrimitives,
     astro,
     box_model,
-    detrend as detrend_median,
     fold,
+    median_detrend,
     periodogram,
 )
-
-# Backward-compat: preserve `detrend` name for existing sandbox hosts, but also
-# offer a more specific alias to avoid collisions with recovery.detrend.
-detrend = detrend_median

@@ -38,7 +38,13 @@ from bittr_tess_vetter.api.references import (
     cite,
     cites,
 )
-from bittr_tess_vetter.api.types import CheckResult, Ephemeris, LightCurve, StellarParams
+from bittr_tess_vetter.api.types import (
+    CheckResult,
+    Ephemeris,
+    LightCurve,
+    StellarParams,
+    ok_result,
+)
 from bittr_tess_vetter.validation.lc_checks import (
     DepthStabilityConfig,
     OddEvenConfig,
@@ -78,25 +84,43 @@ REFERENCES = [
 
 
 def _convert_result(result: object) -> CheckResult:
-    """Convert internal VetterCheckResult to facade CheckResult.
+    """Convert internal VetterCheckResult to canonical CheckResult.
 
     Args:
         result: Internal VetterCheckResult (pydantic model)
 
     Returns:
-        Facade CheckResult dataclass
+        Canonical CheckResult (Pydantic model from validation.result_schema)
     """
-    # VetterCheckResult is a pydantic model with these attributes
-    return CheckResult(
+    from typing import Any
+
+    details = dict(result.details)  # type: ignore[attr-defined]
+
+    # Convert details dict to structured metrics (filter to JSON-serializable scalars)
+    metrics: dict[str, float | int | str | bool | None] = {}
+    raw_data: dict[str, Any] = {}
+    for k, v in details.items():
+        if isinstance(v, (float, int, str, bool, type(None))):
+            metrics[k] = v
+        else:
+            raw_data[k] = v
+
+    return ok_result(
         id=result.id,  # type: ignore[attr-defined]
         name=result.name,  # type: ignore[attr-defined]
-        passed=result.passed,  # type: ignore[attr-defined]
+        metrics=metrics,
         confidence=result.confidence,  # type: ignore[attr-defined]
-        details=dict(result.details),  # type: ignore[attr-defined]
+        raw=raw_data if raw_data else None,
     )
 
 
 def _apply_policy_mode(check: CheckResult, *, policy_mode: str) -> CheckResult:
+    """Apply policy mode (deprecated - all results are now metrics-only).
+
+    With the new canonical CheckResult schema, all results use status-based
+    semantics (ok/skipped/error) rather than passed=True/False/None.
+    This function just emits a deprecation warning if non-metrics_only is requested.
+    """
     if policy_mode != "metrics_only":
         warnings.warn(
             "bittr_tess_vetter.api.* `policy_mode` is deprecated and ignored; "
@@ -105,19 +129,9 @@ def _apply_policy_mode(check: CheckResult, *, policy_mode: str) -> CheckResult:
             category=FutureWarning,
             stacklevel=2,
         )
-    if check.passed is None and check.details.get("_metrics_only") is True:
-        return check
-    details = dict(check.details)
-    details["_metrics_only"] = True
-    if policy_mode != "metrics_only":
-        details["_policy_mode_ignored"] = policy_mode
-    return CheckResult(
-        id=check.id,
-        name=check.name,
-        passed=None,
-        confidence=check.confidence,
-        details=details,
-    )
+    # All new CheckResult instances already have status-based semantics
+    # and the `passed` property derives from status, so just return as-is
+    return check
 
 
 @cites(

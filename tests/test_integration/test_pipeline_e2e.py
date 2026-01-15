@@ -276,12 +276,12 @@ class TestContractTests:
     def test_primitives_imports(self) -> None:
         """Primitives module imports should work."""
         from bittr_tess_vetter.api.primitives import (  # noqa: F401
-            detrend,
             fold,
+            median_detrend,
         )
 
         assert fold is not None
-        assert detrend is not None
+        assert median_detrend is not None
 
     def test_check_result_schema_stable(self) -> None:
         """CheckResult should have stable fields."""

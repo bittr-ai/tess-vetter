@@ -7,7 +7,7 @@ For most use cases, prefer the main `bittr_tess_vetter.api` exports.
 
 Example:
     >>> from bittr_tess_vetter.api.primitives import (
-    ...     fold, detrend, mask_transits, check_odd_even_depth
+    ...     fold, median_detrend, mask_transits, check_odd_even_depth
     ... )
     >>> # Build your own custom analysis pipeline
 """
@@ -26,8 +26,8 @@ from bittr_tess_vetter.compute.primitives import (
     AstroPrimitives,
     astro,
     box_model,
-    detrend,
     fold,
+    median_detrend,
     periodogram,
 )
 
@@ -60,7 +60,7 @@ __all__ = [
     "AstroPrimitives",
     "periodogram",
     "fold",
-    "detrend",
+    "median_detrend",
     "box_model",
     # Legacy LC check functions (pre-VettingPipeline API)
     "check_odd_even_depth",

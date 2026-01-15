@@ -13,7 +13,7 @@ Golden Path (recommended imports):
     )
 
 Advanced Usage:
-    from bittr_tess_vetter.api.primitives import fold, detrend, check_odd_even_depth
+    from bittr_tess_vetter.api.primitives import fold, median_detrend, check_odd_even_depth
     from bittr_tess_vetter.api.experimental import ...
 
 For custom pipelines:
@@ -475,12 +475,9 @@ if TYPE_CHECKING:
         AstroPrimitives,
         astro,
         box_model,
-        # detrend imported from recovery above
         fold,
+        median_detrend,
         periodogram,
-    )
-    from bittr_tess_vetter.api.sandbox_primitives import (
-        detrend as sandbox_detrend,  # noqa: F401
     )
     from bittr_tess_vetter.api.sector_consistency import (  # noqa: F401
         ConsistencyClass,

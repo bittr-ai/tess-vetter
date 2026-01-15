@@ -24,7 +24,14 @@ from bittr_tess_vetter.api.references import (
     cite,
     cites,
 )
-from bittr_tess_vetter.api.types import Candidate, CheckResult, LightCurve
+from bittr_tess_vetter.api.types import (
+    Candidate,
+    CheckResult,
+    LightCurve,
+    error_result,
+    ok_result,
+    skipped_result,
+)
 from bittr_tess_vetter.domain.detection import TransitCandidate, VetterCheckResult
 from bittr_tess_vetter.validation.exovetter_checks import run_modshift, run_sweet
 
@@ -33,22 +40,29 @@ REFERENCES = [ref.to_dict() for ref in [THOMPSON_2018, COUGHLIN_2016]]
 
 
 def _convert_result(result: VetterCheckResult) -> CheckResult:
-    """Convert internal VetterCheckResult to facade CheckResult.
+    """Convert internal VetterCheckResult to canonical CheckResult.
 
     Args:
         result: Internal VetterCheckResult (pydantic model)
 
     Returns:
-        Facade CheckResult dataclass
+        Canonical CheckResult (Pydantic model from validation.result_schema)
     """
-    details = dict(result.details)
-    details["_metrics_only"] = True
-    return CheckResult(
+    # Convert details dict to structured metrics (filter to JSON-serializable scalars)
+    metrics: dict[str, float | int | str | bool | None] = {}
+    raw_data: dict[str, Any] = {}
+    for k, v in result.details.items():
+        if isinstance(v, (float, int, str, bool, type(None))):
+            metrics[k] = v
+        else:
+            raw_data[k] = v
+
+    return ok_result(
         id=result.id,
         name=result.name,
-        passed=None,
+        metrics=metrics,
         confidence=result.confidence,
-        details=details,
+        raw=raw_data if raw_data else None,
     )
 
 
@@ -90,12 +104,11 @@ def _make_skipped_result(check_id: str, check_name: str, reason: str) -> CheckRe
     Returns:
         CheckResult with status="skipped"
     """
-    return CheckResult(
+    return skipped_result(
         id=check_id,
         name=check_name,
-        passed=None,
-        confidence=0.0,  # No confidence - not run
-        details={"status": "skipped", "reason": reason, "_metrics_only": True},
+        reason_flag=reason.upper().replace(" ", "_"),
+        notes=[reason],
     )
 
 
@@ -148,12 +161,11 @@ def modshift(
     try:
         internal_candidate = _candidate_to_internal(candidate)
     except ValueError as e:
-        return CheckResult(
+        return error_result(
             id="V11",
             name="modshift",
-            passed=None,
-            confidence=0.20,
-            details={"status": "error", "reason": str(e)},
+            error="VALIDATION_ERROR",
+            notes=[str(e)],
         )
 
     del config
@@ -212,12 +224,11 @@ def sweet(
     try:
         internal_candidate = _candidate_to_internal(candidate)
     except ValueError as e:
-        return CheckResult(
+        return error_result(
             id="V12",
             name="sweet",
-            passed=None,
-            confidence=0.20,
-            details={"status": "error", "reason": str(e)},
+            error="VALIDATION_ERROR",
+            notes=[str(e)],
         )
 
     del config

@@ -40,6 +40,31 @@ class CheckResult(BaseModel):
 
     model_config = {"extra": "forbid"}
 
+    # Backward-compatible properties for legacy api/types.CheckResult interface
+    @property
+    def passed(self) -> bool | None:
+        """Backward-compatible property: True if status='ok', False if 'error', None if 'skipped'."""
+        if self.status == "ok":
+            return True
+        if self.status == "error":
+            return False
+        return None  # skipped
+
+    @property
+    def details(self) -> dict[str, Any]:
+        """Backward-compatible property: combined metrics/flags/notes/raw as details dict."""
+        result: dict[str, Any] = dict(self.metrics)
+        result["status"] = self.status
+        if self.flags:
+            result["flags"] = self.flags
+        if self.notes:
+            result["notes"] = self.notes
+        if self.raw:
+            result.update(self.raw)
+        # Mark as metrics-only for legacy code that checks this
+        result["_metrics_only"] = True
+        return result
+
 
 class VettingBundleResult(BaseModel):
     """Aggregated result from running multiple vetting checks.
@@ -62,6 +87,31 @@ class VettingBundleResult(BaseModel):
     def n_passed(self) -> int:
         """Count of checks with status 'ok'."""
         return sum(1 for r in self.results if r.status == "ok")
+
+    @property
+    def n_failed(self) -> int:
+        """Count of checks with status 'error'."""
+        return sum(1 for r in self.results if r.status == "error")
+
+    @property
+    def n_unknown(self) -> int:
+        """Count of checks with status 'skipped'."""
+        return sum(1 for r in self.results if r.status == "skipped")
+
+    @property
+    def all_passed(self) -> bool:
+        """True if all checks have status 'ok'."""
+        return all(r.status == "ok" for r in self.results)
+
+    @property
+    def failed_check_ids(self) -> list[str]:
+        """List of IDs for checks with status 'error'."""
+        return [r.id for r in self.results if r.status == "error"]
+
+    @property
+    def unknown_check_ids(self) -> list[str]:
+        """List of IDs for checks with status 'skipped'."""
+        return [r.id for r in self.results if r.status == "skipped"]
 
     def get_result(self, check_id: str) -> CheckResult | None:
         """Get result for a specific check by ID.

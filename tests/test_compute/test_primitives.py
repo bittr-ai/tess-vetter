@@ -16,8 +16,8 @@ from bittr_tess_vetter.compute.primitives import (
     AstroPrimitives,
     astro,
     box_model,
-    detrend,
     fold,
+    median_detrend,
     periodogram,
 )
 
@@ -313,14 +313,14 @@ class TestFold:
 # =============================================================================
 
 
-class TestDetrend:
-    """Tests for the detrend function."""
+class TestMedianDetrend:
+    """Tests for the median_detrend function."""
 
     def test_removes_linear_trend(self, flux_with_trend):
         """Detrending should remove linear trends."""
         time, flux, _ = flux_with_trend
 
-        detrended = detrend(flux, window=51)
+        detrended = median_detrend(flux, window=51)
 
         # After detrending, flux should be centered around 1.0
         assert abs(np.median(detrended) - 1.0) < 0.01, (
@@ -335,7 +335,7 @@ class TestDetrend:
         time, flux, signal = flux_with_trend
 
         # Use window larger than signal period
-        detrended = detrend(flux, window=201)
+        detrended = median_detrend(flux, window=201)
 
         # The detrended flux should still show periodic variation
         # Check that the standard deviation is non-trivial (signal preserved)
@@ -360,8 +360,8 @@ class TestDetrend:
         n_points = 500
         flux = 1.0 + 0.05 * np.linspace(0, 1, n_points)  # Linear trend
 
-        small_window = detrend(flux, window=21)
-        large_window = detrend(flux, window=201)
+        small_window = median_detrend(flux, window=21)
+        large_window = median_detrend(flux, window=201)
 
         # Small window removes more structure
         std_small = np.std(small_window)
@@ -376,7 +376,7 @@ class TestDetrend:
         nan_indices = [10, 25, 50, 75, 90]
         flux[nan_indices] = np.nan
 
-        detrended = detrend(flux, window=11)
+        detrended = median_detrend(flux, window=11)
 
         # Check NaN positions are preserved
         output_nan_indices = np.where(np.isnan(detrended))[0]
@@ -387,7 +387,7 @@ class TestDetrend:
         flux = np.ones(100) + 0.01 * np.arange(100)
 
         # Should not raise error with even window
-        result = detrend(flux, window=50)
+        result = median_detrend(flux, window=50)
         assert len(result) == len(flux)
 
     def test_invalid_window_raises_error(self):
@@ -395,28 +395,28 @@ class TestDetrend:
         flux = np.ones(100)
 
         with pytest.raises(ValueError, match="positive"):
-            detrend(flux, window=0)
+            median_detrend(flux, window=0)
 
         with pytest.raises(ValueError, match="positive"):
-            detrend(flux, window=-5)
+            median_detrend(flux, window=-5)
 
     def test_output_dtype(self, flux_with_trend):
         """Output should be float64."""
         _, flux, _ = flux_with_trend
-        result = detrend(flux, window=51)
+        result = median_detrend(flux, window=51)
         assert result.dtype == np.float64
 
     def test_flat_flux_unchanged(self):
         """Flat flux should remain approximately flat after detrending."""
         flux = np.ones(100)
-        detrended = detrend(flux, window=21)
+        detrended = median_detrend(flux, window=21)
 
         assert_allclose(detrended, flux, rtol=1e-10)
 
     def test_all_nan_flux(self):
         """All NaN flux should produce all NaN output."""
         flux = np.full(100, np.nan)
-        detrended = detrend(flux, window=21)
+        detrended = median_detrend(flux, window=21)
 
         assert np.all(np.isnan(detrended))
 
@@ -557,13 +557,13 @@ class TestAstroPrimitives:
         phase, flux_folded = AstroPrimitives.fold(time, flux, period=2.0, t0=0.0)
         assert len(phase) == len(time)
 
-    def test_detrend_is_staticmethod(self):
-        """detrend should be accessible as staticmethod."""
-        assert hasattr(AstroPrimitives, "detrend")
-        assert callable(AstroPrimitives.detrend)
+    def test_median_detrend_is_staticmethod(self):
+        """median_detrend should be accessible as staticmethod."""
+        assert hasattr(AstroPrimitives, "median_detrend")
+        assert callable(AstroPrimitives.median_detrend)
 
         flux = np.ones(100)
-        detrended = AstroPrimitives.detrend(flux)
+        detrended = AstroPrimitives.median_detrend(flux)
         assert len(detrended) == len(flux)
 
     def test_box_model_is_staticmethod(self):
@@ -577,7 +577,7 @@ class TestAstroPrimitives:
 
     def test_all_methods_present(self):
         """All expected methods should be present in class."""
-        expected_methods = ["periodogram", "fold", "detrend", "box_model"]
+        expected_methods = ["periodogram", "fold", "median_detrend", "box_model"]
         for method in expected_methods:
             assert hasattr(AstroPrimitives, method), f"Missing method: {method}"
 
@@ -614,10 +614,10 @@ class TestAstroInstance:
         phase, flux_folded = astro.fold(time, flux, period=2.0, t0=0.0)
         assert len(phase) == len(time)
 
-    def test_astro_detrend_callable(self):
-        """astro.detrend should be callable."""
+    def test_astro_median_detrend_callable(self):
+        """astro.median_detrend should be callable."""
         flux = np.ones(100)
-        detrended = astro.detrend(flux)
+        detrended = astro.median_detrend(flux)
         assert len(detrended) == len(flux)
 
     def test_astro_box_model_callable(self):
@@ -656,7 +656,7 @@ class TestPrimitivesIntegration:
         time, flux, _ = flux_with_trend
 
         # Step 1: Remove trend
-        detrended = astro.detrend(flux, window=101)
+        detrended = astro.median_detrend(flux, window=101)
 
         # Step 2: Fold at known signal period
         period = 1.5
@@ -692,7 +692,7 @@ class TestPrimitivesIntegration:
         flux_with_trend = flux * trend
 
         # Step 1: Detrend
-        flux_clean = astro.detrend(flux_with_trend, window=201)
+        flux_clean = astro.median_detrend(flux_with_trend, window=201)
 
         # Step 2: Phase fold at known period
         phase, flux_folded = astro.fold(time, flux_clean, true_period, t0)

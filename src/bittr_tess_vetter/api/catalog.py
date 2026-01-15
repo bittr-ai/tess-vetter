@@ -28,7 +28,12 @@ from bittr_tess_vetter.api.references import (
     cite,
     cites,
 )
-from bittr_tess_vetter.api.types import Candidate, CheckResult
+from bittr_tess_vetter.api.types import (
+    Candidate,
+    CheckResult,
+    ok_result,
+    skipped_result,
+)
 from bittr_tess_vetter.domain.detection import TransitCandidate
 from bittr_tess_vetter.validation.checks_catalog import (
     run_exofop_toi_lookup,
@@ -43,22 +48,33 @@ REFERENCES = [ref.to_dict() for ref in [PRSA_2022, GUERRERO_2021]]
 
 
 def _convert_result(result: object) -> CheckResult:
-    """Convert internal VetterCheckResult to facade CheckResult.
+    """Convert internal VetterCheckResult to canonical CheckResult.
 
     Args:
         result: Internal VetterCheckResult (pydantic model)
 
     Returns:
-        Facade CheckResult dataclass
+        Canonical CheckResult (Pydantic model from validation.result_schema)
     """
+    from typing import Any
+
     details = dict(result.details)  # type: ignore[attr-defined]
-    details["_metrics_only"] = True
-    return CheckResult(
+
+    # Convert details dict to structured metrics (filter to JSON-serializable scalars)
+    metrics: dict[str, float | int | str | bool | None] = {}
+    raw_data: dict[str, Any] = {}
+    for k, v in details.items():
+        if isinstance(v, (float, int, str, bool, type(None))):
+            metrics[k] = v
+        else:
+            raw_data[k] = v
+
+    return ok_result(
         id=result.id,  # type: ignore[attr-defined]
         name=result.name,  # type: ignore[attr-defined]
-        passed=None,
+        metrics=metrics,
         confidence=result.confidence,  # type: ignore[attr-defined]
-        details=details,
+        raw=raw_data if raw_data else None,
     )
 
 
@@ -72,33 +88,22 @@ def _make_skipped_result(check_id: str, name: str) -> CheckResult:
     Returns:
         CheckResult with status="skipped"
     """
-    return CheckResult(
+    return skipped_result(
         id=check_id,
         name=name,
-        passed=None,
-        confidence=0.0,
-        details={
-            "status": "skipped",
-            "reason": "network_disabled",
-            "note": "Network access disabled; set network=True to query catalog",
-            "_metrics_only": True,
-        },
+        reason_flag="NETWORK_DISABLED",
+        notes=["Network access disabled; set network=True to query catalog"],
     )
 
 
 def _make_missing_metadata_result(check_id: str, name: str, *, missing: list[str]) -> CheckResult:
     """Create a skipped result when required metadata is missing."""
-    return CheckResult(
+    return skipped_result(
         id=check_id,
         name=name,
-        passed=None,
-        confidence=0.0,
-        details={
-            "status": "skipped",
-            "reason": "missing_metadata",
-            "missing": missing,
-            "_metrics_only": True,
-        },
+        reason_flag="MISSING_METADATA",
+        notes=[f"Missing required metadata: {', '.join(missing)}"],
+        raw={"missing": missing, "reason": "missing_metadata"},
     )
 
 

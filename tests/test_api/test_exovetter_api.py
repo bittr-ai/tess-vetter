@@ -21,8 +21,9 @@ def test_modshift_disabled_returns_skipped() -> None:
     r = modshift(lc, cand, enabled=False)
     assert isinstance(r, CheckResult)
     assert r.id == "V11"
+    # New schema: status="skipped" -> passed=None via backward-compat property
+    assert r.status == "skipped"
     assert r.passed is None
-    assert r.details.get("status") == "skipped"
 
 
 def test_sweet_missing_depth_returns_error_result() -> None:
@@ -30,9 +31,11 @@ def test_sweet_missing_depth_returns_error_result() -> None:
     cand = Candidate(ephemeris=Ephemeris(period_days=3.0, t0_btjd=1001.0, duration_hours=2.0))
     r = sweet(lc, cand, enabled=True)
     assert r.id == "V12"
-    assert r.passed is None
-    assert r.details.get("status") == "error"
-    assert "depth" in str(r.details.get("reason", "")).lower()
+    # New schema: status="error" -> passed=False via backward-compat property
+    assert r.status == "error"
+    assert r.passed is False
+    # Error reason is in notes, not details["reason"]
+    assert any("depth" in note.lower() for note in r.notes)
 
 
 def test_vet_exovetter_enabled_set_filters_and_returns_two_results() -> None:
@@ -46,12 +49,13 @@ def test_vet_exovetter_enabled_set_filters_and_returns_two_results() -> None:
     assert len(results) == 2
     assert results[0].id == "V11"
     assert results[1].id == "V12"
-    assert results[1].details.get("status") == "skipped"
+    # New schema: use status field directly
+    assert results[1].status == "skipped"
 
 
 def test_modshift_returns_metrics_only_result_when_dependency_missing() -> None:
     # This test is written to pass whether or not exovetter is installed:
-    # - if installed, we still expect passed=None (metrics-only) and _metrics_only in details
+    # - if installed, we still expect status="ok" (metrics-only results)
     # - if not installed, we expect EXOVETTER_IMPORT_ERROR warning
     lc = _minimal_lc()
     cand = Candidate(
@@ -60,7 +64,7 @@ def test_modshift_returns_metrics_only_result_when_dependency_missing() -> None:
     )
     r = modshift(lc, cand, enabled=True)
     assert r.id == "V11"
-    assert r.passed is None
-    assert r.details.get("_metrics_only") is True or "EXOVETTER_IMPORT_ERROR" in (
-        r.details.get("warnings", []) or []
-    )
+    # New schema: status="ok" -> passed=True via backward-compat property
+    # All results are now "metrics-only" by design (status-based semantics)
+    assert r.status == "ok"
+    assert r.passed is True

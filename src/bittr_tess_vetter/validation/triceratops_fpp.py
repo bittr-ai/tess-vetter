@@ -598,6 +598,65 @@ def _write_external_lc_files(
     return file_paths, filters
 
 
+def _normalize_triceratops_filter(filt: str | None) -> str:
+    """Normalize filter strings passed into TRICERATOPS(+).
+
+    Vendored TRICERATOPS flux relations support only:
+      TESS, Vis, g, r, i, z, J, H, K
+
+    ExoFOP imaging often uses more specific labels (e.g., 'Kcont', 'Brgamma').
+    Map common synonyms into the supported set and fall back to 'Vis' to avoid
+    upstream crashes (e.g., UnboundLocalError in flux_relation for unknown filt).
+    """
+    raw = str(filt or "").strip()
+    if not raw:
+        return "Vis"
+    key = "".join(ch.lower() for ch in raw if ch.isalnum())
+
+    canonical = {
+        "tess": "TESS",
+        "vis": "Vis",
+        "g": "g",
+        "r": "r",
+        "i": "i",
+        "z": "z",
+        "j": "J",
+        "h": "H",
+        "k": "K",
+    }
+    if key in canonical:
+        return canonical[key]
+
+    aliases = {
+        # Common optical "catch-alls"
+        "v": "Vis",
+        "vband": "Vis",
+        "clear": "Vis",
+        "open": "Vis",
+        # Narrow K-band variants (treat as K for flux-ratio purposes)
+        "kcont": "K",
+        "kcontinuum": "K",
+        "brgamma": "K",
+        "brg": "K",
+        "ks": "K",
+        "kshort": "K",
+        "kprime": "K",
+        # Narrow J/H variants (rare, but safe)
+        "hcont": "H",
+        "jcont": "J",
+    }
+    if key in aliases:
+        return aliases[key]
+
+    # "Kp" is ambiguous (Kepler band vs K-prime). Do not guess silently.
+    if key == "kp":
+        logger.warning("Ambiguous filter label %r; falling back to 'Vis'", raw)
+        return "Vis"
+
+    logger.warning("Unrecognized TRICERATOPS filter %r; falling back to 'Vis'", raw)
+    return "Vis"
+
+
 # =============================================================================
 # Replicate Aggregation Helpers
 # =============================================================================
@@ -1256,6 +1315,7 @@ def calculate_fpp_handler(
         replicate_errors: list[dict[str, Any]] = []
         contrast_curve_file: str | None = None
         contrast_curve_filter: str | None = None
+        contrast_curve_filter_raw: str | None = None
 
         try:
             if external_lightcurves and temp_dir_obj is not None:
@@ -1274,7 +1334,8 @@ def calculate_fpp_handler(
                 try:
                     sep = np.asarray(getattr(contrast_curve, "separation_arcsec"), dtype=float)
                     dmag = np.asarray(getattr(contrast_curve, "delta_mag"), dtype=float)
-                    filt = str(getattr(contrast_curve, "filter", "Vis") or "Vis")
+                    contrast_curve_filter_raw = getattr(contrast_curve, "filter", "Vis")
+                    filt = _normalize_triceratops_filter(contrast_curve_filter_raw)
                 except Exception:
                     sep = np.array([], dtype=float)
                     dmag = np.array([], dtype=float)
@@ -1372,6 +1433,9 @@ def calculate_fpp_handler(
                     if contrast_curve_file is not None:
                         run_result["contrast_curve"] = {
                             "filter": contrast_curve_filter or "Vis",
+                            "filter_raw": str(contrast_curve_filter_raw)
+                            if contrast_curve_filter_raw is not None
+                            else None,
                             "file": os.path.basename(contrast_curve_file),
                         }
                     replicate_results.append(run_result)

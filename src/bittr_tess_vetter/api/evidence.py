@@ -34,16 +34,25 @@ def _jsonable(value: Any) -> Any:
 
 
 def checks_to_evidence_items(checks: list[CheckResult]) -> list[dict[str, Any]]:
-    """Convert CheckResult objects to JSON-serializable evidence-like dicts."""
+    """Convert CheckResult objects to JSON-serializable evidence-like dicts.
+
+    The canonical CheckResult uses status-based semantics (ok/skipped/error).
+    For backward compatibility, the `passed` property is derived from status:
+    - status="ok" -> passed=True
+    - status="error" -> passed=False
+    - status="skipped" -> passed=None
+    """
     items: list[dict[str, Any]] = []
     for c in checks:
+        # The .details property combines metrics/flags/notes/raw for backward compat
         details = dict(c.details)
-        metrics_only = bool(details.get("_metrics_only")) or c.passed is None
+        # All results are metrics-only in the new schema
+        metrics_only = True
         items.append(
             {
                 "id": c.id,
                 "name": c.name,
-                "passed": c.passed,
+                "passed": c.passed,  # Derived from status via property
                 "confidence": c.confidence,
                 "metrics_only": metrics_only,
                 "details": _jsonable(details),

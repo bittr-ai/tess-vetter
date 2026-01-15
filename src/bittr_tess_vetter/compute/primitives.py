@@ -148,7 +148,7 @@ def fold(
     return phase_sorted.astype(np.float64), flux_sorted.astype(np.float64)
 
 
-def detrend(
+def median_detrend(
     flux: NDArray[np.float64],
     window: int = 101,
 ) -> NDArray[np.float64]:
@@ -294,7 +294,7 @@ def create_primitives_namespace(**funcs: object) -> types.SimpleNamespace:
 astro = create_primitives_namespace(
     periodogram=periodogram,
     fold=fold,
-    detrend=detrend,
+    median_detrend=median_detrend,
     box_model=box_model,
 )
 
@@ -309,20 +309,20 @@ class AstroPrimitives:
     Available functions:
     - astro.periodogram(time, flux, periods) -> power spectrum
     - astro.fold(time, flux, period, t0) -> (phase, flux)
-    - astro.detrend(flux, window) -> detrended flux
+    - astro.median_detrend(flux, window) -> detrended flux
     - astro.box_model(phase, depth, duration) -> model flux
     """
 
     periodogram = staticmethod(periodogram)
     fold = staticmethod(fold)
-    detrend = staticmethod(detrend)
+    median_detrend = staticmethod(median_detrend)
     box_model = staticmethod(box_model)
 
 
 __all__ = [
     "periodogram",
     "fold",
-    "detrend",
+    "median_detrend",
     "box_model",
     "AstroPrimitives",
     "astro",

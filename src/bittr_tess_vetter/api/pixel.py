@@ -32,7 +32,7 @@ from bittr_tess_vetter.api.references import (
     cite,
     cites,
 )
-from bittr_tess_vetter.api.types import Candidate, CheckResult, TPFStamp
+from bittr_tess_vetter.api.types import Candidate, CheckResult, TPFStamp, ok_result
 from bittr_tess_vetter.validation.checks_pixel import (
     check_aperture_dependence_with_tpf,
     check_centroid_shift_with_tpf,
@@ -57,23 +57,33 @@ REFERENCES = [
 
 
 def _convert_result(result: object) -> CheckResult:
-    """Convert internal VetterCheckResult to facade CheckResult.
+    """Convert internal VetterCheckResult to canonical CheckResult.
 
     Args:
         result: Internal VetterCheckResult (pydantic model)
 
     Returns:
-        Facade CheckResult dataclass
+        Canonical CheckResult (Pydantic model from validation.result_schema)
     """
-    # VetterCheckResult is a pydantic model with these attributes
+    from typing import Any
+
     details = dict(result.details)  # type: ignore[attr-defined]
-    details["_metrics_only"] = True
-    return CheckResult(
+
+    # Convert details dict to structured metrics (filter to JSON-serializable scalars)
+    metrics: dict[str, float | int | str | bool | None] = {}
+    raw_data: dict[str, Any] = {}
+    for k, v in details.items():
+        if isinstance(v, (float, int, str, bool, type(None))):
+            metrics[k] = v
+        else:
+            raw_data[k] = v
+
+    return ok_result(
         id=result.id,  # type: ignore[attr-defined]
         name=result.name,  # type: ignore[attr-defined]
-        passed=None,
+        metrics=metrics,
         confidence=result.confidence,  # type: ignore[attr-defined]
-        details=details,
+        raw=raw_data if raw_data else None,
     )
 
 

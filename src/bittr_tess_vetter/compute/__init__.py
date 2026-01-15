@@ -207,7 +207,7 @@ PRIMITIVES_CATALOG: dict[str, PrimitiveInfo] = {
         "Compute Lomb-Scargle periodogram using scipy.signal.lombscargle"
     ),
     "astro.fold": PrimitiveInfo("Phase-fold light curve at given period and epoch (t0)"),
-    "astro.detrend": PrimitiveInfo("Remove long-term trends via median filter detrending"),
+    "astro.median_detrend": PrimitiveInfo("Remove long-term trends via median filter detrending"),
     "astro.box_model": PrimitiveInfo("Generate simple box transit model (no limb darkening)"),
     # TLS-based transit search (implemented in periodogram.py)
     "tls_search": PrimitiveInfo(

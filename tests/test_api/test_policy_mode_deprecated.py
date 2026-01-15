@@ -17,8 +17,10 @@ def test_lc_only_policy_mode_is_deprecated_and_ignored() -> None:
 
     with pytest.warns(FutureWarning, match="policy_mode"):
         r = odd_even_depth(lc, eph, policy_mode="anything")
-    assert r.passed is None
-    assert r.details.get("_metrics_only") is True
+    # New schema: status="ok" -> passed=True via backward-compat property
+    # All results are now metrics-only by design (status-based semantics)
+    assert r.status == "ok"
+    assert r.passed is True
 
 
 def test_vet_candidate_returns_vetting_bundle_result() -> None:

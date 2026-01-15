@@ -3,7 +3,14 @@
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.types import CheckResult, Ephemeris, LightCurve, StellarParams
+from bittr_tess_vetter.api.types import (
+    CheckResult,
+    Ephemeris,
+    LightCurve,
+    StellarParams,
+    ok_result,
+    skipped_result,
+)
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 
 
@@ -199,56 +206,47 @@ class TestLightCurve:
 
 
 class TestCheckResult:
-    """Tests for CheckResult dataclass."""
+    """Tests for CheckResult (Pydantic model from validation.result_schema)."""
 
     def test_create_valid_check_result(self) -> None:
-        """Test creating a valid CheckResult."""
-        result = CheckResult(
+        """Test creating a valid CheckResult using helper function."""
+        result = ok_result(
             id="V01",
             name="odd_even_depth",
-            passed=True,
             confidence=0.95,
-            details={"odd_depth": 0.001, "even_depth": 0.001},
+            metrics={"odd_depth": 0.001, "even_depth": 0.001},
         )
         assert result.id == "V01"
         assert result.name == "odd_even_depth"
+        assert result.status == "ok"
+        # passed is a backward-compat property: status="ok" -> passed=True
         assert result.passed is True
         assert result.confidence == 0.95
+        assert result.metrics["odd_depth"] == 0.001
+        # details is a backward-compat property that combines metrics/flags/etc
         assert result.details["odd_depth"] == 0.001
 
-    def test_check_result_is_frozen(self) -> None:
-        """Test that CheckResult is immutable."""
-        result = CheckResult(
+    def test_check_result_extra_fields_forbidden(self) -> None:
+        """Test that CheckResult forbids extra fields during construction."""
+        # Pydantic models with extra="forbid" reject unknown fields
+        with pytest.raises(Exception):  # ValidationError
+            CheckResult(
+                id="V01",
+                name="odd_even_depth",
+                status="ok",
+                unknown_field="value",  # type: ignore[call-arg]
+            )
+
+    def test_check_result_skipped_status(self) -> None:
+        """Test that skipped status maps to passed=None."""
+        result = skipped_result(
             id="V01",
             name="odd_even_depth",
-            passed=True,
-            confidence=0.95,
-            details={},
+            reason_flag="TEST_SKIP",
         )
-        with pytest.raises(AttributeError):
-            result.passed = False  # type: ignore[misc]
-
-    def test_check_result_rejects_invalid_confidence_high(self) -> None:
-        """Test that CheckResult rejects confidence > 1.0."""
-        with pytest.raises(ValueError, match="confidence must be in"):
-            CheckResult(
-                id="V01",
-                name="odd_even_depth",
-                passed=True,
-                confidence=1.5,
-                details={},
-            )
-
-    def test_check_result_rejects_invalid_confidence_low(self) -> None:
-        """Test that CheckResult rejects confidence < 0.0."""
-        with pytest.raises(ValueError, match="confidence must be in"):
-            CheckResult(
-                id="V01",
-                name="odd_even_depth",
-                passed=True,
-                confidence=-0.1,
-                details={},
-            )
+        assert result.status == "skipped"
+        assert result.passed is None
+        assert "SKIPPED:TEST_SKIP" in result.flags
 
 
 class TestStellarParams:
