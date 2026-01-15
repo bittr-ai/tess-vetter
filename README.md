@@ -208,6 +208,10 @@ Many public API entry points and vetting checks include a list of literature ref
   - Cache file locking uses `fcntl` (Unix-only); graceful fallback on Windows.
   - Network timeouts use `SIGALRM` which may not work on all platforms.
 
+## Security
+
+Cache files (light curves, TRICERATOPS results) use pickle serialization for performance. Ensure cache directories have appropriate permissions in shared or multi-user environments.
+
 ## Development
 
 ```bash
