@@ -229,6 +229,37 @@ class CheckResult:
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError(f"confidence must be in [0, 1], got {self.confidence}")
 
+    @property
+    def status(self) -> str:
+        """Normalized status string for the check.
+
+        The v2/v3 pipeline schema uses explicit statuses (e.g. 'skipped').
+        The legacy API stores these values in `details`; expose them here for
+        compatibility with newer tests and callers.
+        """
+        raw = self.details.get("status")
+        if isinstance(raw, str) and raw:
+            return raw
+        # Fallback heuristics for older call sites
+        if self.passed is None:
+            return "metrics_only"
+        return "passed" if self.passed else "failed"
+
+    @property
+    def flags(self) -> list[str]:
+        """Structured flags emitted by the check (may be empty)."""
+        raw = self.details.get("flags")
+        if isinstance(raw, list):
+            return [str(x) for x in raw]
+        return []
+
+    @property
+    def notes(self) -> list[str]:
+        raw = self.details.get("notes")
+        if isinstance(raw, list):
+            return [str(x) for x in raw]
+        return []
+
 
 @dataclass(frozen=True)
 class Candidate:
