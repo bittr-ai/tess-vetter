@@ -81,6 +81,14 @@ class Target(FrozenModel):
     gaia_dr3_id: int | None = None
     twomass_id: str | None = None
 
+    # Near-IR photometry (2MASS via TIC)
+    jmag: float | None = Field(default=None, description="2MASS J magnitude (via TIC)")
+    jmag_err: float | None = Field(default=None, description="Uncertainty on J magnitude (mag)")
+    hmag: float | None = Field(default=None, description="2MASS H magnitude (via TIC)")
+    hmag_err: float | None = Field(default=None, description="Uncertainty on H magnitude (mag)")
+    kmag: float | None = Field(default=None, description="2MASS Ks magnitude (via TIC)")
+    kmag_err: float | None = Field(default=None, description="Uncertainty on Ks magnitude (mag)")
+
     # Known planet disposition (if any)
     known_planet_count: int = 0
     toi_id: str | None = None  # TESS Object of Interest ID
@@ -121,4 +129,10 @@ class Target(FrozenModel):
             distance_pc=tic_data.get("d"),
             gaia_dr3_id=tic_data.get("GAIA"),
             twomass_id=tic_data.get("TWOMASS"),
+            jmag=tic_data.get("Jmag"),
+            jmag_err=tic_data.get("e_Jmag"),
+            hmag=tic_data.get("Hmag"),
+            hmag_err=tic_data.get("e_Hmag"),
+            kmag=tic_data.get("Kmag"),
+            kmag_err=tic_data.get("e_Kmag"),
         )

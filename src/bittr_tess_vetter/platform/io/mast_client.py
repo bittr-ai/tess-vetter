@@ -873,6 +873,13 @@ class MASTClient:
                 "d": self._get_float(row, "d"),
                 "GAIA": self._get_int(row, "GAIA"),
                 "TWOMASS": self._get_str(row, "TWOMASS"),
+                # Near-IR photometry (2MASS via TIC)
+                "Jmag": self._get_float(row, "Jmag"),
+                "e_Jmag": self._get_float(row, "e_Jmag"),
+                "Hmag": self._get_float(row, "Hmag"),
+                "e_Hmag": self._get_float(row, "e_Hmag"),
+                "Kmag": self._get_float(row, "Kmag"),
+                "e_Kmag": self._get_float(row, "e_Kmag"),
             }
 
             logger.info(f"Retrieved TIC data for {tic_id}")

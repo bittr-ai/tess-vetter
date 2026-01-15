@@ -149,6 +149,12 @@ def mock_tic_catalog_row():
         "d": 100.0,
         "GAIA": 12345678901234,
         "TWOMASS": "12345678+9012345",
+        "Jmag": 9.0,
+        "e_Jmag": 0.02,
+        "Hmag": 8.8,
+        "e_Hmag": 0.02,
+        "Kmag": 8.7,
+        "e_Kmag": 0.02,
     }.get(key)
 
     return row
@@ -738,6 +744,33 @@ class TestGetTargetInfo:
 
             assert target.gaia_dr3_id == 12345678901234
             assert target.twomass_id == "12345678+9012345"
+
+    def test_get_target_info_includes_2mass_photometry(
+        self, mock_lightkurve, mock_astroquery_modules, mock_tic_catalog_row
+    ):
+        """Target surfaces 2MASS J/H/K photometry when present in TIC."""
+        mock_catalog_result = MagicMock()
+        mock_catalog_result.__len__ = MagicMock(return_value=1)
+        mock_catalog_result.__getitem__ = MagicMock(return_value=mock_tic_catalog_row)
+
+        with (
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve, **mock_astroquery_modules}),
+            patch("astroquery.mast.Catalogs") as mock_catalogs,
+        ):
+            mock_catalogs.query_criteria.return_value = mock_catalog_result
+
+            client = MASTClient()
+            client._lk = mock_lightkurve
+            client._lk_imported = True
+
+            target = client.get_target_info(tic_id=261136679)
+
+            assert target.jmag == 9.0
+            assert target.jmag_err == 0.02
+            assert target.hmag == 8.8
+            assert target.hmag_err == 0.02
+            assert target.kmag == 8.7
+            assert target.kmag_err == 0.02
 
     def test_get_target_info_not_found(self, mock_lightkurve, mock_astroquery_modules):
         """get_target_info() raises TargetNotFoundError when target not in TIC."""
