@@ -6,6 +6,7 @@ from pandas import read_csv
 
 from .funcs import (
     estimate_sdss_magnitudes,
+    file_to_contrast_curve,
     flux_relation,
     renorm_flux,
     stellar_relations,

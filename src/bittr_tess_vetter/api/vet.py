@@ -31,14 +31,48 @@ from bittr_tess_vetter.api.references import (
 )
 from bittr_tess_vetter.api.types import (
     Candidate,
+    CheckResult,
     LightCurve,
     StellarParams,
     TPFStamp,
+    VettingBundleResult,
 )
-from bittr_tess_vetter.validation.result_schema import VettingBundleResult
+from bittr_tess_vetter.validation.result_schema import (
+    CheckResult as SchemaCheckResult,
+    VettingBundleResult as SchemaVettingBundleResult,
+)
 
 # Module-level references for programmatic access (generated from central registry)
 REFERENCES = [ref.to_dict() for ref in [COUGHLIN_2016, THOMPSON_2018, GUERRERO_2021]]
+
+
+def _schema_check_to_api(check: SchemaCheckResult) -> CheckResult:
+    """Convert pipeline CheckResult schema to legacy API CheckResult."""
+    details: dict[str, Any] = {
+        "status": check.status,
+        "metrics": dict(check.metrics),
+        "flags": list(check.flags),
+        "notes": list(check.notes),
+        "provenance": dict(check.provenance),
+    }
+    if check.raw is not None:
+        details["raw"] = check.raw
+    return CheckResult(
+        id=check.id,
+        name=check.name,
+        passed=None,
+        confidence=float(check.confidence or 0.0),
+        details=details,
+    )
+
+
+def _schema_bundle_to_api(bundle: SchemaVettingBundleResult) -> VettingBundleResult:
+    """Convert pipeline bundle schema to legacy API bundle."""
+    return VettingBundleResult(
+        results=[_schema_check_to_api(r) for r in bundle.results],
+        provenance=dict(bundle.provenance),
+        warnings=list(bundle.warnings),
+    )
 
 
 @cites(
@@ -131,7 +165,7 @@ def vet_candidate(
 
     # Create and run pipeline
     pipeline = VettingPipeline(checks=checks, registry=registry)
-    return pipeline.run(
+    bundle = pipeline.run(
         lc_internal,
         candidate_internal,
         stellar=stellar,
@@ -142,6 +176,7 @@ def vet_candidate(
         tic_id=tic_id,
         context=context,
     )
+    return _schema_bundle_to_api(bundle)
 
 
 @cites(
@@ -192,7 +227,7 @@ def vet_many(
         )
 
     pipeline = VettingPipeline(checks=checks, registry=registry)
-    return pipeline.run_many(
+    bundles, summary = pipeline.run_many(
         lc_internal,
         candidates_internal,
         stellar=stellar,
@@ -203,6 +238,7 @@ def vet_many(
         tic_id=tic_id,
         context=context,
     )
+    return ([_schema_bundle_to_api(b) for b in bundles], summary)
 
 
 # Legacy wrapper for backward compatibility with 'enabled' parameter

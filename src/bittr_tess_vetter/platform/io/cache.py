@@ -25,6 +25,39 @@ from bittr_tess_vetter.api.lightcurve import LightCurveData
 T = TypeVar("T")
 
 
+_INSECURE_PERMS_MASK = 0o022  # group/other writable
+
+
+def _is_secure_pickle_path(path: Path) -> bool:
+    """Best-effort guardrail for loading pickled cache entries.
+
+    Pickle is not safe to load from untrusted locations. Since this cache is
+    user-writable by design, we harden against common footguns:
+    - refuse symlinks (path traversal / TOCTOU)
+    - refuse group/other-writable cache files
+    - (POSIX) refuse cache files not owned by current uid
+    """
+    try:
+        if path.is_symlink():
+            return False
+        st = path.stat()
+        if (st.st_mode & _INSECURE_PERMS_MASK) != 0:
+            return False
+        getuid = getattr(os, "getuid", None)
+        if getuid is not None and st.st_uid != getuid():
+            return False
+        return True
+    except OSError:
+        return False
+
+
+def _best_effort_chmod(path: Path, mode: int) -> None:
+    try:
+        os.chmod(path, mode)
+    except Exception:
+        return
+
+
 def _default_cache_dir() -> Path:
     """Choose a default on-disk cache directory.
 
@@ -218,8 +251,13 @@ class PersistentCache:
         self.max_entries = max_entries
         self._lock = Lock()
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        (self.cache_dir / "data").mkdir(exist_ok=True)
-        (self.cache_dir / "meta").mkdir(exist_ok=True)
+        data_dir = self.cache_dir / "data"
+        meta_dir = self.cache_dir / "meta"
+        data_dir.mkdir(exist_ok=True)
+        meta_dir.mkdir(exist_ok=True)
+        _best_effort_chmod(self.cache_dir, 0o700)
+        _best_effort_chmod(data_dir, 0o700)
+        _best_effort_chmod(meta_dir, 0o700)
 
     @classmethod
     def get_default(cls) -> PersistentCache:
@@ -257,6 +295,9 @@ class PersistentCache:
         data_path = self._data_path(key)
         if not data_path.exists():
             return None
+        if not _is_secure_pickle_path(data_path):
+            self._remove_entry(key)
+            return None
 
         with self._lock:
             try:
@@ -292,6 +333,7 @@ class PersistentCache:
                 finally:
                     if fcntl is not None:
                         fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            _best_effort_chmod(data_path, 0o600)
 
             meta: dict[str, Any] = {
                 "key": key,

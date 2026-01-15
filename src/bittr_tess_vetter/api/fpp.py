@@ -157,7 +157,7 @@ def calculate_fpp(
         overrides: Override specific preset parameters.
         external_lightcurves: Ground-based light curves for multi-band FPP
             (TRICERATOPS+ feature). Up to 4 external LCs supported.
-        contrast_curve: High-resolution imaging contrast curve (not yet implemented).
+        contrast_curve: High-resolution imaging contrast curve used to constrain unresolved companions.
 
     Returns:
         Dictionary with FPP results or error information.

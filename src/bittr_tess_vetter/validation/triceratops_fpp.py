@@ -27,6 +27,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import math
+import os
 import pickle
 import tempfile
 import time
@@ -53,6 +54,30 @@ logger = logging.getLogger(__name__)
 TRILEGAL_POLL_TIMEOUT_SECONDS = 180.0
 TRILEGAL_POLL_INTERVAL_SECONDS = 5.0
 TRICERATOPS_INIT_TIMEOUT_DEFAULT = 300.0
+
+_INSECURE_PERMS_MASK = 0o022  # group/other writable
+
+
+def _is_secure_pickle_path(path: Path) -> bool:
+    try:
+        if path.is_symlink():
+            return False
+        st = path.stat()
+        if (st.st_mode & _INSECURE_PERMS_MASK) != 0:
+            return False
+        getuid = getattr(os, "getuid", None)
+        if getuid is not None and st.st_uid != getuid():
+            return False
+        return True
+    except OSError:
+        return False
+
+
+def _best_effort_chmod(path: Path, mode: int) -> None:
+    try:
+        os.chmod(path, mode)
+    except Exception:
+        return
 
 
 # =============================================================================
@@ -267,6 +292,14 @@ def _prefetch_trilegal_csv(
     url = _normalize_trilegal_url(trilegal_url)
     # Deterministic filename per TIC (latest run wins; TRILEGAL output is time-dependent anyway).
     out_path = out_dir / f"{int(tic_id)}_TRILEGAL.csv"
+    # Fast path: if we already have a cached CSV, reuse it and avoid hitting TRILEGAL again.
+    # (This is particularly important because TRILEGAL output URLs can expire and return 404.)
+    try:
+        if out_path.exists() and out_path.stat().st_size > 0:
+            return str(out_path)
+    except OSError:
+        # Ignore cache stat failures and fall back to network poll.
+        pass
 
     deadline = time.time() + float(timeout_seconds)
     last_error: Exception | None = None
@@ -301,6 +334,12 @@ def _prefetch_trilegal_csv(
     )
 
 
+def _cached_trilegal_csv_path(*, cache_dir: str | Path, tic_id: int) -> Path:
+    cache_dir_path = Path(cache_dir)
+    out_dir = cache_dir_path / "triceratops"
+    return out_dir / f"{int(tic_id)}_TRILEGAL.csv"
+
+
 def _triceratops_target_cache_path(
     *, cache_dir: str | Path, tic_id: int, sectors_used: list[int]
 ) -> Path:
@@ -321,6 +360,10 @@ def _load_cached_triceratops_target(
         cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used
     )
     if not path.exists():
+        return None
+    if not _is_secure_pickle_path(path):
+        with contextlib.suppress(OSError):
+            path.unlink()
         return None
     try:
         return pickle.loads(path.read_bytes())
@@ -349,7 +392,9 @@ def _save_cached_triceratops_target(
     try:
         tmp = path.with_suffix(".tmp")
         tmp.write_bytes(payload)
+        _best_effort_chmod(tmp, 0o600)
         tmp.replace(path)
+        _best_effort_chmod(path, 0o600)
     except Exception:
         with contextlib.suppress(OSError):
             tmp.unlink()  # type: ignore[has-type]
@@ -887,8 +932,6 @@ def calculate_fpp_handler(
     Returns:
         Dictionary with FPP results or error information
     """
-    # Note: contrast_curve is accepted but not yet integrated
-    _ = contrast_curve
     start_time = time.time()
     cache_dir = getattr(cache, "cache_dir", None) or tempfile.gettempdir()
     deadline = None
@@ -1026,11 +1069,21 @@ def calculate_fpp_handler(
             sectors_used_value=sectors_used,
         )
 
-    # Step 5: Calculate probabilities
+        # Step 5: Calculate probabilities
     try:
         # Work around TRICERATOPS's internal TRILEGAL fetch path which can raise
         # pandas EmptyDataError when the output URL exists but is momentarily empty.
         if getattr(target, "trilegal_fname", None) is None:
+            # If we already have a cached TRILEGAL CSV for this TIC, prefer it to avoid
+            # re-querying TRILEGAL and to avoid expired TRILEGAL URLs (HTTP 404).
+            cached_csv = _cached_trilegal_csv_path(cache_dir=cache_dir, tic_id=tic_id)
+            try:
+                if cached_csv.exists() and cached_csv.stat().st_size > 0:
+                    target.trilegal_fname = str(cached_csv)
+                    target.trilegal_url = None
+            except OSError:
+                pass
+
             trilegal_url = getattr(target, "trilegal_url", None)
             if isinstance(trilegal_url, str) and trilegal_url:
                 prefetch_timeout = TRICERATOPS_INIT_TIMEOUT_DEFAULT
@@ -1048,11 +1101,35 @@ def calculate_fpp_handler(
                     float(prefetch_timeout),
                     operation=f"TRILEGAL prefetch for TIC {tic_id}",
                 ):
-                    trilegal_csv = _prefetch(
-                        cache_dir=cache_dir,
-                        tic_id=tic_id,
-                        trilegal_url=trilegal_url,
-                    )
+                    try:
+                        trilegal_csv = _prefetch(
+                            cache_dir=cache_dir,
+                            tic_id=tic_id,
+                            trilegal_url=trilegal_url,
+                        )
+                    except Exception as e:
+                        # If the TRILEGAL output URL has expired (commonly HTTP 404),
+                        # attempt to re-submit a fresh TRILEGAL query once.
+                        msg = str(e)
+                        if "HTTP Error 404" in msg or "404: Not Found" in msg:
+                            try:
+                                from bittr_tess_vetter.ext.triceratops_plus_vendor.triceratops.funcs import (
+                                    query_TRILEGAL,
+                                )
+                            except Exception:
+                                raise
+                            ra = getattr(target, "ra", None) or getattr(target, "RA", None)
+                            dec = getattr(target, "dec", None) or getattr(target, "Dec", None)
+                            if ra is None or dec is None:
+                                raise
+                            new_url = query_TRILEGAL(float(ra), float(dec), verbose=0)
+                            trilegal_csv = _prefetch(
+                                cache_dir=cache_dir,
+                                tic_id=tic_id,
+                                trilegal_url=str(new_url),
+                            )
+                        else:
+                            raise
                 target.trilegal_fname = trilegal_csv
                 target.trilegal_url = None
 
@@ -1171,10 +1248,14 @@ def calculate_fpp_handler(
         n_replicates = max(1, int(replicates)) if replicates is not None else 1
         base_seed = seed if seed is not None else int(time.time() * 1000) % (2**31)
 
-        # Use temp directory for external LC files if needed
-        temp_dir_obj = tempfile.TemporaryDirectory() if external_lightcurves else None
+        # Use temp directory for external LC files / contrast curve file if needed
+        temp_dir_obj = (
+            tempfile.TemporaryDirectory() if (external_lightcurves or contrast_curve) else None
+        )
         replicate_results: list[dict[str, Any]] = []
         replicate_errors: list[dict[str, Any]] = []
+        contrast_curve_file: str | None = None
+        contrast_curve_filter: str | None = None
 
         try:
             if external_lightcurves and temp_dir_obj is not None:
@@ -1187,6 +1268,38 @@ def calculate_fpp_handler(
                     f"TRICERATOPS+ multi-band FPP: {n_external_lcs} external LCs "
                     f"in filters {filt_lcs}"
                 )
+
+            if contrast_curve is not None and temp_dir_obj is not None:
+                temp_dir_path = Path(temp_dir_obj.name)
+                try:
+                    sep = np.asarray(getattr(contrast_curve, "separation_arcsec"), dtype=float)
+                    dmag = np.asarray(getattr(contrast_curve, "delta_mag"), dtype=float)
+                    filt = str(getattr(contrast_curve, "filter", "Vis") or "Vis")
+                except Exception:
+                    sep = np.array([], dtype=float)
+                    dmag = np.array([], dtype=float)
+                    filt = "Vis"
+
+                mask = np.isfinite(sep) & np.isfinite(dmag)
+                sep = sep[mask]
+                dmag = dmag[mask]
+                order = np.argsort(sep)
+                sep = sep[order]
+                dmag = dmag[order]
+                if sep.size >= 2:
+                    out_path = temp_dir_path / "contrast_curve.txt"
+                    # TRICERATOPS expects 2 columns, no header: separation_arcsec, delta_mag
+                    # Vendored TRICERATOPS parses with np.loadtxt(..., delimiter=',')
+                    np.savetxt(out_path, np.column_stack([sep, dmag]), fmt="%.8f", delimiter=",")
+                    contrast_curve_file = str(out_path)
+                    contrast_curve_filter = filt
+                    logger.info(
+                        "Using contrast curve (%s): n=%d, sep=[%.3f..%.3f] arcsec",
+                        filt,
+                        int(sep.size),
+                        float(sep[0]),
+                        float(sep[-1]),
+                    )
 
             # Run replicates
             for rep_idx in range(n_replicates):
@@ -1227,6 +1340,9 @@ def calculate_fpp_handler(
                         if external_lc_files:
                             calc_kwargs["external_lc_files"] = external_lc_files
                             calc_kwargs["filt_lcs"] = filt_lcs
+                        if contrast_curve_file is not None:
+                            calc_kwargs["contrast_curve_file"] = contrast_curve_file
+                            calc_kwargs["filt"] = contrast_curve_filter or "Vis"
 
                         target.calc_probs(**calc_kwargs)
 
@@ -1253,6 +1369,11 @@ def calculate_fpp_handler(
                         run_seed=run_seed,
                         run_start_time=run_start_time,
                     )
+                    if contrast_curve_file is not None:
+                        run_result["contrast_curve"] = {
+                            "filter": contrast_curve_filter or "Vis",
+                            "file": os.path.basename(contrast_curve_file),
+                        }
                     replicate_results.append(run_result)
 
                 except NetworkTimeoutError as e:
