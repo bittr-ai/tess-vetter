@@ -61,20 +61,36 @@ def _extract_tpf_arrays(
 
 
 def _candidate_to_internal(candidate: Any) -> TransitCandidate:
-    """Convert API Candidate to internal TransitCandidate.
+    """Convert API Candidate or internal TransitCandidate to TransitCandidate.
 
     Args:
-        candidate: API Candidate with ephemeris attribute.
+        candidate: Either an API Candidate with ephemeris attribute,
+            or an internal TransitCandidate with flat fields.
 
     Returns:
         Internal TransitCandidate for vetting checks.
     """
+    # If already a TransitCandidate, use it directly
+    if isinstance(candidate, TransitCandidate):
+        return candidate
+
+    # Handle API Candidate with nested ephemeris
+    if hasattr(candidate, "ephemeris"):
+        return TransitCandidate(
+            period=candidate.ephemeris.period_days,
+            t0=candidate.ephemeris.t0_btjd,
+            duration_hours=candidate.ephemeris.duration_hours,
+            depth=candidate.depth or 0.001,
+            snr=0.0,  # Placeholder - not used by pixel checks
+        )
+
+    # Handle object with flat fields (like TransitCandidate but not instance)
     return TransitCandidate(
-        period=candidate.ephemeris.period_days,
-        t0=candidate.ephemeris.t0_btjd,
-        duration_hours=candidate.ephemeris.duration_hours,
-        depth=candidate.depth or 0.001,
-        snr=0.0,  # Placeholder - not used by pixel checks
+        period=candidate.period,
+        t0=candidate.t0,
+        duration_hours=candidate.duration_hours,
+        depth=getattr(candidate, "depth", None) or 0.001,
+        snr=getattr(candidate, "snr", 0.0),
     )
 
 

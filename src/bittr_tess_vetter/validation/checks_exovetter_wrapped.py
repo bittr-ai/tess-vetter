@@ -37,10 +37,11 @@ from bittr_tess_vetter.validation.result_schema import (
 
 
 def _candidate_to_internal(candidate: Any) -> TransitCandidate:
-    """Convert API Candidate to internal TransitCandidate.
+    """Convert API Candidate or internal TransitCandidate to TransitCandidate.
 
     Args:
-        candidate: API Candidate with ephemeris attribute.
+        candidate: Either an API Candidate with ephemeris attribute,
+            or an internal TransitCandidate with flat fields.
 
     Returns:
         Internal TransitCandidate for vetting checks.
@@ -48,16 +49,35 @@ def _candidate_to_internal(candidate: Any) -> TransitCandidate:
     Raises:
         ValueError: If depth is not provided (required for exovetter checks).
     """
-    depth = candidate.depth
+    # If already a TransitCandidate, use it directly
+    if isinstance(candidate, TransitCandidate):
+        if candidate.depth is None:
+            raise ValueError("Candidate depth is required for exovetter checks")
+        return candidate
+
+    # Handle API Candidate with nested ephemeris
+    if hasattr(candidate, "ephemeris"):
+        depth = candidate.depth
+        if depth is None:
+            raise ValueError("Candidate depth is required for exovetter checks")
+        return TransitCandidate(
+            period=candidate.ephemeris.period_days,
+            t0=candidate.ephemeris.t0_btjd,
+            duration_hours=candidate.ephemeris.duration_hours,
+            depth=depth,
+            snr=0.0,  # Placeholder - not used by exovetter checks
+        )
+
+    # Handle object with flat fields (like TransitCandidate but not instance)
+    depth = getattr(candidate, "depth", None)
     if depth is None:
         raise ValueError("Candidate depth is required for exovetter checks")
-
     return TransitCandidate(
-        period=candidate.ephemeris.period_days,
-        t0=candidate.ephemeris.t0_btjd,
-        duration_hours=candidate.ephemeris.duration_hours,
+        period=candidate.period,
+        t0=candidate.t0,
+        duration_hours=candidate.duration_hours,
         depth=depth,
-        snr=0.0,  # Placeholder - not used by exovetter checks
+        snr=getattr(candidate, "snr", 0.0),
     )
 
 
