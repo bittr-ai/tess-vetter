@@ -1073,12 +1073,45 @@ def check_depth_stability(
 
     depths_arr = np.array(epoch_depths)
     sigmas_arr = np.array(epoch_sigmas)
+    epoch_indices_arr = np.array(epoch_indices, dtype=int)
 
     mean_depth = float(np.mean(depths_arr))
     median_depth = float(np.median(depths_arr))
     std_depth = float(np.std(depths_arr))
 
     rms_scatter = std_depth / mean_depth if mean_depth > 0 else 0.0
+
+    # -------------------------------------------------------------------------
+    # Additional false-alarm metrics (metrics-only)
+    # - Single-event domination: one epoch drives detection
+    # - DMM: weighted mean vs median depth mismatch (outlier sensitivity)
+    # -------------------------------------------------------------------------
+    safe_sigmas = np.where(np.isfinite(sigmas_arr) & (sigmas_arr > 0), sigmas_arr, np.nan)
+    snr_epoch = np.abs(depths_arr) / (safe_sigmas + 1e-12)
+    snr_epoch = np.where(np.isfinite(snr_epoch), snr_epoch, 0.0)
+    snr_sq = snr_epoch**2
+    snr_sq_sum = float(np.sum(snr_sq))
+    s_max = float(np.max(snr_epoch)) if snr_epoch.size else 0.0
+    s_median = float(np.median(snr_epoch)) if snr_epoch.size else 0.0
+    s_rms = float(np.sqrt(np.mean(snr_sq))) if snr_epoch.size else 0.0
+    dom_ratio = float(s_max / (s_rms + 1e-12)) if snr_epoch.size else 0.0
+    dom_frac = float((s_max**2) / (snr_sq_sum + 1e-12)) if snr_epoch.size else 0.0
+
+    dom_idx = int(np.argmax(snr_epoch)) if snr_epoch.size else 0
+    dominating_epoch_index = int(epoch_indices_arr[dom_idx]) if epoch_indices_arr.size else None
+    dominating_epoch_time_btjd = (
+        float(t0 + dominating_epoch_index * period) if dominating_epoch_index is not None else None
+    )
+
+    # Weighted mean vs median (DMM)
+    weights = np.where(np.isfinite(sigmas_arr) & (sigmas_arr > 0), 1.0 / (sigmas_arr**2 + 1e-12), 0.0)
+    wsum = float(np.sum(weights))
+    d_mean_w = float(np.sum(weights * depths_arr) / wsum) if wsum > 0 else float(mean_depth)
+    d_med = float(median_depth)
+    dmm = float(d_mean_w / (d_med + 1e-12)) if np.isfinite(d_mean_w) and np.isfinite(d_med) else 0.0
+    dmm_abs = float(np.abs(d_mean_w - d_med) / (np.abs(d_med) + 1e-12)) if np.isfinite(d_med) else 0.0
+
+    depth_mad = float(np.median(np.abs(depths_arr - d_med))) if depths_arr.size else 0.0
 
     # Compute expected scatter from individual uncertainties
     # Expected: sqrt(sum(sigma_k^2)) / N
@@ -1157,6 +1190,20 @@ def check_depth_stability(
             "expected_scatter_ppm": round(expected_scatter_ppm, 2),
             "chi2_reduced": round(chi2_reduced, 2),
             "outlier_epochs": outlier_epochs,
+            # False-alarm enrichment
+            "dom_ratio": round(dom_ratio, 3),
+            "dom_frac": round(dom_frac, 3),
+            "s_max": round(s_max, 3),
+            "s_median": round(s_median, 3),
+            "dominating_epoch_index": dominating_epoch_index,
+            "dominating_epoch_time_btjd": round(dominating_epoch_time_btjd, 6)
+            if dominating_epoch_time_btjd is not None
+            else None,
+            "d_mean_w_ppm": round(d_mean_w * 1e6, 2),
+            "d_med_ppm": round(d_med * 1e6, 2),
+            "dmm": round(dmm, 3),
+            "dmm_abs": round(dmm_abs, 3),
+            "depth_mad_ppm": round(depth_mad * 1e6, 2),
             "warnings": warnings,
             "method": "per_epoch_local_baseline",
             "_metrics_only": True,

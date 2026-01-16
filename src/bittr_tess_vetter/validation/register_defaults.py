@@ -10,7 +10,7 @@ Usage:
     >>> registry = get_default_registry()
     >>> register_all_defaults(registry)
     >>> registry.list_ids()
-    ['V01', 'V02', 'V03', 'V04', 'V05', 'V06', 'V07', 'V08', 'V09', 'V10', 'V11', 'V12']
+    ['V01', 'V02', 'V03', 'V04', 'V05', 'V13', 'V15', 'V06', 'V07', 'V08', 'V09', 'V10', 'V11', 'V12']
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 
 def register_lc_only_checks(registry: CheckRegistry) -> None:
-    """Register LC-only checks V01-V05.
+    """Register LC-only checks V01-V05 plus false-alarm checks V13 and V15.
 
     These checks require only light curve data and ephemeris.
 

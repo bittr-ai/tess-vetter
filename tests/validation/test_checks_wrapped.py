@@ -335,12 +335,14 @@ class TestRegisterFunctions:
         registry = CheckRegistry()
         register_lc_checks(registry)
 
-        assert len(registry) == 5
+        assert len(registry) == 7
         assert "V01" in registry
         assert "V02" in registry
         assert "V03" in registry
         assert "V04" in registry
         assert "V05" in registry
+        assert "V13" in registry
+        assert "V15" in registry
 
     def test_register_catalog_checks(self) -> None:
         registry = CheckRegistry()
@@ -354,8 +356,24 @@ class TestRegisterFunctions:
         registry = CheckRegistry()
         register_all_defaults(registry)
 
-        assert len(registry) == 12
-        expected_ids = [f"V{i:02d}" for i in range(1, 13)]
+        assert len(registry) == 15
+        expected_ids = [
+            "V01",
+            "V02",
+            "V03",
+            "V04",
+            "V05",
+            "V06",
+            "V07",
+            "V08",
+            "V09",
+            "V10",
+            "V11",
+            "V11b",
+            "V12",
+            "V13",
+            "V15",
+        ]
         assert registry.list_ids() == expected_ids
 
     def test_registered_checks_are_valid(self) -> None:
@@ -787,38 +805,40 @@ class TestPixelAndExovetterRegistration:
 
 
 # =============================================================================
-# Full registry with all checks V01-V12
+# Full registry with all checks (defaults)
 # =============================================================================
 
 
 class TestFullRegistryWithAllChecks:
-    """Tests for combining all checks V01-V12 in a single registry."""
+    """Tests for combining all default checks in a single registry."""
 
     def test_register_all_checks(self) -> None:
         registry = CheckRegistry()
-        register_all_defaults(registry)  # V01-V12
+        register_all_defaults(registry)
 
-        assert len(registry) == 12
-        expected_ids = [f"V{i:02d}" for i in range(1, 13)]
-        assert registry.list_ids() == expected_ids
+        assert len(registry) == 15
+        assert "V13" in registry
+        assert "V15" in registry
+        assert "V11b" in registry
 
     def test_all_checks_implement_protocol(self) -> None:
         registry = CheckRegistry()
-        register_all_defaults(registry)  # V01-V12
+        register_all_defaults(registry)
 
         for check in registry.list():
             assert isinstance(check, VettingCheck)
 
     def test_tier_distribution(self) -> None:
         registry = CheckRegistry()
-        register_all_defaults(registry)  # V01-V12
+        register_all_defaults(registry)
 
         lc_checks = registry.list_by_tier(CheckTier.LC_ONLY)
         catalog_checks = registry.list_by_tier(CheckTier.CATALOG)
         pixel_checks = registry.list_by_tier(CheckTier.PIXEL)
         exovetter_checks = registry.list_by_tier(CheckTier.EXOVETTER)
 
-        assert len(lc_checks) == 5  # V01-V05
+        # LC_ONLY includes V01-V05, V13, V15, and V11b (modshift_uniqueness is LC-only).
+        assert len(lc_checks) == 8
         assert len(catalog_checks) == 2  # V06-V07
         assert len(pixel_checks) == 3  # V08-V10
         assert len(exovetter_checks) == 2  # V11-V12

@@ -221,15 +221,15 @@ class TestListChecks:
     """Tests for list_checks introspection."""
 
     def test_list_checks_returns_all_defaults(self) -> None:
-        """list_checks should return all registered V01-V07 checks."""
+        """list_checks should return all registered default checks."""
         registry = CheckRegistry()
         register_all_defaults(registry)
 
         checks = list_checks(registry)
 
         check_ids = {c["id"] for c in checks}
-        # V01-V05 LC-only, V06-V07 catalog, V08-V10 pixel, V11-V12 exovetter (12 checks total)
-        expected_ids = {f"V{i:02d}" for i in range(1, 13)}
+        # Defaults include V01-V12 plus V11b, V13, and V15.
+        expected_ids = {f"V{i:02d}" for i in range(1, 13)} | {"V11b", "V13", "V15"}
         assert check_ids == expected_ids
 
     def test_list_checks_has_required_fields(self) -> None:
