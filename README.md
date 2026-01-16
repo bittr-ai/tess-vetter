@@ -34,7 +34,7 @@ The `platform/` module is entirely optional and only used when explicitly import
 
 ## What's in here
 
-- **Vetting pipeline**: 12 checks (V01-V12) with structured `CheckResult` outputs and batch vetting via `vet_many()` (`bittr_tess_vetter.api.vet`)
+- **Vetting pipeline**: 13 checks (V01-V12, V11b) with structured `CheckResult` outputs and batch vetting via `vet_many()` (`bittr_tess_vetter.api.vet`)
 - **Transit detection**: TLS/LS periodograms, multi-planet search, candidate merging (`bittr_tess_vetter.api.periodogram`)
 - **Pixel diagnostics**: centroid shift, difference images, WCS-aware localization, aperture dependence (`bittr_tess_vetter.api.pixel`)
 - **Transit recovery**: detrend + stack + trapezoid fitting for active stars (`bittr_tess_vetter.api.recovery`)

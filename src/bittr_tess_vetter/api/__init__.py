@@ -288,9 +288,10 @@ if TYPE_CHECKING:
         compute_code_hash as compute_evidence_code_hash,
     )
 
-    # Exovetter checks (V11-V12)
+    # Exovetter checks (V11-V12, V11b)
     from bittr_tess_vetter.api.exovetter import (
         modshift,
+        modshift_uniqueness,
         sweet,
         vet_exovetter,
     )

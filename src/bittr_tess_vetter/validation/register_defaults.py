@@ -79,14 +79,31 @@ def register_exovetter_checks(registry: CheckRegistry) -> None:
     _register(registry)
 
 
+def register_modshift_uniqueness_check(registry: CheckRegistry) -> None:
+    """Register ModShift uniqueness check V11b.
+
+    This is an independent implementation of ModShift with properly-scaled
+    Fred and MS1-MS6 metrics. Runs alongside V11 for A/B comparison.
+
+    Args:
+        registry: CheckRegistry to register checks with.
+    """
+    from bittr_tess_vetter.validation.checks_modshift_uniqueness_wrapped import (
+        register_modshift_uniqueness_check as _register,
+    )
+
+    _register(registry)
+
+
 def register_all_defaults(registry: CheckRegistry) -> None:
-    """Register all default vetting checks V01-V12.
+    """Register all default vetting checks V01-V12 plus V11b.
 
     This registers:
     - V01-V05: LC-only checks (always available)
     - V06-V07: Catalog checks (need network + metadata)
     - V08-V10: Pixel checks (need TPF data)
     - V11-V12: Exovetter checks (external algorithms)
+    - V11b: ModShift uniqueness (independent impl, A/B comparison with V11)
 
     Args:
         registry: CheckRegistry to register checks with.
@@ -97,12 +114,13 @@ def register_all_defaults(registry: CheckRegistry) -> None:
         >>> registry = get_default_registry()
         >>> register_all_defaults(registry)
         >>> len(registry)
-        12
+        13
     """
     register_lc_only_checks(registry)
     register_catalog_checks(registry)
     register_pixel_checks(registry)
     register_exovetter_checks(registry)
+    register_modshift_uniqueness_check(registry)
 
 
 __all__ = [
@@ -110,5 +128,6 @@ __all__ = [
     "register_catalog_checks",
     "register_pixel_checks",
     "register_exovetter_checks",
+    "register_modshift_uniqueness_check",
     "register_all_defaults",
 ]

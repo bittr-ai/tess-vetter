@@ -2,6 +2,12 @@
 
 This project follows semantic versioning (SemVer).
 
+## 0.2.0 (2026-01-16)
+
+- Add V11b `modshift_uniqueness` check: independent ModShift implementation with properly-scaled Fred (~1-10 for TESS, not ~60-96 from exovetter). Includes MS1-MS6 normalized uniqueness metrics, CHASES local uniqueness, and CHI transit depth consistency.
+- New API function `modshift_uniqueness()` in `bittr_tess_vetter.api.exovetter`.
+- Check registry now includes 13 checks (V01-V12 plus V11b).
+
 ## 0.1.0 (2026-01-14)
 
 - Initial public release.

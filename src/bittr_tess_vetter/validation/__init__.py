@@ -30,6 +30,10 @@ from bittr_tess_vetter.validation.checks_lc_wrapped import (
     VShapeCheck,
     register_lc_checks,
 )
+from bittr_tess_vetter.validation.checks_modshift_uniqueness_wrapped import (
+    ModShiftUniquenessCheck,
+    register_modshift_uniqueness_check,
+)
 from bittr_tess_vetter.validation.lc_checks import (
     check_depth_stability,
     check_duration_consistency,
@@ -37,6 +41,7 @@ from bittr_tess_vetter.validation.lc_checks import (
     check_secondary_eclipse,
     check_v_shape,
 )
+from bittr_tess_vetter.validation.modshift_uniqueness import run_modshift_uniqueness
 from bittr_tess_vetter.validation.register_defaults import register_all_defaults
 from bittr_tess_vetter.validation.registry import (
     DEFAULT_REGISTRY,
@@ -102,5 +107,10 @@ __all__ = [
     # Registration functions
     "register_lc_checks",
     "register_catalog_checks",
+    "register_modshift_uniqueness_check",
     "register_all_defaults",
+    # VettingCheck wrapper classes (V11b ModShift uniqueness)
+    "ModShiftUniquenessCheck",
+    # ModShift uniqueness core function
+    "run_modshift_uniqueness",
 ]

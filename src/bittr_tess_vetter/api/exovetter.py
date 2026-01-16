@@ -1,10 +1,11 @@
-"""Exovetter-based vetting checks for the public API (V11-V12).
+"""Exovetter-based vetting checks for the public API (V11-V12, V11b).
 
 This module provides thin wrappers around the exovetter library's ModShift and
 SWEET tests, converting between facade types and internal types.
 
 Check Summary:
 - V11 modshift: Detect secondary eclipses at arbitrary phases (eccentric EBs)
+- V11b modshift_uniqueness: Independent ModShift implementation with proper Fred scaling
 - V12 sweet: Detect stellar variability at transit period mimicking transits
 
 Novelty: standard (both checks implement well-established Kepler techniques)
@@ -34,6 +35,9 @@ from bittr_tess_vetter.api.types import (
 )
 from bittr_tess_vetter.domain.detection import TransitCandidate, VetterCheckResult
 from bittr_tess_vetter.validation.exovetter_checks import run_modshift, run_sweet
+from bittr_tess_vetter.validation.modshift_uniqueness import (
+    run_modshift_uniqueness as _run_modshift_uniqueness,
+)
 
 # Module-level references for programmatic access (generated from central registry)
 REFERENCES = [ref.to_dict() for ref in [THOMPSON_2018, COUGHLIN_2016]]
@@ -235,6 +239,104 @@ def sweet(
     result = run_sweet(candidate=internal_candidate, lightcurve=internal_lc)
 
     return _convert_result(result)
+
+
+@cites(
+    cite(THOMPSON_2018, "§3.2.3 ModShift signal uniqueness metrics"),
+    cite(COUGHLIN_2016, "DR24 Robovetter ModShift MS1-MS6 thresholds"),
+)
+def modshift_uniqueness(
+    lc: LightCurve,
+    candidate: Candidate,
+    *,
+    enabled: bool = True,
+    n_tce: int = 20000,
+    config: dict[str, Any] | None = None,
+) -> CheckResult:
+    """V11b: ModShift uniqueness metrics with properly-scaled Fred.
+
+    Independent implementation of the ModShift signal uniqueness test following
+    Thompson et al. (2018) and Coughlin et al. (2016). This addresses the Fred
+    scaling issue in exovetter where Fred values are ~60-96 instead of ~1-10,
+    which breaks MS1-MS6 normalization.
+
+    Key metrics:
+    - sig_pri/sec/ter/pos: Primary, secondary, tertiary, positive event significance
+    - fred: Red noise estimator (should be ~1-10 for TESS, NOT ~60-96)
+    - ms1-ms6: Normalized uniqueness metrics (sig_pri/fred - FA1, etc.)
+    - fa1/fa2: False alarm thresholds based on n_tce
+    - med_chases: Median local uniqueness (0-1, higher is better)
+    - chi: Transit depth consistency metric
+
+    Args:
+        lc: Light curve data
+        candidate: Transit candidate with ephemeris and depth
+        enabled: If False, return skipped result without running check
+        n_tce: Number of TCEs for false alarm calculation (default 20000)
+        config: Optional configuration overrides (reserved)
+
+    Returns:
+        CheckResult with ModShift uniqueness metrics (metrics-only; no pass/fail)
+
+    Novelty: standard (independent impl with corrected scaling)
+
+    References:
+        [1] Thompson et al. 2018, ApJS 235, 38 (2018ApJS..235...38T)
+            Section 3.2.3: ModShift uniqueness metrics MS1-MS6
+        [2] Coughlin et al. 2016, ApJS 224, 12 (2016ApJS..224...12C)
+            DR24 Robovetter ModShift implementation and thresholds
+    """
+    if not enabled:
+        return _make_skipped_result("V11b", "modshift_uniqueness", "Check disabled by caller")
+
+    # Extract arrays from LightCurve facade
+    internal_lc = lc.to_internal()
+    time = internal_lc.time
+    flux = internal_lc.flux
+    flux_err = internal_lc.flux_err
+
+    # Get ephemeris from candidate
+    period = candidate.ephemeris.period_days
+    t0 = candidate.ephemeris.t0_btjd
+    duration_hours = candidate.ephemeris.duration_hours
+
+    del config
+    # Run the independent modshift uniqueness implementation
+    result = _run_modshift_uniqueness(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        period=period,
+        t0=t0,
+        duration_hours=duration_hours,
+        n_tce=n_tce,
+    )
+
+    # Convert dict result to CheckResult
+    status = result.pop("status", "ok")
+    warnings = result.pop("warnings", [])
+
+    if status == "error":
+        return error_result(
+            id="V11b",
+            name="modshift_uniqueness",
+            error="COMPUTATION_ERROR",
+            notes=warnings,
+        )
+
+    # All remaining keys are metrics
+    metrics: dict[str, float | int | str | bool | None] = {}
+    for k, v in result.items():
+        if isinstance(v, (float, int, str, bool, type(None))):
+            metrics[k] = v
+
+    return ok_result(
+        id="V11b",
+        name="modshift_uniqueness",
+        metrics=metrics,
+        confidence=1.0 if status == "ok" else 0.5,
+        raw=None,
+    )
 
 
 @cites(
