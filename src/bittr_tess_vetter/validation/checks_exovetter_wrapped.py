@@ -224,10 +224,12 @@ class ModShiftCheck:
             "primary_signal": details.get("primary_signal"),
             "secondary_signal": details.get("secondary_signal"),
             "tertiary_signal": details.get("tertiary_signal"),
+            "positive_signal": details.get("positive_signal"),
             "fred": details.get("fred"),
             "false_alarm_threshold": details.get("false_alarm_threshold"),
             "secondary_primary_ratio": details.get("secondary_primary_ratio"),
             "tertiary_primary_ratio": details.get("tertiary_primary_ratio"),
+            "positive_primary_ratio": details.get("positive_primary_ratio"),
         }
 
         # Add inputs summary to metrics for analysis

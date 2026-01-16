@@ -198,11 +198,13 @@ def run_modshift(
     pri = float(metrics.get("pri", 0.0) or 0.0)
     sec = float(metrics.get("sec", 0.0) or 0.0)
     ter = float(metrics.get("ter", 0.0) or 0.0)
+    pos = float(metrics.get("pos", 0.0) or 0.0)
     fred = float(metrics.get("Fred", 0.0) or 0.0)
     fa = float(metrics.get("false_alarm_threshold", 0.0) or 0.0)
 
     sec_pri = (sec / pri) if pri > 0 else 0.0
     ter_pri = (ter / pri) if pri > 0 else 0.0
+    pos_pri = (pos / pri) if pri > 0 else 0.0
 
     n_transits = int(inputs_summary.get("n_transits_expected", 0))
     confidence = min(1.0, (n_transits / 5.0)) if n_transits > 0 else 0.5
@@ -216,10 +218,12 @@ def run_modshift(
             "primary_signal": round(pri, 6),
             "secondary_signal": round(sec, 6),
             "tertiary_signal": round(ter, 6),
+            "positive_signal": round(pos, 6),
             "fred": round(fred, 6),
             "false_alarm_threshold": round(fa, 6),
             "secondary_primary_ratio": round(sec_pri, 6),
             "tertiary_primary_ratio": round(ter_pri, 6),
+            "positive_primary_ratio": round(pos_pri, 6),
             "raw_metrics": metrics,
         },
     )
