@@ -1,4 +1,4 @@
-"""Light curve-only vetting check wrappers (V01-V05).
+"""Light curve-only vetting check wrappers (V01-V05, V13, V15).
 
 This module provides VettingCheck-compliant wrappers around the existing
 LC-only check implementations. These wrappers:
@@ -282,8 +282,76 @@ class VShapeCheck:
             )
 
 
+class DataGapsCheck:
+    """V13: Data gaps / missing cadence near transit windows."""
+
+    id = "V13"
+    name = "Data Gaps"
+    tier = CheckTier.LC_ONLY
+    requirements = CheckRequirements()
+    citations = [
+        "Thompson et al. 2018, ApJS 235, 38",
+        "Twicken et al. 2018, PASP 130, 064502",
+    ]
+
+    def run(self, inputs: CheckInputs, config: CheckConfig) -> CheckResult:
+        """Execute the data gaps check."""
+        try:
+            from bittr_tess_vetter.validation.lc_false_alarm_checks import check_data_gaps
+
+            result = check_data_gaps(
+                inputs.lc,
+                inputs.candidate.period,
+                inputs.candidate.t0,
+                inputs.candidate.duration_hours,
+            )
+            return _convert_legacy_result(result, self.id, self.name)
+        except Exception as e:
+            return error_result(
+                self.id,
+                self.name,
+                error=type(e).__name__,
+                notes=[str(e)],
+            )
+
+
+class TransitAsymmetryCheck:
+    """V15: Transit-window asymmetry (ramp/step proxy)."""
+
+    id = "V15"
+    name = "Transit Asymmetry"
+    tier = CheckTier.LC_ONLY
+    requirements = CheckRequirements()
+    citations = [
+        "Thompson et al. 2018, ApJS 235, 38",
+        "Twicken et al. 2018, PASP 130, 064502",
+    ]
+
+    def run(self, inputs: CheckInputs, config: CheckConfig) -> CheckResult:
+        """Execute the transit asymmetry check."""
+        try:
+            from bittr_tess_vetter.validation.lc_false_alarm_checks import (
+                check_transit_asymmetry,
+            )
+
+            result = check_transit_asymmetry(
+                inputs.lc,
+                inputs.candidate.period,
+                inputs.candidate.t0,
+                inputs.candidate.duration_hours,
+            )
+            return _convert_legacy_result(result, self.id, self.name)
+        except Exception as e:
+            return error_result(
+                self.id,
+                self.name,
+                error=type(e).__name__,
+                notes=[str(e)],
+            )
+
+
 def register_lc_checks(registry: Any) -> None:
-    """Register LC-only checks V01-V05 with a registry.
+    """Register LC-only checks with a registry.
 
     Args:
         registry: A CheckRegistry instance.
@@ -293,6 +361,8 @@ def register_lc_checks(registry: Any) -> None:
     registry.register(DurationConsistencyCheck())
     registry.register(DepthStabilityCheck())
     registry.register(VShapeCheck())
+    registry.register(DataGapsCheck())
+    registry.register(TransitAsymmetryCheck())
 
 
 # All check classes for explicit imports
@@ -302,5 +372,7 @@ __all__ = [
     "DurationConsistencyCheck",
     "DepthStabilityCheck",
     "VShapeCheck",
+    "DataGapsCheck",
+    "TransitAsymmetryCheck",
     "register_lc_checks",
 ]

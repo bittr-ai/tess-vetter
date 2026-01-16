@@ -107,7 +107,7 @@ Aliases:
 Vetting Checks
 --------------
 
-LC-Only Checks (V01-V05)
+LC-Only Checks (V01-V05, V13, V15)
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 Light curve-only vetting checks that do not require external data.
@@ -122,6 +122,14 @@ Light curve-only vetting checks that do not require external data.
    depth_stability
    v_shape
    vet_lc_only
+
+Additional LC-only checks are available via the pipeline registry:
+
+- ``V13``: ``data_gaps`` (missing-cadence fraction near each transit epoch)
+- ``V15``: ``transit_asymmetry`` (left/right asymmetry in transit window)
+
+Use :func:`~bittr_tess_vetter.api.vet_candidate` with ``checks=["V13", "V15"]`` or
+discover check IDs via :func:`~bittr_tess_vetter.api.list_checks`.
 
 Catalog Checks (V06-V07)
 ^^^^^^^^^^^^^^^^^^^^^^^^

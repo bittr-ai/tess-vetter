@@ -69,7 +69,8 @@ class VetterCheckResult(FrozenModel):
     confidence, and check-specific details.
 
     Check IDs:
-    - V01-V10: Canonical vetting checks (see lc_checks.py)
+    - V01-V12: Canonical vetting checks (see validation/*)
+    - V13, V15: LC-only false-alarm checks (gap/asymmetry)
     - PF01-PF99: Pre-filter checks (optional, run before V01-V10)
 
     Passed field:

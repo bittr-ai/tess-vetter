@@ -85,7 +85,7 @@ Vetting Check Categories
 
 The vetting pipeline includes several categories of checks:
 
-LC-Only Checks (V01-V05)
+LC-Only Checks (V01-V05, V13, V15)
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 These checks use only the light curve data:
@@ -95,6 +95,8 @@ These checks use only the light curve data:
 - **V03 duration_consistency**: Check duration vs stellar density
 - **V04 depth_stability**: Check depth consistency across transits
 - **V05 v_shape**: Distinguish U-shaped vs V-shaped transits
+- **V13 data_gaps**: Estimate missing-cadence fraction near each transit epoch
+- **V15 transit_asymmetry**: Left/right asymmetry in the transit window (ramp/step proxy)
 
 Catalog Checks (V06-V07)
 ^^^^^^^^^^^^^^^^^^^^^^^^
