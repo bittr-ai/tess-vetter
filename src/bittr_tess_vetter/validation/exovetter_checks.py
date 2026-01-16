@@ -46,11 +46,21 @@ def _coerce_metrics_dict(d: dict[str, Any]) -> dict[str, Any]:
     for k, v in d.items():
         if isinstance(v, dict):
             out[k] = _coerce_metrics_dict(v)
+        elif isinstance(v, np.ndarray):
+            # Convert numpy arrays to nested lists with Python scalars
+            out[k] = _ndarray_to_list(v)
         elif isinstance(v, (list, tuple)):
             out[k] = [_coerce_scalar(x) for x in v]
         else:
             out[k] = _coerce_scalar(v)
     return out
+
+
+def _ndarray_to_list(arr: np.ndarray) -> list[Any]:
+    """Convert numpy array to nested list of Python scalars."""
+    if arr.ndim == 0:
+        return _coerce_scalar(arr.item())  # type: ignore[return-value]
+    return [_ndarray_to_list(x) if isinstance(x, np.ndarray) else _coerce_scalar(x) for x in arr]
 
 
 def _as_jsonable_metrics(metrics: Any) -> dict[str, Any]:
@@ -220,7 +230,21 @@ def run_sweet(
     candidate: TransitCandidate,
     lightcurve: LightCurveData,
 ) -> VetterCheckResult:
-    """V12: SWEET metrics."""
+    """V12: SWEET metrics.
+
+    SWEET (Sine Wave Evaluation for Ephemeris Transits) fits sinusoids at
+    P/2, P, and 2P to out-of-transit flux to detect stellar variability.
+
+    Returns (when available):
+    - snr_half_period: SNR of sinusoid fit at P/2 (even harmonics)
+    - snr_at_period: SNR of sinusoid fit at P (direct variability)
+    - snr_double_period: SNR of sinusoid fit at 2P (subharmonics)
+    - msg: Human-readable pass/fail message (legacy, less useful)
+
+    The amp array from exovetter has shape (3, 3):
+    - Row 0 = P/2, Row 1 = P, Row 2 = 2P
+    - Columns = [amplitude, uncertainty, SNR]
+    """
     inputs_summary = _inputs_summary(lightcurve, candidate)
     try:
         import astropy.units as u
@@ -271,12 +295,34 @@ def run_sweet(
     n_points = int(inputs_summary.get("n_points", 0))
     confidence = min(1.0, n_points / 200.0) if n_points > 0 else 0.5
 
+    # Extract SNR values from the amp array
+    # amp has shape (3, 3): [[amp, unc, SNR], ...] for P/2, P, 2P
+    snr_half_period: float | None = None
+    snr_at_period: float | None = None
+    snr_double_period: float | None = None
+
+    amp = metrics.get("amp")
+    if amp is not None and isinstance(amp, list) and len(amp) >= 3:
+        try:
+            # Row 0 = P/2, Row 1 = P, Row 2 = 2P; column 2 = SNR
+            if isinstance(amp[0], list) and len(amp[0]) >= 3:
+                snr_half_period = float(amp[0][2])
+            if isinstance(amp[1], list) and len(amp[1]) >= 3:
+                snr_at_period = float(amp[1][2])
+            if isinstance(amp[2], list) and len(amp[2]) >= 3:
+                snr_double_period = float(amp[2][2])
+        except (IndexError, TypeError, ValueError) as e:
+            logger.debug("Failed to extract SWEET SNR values: %s", e)
+
     return _metrics_result(
         check_id="V12",
         name="sweet",
         confidence=confidence,
         details={
             "inputs_summary": inputs_summary,
+            "snr_half_period": snr_half_period,
+            "snr_at_period": snr_at_period,
+            "snr_double_period": snr_double_period,
             "raw_metrics": metrics,
         },
     )

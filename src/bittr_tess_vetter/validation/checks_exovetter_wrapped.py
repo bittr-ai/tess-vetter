@@ -367,6 +367,15 @@ class SweetCheck:
             metrics["n_transits_expected"] = inputs_summary.get("n_transits_expected")
             metrics["cadence_median_min"] = inputs_summary.get("cadence_median_min")
 
+        # Extract the explicit SNR fields from details (new approach)
+        # These are more useful for ML than the raw msg pass/fail
+        if details.get("snr_half_period") is not None:
+            metrics["snr_half_period"] = details.get("snr_half_period")
+        if details.get("snr_at_period") is not None:
+            metrics["snr_at_period"] = details.get("snr_at_period")
+        if details.get("snr_double_period") is not None:
+            metrics["snr_double_period"] = details.get("snr_double_period")
+
         # Flatten raw_metrics from exovetter SWEET
         # SWEET returns metrics for half, full, and double period fits
         for key, value in raw_metrics.items():
