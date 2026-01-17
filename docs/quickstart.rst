@@ -100,6 +100,12 @@ These checks use only the light curve data:
 - **V13 data_gaps**: Estimate missing-cadence fraction near each transit epoch
 - **V15 transit_asymmetry**: Left/right asymmetry in the transit window (ramp/step proxy)
 
+.. note::
+
+   V13 reports both a global missingness summary (which can include predicted epochs with
+   no time coverage) and coverage-aware fields (``*_in_coverage``). For interpretation,
+   prefer the coverage-aware metrics to avoid inter-sector gap confusion.
+
 Catalog Checks (V06-V07)
 ^^^^^^^^^^^^^^^^^^^^^^^^
 

@@ -208,6 +208,13 @@ Additional LC-only checks are available via the pipeline registry:
 Use :func:`~bittr_tess_vetter.api.vet_candidate` with ``checks=["V13", "V15"]`` or
 discover check IDs via :func:`~bittr_tess_vetter.api.list_checks`.
 
+Notes on V13 (data gaps):
+
+- ``missing_frac_max`` can be ``1.0`` when the ephemeris predicts transits during large
+  gaps (e.g., between sectors). For interpretation, prefer the coverage-aware fields:
+  ``missing_frac_max_in_coverage``, ``missing_frac_median_in_coverage``,
+  ``n_epochs_evaluated_in_coverage``, and ``n_epochs_missing_ge_0p25_in_coverage``.
+
 Catalog Checks (V06-V07)
 ^^^^^^^^^^^^^^^^^^^^^^^^
 

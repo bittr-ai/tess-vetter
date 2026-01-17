@@ -148,6 +148,24 @@ def check_data_gaps(
     n_epochs_evaluated = int(len(rows))
     n_epochs_missing_ge_0p25 = int(np.sum(missing >= 0.25))
 
+    # Coverage-aware summaries: exclude epochs whose window contains no observed cadences.
+    # This avoids confusing cases where the ephemeris predicts transits during large
+    # inter-sector gaps (missing_frac=1.0 but no data exists to evaluate that epoch).
+    rows_in_coverage = [r for r in rows if int(r.get("n_observed", 0)) > 0]
+    if rows_in_coverage:
+        missing_in_cov = np.array([r["missing_frac"] for r in rows_in_coverage], dtype=np.float64)
+        missing_frac_max_in_coverage = float(np.max(missing_in_cov))
+        missing_frac_median_in_coverage = float(np.median(missing_in_cov))
+        n_epochs_evaluated_in_coverage = int(len(rows_in_coverage))
+        n_epochs_missing_ge_0p25_in_coverage = int(np.sum(missing_in_cov >= 0.25))
+    else:
+        missing_frac_max_in_coverage = None
+        missing_frac_median_in_coverage = None
+        n_epochs_evaluated_in_coverage = 0
+        n_epochs_missing_ge_0p25_in_coverage = 0
+
+    n_epochs_excluded_no_coverage = int(n_epochs_evaluated - n_epochs_evaluated_in_coverage)
+
     # Confidence: mostly about how many epochs we could evaluate.
     if n_epochs_evaluated < 2:
         confidence = 0.35
@@ -171,6 +189,19 @@ def check_data_gaps(
             "missing_frac_median": round(missing_frac_median, 3),
             "n_epochs_evaluated": n_epochs_evaluated,
             "n_epochs_missing_ge_0p25": n_epochs_missing_ge_0p25,
+            "missing_frac_max_in_coverage": (
+                round(float(missing_frac_max_in_coverage), 3)
+                if missing_frac_max_in_coverage is not None
+                else None
+            ),
+            "missing_frac_median_in_coverage": (
+                round(float(missing_frac_median_in_coverage), 3)
+                if missing_frac_median_in_coverage is not None
+                else None
+            ),
+            "n_epochs_evaluated_in_coverage": int(n_epochs_evaluated_in_coverage),
+            "n_epochs_missing_ge_0p25_in_coverage": int(n_epochs_missing_ge_0p25_in_coverage),
+            "n_epochs_excluded_no_coverage": int(n_epochs_excluded_no_coverage),
             "window_mult": float(config.window_mult),
             "worst_epochs": worst,
             "warnings": warnings,
@@ -358,4 +389,3 @@ __all__ = [
     "check_data_gaps",
     "check_transit_asymmetry",
 ]
-
