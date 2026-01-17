@@ -136,6 +136,13 @@ __all__ = [
     "CheckRequirements",
     "PipelineConfig",
     # -------------------------------------------------------------------------
+    # Reporting / UX helpers
+    # -------------------------------------------------------------------------
+    "VettingTableOptions",
+    "format_vetting_table",
+    "summarize_bundle",
+    "render_validation_report_markdown",
+    # -------------------------------------------------------------------------
     # Sector / Consistency Metrics (metrics-only)
     # -------------------------------------------------------------------------
     "SectorEphemerisMetrics",
@@ -604,6 +611,12 @@ if TYPE_CHECKING:
 
     # Main orchestrator
     from bittr_tess_vetter.api.vet import vet_candidate, vet_many
+    from bittr_tess_vetter.api.vetting_report import (
+        VettingTableOptions,
+        format_vetting_table,
+        render_validation_report_markdown,
+        summarize_bundle,
+    )
     from bittr_tess_vetter.api.wcs_localization import (
         LocalizationResult,
         LocalizationVerdict,

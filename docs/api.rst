@@ -68,6 +68,21 @@ Aliases:
 
 - ``btv.vet`` is an alias for ``vet_candidate``
 
+Reporting Helpers
+-----------------
+
+Helpers for turning `VettingBundleResult` outputs into researcher-friendly tables,
+summaries, and markdown reports (policy-free).
+
+.. autosummary::
+   :toctree: _autosummary
+   :nosignatures:
+
+   VettingTableOptions
+   format_vetting_table
+   summarize_bundle
+   render_validation_report_markdown
+
 Presets:
 
 - ``preset="default"``: runs the default check set (15 checks total; see below).
