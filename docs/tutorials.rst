@@ -21,3 +21,4 @@ the Sphinx build by default).
 - :download:`03-pixel-analysis.ipynb <tutorials/03-pixel-analysis.ipynb>` — pixel diagnostics concepts and helpers.
 - :download:`04-real-candidate-validation.ipynb <tutorials/04-real-candidate-validation.ipynb>` — end-to-end validation workflow on a real TOI (includes AO-assisted FPP).
 - :download:`05-extended-metrics.ipynb <tutorials/05-extended-metrics.ipynb>` — opt-in extended metrics checks (V16–V21) and how to compare against the default preset.
+- :download:`06-toi-5807-robustness.ipynb <tutorials/06-toi-5807-robustness.ipynb>` — robustness checks for TOI-5807.01 (V16 detrend sensitivity, per-sector pixel vetting, V19 phase-shift events).
