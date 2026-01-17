@@ -129,6 +129,18 @@ Helpers for exporting results into shareable formats (JSON/CSV/Markdown).
    ExportFormat
    export_bundle
 
+FPP Workflow Helpers (Policy-Free)
+----------------------------------
+
+Helpers that reduce glue around TRICERATOPS(+), without embedding thresholds.
+
+.. autosummary::
+   :toctree: _autosummary
+   :nosignatures:
+
+   hydrate_cache_from_dataset
+   load_contrast_curve_exofop_tbl
+
 Periodogram and Detection
 -------------------------
 

@@ -161,6 +161,11 @@ __all__ = [
     "ExportFormat",
     "export_bundle",
     # -------------------------------------------------------------------------
+    # FPP workflow helpers (policy-free)
+    # -------------------------------------------------------------------------
+    "hydrate_cache_from_dataset",
+    "load_contrast_curve_exofop_tbl",
+    # -------------------------------------------------------------------------
     # Sector / Consistency Metrics (metrics-only)
     # -------------------------------------------------------------------------
     "SectorEphemerisMetrics",
@@ -343,6 +348,10 @@ if TYPE_CHECKING:
         STANDARD_PRESET,
         TriceratopsFppPreset,
         calculate_fpp,
+    )
+    from bittr_tess_vetter.api.fpp_helpers import (  # noqa: F401
+        hydrate_cache_from_dataset,
+        load_contrast_curve_exofop_tbl,
     )
     from bittr_tess_vetter.api.ghost_features import (  # noqa: F401
         GhostFeatures,
