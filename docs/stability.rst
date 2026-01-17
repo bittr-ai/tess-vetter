@@ -12,6 +12,7 @@ Stability Tiers
 * Main entry point: ``vet_candidate()``
 * Check IDs (default preset): V01-V12, V13, V15, V11b
 * Check IDs (extended preset, opt-in): V16-V21
+* Check result schema: metric dictionaries may gain new keys over time; existing keys keep their meaning
 
 **Provisional** - API may evolve based on user feedback:
 

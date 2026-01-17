@@ -160,9 +160,18 @@ def calculate_fpp(
         external_lightcurves: Ground-based light curves for multi-band FPP
             (TRICERATOPS+ feature). Up to 4 external LCs supported.
         contrast_curve: High-resolution imaging contrast curve used to constrain unresolved companions.
+        replicates: If provided and >1, run multiple independent TRICERATOPS realizations
+            (with incremented seeds) and report aggregate statistics.
+        seed: Base RNG seed used for replicate runs (replicate i uses seed+i).
 
     Returns:
-        Dictionary with FPP results or error information.
+        Dictionary with FPP results or error information. When ``replicates`` > 1 and
+        multiple runs succeed, the returned dict includes:
+
+        - ``fpp_summary`` / ``nfpp_summary``: ``{"median","p16","p84","values"}``
+        - ``n_success`` / ``n_fail`` and ``base_seed``
+
+        Headline ``fpp``/``nfpp`` are set to the median of the successful replicates.
     """
     base = FAST_PRESET if preset == "fast" else STANDARD_PRESET
     extra = overrides or {}

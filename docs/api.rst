@@ -455,6 +455,11 @@ FPP estimation using TRICERATOPS+.
 
    calculate_fpp
 
+Notes:
+
+- Use ``replicates`` to get lower-variance FPP/NFPP plus ``fpp_summary`` / ``nfpp_summary``
+  percentiles (recommended when making validation-grade claims).
+
 Types:
 
 .. autosummary::

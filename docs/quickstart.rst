@@ -130,6 +130,12 @@ These checks analyze pixel-level data:
    ``max_depth_pixel_edge_distance``) and flags (e.g. ``DIFFIMG_UNRELIABLE``) to decide whether
    to trust the localization for a given target.
 
+False Positive Probability (TRICERATOPS+)
+-----------------------------------------
+
+For statistical validation-style workflows, compute FPP/NFPP via :func:`~bittr_tess_vetter.api.calculate_fpp`.
+For stability, use ``replicates`` and review the returned ``fpp_summary`` / ``nfpp_summary``.
+
 Exovetter Checks (V11-V12)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
