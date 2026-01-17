@@ -202,9 +202,17 @@ def run_modshift(
     fred = float(metrics.get("Fred", 0.0) or 0.0)
     fa = float(metrics.get("false_alarm_threshold", 0.0) or 0.0)
 
-    sec_pri = (sec / pri) if pri > 0 else 0.0
-    ter_pri = (ter / pri) if pri > 0 else 0.0
-    pos_pri = (pos / pri) if pri > 0 else 0.0
+    # ModShift signals can be negative depending on sign conventions
+    # (e.g., dips represented as negative). Ratios should be computed against
+    # the magnitude of the primary signal.
+    pri_abs = abs(pri)
+    sec_abs = abs(sec)
+    ter_abs = abs(ter)
+    pos_abs = abs(pos)
+
+    sec_pri = (sec_abs / pri_abs) if pri_abs > 0 else 0.0
+    ter_pri = (ter_abs / pri_abs) if pri_abs > 0 else 0.0
+    pos_pri = (pos_abs / pri_abs) if pri_abs > 0 else 0.0
 
     n_transits = int(inputs_summary.get("n_transits_expected", 0))
     confidence = min(1.0, (n_transits / 5.0)) if n_transits > 0 else 0.5
@@ -215,10 +223,16 @@ def run_modshift(
         confidence=confidence,
         details={
             "inputs_summary": inputs_summary,
-            "primary_signal": round(pri, 6),
-            "secondary_signal": round(sec, 6),
-            "tertiary_signal": round(ter, 6),
-            "positive_signal": round(pos, 6),
+            # Backward-compatible keys (now magnitude-based for interpretability)
+            "primary_signal": round(pri_abs, 6),
+            "secondary_signal": round(sec_abs, 6),
+            "tertiary_signal": round(ter_abs, 6),
+            "positive_signal": round(pos_abs, 6),
+            # Signed values for debugging / traceability
+            "primary_signal_signed": round(pri, 6),
+            "secondary_signal_signed": round(sec, 6),
+            "tertiary_signal_signed": round(ter, 6),
+            "positive_signal_signed": round(pos, 6),
             "fred": round(fred, 6),
             "false_alarm_threshold": round(fa, 6),
             "secondary_primary_ratio": round(sec_pri, 6),

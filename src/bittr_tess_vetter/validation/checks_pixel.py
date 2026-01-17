@@ -236,6 +236,11 @@ def check_pixel_level_lc_with_tpf(
     candidate: TransitCandidate,
     target_pixel: tuple[int, int] | None = None,
 ) -> VetterCheckResult:
+    def _edge_distance(pixel: tuple[int, int], shape: tuple[int, int]) -> int:
+        r, c = int(pixel[0]), int(pixel[1])
+        n_rows, n_cols = int(shape[0]), int(shape[1])
+        return int(min(r, c, (n_rows - 1) - r, (n_cols - 1) - c))
+
     try:
         depth_map = compute_pixel_level_depths_ppm(
             tpf_data=tpf_data,
@@ -252,6 +257,31 @@ def check_pixel_level_lc_with_tpf(
         if not np.isfinite(metrics.distance_to_target_pixels):
             confidence = 0.2
             warnings.append("NO_VALID_PIXEL_DEPTHS")
+
+        # Reliability diagnostics for bright/saturated/edge-dominated stamps.
+        n_rows, n_cols = depth_map.shape
+        max_edge_dist = _edge_distance(metrics.max_depth_pixel, (n_rows, n_cols))
+        target_edge_dist = _edge_distance(metrics.target_pixel, (n_rows, n_cols))
+
+        max_at_edge = max_edge_dist <= 1
+        target_depth_nonpositive = not (metrics.target_depth_ppm > 0)
+        max_depth_nonpositive = not (metrics.max_depth_ppm > 0)
+
+        if max_at_edge:
+            warnings.append("DIFFIMG_MAX_AT_EDGE")
+        if target_depth_nonpositive:
+            warnings.append("DIFFIMG_TARGET_DEPTH_NONPOSITIVE")
+        if max_depth_nonpositive:
+            warnings.append("DIFFIMG_MAX_DEPTH_NONPOSITIVE")
+
+        localization_reliable = (
+            np.isfinite(metrics.distance_to_target_pixels)
+            and not max_at_edge
+            and not target_depth_nonpositive
+            and not max_depth_nonpositive
+        )
+        if not localization_reliable:
+            warnings.append("DIFFIMG_UNRELIABLE")
     except ValueError as e:
         return _metrics_result(
             check_id="V09",
@@ -279,10 +309,20 @@ def check_pixel_level_lc_with_tpf(
             "status": "ok",
             "max_depth_pixel": metrics.max_depth_pixel,
             "max_depth_ppm": metrics.max_depth_ppm,
+            "max_depth_ppm_abs": float(abs(metrics.max_depth_ppm)),
             "target_pixel": metrics.target_pixel,
             "target_depth_ppm": metrics.target_depth_ppm,
+            "target_depth_ppm_abs": float(abs(metrics.target_depth_ppm)),
             "concentration_ratio": metrics.concentration_ratio,
+            "concentration_ratio_abs": float(
+                abs(metrics.target_depth_ppm) / abs(metrics.max_depth_ppm)
+            )
+            if metrics.max_depth_ppm != 0
+            else 0.0,
             "distance_to_target_pixels": metrics.distance_to_target_pixels,
+            "max_depth_pixel_edge_distance": int(max_edge_dist),
+            "target_pixel_edge_distance": int(target_edge_dist),
+            "localization_reliable": bool(localization_reliable),
             "tpf_shape": list(tpf_data.shape),
             "n_cadences": int(time.shape[0]),
             "warnings": warnings,
@@ -339,6 +379,14 @@ def check_aperture_dependence_with_tpf(
     n_out = int(result.n_out_of_transit_cadences)
     confidence = min(1.0, (n_in / 10.0)) * min(1.0, (n_out / 50.0))
 
+    # Minimal additional diagnostics (useful for bright targets where apertures
+    # can behave pathologically).
+    depths_map = {float(k): float(v) for k, v in result.depths_by_aperture.items()}
+    radii = sorted(depths_map.keys())
+    depth_small = depths_map[radii[0]] if radii else float("nan")
+    depth_large = depths_map[radii[-1]] if radii else float("nan")
+    sign_flip = bool(np.isfinite(depth_small) and np.isfinite(depth_large) and depth_small * depth_large < 0)
+
     return _metrics_result(
         check_id="V10",
         name="aperture_dependence",
@@ -349,6 +397,9 @@ def check_aperture_dependence_with_tpf(
             "depths_by_aperture_ppm": {
                 str(k): float(v) for k, v in result.depths_by_aperture.items()
             },
+            "depth_ppm_aperture_min": float(depth_small),
+            "depth_ppm_aperture_max": float(depth_large),
+            "aperture_depth_sign_flip": bool(sign_flip),
             "depth_variance_ppm2": float(result.depth_variance),
             "recommended_aperture_pixels": float(result.recommended_aperture),
             "n_in_transit_cadences": n_in,

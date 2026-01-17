@@ -469,9 +469,15 @@ class DifferenceImageCheck:
             metrics: dict[str, float | int | str | bool | None] = {
                 **overlap_metrics,
                 "max_depth_ppm": details.get("max_depth_ppm"),
+                "max_depth_ppm_abs": details.get("max_depth_ppm_abs"),
                 "target_depth_ppm": details.get("target_depth_ppm"),
+                "target_depth_ppm_abs": details.get("target_depth_ppm_abs"),
                 "concentration_ratio": details.get("concentration_ratio"),
+                "concentration_ratio_abs": details.get("concentration_ratio_abs"),
                 "distance_to_target_pixels": details.get("distance_to_target_pixels"),
+                "max_depth_pixel_edge_distance": details.get("max_depth_pixel_edge_distance"),
+                "target_pixel_edge_distance": details.get("target_pixel_edge_distance"),
+                "localization_reliable": details.get("localization_reliable"),
                 "n_cadences": details.get("n_cadences"),
             }
 
@@ -621,6 +627,9 @@ class ApertureDependenceCheck:
                 "stability_metric": details.get("stability_metric"),
                 "depth_variance_ppm2": details.get("depth_variance_ppm2"),
                 "recommended_aperture_pixels": details.get("recommended_aperture_pixels"),
+                "depth_ppm_aperture_min": details.get("depth_ppm_aperture_min"),
+                "depth_ppm_aperture_max": details.get("depth_ppm_aperture_max"),
+                "aperture_depth_sign_flip": details.get("aperture_depth_sign_flip"),
                 "n_in_transit_cadences": details.get("n_in_transit_cadences"),
                 "n_out_of_transit_cadences": details.get("n_out_of_transit_cadences"),
                 "n_transit_epochs": details.get("n_transit_epochs"),
