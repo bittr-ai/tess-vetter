@@ -95,6 +95,7 @@ def load_contrast_curve_exofop_tbl(
     """Parse an ExoFOP-format contrast curve `.tbl` file into a ContrastCurve.
 
     The common format is:
+
     - comment / metadata header lines
     - a numeric table with at least 2 columns: separation_arcsec, delta_mag
       (an optional third column like dmag_rms is ignored)

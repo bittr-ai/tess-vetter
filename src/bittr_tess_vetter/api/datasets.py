@@ -96,6 +96,7 @@ def load_local_dataset(
     """Load a local dataset folder into API types.
 
     Supported inputs (by default patterns):
+
     - Light curves: `sector{sector}_pdcsap.csv` with columns:
       `time_btjd,flux,flux_err,quality` (tutorial format)
     - TPF stamps: `sector{sector}_tpf.npz` with keys:

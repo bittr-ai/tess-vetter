@@ -79,6 +79,7 @@ summaries, and markdown reports (policy-free).
    :nosignatures:
 
    VettingTableOptions
+   format_check_result
    format_vetting_table
    summarize_bundle
    render_validation_report_markdown
@@ -112,6 +113,9 @@ or verdict policy.
    :toctree: _autosummary
    :nosignatures:
 
+   VettingSession
+   run_check
+   run_checks
    WorkflowResult
    run_candidate_workflow
    PerSectorVettingResult
@@ -181,7 +185,7 @@ Vetting Checks
 --------------
 
 LC-Only Checks (V01-V05, V13, V15)
-^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Light curve-only vetting checks that do not require external data.
 
@@ -231,6 +235,18 @@ Pixel-level vetting checks.
    aperture_dependence
    vet_pixel
 
+Notes on V09 (difference image localization):
+
+- For bright/saturated targets, naive difference images can be **edge-dominated** or show
+  non-physical depth maps. The V09 result includes **diagnostic metrics** to help you assess
+  whether the localization is reliable:
+  - ``localization_reliable`` (bool)
+  - ``max_depth_pixel_edge_distance`` / ``target_pixel_edge_distance`` (pixels from the stamp edge)
+  - ``target_depth_ppm_abs`` / ``max_depth_ppm_abs`` and ``concentration_ratio_abs``
+  - flags such as ``DIFFIMG_MAX_AT_EDGE`` and ``DIFFIMG_UNRELIABLE``
+
+These are intentionally policy-free: callers can decide how to gate or visualize the results.
+
 Exovetter Checks (V11-V12)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -243,6 +259,12 @@ Integration with the Exovetter package.
    modshift
    sweet
    vet_exovetter
+
+Notes on V11 (ModShift):
+
+- Exovetter may use a sign convention where dips are negative. The V11 wrapper reports
+  magnitude-based ``primary_signal``/``secondary_signal`` (plus ``*_signed`` debug fields) and
+  computes ratios (e.g. ``secondary_primary_ratio``) using magnitudes for interpretability.
 
 Sector Metrics (metrics-only)
 -----------------------------

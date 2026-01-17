@@ -88,7 +88,7 @@ The vetting pipeline includes several categories of checks. By default,
 You can opt into additional diagnostics by passing ``preset="extended"``.
 
 LC-Only Checks (V01-V05, V13, V15)
-^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 These checks use only the light curve data:
 
@@ -114,8 +114,15 @@ Pixel Checks (V08-V10)
 These checks analyze pixel-level data:
 
 - **V08 centroid_shift**: Detect centroid motion during transit
-- **V09 difference_image_localization**: Locate transit source
+- **V09 difference_image_localization**: Locate transit source (see note below)
 - **V10 aperture_dependence**: Check depth vs aperture size
+
+.. note::
+
+   V09 is a diagnostic localization proxy and can be unreliable for bright/saturated targets.
+   Use the reported metrics (e.g. ``localization_reliable``,
+   ``max_depth_pixel_edge_distance``) and flags (e.g. ``DIFFIMG_UNRELIABLE``) to decide whether
+   to trust the localization for a given target.
 
 Exovetter Checks (V11-V12)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -126,8 +133,14 @@ These checks integrate with `exovetter <https://github.com/spacetelescope/exovet
 - **V11 modshift**: Modshift transit/secondary significance checks
 - **V12 sweet**: SWEET test for periodic out-of-transit variability
 
+.. note::
+
+   ModShift signal metrics may be reported with different sign conventions depending on the
+   underlying implementation. The API reports magnitude-based ``primary_signal`` and
+   ``secondary_signal`` and also exposes signed values via ``*_signed`` fields.
+
 Extended Metrics Checks (V16-V21, opt-in)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 These checks are metrics-only diagnostics (they do not apply any subjective thresholds).
 Enable them with ``preset="extended"``:

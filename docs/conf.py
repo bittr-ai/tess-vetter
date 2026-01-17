@@ -91,7 +91,12 @@ intersphinx_mapping = {
 }
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    "tutorials/persistent_cache/**",
+]
 
 # Source file suffixes
 source_suffix = {
