@@ -169,6 +169,70 @@ def format_vetting_table(
     return "\n".join(lines).rstrip() + "\n"
 
 
+def format_check_result(
+    result: Any,
+    *,
+    include_header: bool = True,
+    include_metrics: bool = True,
+    metric_keys: Sequence[str] = (),
+    max_metrics: int = 0,
+    include_flags: bool = True,
+    include_notes: bool = True,
+    include_provenance: bool = False,
+) -> str:
+    """Format a single :class:`~bittr_tess_vetter.validation.result_schema.CheckResult`.
+
+    Policy note: this only renders what the check produced (status/metrics/flags),
+    and does not apply thresholds or interpret as planet/not-planet.
+    """
+    rid = _safe_str(getattr(result, "id", ""))
+    name = _safe_str(getattr(result, "name", ""))
+    status = _safe_str(getattr(result, "status", ""))
+    conf = _format_confidence(getattr(result, "confidence", None))
+
+    lines: list[str] = []
+    if include_header:
+        lines.append("Check Result")
+        lines.append("=" * 60)
+
+    lines.append(_table([["ID", rid], ["Name", name], ["Status", status], ["Confidence", conf]]))
+
+    if include_metrics:
+        metrics = getattr(result, "metrics", None) or {}
+        pairs = _select_metrics_for_row(metrics, metric_keys=metric_keys, max_metrics_per_row=int(max_metrics))
+        if pairs:
+            lines.append("")
+            lines.append("Metrics")
+            lines.append("-" * 60)
+            lines.append(_table([[k, v] for k, v in pairs], headers=None))
+
+    if include_flags:
+        flags = list(getattr(result, "flags", []) or [])
+        if flags:
+            lines.append("")
+            lines.append("Flags")
+            lines.append("-" * 60)
+            lines.append("\n".join(f"- {f}" for f in flags))
+
+    if include_notes:
+        notes = list(getattr(result, "notes", []) or [])
+        if notes:
+            lines.append("")
+            lines.append("Notes")
+            lines.append("-" * 60)
+            lines.append("\n".join(f"- {n}" for n in notes))
+
+    if include_provenance:
+        prov = getattr(result, "provenance", None)
+        if isinstance(prov, dict) and prov:
+            lines.append("")
+            lines.append("Provenance")
+            lines.append("-" * 60)
+            lines.append(_table([[k, _safe_str(v)] for k, v in sorted(prov.items())], headers=None))
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def summarize_bundle(
     bundle: Any,
     *,
@@ -258,8 +322,8 @@ def render_validation_report_markdown(
 
 __all__ = [
     "VettingTableOptions",
+    "format_check_result",
     "format_vetting_table",
     "summarize_bundle",
     "render_validation_report_markdown",
 ]
-

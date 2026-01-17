@@ -1,4 +1,4 @@
-# ruff: noqa: F401
+# ruff: noqa: F401, I001
 
 """bittr-tess-vetter public API.
 
@@ -139,6 +139,7 @@ __all__ = [
     # Reporting / UX helpers
     # -------------------------------------------------------------------------
     "VettingTableOptions",
+    "format_check_result",
     "format_vetting_table",
     "summarize_bundle",
     "render_validation_report_markdown",
@@ -155,6 +156,9 @@ __all__ = [
     "per_sector_vet",
     "WorkflowResult",
     "run_candidate_workflow",
+    "VettingSession",
+    "run_check",
+    "run_checks",
     # -------------------------------------------------------------------------
     # Export helpers (policy-free)
     # -------------------------------------------------------------------------
@@ -670,7 +674,9 @@ if TYPE_CHECKING:
         world_to_pixel,
         world_to_pixel_batch,
     )
+    from bittr_tess_vetter.api.check_runner import VettingSession, run_check, run_checks
     from bittr_tess_vetter.api.workflow import WorkflowResult, run_candidate_workflow
+    from bittr_tess_vetter.api.vetting_report import format_check_result
     from bittr_tess_vetter.validation.registry import (  # noqa: F401
         CheckRegistry,
         CheckRequirements,

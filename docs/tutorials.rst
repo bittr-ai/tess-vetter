@@ -16,6 +16,7 @@ These notebooks are intended to be executed locally (they are not rendered in
 the Sphinx build by default).
 
 - :download:`09-toi-5807-validation-walkthrough.ipynb <tutorials/09-toi-5807-validation-walkthrough.ipynb>` — recommended step-by-step statistical validation walkthrough for TOI-5807.01 (domain-language, traceable outputs).
+- :download:`10-toi-5807-check-by-check.ipynb <tutorials/10-toi-5807-check-by-check.ipynb>` — check-by-check walkthrough for TOI-5807.01 (run each vetting check individually and inspect metrics).
 - :download:`08-toi-5807-end-to-end.ipynb <tutorials/08-toi-5807-end-to-end.ipynb>` — recommended end-to-end TOI-5807.01 workflow (consolidates 04–07).
 - :download:`00-quick-fp-kill.ipynb <tutorials/00-quick-fp-kill.ipynb>` — LC-only “false positive” demo (offline).
 - :download:`01-basic-vetting.ipynb <tutorials/01-basic-vetting.ipynb>` — `LightCurve` + `Candidate` → `vet_candidate`.
