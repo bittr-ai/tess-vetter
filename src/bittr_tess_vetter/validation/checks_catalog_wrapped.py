@@ -87,6 +87,11 @@ def _convert_catalog_result(
         if found:
             flags.append("EXOFOP_MATCH")
             notes.append("Candidate found in ExoFOP TOI table")
+            row = details.get("row")
+            if isinstance(row, dict):
+                toi_val = row.get("toi")
+                if toi_val not in (None, ""):
+                    metrics["toi"] = str(toi_val)
         if details.get("cache_stale"):
             flags.append("STALE_CACHE")
             notes.append("Using cached data that may be outdated")
