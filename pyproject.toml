@@ -84,6 +84,10 @@ docs = [
   "furo",
   "sphinx-autodoc-typehints",
   "myst-parser",
+  # Notebook execution (for traceable tutorial outputs)
+  "nbconvert>=7.16.0",
+  "nbformat>=5.10.0",
+  "ipykernel>=6.29.0",
 ]
 all = ["bittr-tess-vetter[tls,fit,wotan,batman,mlx,exovetter,ldtk,triceratops]"]
 
