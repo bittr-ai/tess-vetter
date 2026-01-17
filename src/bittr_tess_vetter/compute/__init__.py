@@ -237,9 +237,6 @@ PRIMITIVES_CATALOG: dict[str, PrimitiveInfo] = {
     "flatten_with_wotan": PrimitiveInfo(
         "Wotan detrending with automatic fallback to median filter"
     ),
-    "astro.median_detrend": PrimitiveInfo(
-        "Remove median trend from light curve", implemented=False
-    ),
     "astro.normalize": PrimitiveInfo("Normalize flux to median or mean", implemented=False),
     "astro.sigma_clip": PrimitiveInfo("Remove outliers using sigma clipping", implemented=False),
     "astro.flatten": PrimitiveInfo(

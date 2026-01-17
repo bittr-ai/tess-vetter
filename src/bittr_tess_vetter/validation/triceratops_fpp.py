@@ -66,9 +66,7 @@ def _is_secure_pickle_path(path: Path) -> bool:
         if (st.st_mode & _INSECURE_PERMS_MASK) != 0:
             return False
         getuid = getattr(os, "getuid", None)
-        if getuid is not None and st.st_uid != getuid():
-            return False
-        return True
+        return not (getuid is not None and st.st_uid != getuid())
     except OSError:
         return False
 
@@ -1332,9 +1330,12 @@ def calculate_fpp_handler(
             if contrast_curve is not None and temp_dir_obj is not None:
                 temp_dir_path = Path(temp_dir_obj.name)
                 try:
-                    sep = np.asarray(getattr(contrast_curve, "separation_arcsec"), dtype=float)
-                    dmag = np.asarray(getattr(contrast_curve, "delta_mag"), dtype=float)
-                    contrast_curve_filter_raw = getattr(contrast_curve, "filter", "Vis")
+                    sep_attr = "separation_arcsec"
+                    dmag_attr = "delta_mag"
+                    filt_attr = "filter"
+                    sep = np.asarray(getattr(contrast_curve, sep_attr), dtype=float)
+                    dmag = np.asarray(getattr(contrast_curve, dmag_attr), dtype=float)
+                    contrast_curve_filter_raw = getattr(contrast_curve, filt_attr, "Vis")
                     filt = _normalize_triceratops_filter(contrast_curve_filter_raw)
                 except Exception:
                     sep = np.array([], dtype=float)

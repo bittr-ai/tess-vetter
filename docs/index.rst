@@ -11,6 +11,7 @@ Features
 
 - **Transit detection**: TLS/LS periodograms, multi-planet search, candidate merging
 - **Vetting pipeline**: Tiered checks (LC-only, catalog, pixel, Exovetter)
+- **Extended metrics (opt-in)**: Additional metrics-only diagnostics (V16-V21) via ``preset="extended"``
 - **Pixel diagnostics**: Centroid shift, difference images, WCS-aware localization
 - **Transit recovery**: Detrend + stack + trapezoid fitting for active stars
 - **FPP estimation**: TRICERATOPS+ support (optional)

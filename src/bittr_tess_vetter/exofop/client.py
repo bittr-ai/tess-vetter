@@ -8,10 +8,11 @@ import os
 import re
 import time
 import zipfile
+from collections.abc import Iterable
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import requests
 
@@ -491,7 +492,7 @@ class ExoFopClient:
 
         payload = {
             "schema_version": 1,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "target": asdict(target),
             "auth": {"cookie_jar_used": bool(self.cookie_jar_path), "cookie_loaded": self.cookie_jar_loaded},
             "sources": {"base_url": self.BASE_URL},

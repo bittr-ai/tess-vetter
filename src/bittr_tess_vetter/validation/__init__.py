@@ -42,7 +42,10 @@ from bittr_tess_vetter.validation.lc_checks import (
     check_v_shape,
 )
 from bittr_tess_vetter.validation.modshift_uniqueness import run_modshift_uniqueness
-from bittr_tess_vetter.validation.register_defaults import register_all_defaults
+from bittr_tess_vetter.validation.register_defaults import (
+    register_all_defaults,
+    register_extended_defaults,
+)
 from bittr_tess_vetter.validation.registry import (
     DEFAULT_REGISTRY,
     CheckConfig,
@@ -109,6 +112,7 @@ __all__ = [
     "register_catalog_checks",
     "register_modshift_uniqueness_check",
     "register_all_defaults",
+    "register_extended_defaults",
     # VettingCheck wrapper classes (V11b ModShift uniqueness)
     "ModShiftUniquenessCheck",
     # ModShift uniqueness core function

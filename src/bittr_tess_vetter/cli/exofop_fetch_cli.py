@@ -33,10 +33,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     selectors = None
     if not args.index_only:
-        types = set([t.strip() for t in (args.types or "").split(",") if t.strip()]) or None
+        types = {t.strip() for t in (args.types or "").split(",") if t.strip()} or None
         tag_ids = None
         if args.tag_ids:
-            tag_ids = set(int(x) for x in args.tag_ids.split(",") if x.strip())
+            tag_ids = {int(x) for x in args.tag_ids.split(",") if x.strip()}
         selectors = ExoFopSelectors(
             types=types,
             filename_regex=args.regex,
@@ -55,4 +55,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -229,7 +229,9 @@ class TestCheckResult:
     def test_check_result_extra_fields_forbidden(self) -> None:
         """Test that CheckResult forbids extra fields during construction."""
         # Pydantic models with extra="forbid" reject unknown fields
-        with pytest.raises(Exception):  # ValidationError
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
             CheckResult(
                 id="V01",
                 name="odd_even_depth",

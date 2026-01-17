@@ -136,6 +136,12 @@ __all__ = [
     "CheckRequirements",
     "PipelineConfig",
     # -------------------------------------------------------------------------
+    # Sector / Consistency Metrics (metrics-only)
+    # -------------------------------------------------------------------------
+    "SectorEphemerisMetrics",
+    "compute_sector_ephemeris_metrics",
+    "compute_sector_ephemeris_metrics_from_stitched",
+    # -------------------------------------------------------------------------
     # Short Aliases (convenience)
     # -------------------------------------------------------------------------
     "vet",  # -> vet_candidate
@@ -477,13 +483,17 @@ if TYPE_CHECKING:
         astro,
         box_model,
         fold,
-        median_detrend,
         periodogram,
     )
     from bittr_tess_vetter.api.sector_consistency import (  # noqa: F401
         ConsistencyClass,
         SectorMeasurement,
         compute_sector_consistency,
+    )
+    from bittr_tess_vetter.api.sector_metrics import (  # noqa: F401
+        SectorEphemerisMetrics,
+        compute_sector_ephemeris_metrics,
+        compute_sector_ephemeris_metrics_from_stitched,
     )
 
     # Stellar dilution / implied-size physics (metrics-only)

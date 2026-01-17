@@ -83,7 +83,9 @@ Once you have a candidate, run the vetting pipeline:
 Vetting Check Categories
 ------------------------
 
-The vetting pipeline includes several categories of checks:
+The vetting pipeline includes several categories of checks. By default,
+:func:`~bittr_tess_vetter.api.vet_candidate` runs a 15-check "default" preset.
+You can opt into additional diagnostics by passing ``preset="extended"``.
 
 LC-Only Checks (V01-V05, V13, V15)
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -123,6 +125,23 @@ These checks integrate with `exovetter <https://github.com/spacetelescope/exovet
 
 - **V11 modshift**: Modshift transit/secondary significance checks
 - **V12 sweet**: SWEET test for periodic out-of-transit variability
+
+Extended Metrics Checks (V16-V21, opt-in)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+These checks are metrics-only diagnostics (they do not apply any subjective thresholds).
+Enable them with ``preset="extended"``:
+
+.. code-block:: python
+
+   bundle = btv.vet_candidate(lc, candidate, preset="extended", network=False)
+
+- **V16 model_competition**: Transit vs alternative model comparisons
+- **V17 ephemeris_reliability_regime**: Score reliability diagnostics
+- **V18 ephemeris_sensitivity_sweep**: Sensitivity of metrics to ephemeris perturbations
+- **V19 alias_diagnostics**: Alias/harmonic plausibility diagnostics
+- **V20 ghost_features**: Ghost/scattered-light features (may be skipped without pixel inputs)
+- **V21 sector_consistency**: Sector-to-sector consistency (may be skipped unless provided)
 
 Using Aliases
 -------------

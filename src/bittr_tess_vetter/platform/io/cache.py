@@ -44,9 +44,7 @@ def _is_secure_pickle_path(path: Path) -> bool:
         if (st.st_mode & _INSECURE_PERMS_MASK) != 0:
             return False
         getuid = getattr(os, "getuid", None)
-        if getuid is not None and st.st_uid != getuid():
-            return False
-        return True
+        return not (getuid is not None and st.st_uid != getuid())
     except OSError:
         return False
 

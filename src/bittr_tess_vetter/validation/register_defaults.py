@@ -123,6 +123,20 @@ def register_all_defaults(registry: CheckRegistry) -> None:
     register_modshift_uniqueness_check(registry)
 
 
+def register_extended_defaults(registry: CheckRegistry) -> None:
+    """Register the default checks plus extended metrics-only diagnostics.
+
+    This preserves the existing semantics of `register_all_defaults` while
+    providing an opt-in, richer check set for host applications that want
+    additional guardrail metrics without embedding policy thresholds.
+    """
+    register_all_defaults(registry)
+
+    from bittr_tess_vetter.validation.checks_extended_wrapped import register_extended_checks
+
+    register_extended_checks(registry)
+
+
 __all__ = [
     "register_lc_only_checks",
     "register_catalog_checks",
@@ -130,4 +144,5 @@ __all__ = [
     "register_exovetter_checks",
     "register_modshift_uniqueness_check",
     "register_all_defaults",
+    "register_extended_defaults",
 ]

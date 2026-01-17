@@ -58,6 +58,7 @@ def vet_candidate(
     ra_deg: float | None = None,
     dec_deg: float | None = None,
     tic_id: int | None = None,
+    preset: str = "default",
     checks: list[str] | None = None,
     context: dict[str, Any] | None = None,
 ) -> SchemaVettingBundleResult:
@@ -76,6 +77,9 @@ def vet_candidate(
         ra_deg: Right ascension in degrees.
         dec_deg: Declination in degrees.
         tic_id: TIC identifier.
+        preset: Registry preset to use when `checks` is None.
+            - "default": current default check set (V01-V15 subset + V11b)
+            - "extended": default set plus additional metrics-only diagnostics (V16+)
         checks: Optional list of check IDs to run. If None, runs all registered.
         context: Additional context for checks.
 
@@ -107,12 +111,22 @@ def vet_candidate(
     """
     from bittr_tess_vetter.api.pipeline import VettingPipeline
     from bittr_tess_vetter.domain.detection import TransitCandidate
-    from bittr_tess_vetter.validation.register_defaults import register_all_defaults
+    from bittr_tess_vetter.validation.register_defaults import (
+        register_all_defaults,
+        register_extended_defaults,
+    )
     from bittr_tess_vetter.validation.registry import CheckRegistry
 
-    # Create registry with default checks
+    # Create registry with preset checks.
+    #
+    # Important: callers (e.g., astro-arc-tess) often pass an explicit `checks=[...]`
+    # list. The registry must still include those IDs, so preset selection must not
+    # depend on `checks is None`.
     registry = CheckRegistry()
-    register_all_defaults(registry)
+    if str(preset).lower() == "extended":
+        register_extended_defaults(registry)
+    else:
+        register_all_defaults(registry)
 
     # Convert public API types to internal types
     lc_internal = lc.to_internal(tic_id=tic_id or 0)
@@ -162,6 +176,7 @@ def vet_many(
     ra_deg: float | None = None,
     dec_deg: float | None = None,
     tic_id: int | None = None,
+    preset: str = "default",
     checks: list[str] | None = None,
     context: dict[str, Any] | None = None,
 ) -> tuple[list[SchemaVettingBundleResult], list[dict[str, Any]]]:
@@ -173,11 +188,17 @@ def vet_many(
     """
     from bittr_tess_vetter.api.pipeline import VettingPipeline
     from bittr_tess_vetter.domain.detection import TransitCandidate
-    from bittr_tess_vetter.validation.register_defaults import register_all_defaults
+    from bittr_tess_vetter.validation.register_defaults import (
+        register_all_defaults,
+        register_extended_defaults,
+    )
     from bittr_tess_vetter.validation.registry import CheckRegistry
 
     registry = CheckRegistry()
-    register_all_defaults(registry)
+    if str(preset).lower() == "extended":
+        register_extended_defaults(registry)
+    else:
+        register_all_defaults(registry)
 
     lc_internal = lc.to_internal(tic_id=tic_id or 0)
 
@@ -224,7 +245,7 @@ def _vet_candidate_legacy(
     dec_deg: float | None = None,
     tic_id: int | None = None,
     context: dict[str, Any] | None = None,
-) -> VettingBundleResult:
+) -> SchemaVettingBundleResult:
     """Legacy vet_candidate with deprecated parameters."""
     if policy_mode != "metrics_only":
         warnings.warn(

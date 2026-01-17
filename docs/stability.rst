@@ -10,7 +10,8 @@ Stability Tiers
 
 * Core types: ``Candidate``, ``Ephemeris``, ``CheckResult``, ``LightCurve``, ``VettingBundleResult``
 * Main entry point: ``vet_candidate()``
-* Check IDs: V01-V12, V13, V15, V11b
+* Check IDs (default preset): V01-V12, V13, V15, V11b
+* Check IDs (extended preset, opt-in): V16-V21
 
 **Provisional** - API may evolve based on user feedback:
 

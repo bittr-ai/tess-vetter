@@ -68,6 +68,11 @@ Aliases:
 
 - ``btv.vet`` is an alias for ``vet_candidate``
 
+Presets:
+
+- ``preset="default"``: runs the default check set (15 checks total; see below).
+- ``preset="extended"``: runs the default set plus additional metrics-only diagnostics (V16-V21).
+
 Periodogram and Detection
 -------------------------
 
@@ -170,6 +175,34 @@ Integration with the Exovetter package.
    modshift
    sweet
    vet_exovetter
+
+Sector Metrics (metrics-only)
+-----------------------------
+
+Helpers for per-sector/per-chunk diagnostics when you have stitched or labeled
+multi-sector time series. These functions report quantitative metrics only; they
+do not apply pass/fail thresholds.
+
+.. autosummary::
+   :toctree: _autosummary
+   :nosignatures:
+
+   SectorEphemerisMetrics
+   compute_sector_ephemeris_metrics
+   compute_sector_ephemeris_metrics_from_stitched
+
+Extended Metrics Checks (V16-V21)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Optional, metrics-only diagnostic checks. These are not part of the default preset.
+Enable them with :func:`~bittr_tess_vetter.api.vet_candidate` using ``preset="extended"``.
+
+- ``V16``: model competition (transit vs alternatives)
+- ``V17``: ephemeris reliability regime (quality diagnostics for fixed ephemeris scoring)
+- ``V18``: ephemeris sensitivity sweep (how score/depth respond to small ephemeris perturbations)
+- ``V19``: alias/harmonic diagnostics (period/alias plausibility signals)
+- ``V20``: ghost/scattered-light features (requires pixel-level inputs; may be skipped)
+- ``V21``: sector-to-sector consistency (host-provided metrics; may be skipped)
 
 Pixel Localization
 ------------------

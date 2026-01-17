@@ -60,6 +60,80 @@ def _extract_tpf_arrays(
     return time_arr, flux_arr
 
 
+def _lc_tpf_time_overlap_metrics(
+    inputs: CheckInputs,
+    *,
+    tpf_time: np.ndarray,
+) -> tuple[dict[str, float | int | str | bool | None], list[str], list[str]]:
+    """Compute objective LC vs TPF timebase overlap metrics.
+
+    Pixel checks run on the TPF timebase, but many hosts also pass an LC for
+    other checks. When LC and TPF are from different sectors or targets, the
+    pixel diagnostics can be misleading. This helper surfaces a purely
+    time-range-based guardrail.
+
+    Returns:
+        (metrics, flags, notes)
+    """
+    flags: list[str] = []
+    notes: list[str] = []
+
+    lc_time = np.asarray(inputs.lc.time, dtype=np.float64)
+    lc_valid = np.asarray(inputs.lc.valid_mask, dtype=bool)
+    lc_time = lc_time[lc_valid]
+    lc_time = lc_time[np.isfinite(lc_time)]
+
+    tpf_time = np.asarray(tpf_time, dtype=np.float64)
+    tpf_time = tpf_time[np.isfinite(tpf_time)]
+
+    if lc_time.size == 0 or tpf_time.size == 0:
+        flags.append("LC_TPF_TIME_INVALID")
+        notes.append("Could not compute LC/TPF time overlap (empty or non-finite time arrays).")
+        return (
+            {
+                "lc_time_min_btjd": None,
+                "lc_time_max_btjd": None,
+                "tpf_time_min_btjd": None,
+                "tpf_time_max_btjd": None,
+                "lc_tpf_time_overlap_days": None,
+                "lc_tpf_time_overlap_fraction_union": None,
+                "tpf_fraction_within_lc_timerange": None,
+            },
+            flags,
+            notes,
+        )
+
+    lc_min = float(np.min(lc_time))
+    lc_max = float(np.max(lc_time))
+    tpf_min = float(np.min(tpf_time))
+    tpf_max = float(np.max(tpf_time))
+
+    overlap_days = float(max(0.0, min(lc_max, tpf_max) - max(lc_min, tpf_min)))
+    union_days = float(max(lc_max, tpf_max) - min(lc_min, tpf_min))
+    overlap_frac = float(overlap_days / union_days) if union_days > 0 else 1.0
+
+    within = (tpf_time >= lc_min) & (tpf_time <= lc_max)
+    tpf_fraction_within = float(np.mean(within)) if tpf_time.size else float("nan")
+
+    if overlap_days == 0.0:
+        flags.append("LC_TPF_TIME_DISJOINT")
+        notes.append("LC and TPF time ranges are disjoint; pixel diagnostics may be meaningless.")
+
+    return (
+        {
+            "lc_time_min_btjd": lc_min,
+            "lc_time_max_btjd": lc_max,
+            "tpf_time_min_btjd": tpf_min,
+            "tpf_time_max_btjd": tpf_max,
+            "lc_tpf_time_overlap_days": overlap_days,
+            "lc_tpf_time_overlap_fraction_union": overlap_frac,
+            "tpf_fraction_within_lc_timerange": tpf_fraction_within,
+        },
+        flags,
+        notes,
+    )
+
+
 def _candidate_to_internal(candidate: Any) -> TransitCandidate:
     """Convert API Candidate or internal TransitCandidate to TransitCandidate.
 
@@ -197,6 +271,9 @@ class CentroidShiftCheck:
 
             # Extract config parameters
             extra = config.extra_params
+            overlap_metrics, overlap_flags, overlap_notes = _lc_tpf_time_overlap_metrics(
+                inputs, tpf_time=time_arr
+            )
             result = check_centroid_shift_with_tpf(
                 tpf_data=flux_arr,
                 time=time_arr,
@@ -225,6 +302,7 @@ class CentroidShiftCheck:
 
             # Build structured metrics
             metrics: dict[str, float | int | str | bool | None] = {
+                **overlap_metrics,
                 "centroid_shift_pixels": details.get("centroid_shift_pixels"),
                 "centroid_shift_arcsec": details.get("centroid_shift_arcsec"),
                 "significance_sigma": details.get("significance_sigma"),
@@ -251,6 +329,9 @@ class CentroidShiftCheck:
             if out_centroid and len(out_centroid) == 2:
                 metrics["out_of_transit_centroid_x"] = float(out_centroid[0])
                 metrics["out_of_transit_centroid_y"] = float(out_centroid[1])
+
+            flags.extend(overlap_flags)
+            notes.extend(overlap_notes)
 
             return ok_result(
                 self.id,
@@ -338,6 +419,9 @@ class DifferenceImageCheck:
 
             # Extract target pixel from config
             extra = config.extra_params
+            overlap_metrics, overlap_flags, overlap_notes = _lc_tpf_time_overlap_metrics(
+                inputs, tpf_time=time_arr
+            )
             target_pixel: tuple[int, int] | None = None
             target_rc = extra.get("target_rc")
             if target_rc is not None:
@@ -372,6 +456,7 @@ class DifferenceImageCheck:
 
             # Build metrics
             flags: list[str] = []
+            notes: list[str] = []
             warnings = details.get("warnings", [])
             for w in warnings:
                 if isinstance(w, str):
@@ -382,6 +467,7 @@ class DifferenceImageCheck:
             target_pixel_out = details.get("target_pixel")
 
             metrics: dict[str, float | int | str | bool | None] = {
+                **overlap_metrics,
                 "max_depth_ppm": details.get("max_depth_ppm"),
                 "target_depth_ppm": details.get("target_depth_ppm"),
                 "concentration_ratio": details.get("concentration_ratio"),
@@ -397,12 +483,16 @@ class DifferenceImageCheck:
                 metrics["target_pixel_row"] = int(target_pixel_out[0])
                 metrics["target_pixel_col"] = int(target_pixel_out[1])
 
+            flags.extend(overlap_flags)
+            notes.extend(overlap_notes)
+
             return ok_result(
                 self.id,
                 self.name,
                 metrics=metrics,
                 confidence=result.confidence,
                 flags=flags,
+                notes=notes,
                 raw=details,
             )
 
@@ -482,6 +572,9 @@ class ApertureDependenceCheck:
 
             # Extract config parameters
             extra = config.extra_params
+            overlap_metrics, overlap_flags, overlap_notes = _lc_tpf_time_overlap_metrics(
+                inputs, tpf_time=time_arr
+            )
             radii_px = extra.get("radii_px")
             center_row_col = extra.get("center_row_col")
 
@@ -515,6 +608,7 @@ class ApertureDependenceCheck:
 
             # Build metrics
             flags: list[str] = []
+            notes: list[str] = []
             detail_flags = details.get("flags", [])
             for f in detail_flags:
                 if isinstance(f, str):
@@ -523,6 +617,7 @@ class ApertureDependenceCheck:
             # Flatten depths_by_aperture to individual metrics
             depths = details.get("depths_by_aperture_ppm", {})
             metrics: dict[str, float | int | str | bool | None] = {
+                **overlap_metrics,
                 "stability_metric": details.get("stability_metric"),
                 "depth_variance_ppm2": details.get("depth_variance_ppm2"),
                 "recommended_aperture_pixels": details.get("recommended_aperture_pixels"),
@@ -541,12 +636,16 @@ class ApertureDependenceCheck:
                 key = f"depth_ppm_aperture_{aperture_str.replace('.', 'p')}"
                 metrics[key] = _coerce_scalar(depth)
 
+            flags.extend(overlap_flags)
+            notes.extend(overlap_notes)
+
             return ok_result(
                 self.id,
                 self.name,
                 metrics=metrics,
                 confidence=result.confidence,
                 flags=flags,
+                notes=notes,
                 raw=details,
             )
 

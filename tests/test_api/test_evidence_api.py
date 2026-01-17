@@ -6,7 +6,7 @@ from enum import Enum
 import numpy as np
 
 from bittr_tess_vetter.api.evidence import checks_to_evidence_items
-from bittr_tess_vetter.api.types import CheckResult, ok_result, skipped_result
+from bittr_tess_vetter.api.types import ok_result, skipped_result
 
 
 class _EnumForTest(Enum):

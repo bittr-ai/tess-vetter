@@ -65,8 +65,6 @@ def _convert_result(result: object) -> CheckResult:
     Returns:
         Canonical CheckResult (Pydantic model from validation.result_schema)
     """
-    from typing import Any
-
     details = dict(result.details)  # type: ignore[attr-defined]
 
     # Convert details dict to structured metrics (filter to JSON-serializable scalars)
