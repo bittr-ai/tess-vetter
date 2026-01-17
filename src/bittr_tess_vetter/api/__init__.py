@@ -143,6 +143,24 @@ __all__ = [
     "summarize_bundle",
     "render_validation_report_markdown",
     # -------------------------------------------------------------------------
+    # Local Datasets (optional IO convenience)
+    # -------------------------------------------------------------------------
+    "LocalDataset",
+    "load_local_dataset",
+    "load_tutorial_target",
+    # -------------------------------------------------------------------------
+    # Workflow / Per-sector helpers (policy-free)
+    # -------------------------------------------------------------------------
+    "PerSectorVettingResult",
+    "per_sector_vet",
+    "WorkflowResult",
+    "run_candidate_workflow",
+    # -------------------------------------------------------------------------
+    # Export helpers (policy-free)
+    # -------------------------------------------------------------------------
+    "ExportFormat",
+    "export_bundle",
+    # -------------------------------------------------------------------------
     # Sector / Consistency Metrics (metrics-only)
     # -------------------------------------------------------------------------
     "SectorEphemerisMetrics",
@@ -229,6 +247,13 @@ if TYPE_CHECKING:
         vet_catalog,
     )
 
+    # Local dataset loading (optional IO convenience)
+    from bittr_tess_vetter.api.datasets import (  # noqa: F401
+        LocalDataset,
+        load_local_dataset,
+        load_tutorial_target,
+    )
+
     # Detection/periodogram model contract (host-facing)
     from bittr_tess_vetter.api.detection import (  # noqa: F401
         Detection,
@@ -309,6 +334,9 @@ if TYPE_CHECKING:
         vet_exovetter,
     )
 
+    # Workflow / per-sector helpers
+    from bittr_tess_vetter.api.export import ExportFormat, export_bundle
+
     # FPP (TRICERATOPS) presets
     from bittr_tess_vetter.api.fpp import (
         FAST_PRESET,
@@ -367,6 +395,7 @@ if TYPE_CHECKING:
         generate_phase_scramble,
         generate_time_scramble,
     )
+    from bittr_tess_vetter.api.per_sector import PerSectorVettingResult, per_sector_vet
 
     # Periodogram facade (host-facing)
     from bittr_tess_vetter.api.periodogram import (  # noqa: F401
@@ -632,6 +661,7 @@ if TYPE_CHECKING:
         world_to_pixel,
         world_to_pixel_batch,
     )
+    from bittr_tess_vetter.api.workflow import WorkflowResult, run_candidate_workflow
     from bittr_tess_vetter.validation.registry import (  # noqa: F401
         CheckRegistry,
         CheckRequirements,

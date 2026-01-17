@@ -88,6 +88,47 @@ Presets:
 - ``preset="default"``: runs the default check set (15 checks total; see below).
 - ``preset="extended"``: runs the default set plus additional metrics-only diagnostics (V16-V21).
 
+Datasets (Optional IO Convenience)
+----------------------------------
+
+Helpers for loading local tutorial-style datasets into in-memory API types.
+These functions never use the network.
+
+.. autosummary::
+   :toctree: _autosummary
+   :nosignatures:
+
+   LocalDataset
+   load_local_dataset
+   load_tutorial_target
+
+Workflow Helpers (Policy-Free)
+------------------------------
+
+Thin orchestration helpers that compose existing APIs without adding thresholds
+or verdict policy.
+
+.. autosummary::
+   :toctree: _autosummary
+   :nosignatures:
+
+   WorkflowResult
+   run_candidate_workflow
+   PerSectorVettingResult
+   per_sector_vet
+
+Export Helpers (Policy-Free)
+----------------------------
+
+Helpers for exporting results into shareable formats (JSON/CSV/Markdown).
+
+.. autosummary::
+   :toctree: _autosummary
+   :nosignatures:
+
+   ExportFormat
+   export_bundle
+
 Periodogram and Detection
 -------------------------
 
