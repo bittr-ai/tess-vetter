@@ -30,6 +30,7 @@ class GhostFeatures:
     in_aperture_depth: float
     out_aperture_depth: float
     aperture_contrast: float
+    aperture_sign_consistent: bool
     spatial_uniformity: float
     prf_likeness: float
     edge_gradient_strength: float
@@ -46,6 +47,7 @@ class GhostFeatures:
             "in_aperture_depth": self.in_aperture_depth,
             "out_aperture_depth": self.out_aperture_depth,
             "aperture_contrast": self.aperture_contrast,
+            "aperture_sign_consistent": self.aperture_sign_consistent,
             "spatial_uniformity": self.spatial_uniformity,
             "prf_likeness": self.prf_likeness,
             "edge_gradient_strength": self.edge_gradient_strength,
@@ -336,6 +338,7 @@ def compute_ghost_features(
     in_aperture_depth, out_aperture_depth, aperture_contrast = compute_aperture_contrast(
         diff_image, aperture_mask, background_annulus=background_annulus
     )
+    aperture_sign_consistent = (in_aperture_depth * out_aperture_depth) >= 0
 
     spatial_uniformity = compute_spatial_uniformity(diff_image, aperture_mask)
     prf_likeness = compute_prf_likeness(diff_image, prf_sigma=prf_sigma)
@@ -357,6 +360,7 @@ def compute_ghost_features(
         in_aperture_depth=float(in_aperture_depth),
         out_aperture_depth=float(out_aperture_depth),
         aperture_contrast=float(aperture_contrast),
+        aperture_sign_consistent=bool(aperture_sign_consistent),
         spatial_uniformity=float(spatial_uniformity),
         prf_likeness=float(prf_likeness),
         edge_gradient_strength=float(edge_gradient_strength),
