@@ -84,6 +84,7 @@ we now resolve exports lazily via `__getattr__` (PEP 562).
 """
 
 MLX_AVAILABLE = _importlib_util.find_spec("mlx") is not None
+MATPLOTLIB_AVAILABLE = _importlib_util.find_spec("matplotlib") is not None
 
 _MLX_GUARDED_EXPORTS: set[str] = {
     "MlxTopKScoreResult",
@@ -93,6 +94,41 @@ _MLX_GUARDED_EXPORTS: set[str] = {
     "score_fixed_period_refine_t0",
     "score_top_k_periods",
     "integrated_gradients",
+}
+
+_MATPLOTLIB_GUARDED_EXPORTS: set[str] = {
+    # V01-V05: Light curve checks
+    "plot_odd_even",
+    "plot_secondary_eclipse",
+    "plot_duration_consistency",
+    "plot_depth_stability",
+    "plot_v_shape",
+    # V06-V07: Catalog checks
+    "plot_nearby_ebs",
+    "plot_exofop_card",
+    # V08-V10: Pixel checks
+    "plot_centroid_shift",
+    "plot_difference_image",
+    "plot_aperture_curve",
+    # V11-V12: Exovetter checks
+    "plot_modshift",
+    "plot_sweet",
+    # V13, V15: False alarm checks
+    "plot_data_gaps",
+    "plot_asymmetry",
+    # V16-V21: Extended checks
+    "plot_model_comparison",
+    "plot_ephemeris_reliability",
+    "plot_alias_diagnostics",
+    "plot_ghost_features",
+    "plot_sector_consistency",
+    # DVR summary report
+    "plot_vetting_summary",
+    "save_vetting_report",
+    # Transit and lightcurve visualization
+    "plot_phase_folded",
+    "plot_transit_fit",
+    "plot_full_lightcurve",
 }
 
 # =============================================================================
@@ -185,6 +221,10 @@ __all__ = [
     # Optional MLX (guarded)
     # -------------------------------------------------------------------------
     "MLX_AVAILABLE",
+    # -------------------------------------------------------------------------
+    # Optional Matplotlib (guarded)
+    # -------------------------------------------------------------------------
+    "MATPLOTLIB_AVAILABLE",
 ]
 
 if MLX_AVAILABLE:
@@ -197,6 +237,44 @@ if MLX_AVAILABLE:
             "score_fixed_period_refine_t0",
             "score_top_k_periods",
             "integrated_gradients",
+        ]
+    )
+
+if MATPLOTLIB_AVAILABLE:
+    __all__.extend(
+        [
+            # V01-V05: Light curve checks
+            "plot_odd_even",
+            "plot_secondary_eclipse",
+            "plot_duration_consistency",
+            "plot_depth_stability",
+            "plot_v_shape",
+            # V06-V07: Catalog checks
+            "plot_nearby_ebs",
+            "plot_exofop_card",
+            # V08-V10: Pixel checks
+            "plot_centroid_shift",
+            "plot_difference_image",
+            "plot_aperture_curve",
+            # V11-V12: Exovetter checks
+            "plot_modshift",
+            "plot_sweet",
+            # V13, V15: False alarm checks
+            "plot_data_gaps",
+            "plot_asymmetry",
+            # V16-V21: Extended checks
+            "plot_model_comparison",
+            "plot_ephemeris_reliability",
+            "plot_alias_diagnostics",
+            "plot_ghost_features",
+            "plot_sector_consistency",
+            # DVR summary report
+            "plot_vetting_summary",
+            "save_vetting_report",
+            # Transit and lightcurve visualization
+            "plot_phase_folded",
+            "plot_transit_fit",
+            "plot_full_lightcurve",
         ]
     )
 
@@ -684,6 +762,44 @@ if TYPE_CHECKING:
         VettingCheck,
     )
 
+    # =========================================================================
+    # Plotting (optional, requires matplotlib)
+    # =========================================================================
+    from bittr_tess_vetter.plotting import (  # noqa: F401
+        # V01-V05: Light curve checks
+        plot_odd_even,
+        plot_secondary_eclipse,
+        plot_duration_consistency,
+        plot_depth_stability,
+        plot_v_shape,
+        # V06-V07: Catalog checks
+        plot_nearby_ebs,
+        plot_exofop_card,
+        # V08-V10: Pixel checks
+        plot_centroid_shift,
+        plot_difference_image,
+        plot_aperture_curve,
+        # V11-V12: Exovetter checks
+        plot_modshift,
+        plot_sweet,
+        # V13, V15: False alarm checks
+        plot_data_gaps,
+        plot_asymmetry,
+        # V16-V21: Extended checks
+        plot_model_comparison,
+        plot_ephemeris_reliability,
+        plot_alias_diagnostics,
+        plot_ghost_features,
+        plot_sector_consistency,
+        # DVR summary report
+        plot_vetting_summary,
+        save_vetting_report,
+        # Transit and lightcurve visualization
+        plot_phase_folded,
+        plot_transit_fit,
+        plot_full_lightcurve,
+    )
+
 
 def _iter_stmts_in_order(stmts: list[ast.stmt]) -> list[ast.stmt]:
     ordered: list[ast.stmt] = []
@@ -748,8 +864,15 @@ _ALIASES: dict[str, str] = {
 def __getattr__(name: str) -> Any:
     if name == "MLX_AVAILABLE":
         return MLX_AVAILABLE
+    if name == "MATPLOTLIB_AVAILABLE":
+        return MATPLOTLIB_AVAILABLE
     if name in _MLX_GUARDED_EXPORTS and not MLX_AVAILABLE:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    if name in _MATPLOTLIB_GUARDED_EXPORTS and not MATPLOTLIB_AVAILABLE:
+        raise ImportError(
+            "Plotting requires matplotlib. Install with: "
+            "pip install 'bittr-tess-vetter[plotting]'"
+        )
 
     alias_target = _ALIASES.get(name)
     if alias_target is not None:
