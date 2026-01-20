@@ -50,7 +50,10 @@ if MATPLOTLIB_AVAILABLE:
         plot_sector_consistency,
     )
     from .false_alarm import plot_asymmetry, plot_data_gaps
+    from .lightcurve import plot_full_lightcurve
     from .pixel import plot_aperture_curve, plot_centroid_shift, plot_difference_image
+    from .report import plot_vetting_summary, save_vetting_report
+    from .transit import plot_phase_folded, plot_transit_fit
 
     __all__: list[str] = [
         # V01-V05: Light curve checks
@@ -78,6 +81,13 @@ if MATPLOTLIB_AVAILABLE:
         "plot_alias_diagnostics",
         "plot_ghost_features",
         "plot_sector_consistency",
+        # DVR summary report
+        "plot_vetting_summary",
+        "save_vetting_report",
+        # Transit and lightcurve visualization
+        "plot_phase_folded",
+        "plot_transit_fit",
+        "plot_full_lightcurve",
     ]
 else:
     __all__: list[str] = []
