@@ -146,10 +146,35 @@ def plot_data_gaps(
         # Annotate maximum missing fraction if requested
         if annotate_max and len(coverage) > 0:
             max_missing = 1.0 - min(coverage)
+
+            # Prefer metric-based summaries when available (they may refer to the
+            # full evaluation set, not just the subset used for plotting).
+            missing_all = None
+            missing_in_cov = None
+            if result.metrics:
+                ma = result.metrics.get("missing_frac_max")
+                mic = result.metrics.get("missing_frac_max_in_coverage")
+                if ma is not None:
+                    try:
+                        missing_all = float(ma)
+                    except (TypeError, ValueError):
+                        missing_all = None
+                if mic is not None:
+                    try:
+                        missing_in_cov = float(mic)
+                    except (TypeError, ValueError):
+                        missing_in_cov = None
+
+            if missing_all is None:
+                missing_all = max_missing
+
+            txt = [f"Max missing: {missing_all:.1%}"]
+            if missing_in_cov is not None:
+                txt.append(f"In coverage: {missing_in_cov:.1%}")
             ax.text(
                 0.95,
                 0.95,
-                f"Max missing: {max_missing:.1%}",
+                "\n".join(txt),
                 transform=ax.transAxes,
                 ha="right",
                 va="top",
