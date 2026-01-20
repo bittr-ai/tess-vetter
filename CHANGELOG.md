@@ -2,6 +2,12 @@
 
 This project follows semantic versioning (SemVer).
 
+## 0.2.2 (2026-01-20)
+
+- Add static tutorial companion `docs/tutorials/10-toi-5807-check-by-check.md` so plots render in any IDE without running a notebook.
+- Add additional pre-rendered tutorial artifacts for V03/V06/V07/V09/V10 under `docs/tutorials/artifacts/10-toi-5807-check-by-check/`.
+- Plot polish: more conservative ExoFOP card note wrapping; sensitivity-sweep y-label compaction.
+
 ## 0.2.1 (2026-01-20)
 
 - Add optional plotting extra: `pip install 'bittr-tess-vetter[plotting]'`.

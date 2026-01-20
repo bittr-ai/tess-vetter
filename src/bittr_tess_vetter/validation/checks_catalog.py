@@ -160,6 +160,13 @@ def run_nearby_eb_search(
         parsed_rows = []
 
     if not parsed_rows and "<TR>" not in text:
+        plot_data = {
+            "version": 1,
+            "target_ra": float(ra_deg),
+            "target_dec": float(dec_deg),
+            "search_radius_arcsec": float(search_radius_arcsec),
+            "matches": [],
+        }
         return _metrics_result(
             check_id="V06",
             name="nearby_eb_search",
@@ -170,6 +177,7 @@ def run_nearby_eb_search(
                 "search_radius_arcsec": search_radius_arcsec,
                 "ra": ra_deg,
                 "dec": dec_deg,
+                "plot_data": plot_data,
             },
         )
 
@@ -241,6 +249,22 @@ def run_nearby_eb_search(
             }
         )
 
+    plot_data = {
+        "version": 1,
+        "target_ra": float(ra_deg),
+        "target_dec": float(dec_deg),
+        "search_radius_arcsec": float(search_radius_arcsec),
+        "matches": [
+            {
+                "ra": m.get("ra_deg"),
+                "dec": m.get("dec_deg"),
+                "sep_arcsec": m.get("sep_arcsec"),
+                "period_days": m.get("period_days"),
+            }
+            for m in match_summaries
+        ],
+    }
+
     return _metrics_result(
         check_id="V06",
         name="nearby_eb_search",
@@ -256,6 +280,7 @@ def run_nearby_eb_search(
                 float(min_delta_any) if min_delta_any != float("inf") else None
             ),
             "matches": match_summaries,
+            "plot_data": plot_data,
         },
     )
 
@@ -323,6 +348,11 @@ def run_exofop_toi_lookup(
     is_stale = bool(age_seconds is not None and age_seconds > float(cache_ttl_seconds))
 
     if selected is None:
+        plot_data: dict[str, Any] = {
+            "version": 1,
+            "tic_id": int(tic_id),
+            "found": False,
+        }
         return _metrics_result(
             check_id="V07",
             name="exofop_toi_lookup",
@@ -338,8 +368,25 @@ def run_exofop_toi_lookup(
                 "cache_stale": is_stale,
                 "used_stale_cache": used_stale_cache,
                 "fetch_error": fetch_error,
+                "plot_data": plot_data,
             },
         )
+
+    row = dict(selected)
+    toi_str = row.get("toi")
+    tfopwg = row.get("tfopwg_disp") or row.get("tfopwg") or row.get("tfopwg_disposition")
+    planet_disp = row.get("disp") or row.get("planet_disposition") or row.get("disposition")
+    comments = row.get("comments") or row.get("comment") or row.get("notes")
+
+    plot_data = {
+        "version": 1,
+        "tic_id": int(tic_id),
+        "found": True,
+        "toi": toi_str,
+        "tfopwg_disposition": tfopwg,
+        "planet_disposition": planet_disp,
+        "comments": comments,
+    }
 
     return _metrics_result(
         check_id="V07",
@@ -350,13 +397,14 @@ def run_exofop_toi_lookup(
             "tic_id": int(tic_id),
             "toi": (float(toi) if toi is not None else None),
             "found": True,
-            "row": dict(selected),
+            "row": row,
             "source": "exofop_toi_table",
             "cache_ttl_seconds": int(cache_ttl_seconds),
             "cache_age_seconds": age_seconds,
             "cache_stale": is_stale,
             "used_stale_cache": used_stale_cache,
             "fetch_error": fetch_error,
+            "plot_data": plot_data,
         },
     )
 

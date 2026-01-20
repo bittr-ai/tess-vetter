@@ -296,7 +296,9 @@ def plot_exofop_card(
             "default": 38,
             "presentation": 28,
         }
-        wrap_width = wrap_width_by_style.get(style, 38)
+        # Account for the "Notes: " prefix and continuation indentation so we
+        # don't overflow horizontally on typical card sizes.
+        wrap_width = max(10, wrap_width_by_style.get(style, 38) - 8)
 
         wrapped = textwrap.wrap(
             notes,

@@ -461,6 +461,7 @@ def plot_sensitivity_sweep(
             downsample_factor=r.get("downsample_factor"),
             outlier_policy=r.get("outlier_policy"),
             detrender=r.get("detrender"),
+            max_len=22,
         )
         labels.append(label)
         statuses.append(status)
@@ -474,6 +475,7 @@ def plot_sensitivity_sweep(
     y = np.arange(len(labels))
 
     with style_context(style):
+        created = ax is None
         fig, ax = ensure_ax(ax)
 
         # Use depth coloring only if we have at least one depth value.
@@ -513,8 +515,18 @@ def plot_sensitivity_sweep(
                     label="Failed",
                 )
 
+        def _compact_label(label: str) -> str:
+            if "\n" in label:
+                return label
+            if len(label) <= 22 or " " not in label:
+                return label
+            parts = label.split()
+            if len(parts) >= 3:
+                return " ".join(parts[:2]) + "\n" + " ".join(parts[2:])
+            return label
+
         ax.set_yticks(y)
-        ax.set_yticklabels(labels, fontsize=7)
+        ax.set_yticklabels([_compact_label(label) for label in labels], fontsize=7)
         ax.invert_yaxis()
         ax.set_xlabel("Score")
         ax.set_title("Sensitivity Sweep")
@@ -546,6 +558,12 @@ def plot_sensitivity_sweep(
 
         # Silence unused variable warnings while keeping cbar creation explicit.
         _ = cbar
+
+        if created:
+            from contextlib import suppress
+
+            with suppress(Exception):
+                fig.tight_layout()
 
     return ax
 
