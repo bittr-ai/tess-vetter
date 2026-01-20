@@ -83,6 +83,64 @@ def check_centroid_shift_with_tpf(
     n_out = int(result.n_out_transit_cadences)
     confidence = min(1.0, (n_in / 10.0)) * min(1.0, (n_out / 50.0))
 
+    # Compute reference image (out-of-transit median) for plotting
+    # Apply same cadence mask as centroid computation
+    time_arr = np.asarray(time, dtype=np.float64)
+    tpf_arr = np.asarray(tpf_data, dtype=np.float64)
+    finite_time = np.isfinite(time_arr)
+    frame_has_finite = np.any(np.isfinite(tpf_arr), axis=(1, 2))
+    cadence_mask = finite_time & frame_has_finite
+    tpf_filtered = tpf_arr[cadence_mask]
+    time_filtered = time_arr[cadence_mask]
+
+    # Compute out-of-transit mask
+    out_mask = get_out_of_transit_mask(
+        time_filtered,
+        float(candidate.period),
+        float(candidate.t0),
+        float(candidate.duration_hours),
+        buffer_factor=1.5,
+    )
+    if np.any(out_mask):
+        reference_image = np.nanmedian(tpf_filtered[out_mask], axis=0)
+    else:
+        reference_image = np.nanmedian(tpf_filtered, axis=0)
+
+    # Cap image to 21x21 for plot_data
+    max_size = 21
+    n_rows, n_cols = reference_image.shape
+    if n_rows > max_size or n_cols > max_size:
+        row_start = (n_rows - max_size) // 2 if n_rows > max_size else 0
+        col_start = (n_cols - max_size) // 2 if n_cols > max_size else 0
+        row_end = row_start + min(n_rows, max_size)
+        col_end = col_start + min(n_cols, max_size)
+        reference_image = reference_image[row_start:row_end, col_start:col_end]
+    else:
+        row_start, col_start = 0, 0
+
+    # Target pixel is center of the TPF (adjust for any cropping)
+    target_col = int(n_cols // 2) - col_start
+    target_row = int(n_rows // 2) - row_start
+
+    # Centroids: (x, y) = (col, row) from compute_centroid_shift
+    # Adjust for any cropping
+    in_col = float(result.in_transit_centroid[0]) - col_start
+    in_row = float(result.in_transit_centroid[1]) - row_start
+    out_col = float(result.out_of_transit_centroid[0]) - col_start
+    out_row = float(result.out_of_transit_centroid[1]) - row_start
+
+    # Build plot_data
+    plot_data: dict[str, Any] = {
+        "version": 1,
+        "reference_image": reference_image.astype(np.float32).tolist(),
+        "in_centroid_col": in_col,
+        "in_centroid_row": in_row,
+        "out_centroid_col": out_col,
+        "out_centroid_row": out_row,
+        "target_col": target_col,
+        "target_row": target_row,
+    }
+
     return _metrics_result(
         check_id="V08",
         name="centroid_shift",
@@ -109,6 +167,7 @@ def check_centroid_shift_with_tpf(
             "n_outliers_rejected": int(result.n_outliers_rejected),
             "warnings": list(result.warnings),
             "tpf_shape": list(tpf_data.shape),
+            "plot_data": plot_data,
         },
     )
 
@@ -301,6 +360,70 @@ def check_pixel_level_lc_with_tpf(
             details={"status": "error", "error": str(e), "tpf_shape": list(tpf_data.shape)},
         )
 
+    # Build difference image (out-of-transit median - in-transit median) for plotting
+    time_arr = np.asarray(time, dtype=np.float64)
+    tpf_arr = np.asarray(tpf_data, dtype=np.float64)
+    finite_time = np.isfinite(time_arr)
+    frame_has_finite = np.any(np.isfinite(tpf_arr), axis=(1, 2))
+    cadence_mask_v09 = finite_time & frame_has_finite
+    tpf_filtered = tpf_arr[cadence_mask_v09]
+    time_filtered = time_arr[cadence_mask_v09]
+
+    in_mask = get_in_transit_mask(
+        time_filtered,
+        float(candidate.period),
+        float(candidate.t0),
+        float(candidate.duration_hours),
+    )
+    out_mask = get_out_of_transit_mask(
+        time_filtered,
+        float(candidate.period),
+        float(candidate.t0),
+        float(candidate.duration_hours),
+        buffer_factor=3.0,
+    )
+
+    if np.any(in_mask) and np.any(out_mask):
+        in_median = np.nanmedian(tpf_filtered[in_mask], axis=0)
+        out_median = np.nanmedian(tpf_filtered[out_mask], axis=0)
+        difference_image = out_median - in_median
+    else:
+        difference_image = np.zeros_like(depth_map)
+
+    # Cap images to 21x21 for plot_data
+    max_size = 21
+    n_rows_orig, n_cols_orig = depth_map.shape
+    if n_rows_orig > max_size or n_cols_orig > max_size:
+        row_start = (n_rows_orig - max_size) // 2 if n_rows_orig > max_size else 0
+        col_start = (n_cols_orig - max_size) // 2 if n_cols_orig > max_size else 0
+        row_end = row_start + min(n_rows_orig, max_size)
+        col_end = col_start + min(n_cols_orig, max_size)
+        depth_map_cropped = depth_map[row_start:row_end, col_start:col_end]
+        difference_image_cropped = difference_image[row_start:row_end, col_start:col_end]
+    else:
+        row_start, col_start = 0, 0
+        depth_map_cropped = depth_map
+        difference_image_cropped = difference_image
+
+    # Adjust pixel coordinates for cropping
+    target_pixel_adj = [
+        int(metrics.target_pixel[0]) - row_start,
+        int(metrics.target_pixel[1]) - col_start,
+    ]
+    max_depth_pixel_adj = [
+        int(metrics.max_depth_pixel[0]) - row_start,
+        int(metrics.max_depth_pixel[1]) - col_start,
+    ]
+
+    # Build plot_data for V09
+    plot_data_v09: dict[str, Any] = {
+        "version": 1,
+        "difference_image": difference_image_cropped.astype(np.float32).tolist(),
+        "depth_map_ppm": depth_map_cropped.astype(np.float32).tolist(),
+        "target_pixel": target_pixel_adj,  # [row, col]
+        "max_depth_pixel": max_depth_pixel_adj,  # [row, col]
+    }
+
     return _metrics_result(
         check_id="V09",
         name="pixel_level_lc",
@@ -326,6 +449,7 @@ def check_pixel_level_lc_with_tpf(
             "tpf_shape": list(tpf_data.shape),
             "n_cadences": int(time.shape[0]),
             "warnings": warnings,
+            "plot_data": plot_data_v09,
         },
     )
 
@@ -387,6 +511,33 @@ def check_aperture_dependence_with_tpf(
     depth_large = depths_map[radii[-1]] if radii else float("nan")
     sign_flip = bool(np.isfinite(depth_small) and np.isfinite(depth_large) and depth_small * depth_large < 0)
 
+    # Build plot_data for V10
+    # Extract sorted radii and corresponding depths for plotting
+    aperture_radii_list = [float(r) for r in radii]
+    depths_ppm_list = [float(depths_map[r]) for r in radii]
+    # Compute depth errors as sqrt(variance) / sqrt(n_apertures) as a simple estimate
+    # This is a rough approximation; real errors would need per-aperture bootstrap
+    depth_variance = float(result.depth_variance)
+    n_apertures = len(radii)
+    if n_apertures > 1 and depth_variance > 0:
+        # Use coefficient of variation as a proxy for relative error
+        mean_depth = float(np.mean(depths_ppm_list))
+        if abs(mean_depth) > 0:
+            cv = float(np.sqrt(depth_variance)) / abs(mean_depth)
+            depth_errs_ppm_list = [abs(d) * cv for d in depths_ppm_list]
+        else:
+            depth_errs_ppm_list = [float(np.sqrt(depth_variance))] * n_apertures
+    else:
+        # No variance info, use zero errors
+        depth_errs_ppm_list = [0.0] * n_apertures
+
+    plot_data_v10: dict[str, Any] = {
+        "version": 1,
+        "aperture_radii_px": aperture_radii_list,
+        "depths_ppm": depths_ppm_list,
+        "depth_errs_ppm": depth_errs_ppm_list,
+    }
+
     return _metrics_result(
         check_id="V10",
         name="aperture_dependence",
@@ -414,6 +565,7 @@ def check_aperture_dependence_with_tpf(
             "flags": list(result.flags),
             "notes": dict(result.notes),
             "tpf_shape": list(tpf_data.shape),
+            "plot_data": plot_data_v10,
         },
     )
 

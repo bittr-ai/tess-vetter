@@ -33,10 +33,24 @@ MATPLOTLIB_AVAILABLE = importlib.util.find_spec("matplotlib") is not None
 
 # Export plot functions if matplotlib is available
 if MATPLOTLIB_AVAILABLE:
-    from .checks import plot_odd_even
+    from .checks import (
+        plot_depth_stability,
+        plot_duration_consistency,
+        plot_odd_even,
+        plot_secondary_eclipse,
+        plot_v_shape,
+    )
+    from .pixel import plot_aperture_curve, plot_centroid_shift, plot_difference_image
 
     __all__: list[str] = [
         "plot_odd_even",
+        "plot_secondary_eclipse",
+        "plot_duration_consistency",
+        "plot_depth_stability",
+        "plot_v_shape",
+        "plot_centroid_shift",
+        "plot_difference_image",
+        "plot_aperture_curve",
     ]
 else:
     __all__: list[str] = []

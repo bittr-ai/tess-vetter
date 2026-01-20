@@ -709,6 +709,16 @@ def check_secondary_eclipse(
         n_secondary_points < config.min_secondary_points
         or n_baseline_points < config.min_baseline_points
     ):
+        # Build plot_data for insufficient data case
+        plot_data = {
+            "version": 1,
+            "phase": [],
+            "flux": [],
+            "flux_err": [],
+            "secondary_window": [float(sec_lo), float(sec_hi)],
+            "primary_window": [-0.05, 0.05],  # Transit at phase 0
+            "secondary_depth_ppm": None,
+        }
         return VetterCheckResult(
             id="V02",
             name="secondary_eclipse",
@@ -724,6 +734,7 @@ def check_secondary_eclipse(
                 "n_secondary_events_effective": 0,
                 "warnings": warnings,
                 "note": "Insufficient data for secondary eclipse search",
+                "plot_data": plot_data,
                 "_metrics_only": True,
             },
         )
@@ -752,6 +763,16 @@ def check_secondary_eclipse(
     secondary_median = float(np.median(secondary_flux))
 
     if baseline_median <= 0:
+        # Build plot_data for invalid baseline case
+        plot_data = {
+            "version": 1,
+            "phase": [],
+            "flux": [],
+            "flux_err": [],
+            "secondary_window": [float(sec_lo), float(sec_hi)],
+            "primary_window": [-0.05, 0.05],
+            "secondary_depth_ppm": None,
+        }
         return VetterCheckResult(
             id="V02",
             name="secondary_eclipse",
@@ -762,6 +783,7 @@ def check_secondary_eclipse(
                 "n_baseline_points": n_baseline_points,
                 "warnings": warnings + ["Invalid baseline median <= 0"],
                 "note": "Invalid baseline flux",
+                "plot_data": plot_data,
                 "_metrics_only": True,
             },
         )
@@ -821,6 +843,31 @@ def check_secondary_eclipse(
     secondary_depth_ppm = secondary_depth * 1e6
     secondary_err_ppm = secondary_err * 1e6
 
+    # Compute flux errors using baseline scatter
+    flux_normalized = flux / baseline_median
+    flux_err = np.full_like(flux_normalized, baseline_scatter / baseline_median)
+
+    # Build plot_data for visualization (capped at 200 elements for phase arrays)
+    # Sort by phase for cleaner plotting
+    sort_idx = np.argsort(phase)
+    max_points = 200
+    if len(phase) > max_points:
+        # Downsample by taking evenly spaced points
+        step = len(phase) // max_points
+        sample_idx = sort_idx[::step][:max_points]
+    else:
+        sample_idx = sort_idx
+
+    plot_data = {
+        "version": 1,
+        "phase": phase[sample_idx].tolist(),
+        "flux": flux_normalized[sample_idx].tolist(),
+        "flux_err": flux_err[sample_idx].tolist(),
+        "secondary_window": [float(sec_lo), float(sec_hi)],
+        "primary_window": [-0.05, 0.05],  # Transit at phase 0
+        "secondary_depth_ppm": float(secondary_depth_ppm) if secondary_depth_ppm else None,
+    }
+
     return VetterCheckResult(
         id="V02",
         name="secondary_eclipse",
@@ -841,6 +888,7 @@ def check_secondary_eclipse(
             "red_noise_inflation": round(inflation, 2),
             "search_window": [round(sec_lo, 3), round(sec_hi, 3)],
             "warnings": warnings,
+            "plot_data": plot_data,
             "_metrics_only": True,
         },
     )
@@ -932,6 +980,20 @@ def check_duration_consistency(
             "Provide stellar parameters for accurate M-dwarf/giant assessment."
         )
 
+    # Compute uncertainty in expected duration
+    # For a rough estimate, assume ~20% uncertainty due to impact parameter/eccentricity
+    expected_hours_err = expected_duration_hours * 0.2
+
+    # Build plot_data for visualization
+    plot_data = {
+        "version": 1,
+        "observed_hours": float(duration_hours),
+        "expected_hours": float(expected_duration_hours),
+        "expected_hours_err": float(expected_hours_err),
+        "duration_ratio": float(ratio),
+    }
+    details["plot_data"] = plot_data
+
     return VetterCheckResult(
         id="V03",
         name="duration_consistency",
@@ -988,6 +1050,16 @@ def check_depth_stability(
     # separation becomes ill-defined, so depth stability is not meaningful.
     if duration_days >= 0.5 * period:
         warnings.append("duration_too_long_relative_to_period")
+        # Build empty plot_data for invalid duration case
+        plot_data = {
+            "version": 1,
+            "epoch_times_btjd": [],
+            "depths_ppm": [],
+            "depth_errs_ppm": [],
+            "mean_depth_ppm": 0.0,
+            "expected_scatter_ppm": 0.0,
+            "dominating_epoch_idx": None,
+        }
         return VetterCheckResult(
             id="V04",
             name="depth_stability",
@@ -1001,6 +1073,7 @@ def check_depth_stability(
                 "chi2_reduced": 0.0,
                 "warnings": warnings,
                 "note": "Duration too long relative to period for depth stability check",
+                "plot_data": plot_data,
                 "_metrics_only": True,
             },
         )
@@ -1098,6 +1171,16 @@ def check_depth_stability(
     n_transits = len(epoch_depths)
 
     if n_transits < 2:
+        # Build plot_data with partial data if available
+        plot_data = {
+            "version": 1,
+            "epoch_times_btjd": [float(t0 + ep * period) for ep in epoch_indices[:50]],
+            "depths_ppm": [float(d * 1e6) for d in epoch_depths[:50]],
+            "depth_errs_ppm": [float(s * 1e6) for s in epoch_sigmas[:50]],
+            "mean_depth_ppm": float(epoch_depths[0] * 1e6) if epoch_depths else 0.0,
+            "expected_scatter_ppm": 0.0,
+            "dominating_epoch_idx": None,
+        }
         return VetterCheckResult(
             id="V04",
             name="depth_stability",
@@ -1111,6 +1194,7 @@ def check_depth_stability(
                 "chi2_reduced": 0.0,
                 "warnings": warnings,
                 "note": "Insufficient transits for depth stability check",
+                "plot_data": plot_data,
                 "_metrics_only": True,
             },
         )
@@ -1215,6 +1299,18 @@ def check_depth_stability(
     expected_scatter_ppm = expected_scatter * 1e6
     mean_depth_ppm = mean_depth * 1e6
 
+    # Build plot_data for visualization (capped at 50 epochs)
+    n_plot = min(50, n_transits)
+    plot_data = {
+        "version": 1,
+        "epoch_times_btjd": [float(t0 + ep * period) for ep in epoch_indices_arr[:n_plot]],
+        "depths_ppm": [float(d * 1e6) for d in depths_arr[:n_plot]],
+        "depth_errs_ppm": [float(s * 1e6) for s in sigmas_arr[:n_plot]],
+        "mean_depth_ppm": float(mean_depth_ppm),
+        "expected_scatter_ppm": float(expected_scatter_ppm),
+        "dominating_epoch_idx": int(dom_idx) if dom_idx < n_plot else None,
+    }
+
     return VetterCheckResult(
         id="V04",
         name="depth_stability",
@@ -1250,6 +1346,7 @@ def check_depth_stability(
             "depth_mad_ppm": round(depth_mad * 1e6, 2),
             "warnings": warnings,
             "method": "per_epoch_local_baseline",
+            "plot_data": plot_data,
             "_metrics_only": True,
         },
     )
@@ -1441,6 +1538,17 @@ def check_v_shape(
     # localized transit shape becomes ill-defined.
     if duration_days >= 0.5 * period:
         warnings.append("duration_too_long_relative_to_period")
+        # Build empty plot_data for invalid duration case
+        plot_data = {
+            "version": 1,
+            "binned_phase": [],
+            "binned_flux": [],
+            "binned_flux_err": [],
+            "trapezoid_phase": [],
+            "trapezoid_flux": [],
+            "t_flat_hours": 0.0,
+            "t_total_hours": float(duration_hours),
+        }
         return VetterCheckResult(
             id="V05",
             name="v_shape",
@@ -1465,6 +1573,7 @@ def check_v_shape(
                 "n_baseline": 0,
                 "warnings": warnings,
                 "method": "trapezoid_grid_search",
+                "plot_data": plot_data,
                 "_metrics_only": True,
             },
         )
@@ -1511,6 +1620,17 @@ def check_v_shape(
 
     if insufficient_data:
         # Metrics-only: insufficient data to interpret transit shape.
+        # Build plot_data for insufficient data case
+        plot_data = {
+            "version": 1,
+            "binned_phase": [],
+            "binned_flux": [],
+            "binned_flux_err": [],
+            "trapezoid_phase": [],
+            "trapezoid_flux": [],
+            "t_flat_hours": 0.0,
+            "t_total_hours": float(duration_hours),
+        }
         return VetterCheckResult(
             id="V05",
             name="v_shape",
@@ -1535,6 +1655,7 @@ def check_v_shape(
                 "n_baseline": n_baseline,
                 "warnings": warnings,
                 "method": "trapezoid_grid_search",
+                "plot_data": plot_data,
                 "_metrics_only": True,
             },
         )
@@ -1615,6 +1736,45 @@ def check_v_shape(
     # Legacy shape_ratio (retained for stable outputs)
     shape_ratio = depth_bottom / depth_edge if depth_edge > 0 and depth_bottom > 0 else 2.0
 
+    # Build binned phase-folded data for plotting (capped at 200 bins)
+    # Bin the in-transit data for cleaner visualization
+    n_bins = min(50, max(10, n_in_transit // 5))
+    bin_edges = np.linspace(-half_dur_phase * 1.2, half_dur_phase * 1.2, n_bins + 1)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+    binned_flux_list: list[float] = []
+    binned_flux_err_list: list[float] = []
+    binned_phase_list: list[float] = []
+
+    for i in range(n_bins):
+        bin_mask = (in_transit_phase >= bin_edges[i]) & (in_transit_phase < bin_edges[i + 1])
+        if np.sum(bin_mask) >= 1:
+            bin_flux_vals = in_transit_flux[bin_mask]
+            binned_phase_list.append(float(bin_centers[i]))
+            binned_flux_list.append(float(np.median(bin_flux_vals)))
+            binned_flux_err_list.append(
+                float(_robust_std(bin_flux_vals) / np.sqrt(np.sum(bin_mask)))
+                if np.sum(bin_mask) > 1
+                else 0.01
+            )
+
+    # Generate trapezoid model for overlay
+    t_flat_phase = tflat_ttotal_ratio * t_total_phase
+    model_phase = np.linspace(-half_dur_phase * 1.2, half_dur_phase * 1.2, 100)
+    model_flux = _trapezoid_model(model_phase, t_flat_phase, t_total_phase, depth)
+
+    # Build plot_data
+    plot_data = {
+        "version": 1,
+        "binned_phase": binned_phase_list,
+        "binned_flux": binned_flux_list,
+        "binned_flux_err": binned_flux_err_list,
+        "trapezoid_phase": model_phase.tolist(),
+        "trapezoid_flux": model_flux.tolist(),
+        "t_flat_hours": float(t_flat_hours),
+        "t_total_hours": float(t_total_hours),
+    }
+
     passed: bool | None = None
     return VetterCheckResult(
         id="V05",
@@ -1641,6 +1801,7 @@ def check_v_shape(
             "n_baseline": n_baseline,
             "warnings": warnings,
             "method": "trapezoid_grid_search",
+            "plot_data": plot_data,
             "_metrics_only": True,
         },
     )
