@@ -33,6 +33,7 @@ MATPLOTLIB_AVAILABLE = importlib.util.find_spec("matplotlib") is not None
 
 # Export plot functions if matplotlib is available
 if MATPLOTLIB_AVAILABLE:
+    from .catalog import plot_exofop_card, plot_nearby_ebs
     from .checks import (
         plot_depth_stability,
         plot_duration_consistency,
@@ -40,17 +41,43 @@ if MATPLOTLIB_AVAILABLE:
         plot_secondary_eclipse,
         plot_v_shape,
     )
+    from .exovetter import plot_modshift, plot_sweet
+    from .extended import (
+        plot_alias_diagnostics,
+        plot_ephemeris_reliability,
+        plot_ghost_features,
+        plot_model_comparison,
+        plot_sector_consistency,
+    )
+    from .false_alarm import plot_asymmetry, plot_data_gaps
     from .pixel import plot_aperture_curve, plot_centroid_shift, plot_difference_image
 
     __all__: list[str] = [
+        # V01-V05: Light curve checks
         "plot_odd_even",
         "plot_secondary_eclipse",
         "plot_duration_consistency",
         "plot_depth_stability",
         "plot_v_shape",
+        # V06-V07: Catalog checks
+        "plot_nearby_ebs",
+        "plot_exofop_card",
+        # V08-V10: Pixel checks
         "plot_centroid_shift",
         "plot_difference_image",
         "plot_aperture_curve",
+        # V11-V12: Exovetter checks
+        "plot_modshift",
+        "plot_sweet",
+        # V13, V15: False alarm checks
+        "plot_data_gaps",
+        "plot_asymmetry",
+        # V16-V21: Extended checks
+        "plot_model_comparison",
+        "plot_ephemeris_reliability",
+        "plot_alias_diagnostics",
+        "plot_ghost_features",
+        "plot_sector_consistency",
     ]
 else:
     __all__: list[str] = []
