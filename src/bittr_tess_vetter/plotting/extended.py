@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 if TYPE_CHECKING:
     import matplotlib.axes
     import matplotlib.colorbar
@@ -122,10 +124,11 @@ def plot_model_comparison(
         sinusoid_model = data["sinusoid_model"]
 
         # Set default plot kwargs
-        plot_defaults = {
+        plot_defaults: dict[str, Any] = {
             "linewidth": 1.5,
         }
         plot_defaults.update(plot_kwargs)
+        plot_kw: Any = plot_defaults
 
         # Plot data points
         if show_data and len(phase) > 0:
@@ -145,7 +148,7 @@ def plot_model_comparison(
                 transit_model,
                 color=transit_color,
                 label="Transit",
-                **plot_defaults,
+                **plot_kw,
             )
         if len(eb_model) > 0:
             ax.plot(
@@ -154,7 +157,7 @@ def plot_model_comparison(
                 color=eb_color,
                 label="EB-like",
                 linestyle="--",
-                **plot_defaults,
+                **plot_kw,
             )
         if len(sinusoid_model) > 0:
             ax.plot(
@@ -163,7 +166,7 @@ def plot_model_comparison(
                 color=sinusoid_color,
                 label="Sinusoid",
                 linestyle=":",
-                **plot_defaults,
+                **plot_kw,
             )
 
         # Annotate winner if available and requested
@@ -288,10 +291,11 @@ def plot_ephemeris_reliability(
         null_scores = data["null_scores"]
 
         # Set default plot kwargs
-        plot_defaults = {
+        plot_defaults: dict[str, Any] = {
             "linewidth": 1.5,
         }
         plot_defaults.update(plot_kwargs)
+        plot_kw: Any = plot_defaults
 
         # Plot null score distribution
         if show_null_distribution and len(phase_shifts) > 0 and len(null_scores) > 0:
@@ -301,13 +305,11 @@ def plot_ephemeris_reliability(
                 color=null_color,
                 alpha=0.7,
                 label="Null scores",
-                **plot_defaults,
+                **plot_kw,
             )
 
             # Mark the on-ephemeris point (phase shift = 0)
-            import numpy as np
-
-            on_eph_idx = np.argmin(np.abs(np.array(phase_shifts)))
+            on_eph_idx = int(np.argmin(np.abs(np.array(phase_shifts))))
             if on_eph_idx < len(null_scores):
                 ax.scatter(
                     [phase_shifts[on_eph_idx]],
@@ -342,6 +344,208 @@ def plot_ephemeris_reliability(
         # Add legend if requested
         if show_legend:
             ax.legend(loc="lower right")
+
+    return ax
+
+
+def plot_sensitivity_sweep(
+    result: CheckResult,
+    *,
+    ax: matplotlib.axes.Axes | None = None,
+    show_failed: bool = True,
+    show_colorbar: bool = True,
+    colorbar_label: str = "Depth hat (ppm)",
+    ok_color: str = "#1f77b4",
+    failed_color: str = "#7f7f7f",
+    style: str = "default",
+    **scatter_kwargs: Any,
+) -> matplotlib.axes.Axes:
+    """Plot ephemeris sensitivity sweep results (V18).
+
+    Visualizes the robustness of the detection score across preprocessing variants.
+    Each variant is represented as a point at its score; points can be colored by
+    depth estimate to highlight variant-driven depth shifts.
+
+    Parameters
+    ----------
+    result : CheckResult
+        A CheckResult from V18. Must contain `raw["plot_data"]["sweep_table"]`.
+    ax : matplotlib.axes.Axes, optional
+        Axes to plot on. If None, creates a new figure and axes.
+    show_failed : bool, default=True
+        Whether to include failed variants (status != "ok") in the plot.
+    show_colorbar : bool, default=True
+        Whether to show a colorbar when depth estimates are available.
+    colorbar_label : str, default="Depth hat (ppm)"
+        Colorbar label when `show_colorbar=True`.
+    ok_color : str, default="#1f77b4"
+        Color for ok points when depth coloring is not used.
+    failed_color : str, default="#7f7f7f"
+        Color for failed points.
+    style : str, default="default"
+        Style preset: "default", "paper", or "presentation".
+    **scatter_kwargs : Any
+        Additional keyword arguments passed to `ax.scatter()`.
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+        The axes containing the plot.
+    """
+    from ._core import add_colorbar, ensure_ax, extract_plot_data, style_context
+
+    data = extract_plot_data(result, required_keys=["sweep_table"])
+    sweep_table = data.get("sweep_table") or []
+
+    rows: list[dict[str, Any]] = [r for r in sweep_table if isinstance(r, dict)]
+    if not rows:
+        raise ValueError("V18 plot requires non-empty plot_data['sweep_table']")
+
+    labels: list[str] = []
+    scores: list[float] = []
+    depths_ppm: list[float | None] = []
+    statuses: list[str] = []
+
+    def _format_variant_label(
+        *,
+        downsample_factor: object,
+        outlier_policy: object,
+        detrender: object,
+        max_len: int = 28,
+    ) -> str:
+        ds = "?" if downsample_factor is None else str(downsample_factor)
+        op = "?" if outlier_policy is None else str(outlier_policy)
+        det = "?" if detrender is None else str(detrender)
+
+        def _abbr_outlier(policy: str) -> str:
+            if policy in {"none", "null", "None"}:
+                return "none"
+            if policy.startswith("sigma_clip_"):
+                return "sc" + policy.removeprefix("sigma_clip_")
+            if policy.startswith("winsorize_"):
+                return "win" + policy.removeprefix("winsorize_")
+            return policy
+
+        def _abbr_detrender(name: str) -> str:
+            if name in {"none", "null", "None"}:
+                return "none"
+            if name.startswith("running_median_"):
+                return "rm" + name.removeprefix("running_median_")
+            if name.startswith("savgol_"):
+                return "sg" + name.removeprefix("savgol_")
+            if name.startswith("gp_"):
+                return "gp" + name.removeprefix("gp_")
+            return name
+
+        op_short = _abbr_outlier(op)
+        det_short = _abbr_detrender(det)
+
+        label = f"ds={ds} {op_short} {det_short}".strip()
+        label = " ".join(label.split())
+
+        if len(label) <= max_len:
+            return label
+
+        label = f"ds={ds} {op_short}".strip()
+        if len(label) <= max_len:
+            return label
+
+        return f"ds={ds}"
+
+    for r in rows:
+        status = str(r.get("status", "unknown"))
+        if status != "ok" and not show_failed:
+            continue
+
+        label = _format_variant_label(
+            downsample_factor=r.get("downsample_factor"),
+            outlier_policy=r.get("outlier_policy"),
+            detrender=r.get("detrender"),
+        )
+        labels.append(label)
+        statuses.append(status)
+
+        score_val = r.get("score")
+        scores.append(float(score_val) if score_val is not None else float("nan"))
+
+        depth_val = r.get("depth_hat_ppm")
+        depths_ppm.append(float(depth_val) if depth_val is not None else None)
+
+    y = np.arange(len(labels))
+
+    with style_context(style):
+        fig, ax = ensure_ax(ax)
+
+        # Use depth coloring only if we have at least one depth value.
+        use_depth_color = show_colorbar and any(d is not None for d in depths_ppm)
+
+        default_scatter_kwargs: dict[str, Any] = {
+            "s": 50,
+            "alpha": 0.9,
+            "edgecolors": "black",
+            "linewidths": 0.5,
+        }
+        default_scatter_kwargs.update(scatter_kwargs)
+
+        cbar = None
+        if use_depth_color:
+            depth_arr = np.array([d if d is not None else np.nan for d in depths_ppm], dtype=float)
+            sc = ax.scatter(scores, y, c=depth_arr, cmap="viridis", **default_scatter_kwargs)
+            cbar = add_colorbar(sc, ax, label=colorbar_label)
+        else:
+            ok_mask = np.array([s == "ok" for s in statuses], dtype=bool)
+            if np.any(ok_mask):
+                ax.scatter(
+                    np.array(scores)[ok_mask],
+                    y[ok_mask],
+                    c=ok_color,
+                    **default_scatter_kwargs,
+                )
+            if show_failed and np.any(~ok_mask):
+                ax.scatter(
+                    np.array(scores)[~ok_mask],
+                    y[~ok_mask],
+                    c=failed_color,
+                    marker="x",
+                    s=60,
+                    alpha=0.9,
+                    linewidths=2,
+                    label="Failed",
+                )
+
+        ax.set_yticks(y)
+        ax.set_yticklabels(labels, fontsize=7)
+        ax.invert_yaxis()
+        ax.set_xlabel("Score")
+        ax.set_title("Sensitivity Sweep")
+        ax.grid(True, axis="x", alpha=0.2)
+
+        # Summary annotation (top-right, away from y labels)
+        stable = data.get("stable")
+        n_total = data.get("n_variants_total")
+        n_ok = data.get("n_variants_ok")
+        txt = []
+        if stable is not None:
+            txt.append(f"stable: {bool(stable)}")
+        if n_total is not None and n_ok is not None:
+            txt.append(f"ok: {int(n_ok)}/{int(n_total)}")
+        if txt:
+            ax.text(
+                0.98,
+                0.02,
+                "\n".join(txt),
+                transform=ax.transAxes,
+                ha="right",
+                va="bottom",
+                fontsize=8,
+                bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.8},
+            )
+
+        if not use_depth_color and show_failed and any(s != "ok" for s in statuses):
+            ax.legend(loc="lower right", fontsize="small")
+
+        # Silence unused variable warnings while keeping cbar creation explicit.
+        _ = cbar
 
     return ax
 
@@ -441,12 +645,13 @@ def plot_alias_diagnostics(
         x_positions = list(range(n_harmonics))
 
         # Set default bar kwargs
-        bar_defaults = {
+        bar_defaults: dict[str, Any] = {
             "width": 0.6,
             "edgecolor": "black",
             "linewidth": 1,
         }
         bar_defaults.update(bar_kwargs)
+        bar_kw: Any = bar_defaults
 
         # Find best harmonic
         if len(scores) > 0:
@@ -463,7 +668,7 @@ def plot_alias_diagnostics(
                 x_positions,
                 scores,
                 color=colors,
-                **bar_defaults,
+                **bar_kw,
             )
 
         # Annotate best harmonic if requested
@@ -603,14 +808,15 @@ def plot_ghost_features(
         out_depth = data["out_aperture_depth"]
 
         # Set default imshow kwargs
-        imshow_defaults = {
+        imshow_defaults: dict[str, Any] = {
             "origin": "lower",
             "aspect": "equal",
         }
         imshow_defaults.update(imshow_kwargs)
+        imshow_kw: Any = imshow_defaults
 
         # Plot difference image
-        im = ax.imshow(diff_image, cmap=cmap, **imshow_defaults)
+        im = ax.imshow(diff_image, cmap=cmap, **imshow_kw)
 
         # Overlay aperture mask if requested
         if show_aperture and aperture_mask.shape == diff_image.shape:
@@ -761,12 +967,13 @@ def plot_sector_consistency(
         x_positions = list(range(n_sectors))
 
         # Set default bar kwargs
-        bar_defaults = {
+        bar_defaults: dict[str, Any] = {
             "width": 0.6,
             "edgecolor": "black",
             "linewidth": 1,
         }
         bar_defaults.update(bar_kwargs)
+        bar_kw: Any = bar_defaults
 
         # Determine bar colors (highlight outliers)
         colors = []
@@ -782,7 +989,7 @@ def plot_sector_consistency(
                 x_positions,
                 depths,
                 color=colors,
-                **bar_defaults,
+                **bar_kw,
             )
 
             # Add error bars if requested
@@ -808,15 +1015,16 @@ def plot_sector_consistency(
             )
 
         # Annotate chi2 p-value if available and requested
+        # Place at upper-left to avoid overlap with legend at upper-right
         if annotate_chi2 and result.metrics:
             chi2_p = result.metrics.get("chi2_p_value")
             if chi2_p is not None:
                 ax.text(
-                    0.95,
+                    0.05,
                     0.95,
                     f"$\\chi^2$ p-value: {chi2_p:.3f}",
                     transform=ax.transAxes,
-                    ha="right",
+                    ha="left",
                     va="top",
                     fontsize=9,
                     bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.8},
@@ -833,7 +1041,7 @@ def plot_sector_consistency(
         if show_legend:
             from matplotlib.patches import Patch
 
-            legend_elements = [
+            legend_elements: list[Any] = [
                 Patch(facecolor=bar_color, label="Normal"),
                 Patch(facecolor=outlier_color, label="Outlier"),
             ]
@@ -851,6 +1059,7 @@ def plot_sector_consistency(
 __all__ = [
     "plot_model_comparison",
     "plot_ephemeris_reliability",
+    "plot_sensitivity_sweep",
     "plot_alias_diagnostics",
     "plot_ghost_features",
     "plot_sector_consistency",

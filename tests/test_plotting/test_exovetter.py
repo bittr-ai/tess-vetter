@@ -7,13 +7,14 @@ import pytest
 pytest.importorskip("matplotlib")
 
 import matplotlib
+
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 from bittr_tess_vetter.plotting.exovetter import plot_modshift, plot_sweet
-from bittr_tess_vetter.validation.result_schema import ok_result, CheckResult
+from bittr_tess_vetter.validation.result_schema import CheckResult, ok_result
 
 
 @pytest.fixture

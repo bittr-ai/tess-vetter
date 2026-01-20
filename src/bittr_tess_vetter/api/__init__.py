@@ -119,6 +119,7 @@ _MATPLOTLIB_GUARDED_EXPORTS: set[str] = {
     # V16-V21: Extended checks
     "plot_model_comparison",
     "plot_ephemeris_reliability",
+    "plot_sensitivity_sweep",
     "plot_alias_diagnostics",
     "plot_ghost_features",
     "plot_sector_consistency",
@@ -265,6 +266,7 @@ if MATPLOTLIB_AVAILABLE:
             # V16-V21: Extended checks
             "plot_model_comparison",
             "plot_ephemeris_reliability",
+            "plot_sensitivity_sweep",
             "plot_alias_diagnostics",
             "plot_ghost_features",
             "plot_sector_consistency",
@@ -788,6 +790,7 @@ if TYPE_CHECKING:
         # V16-V21: Extended checks
         plot_model_comparison,
         plot_ephemeris_reliability,
+        plot_sensitivity_sweep,
         plot_alias_diagnostics,
         plot_ghost_features,
         plot_sector_consistency,

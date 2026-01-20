@@ -8,16 +8,14 @@ This module tests:
 
 from __future__ import annotations
 
-import numpy as np
-import pytest
-
 # These imports happen after conftest.py sets up matplotlib backend
 import matplotlib.pyplot as plt
+import numpy as np
+import pytest
 
 from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 from bittr_tess_vetter.plotting.lightcurve import plot_full_lightcurve
 from bittr_tess_vetter.plotting.transit import plot_phase_folded, plot_transit_fit
-
 
 # =============================================================================
 # Fixtures

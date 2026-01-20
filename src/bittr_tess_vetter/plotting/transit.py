@@ -343,7 +343,7 @@ def plot_transit_fit(
             )
             ax = ax_main
         else:
-            fig, ax = ensure_ax(ax)
+            _fig, ax = ensure_ax(ax)
 
         # Set default scatter kwargs
         scatter_defaults: dict[str, Any] = {

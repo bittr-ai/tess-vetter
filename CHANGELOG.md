@@ -2,6 +2,13 @@
 
 This project follows semantic versioning (SemVer).
 
+## 0.2.1 (2026-01-20)
+
+- Add optional plotting extra: `pip install 'bittr-tess-vetter[plotting]'`.
+- Add `bittr_tess_vetter.plotting` module with matplotlib-guarded exports and DVR-style summary plotting.
+- Add per-check plot functions for V01-V21 plus transit/lightcurve visualization helpers.
+- Add plot verification script `scripts/verify_plots.py` (writes to `working_docs/image_support/verification/verification_plots/` by default).
+
 ## 0.2.0 (2026-01-16)
 
 - Add V11b `modshift_uniqueness` check: independent ModShift implementation with properly-scaled Fred (~1-10 for TESS, not ~60-96 from exovetter). Includes MS1-MS6 normalized uniqueness metrics, CHASES local uniqueness, and CHI transit depth consistency.

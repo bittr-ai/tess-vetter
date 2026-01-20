@@ -20,7 +20,6 @@ from bittr_tess_vetter.plotting.pixel import (
 )
 from bittr_tess_vetter.validation.result_schema import ok_result
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================

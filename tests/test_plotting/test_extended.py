@@ -7,17 +7,19 @@ import pytest
 pytest.importorskip("matplotlib")
 
 import matplotlib
+
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 from bittr_tess_vetter.plotting.extended import (
-    plot_model_comparison,
-    plot_ephemeris_reliability,
     plot_alias_diagnostics,
+    plot_ephemeris_reliability,
     plot_ghost_features,
+    plot_model_comparison,
     plot_sector_consistency,
+    plot_sensitivity_sweep,
 )
 from bittr_tess_vetter.validation.result_schema import ok_result
 
@@ -93,6 +95,83 @@ def mock_v19_result():
                 "harmonic_labels": ["P", "P/2", "2P", "P/3", "3P"],
                 "harmonic_periods": [5.0, 2.5, 10.0, 1.67, 15.0],
                 "harmonic_scores": [8.5, 5.2, 3.1, 2.5, 1.8],
+            }
+        },
+    )
+
+
+@pytest.fixture
+def mock_v18_result():
+    """Create a mock V18 (sensitivity sweep) CheckResult with plot_data."""
+    sweep_table = [
+        {
+            "variant_id": "ds1|none|none",
+            "status": "ok",
+            "backend": "cpu",
+            "runtime_seconds": 0.1,
+            "n_points_used": 1000,
+            "downsample_factor": 1,
+            "outlier_policy": "none",
+            "detrender": "none",
+            "score": 0.95,
+            "depth_hat_ppm": 2200.0,
+            "depth_err_ppm": 120.0,
+            "warnings": [],
+            "failure_reason": None,
+            "variant_config": {},
+            "gp_hyperparams": None,
+            "gp_fit_diagnostics": None,
+        },
+        {
+            "variant_id": "ds2|sigma_clip_4|running_median_0.5d",
+            "status": "ok",
+            "backend": "cpu",
+            "runtime_seconds": 0.2,
+            "n_points_used": 500,
+            "downsample_factor": 2,
+            "outlier_policy": "sigma_clip_4",
+            "detrender": "running_median_0.5d",
+            "score": 0.88,
+            "depth_hat_ppm": 2100.0,
+            "depth_err_ppm": 140.0,
+            "warnings": [],
+            "failure_reason": None,
+            "variant_config": {},
+            "gp_hyperparams": None,
+            "gp_fit_diagnostics": None,
+        },
+        {
+            "variant_id": "ds5|none|none",
+            "status": "failed",
+            "backend": "cpu",
+            "runtime_seconds": 0.05,
+            "n_points_used": 200,
+            "downsample_factor": 5,
+            "outlier_policy": "none",
+            "detrender": "none",
+            "score": None,
+            "depth_hat_ppm": None,
+            "depth_err_ppm": None,
+            "warnings": ["timeout"],
+            "failure_reason": "timeout",
+            "variant_config": {},
+            "gp_hyperparams": None,
+            "gp_fit_diagnostics": None,
+        },
+    ]
+
+    return ok_result(
+        id="V18",
+        name="Sensitivity Sweep",
+        metrics={"n_variants_total": 3, "n_variants_ok": 2},
+        confidence=0.8,
+        raw={
+            "plot_data": {
+                "version": 1,
+                "stable": True,
+                "n_variants_total": 3,
+                "n_variants_ok": 2,
+                "sweep_table": sweep_table,
             }
         },
     )
@@ -239,12 +318,39 @@ class TestPlotModelComparison:
         for style in ["default", "paper", "presentation"]:
             ax = plot_model_comparison(mock_v16_result, style=style)
             assert ax is not None
-            plt.close(ax.figure)
+
+
+class TestPlotSensitivitySweep:
+    """Tests for plot_sensitivity_sweep function."""
+
+    def test_creates_figure_when_ax_none(self, mock_v18_result):
+        ax = plot_sensitivity_sweep(mock_v18_result)
+        assert ax is not None
+        assert ax.figure is not None
+
+    def test_uses_provided_ax(self, mock_v18_result):
+        fig, provided_ax = plt.subplots()
+        ax = plot_sensitivity_sweep(mock_v18_result, ax=provided_ax)
+        assert ax is provided_ax
+        plt.close(fig)
+
+    def test_raises_on_missing_plot_data(self, mock_result_no_plot_data):
+        with pytest.raises(ValueError, match="plot_data"):
+            plot_sensitivity_sweep(mock_result_no_plot_data)
 
     def test_invalid_style_raises(self, mock_v16_result):
         """plot_model_comparison raises ValueError for invalid style."""
         with pytest.raises(ValueError, match="Unknown style"):
             plot_model_comparison(mock_v16_result, style="invalid_style")
+
+    def test_shortens_variant_labels(self, mock_v18_result):
+        """plot_sensitivity_sweep abbreviates long variant labels."""
+        ax = plot_sensitivity_sweep(mock_v18_result)
+        labels = [t.get_text() for t in ax.get_yticklabels()]
+        assert labels
+        # Abbreviations should remove long tokens.
+        assert all("running_median_" not in s for s in labels)
+        assert any("sc4" in s for s in labels)
 
 
 class TestPlotEphemerisReliability:

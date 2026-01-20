@@ -114,6 +114,8 @@ def plot_odd_even(
         }
         errorbar_defaults.update(errorbar_kwargs)
 
+        eb_kw: Any = {k: v for k, v in errorbar_defaults.items() if k != "fmt"}
+
         # Plot odd epochs with circles
         ax.errorbar(
             data["odd_epochs"],
@@ -122,7 +124,7 @@ def plot_odd_even(
             color=odd_color,
             label="Odd",
             marker="o",
-            **{k: v for k, v in errorbar_defaults.items() if k != "fmt"},
+            **eb_kw,
         )
 
         # Plot even epochs with squares
@@ -133,7 +135,7 @@ def plot_odd_even(
             color=even_color,
             label="Even",
             marker="s",
-            **{k: v for k, v in errorbar_defaults.items() if k != "fmt"},
+            **eb_kw,
         )
 
         # Add horizontal lines for means if requested
@@ -269,11 +271,12 @@ def plot_secondary_eclipse(
         flux = data["flux"]
 
         # Set default scatter kwargs
-        scatter_defaults = {
+        scatter_defaults: dict[str, Any] = {
             "s": 4,
             "alpha": 0.5,
         }
         scatter_defaults.update(scatter_kwargs)
+        scatter_kw: Any = scatter_defaults
 
         # Plot data points
         if len(phase) > 0:
@@ -282,7 +285,7 @@ def plot_secondary_eclipse(
                 flux,
                 c=data_color,
                 label="Data",
-                **scatter_defaults,
+                **scatter_kw,
             )
 
         # Add window shading if requested
@@ -423,12 +426,13 @@ def plot_duration_consistency(
         ratio = data["duration_ratio"]
 
         # Set default bar kwargs
-        bar_defaults = {
+        bar_defaults: dict[str, Any] = {
             "width": 0.6,
             "edgecolor": "black",
             "linewidth": 1,
         }
         bar_defaults.update(bar_kwargs)
+        bar_kw: Any = bar_defaults
 
         # Plot bars
         x_positions = [0, 1]
@@ -445,7 +449,7 @@ def plot_duration_consistency(
                 val,
                 color=color,
                 label=label,
-                **bar_defaults,
+                **bar_kw,
             )
             bars.append(bar)
 
@@ -585,13 +589,14 @@ def plot_depth_stability(
         dominating_idx = data.get("dominating_epoch_idx")
 
         # Set default errorbar kwargs
-        errorbar_defaults = {
+        errorbar_defaults: dict[str, Any] = {
             "fmt": "o",
             "capsize": 3,
             "capthick": 1,
             "markersize": 6,
         }
         errorbar_defaults.update(errorbar_kwargs)
+        eb_kw: Any = errorbar_defaults
 
         # Plot per-epoch depths
         if len(times) > 0:
@@ -601,7 +606,7 @@ def plot_depth_stability(
                 yerr=depth_errs,
                 color=data_color,
                 label="Per-epoch depth",
-                **errorbar_defaults,
+                **eb_kw,
             )
 
             # Highlight dominating epoch if requested
@@ -741,13 +746,14 @@ def plot_v_shape(
         t_total = data["t_total_hours"]
 
         # Set default errorbar kwargs
-        errorbar_defaults = {
+        errorbar_defaults: dict[str, Any] = {
             "fmt": "o",
             "capsize": 3,
             "capthick": 1,
             "markersize": 5,
         }
         errorbar_defaults.update(errorbar_kwargs)
+        eb_kw: Any = errorbar_defaults
 
         # Plot binned data
         if len(binned_phase) > 0:
@@ -757,7 +763,7 @@ def plot_v_shape(
                 yerr=binned_flux_err,
                 color=data_color,
                 label="Binned data",
-                **errorbar_defaults,
+                **eb_kw,
             )
 
         # Plot trapezoid model if requested

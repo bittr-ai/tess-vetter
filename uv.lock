@@ -348,7 +348,7 @@ wheels = [
 
 [[package]]
 name = "bittr-tess-vetter"
-version = "0.1.0"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "astropy" },
@@ -405,6 +405,9 @@ ldtk = [
 mlx = [
     { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
 ]
+plotting = [
+    { name = "matplotlib" },
+]
 tls = [
     { name = "numba" },
     { name = "transitleastsquares" },
@@ -441,7 +444,7 @@ requires-dist = [
     { name = "astropy", specifier = ">=5.0.0" },
     { name = "astroquery", marker = "extra == 'triceratops'", specifier = ">=0.4.6" },
     { name = "batman-package", marker = "extra == 'batman'", specifier = ">=2.4.0" },
-    { name = "bittr-tess-vetter", extras = ["tls", "fit", "wotan", "batman", "mlx", "exovetter", "ldtk", "triceratops"], marker = "extra == 'all'" },
+    { name = "bittr-tess-vetter", extras = ["tls", "fit", "wotan", "batman", "mlx", "exovetter", "ldtk", "triceratops", "plotting"], marker = "extra == 'all'" },
     { name = "celerite", marker = "extra == 'triceratops'", specifier = ">=0.4.0" },
     { name = "corner", marker = "extra == 'triceratops'", specifier = ">=2.2.1" },
     { name = "emcee", marker = "extra == 'fit'", specifier = ">=3.1.6" },
@@ -450,6 +453,7 @@ requires-dist = [
     { name = "ipykernel", marker = "extra == 'docs'", specifier = ">=6.29.0" },
     { name = "ldtk", marker = "extra == 'ldtk'", specifier = ">=1.8.5" },
     { name = "lightkurve", marker = "extra == 'triceratops'", specifier = ">=2.0.0" },
+    { name = "matplotlib", marker = "extra == 'plotting'", specifier = ">=3.5.1" },
     { name = "matplotlib", marker = "extra == 'triceratops'", specifier = ">=3.5.1" },
     { name = "mechanicalsoup", marker = "extra == 'triceratops'", specifier = ">=1.0.0" },
     { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'mlx'", specifier = ">=0.0.0" },
@@ -470,7 +474,7 @@ requires-dist = [
     { name = "transitleastsquares", marker = "extra == 'tls'", specifier = ">=1.32" },
     { name = "wotan", marker = "extra == 'wotan'", specifier = ">=1.1" },
 ]
-provides-extras = ["tls", "fit", "wotan", "batman", "mlx", "exovetter", "ldtk", "triceratops", "docs", "all"]
+provides-extras = ["tls", "fit", "wotan", "batman", "mlx", "exovetter", "ldtk", "triceratops", "docs", "plotting", "all"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -23,12 +23,12 @@ if TYPE_CHECKING:
     from matplotlib.axes import Axes
     from matplotlib.cm import ScalarMappable
     from matplotlib.colorbar import Colorbar
-    from matplotlib.figure import Figure
+    from matplotlib.figure import Figure, SubFigure
 
     from bittr_tess_vetter.validation.result_schema import CheckResult
 
 
-def ensure_ax(ax: Axes | None = None) -> tuple[Figure, Axes]:
+def ensure_ax(ax: Axes | None = None) -> tuple[Figure | SubFigure, Axes]:
     """Return (figure, axes), creating new ones if ax is None.
 
     This is the standard way to handle the optional ax parameter in plot
@@ -236,7 +236,7 @@ def get_sector_color(sector: int, all_sectors: list[int]) -> str:
     import matplotlib.pyplot as plt
 
     # Get tab10 colormap colors
-    cmap = plt.cm.tab10
+    cmap = plt.get_cmap("tab10")
 
     # Sort sectors for consistent ordering
     sorted_sectors = sorted(all_sectors)

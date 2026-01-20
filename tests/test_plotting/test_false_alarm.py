@@ -7,13 +7,14 @@ import pytest
 pytest.importorskip("matplotlib")
 
 import matplotlib
+
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 
 from bittr_tess_vetter.plotting.false_alarm import (
-    plot_data_gaps,
     plot_asymmetry,
+    plot_data_gaps,
 )
 from bittr_tess_vetter.validation.result_schema import ok_result
 
@@ -175,8 +176,6 @@ class TestPlotDataGaps:
         """plot_data_gaps uses custom threshold value."""
         ax = plot_data_gaps(mock_v13_result, threshold_value=0.5)
 
-        # Check title or legend for the threshold value
-        title = ax.get_title()
         # The threshold is shown in the legend, check it exists
         legend = ax.get_legend()
         assert legend is not None
@@ -293,9 +292,6 @@ class TestPlotAsymmetry:
         """plot_asymmetry doesn't show sigma when annotate_sigma=False."""
         ax = plot_asymmetry(mock_v15_result, annotate_sigma=False)
 
-        # Check that no text annotation contains "sigma"
-        texts = [child for child in ax.get_children() if hasattr(child, 'get_text')]
-        sigma_texts = [t for t in texts if hasattr(t, 'get_text') and 'sigma' in t.get_text().lower()]
         # We just test no error occurs since text annotation detection is complex
         assert ax is not None
 

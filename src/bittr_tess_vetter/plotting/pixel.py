@@ -281,29 +281,66 @@ def plot_difference_image(
         target_pixel = data["target_pixel"]
         max_depth_pixel = data["max_depth_pixel"]
 
-        # Plot target pixel: x = col, y = row
-        if show_target:
-            ax.plot(
-                target_pixel[1],  # col
-                target_pixel[0],  # row
-                marker="+",
-                markersize=12,
-                markeredgecolor="#d62728",  # Red
-                markeredgewidth=2,
-                label="Target",
-            )
+        # Check if target and max depth are the same pixel
+        same_pixel = (
+            target_pixel[0] == max_depth_pixel[0]
+            and target_pixel[1] == max_depth_pixel[1]
+        )
 
-        # Plot max depth pixel
-        if show_max_depth:
-            ax.plot(
-                max_depth_pixel[1],  # col
-                max_depth_pixel[0],  # row
-                marker="x",
-                markersize=10,
-                markeredgecolor="#2ca02c",  # Green
-                markeredgewidth=2,
-                label="Max Depth",
-            )
+        # Plot target/max markers (x = col, y = row)
+        if same_pixel:
+            if show_target and show_max_depth:
+                ax.plot(
+                    target_pixel[1],  # col
+                    target_pixel[0],  # row
+                    marker="X",
+                    markersize=12,
+                    markerfacecolor="#2ca02c",  # Green fill (Max Depth)
+                    markeredgecolor="#d62728",  # Red edge (Target)
+                    markeredgewidth=2,
+                    label="Target = Max Depth",
+                )
+            elif show_target:
+                ax.plot(
+                    target_pixel[1],  # col
+                    target_pixel[0],  # row
+                    marker="+",
+                    markersize=12,
+                    markeredgecolor="#d62728",  # Red
+                    markeredgewidth=2,
+                    label="Target",
+                )
+            elif show_max_depth:
+                ax.plot(
+                    target_pixel[1],  # col
+                    target_pixel[0],  # row
+                    marker="x",
+                    markersize=10,
+                    markeredgecolor="#2ca02c",  # Green
+                    markeredgewidth=2,
+                    label="Max Depth",
+                )
+        else:
+            if show_target:
+                ax.plot(
+                    target_pixel[1],  # col
+                    target_pixel[0],  # row
+                    marker="+",
+                    markersize=12,
+                    markeredgecolor="#d62728",  # Red
+                    markeredgewidth=2,
+                    label="Target",
+                )
+            if show_max_depth:
+                ax.plot(
+                    max_depth_pixel[1],  # col
+                    max_depth_pixel[0],  # row
+                    marker="x",
+                    markersize=10,
+                    markeredgecolor="#2ca02c",  # Green
+                    markeredgewidth=2,
+                    label="Max Depth",
+                )
 
         # Set labels
         ax.set_xlabel("Column (pixels)")

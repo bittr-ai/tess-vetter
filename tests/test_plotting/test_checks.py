@@ -7,15 +7,16 @@ import pytest
 pytest.importorskip("matplotlib")
 
 import matplotlib
+
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 
 from bittr_tess_vetter.plotting.checks import (
+    plot_depth_stability,
+    plot_duration_consistency,
     plot_odd_even,
     plot_secondary_eclipse,
-    plot_duration_consistency,
-    plot_depth_stability,
     plot_v_shape,
 )
 

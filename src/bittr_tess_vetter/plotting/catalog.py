@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import textwrap
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -287,6 +288,31 @@ def plot_exofop_card(
     tic_id = data["tic_id"]
     found = data["found"]
 
+    def _wrap_notes(notes: str, *, style: str, max_lines: int) -> list[str]:
+        # These widths are tuned for the default verification figsize (5x4) and a
+        # monospace font; they’re conservative to avoid overflowing the card box.
+        wrap_width_by_style = {
+            "paper": 30,
+            "default": 38,
+            "presentation": 28,
+        }
+        wrap_width = wrap_width_by_style.get(style, 38)
+
+        wrapped = textwrap.wrap(
+            notes,
+            width=wrap_width,
+            break_long_words=True,
+            break_on_hyphens=True,
+        )
+        if not wrapped:
+            return []
+
+        if len(wrapped) > max_lines:
+            wrapped = wrapped[:max_lines]
+            if not wrapped[-1].endswith("..."):
+                wrapped[-1] = wrapped[-1].rstrip(".") + "..."
+        return wrapped
+
     with style_context(style):
         fig, ax = ensure_ax(ax)
 
@@ -335,10 +361,13 @@ def plot_exofop_card(
                 lines.append(f"Disposition: {planet_disp}")
 
             if comments:
-                # Truncate long comments
-                if len(comments) > 50:
-                    comments = comments[:47] + "..."
-                lines.append(f"Notes: {comments}")
+                # Wrap notes across multiple lines to avoid overflowing the card.
+                # Keep the overall card compact by limiting note lines.
+                note_lines = _wrap_notes(str(comments), style=style, max_lines=3)
+                if note_lines:
+                    lines.append(f"Notes: {note_lines[0]}")
+                    for extra in note_lines[1:]:
+                        lines.append(f"  {extra}")
 
         # Set default text kwargs
         text_defaults: dict[str, Any] = {
@@ -373,6 +402,7 @@ def plot_exofop_card(
             text_content,
             transform=ax.transAxes,
             color=status_color,
+            clip_on=True,
             **text_defaults,
         )
 

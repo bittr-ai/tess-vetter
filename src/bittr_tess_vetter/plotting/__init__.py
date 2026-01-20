@@ -31,6 +31,8 @@ import importlib.util
 # Check for matplotlib availability without importing it
 MATPLOTLIB_AVAILABLE = importlib.util.find_spec("matplotlib") is not None
 
+__all__: list[str]
+
 # Export plot functions if matplotlib is available
 if MATPLOTLIB_AVAILABLE:
     from .catalog import plot_exofop_card, plot_nearby_ebs
@@ -48,6 +50,7 @@ if MATPLOTLIB_AVAILABLE:
         plot_ghost_features,
         plot_model_comparison,
         plot_sector_consistency,
+        plot_sensitivity_sweep,
     )
     from .false_alarm import plot_asymmetry, plot_data_gaps
     from .lightcurve import plot_full_lightcurve
@@ -55,7 +58,7 @@ if MATPLOTLIB_AVAILABLE:
     from .report import plot_vetting_summary, save_vetting_report
     from .transit import plot_phase_folded, plot_transit_fit
 
-    __all__: list[str] = [
+    __all__ = [
         # V01-V05: Light curve checks
         "plot_odd_even",
         "plot_secondary_eclipse",
@@ -78,6 +81,7 @@ if MATPLOTLIB_AVAILABLE:
         # V16-V21: Extended checks
         "plot_model_comparison",
         "plot_ephemeris_reliability",
+        "plot_sensitivity_sweep",
         "plot_alias_diagnostics",
         "plot_ghost_features",
         "plot_sector_consistency",
@@ -90,7 +94,7 @@ if MATPLOTLIB_AVAILABLE:
         "plot_full_lightcurve",
     ]
 else:
-    __all__: list[str] = []
+    __all__ = []
 
 
 def __getattr__(name: str) -> object:

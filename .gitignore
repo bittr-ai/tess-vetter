@@ -16,3 +16,4 @@ persistent_cache/
 mplconfig/
 .release_smoke_venv/
 working_docs/LEO_vetter/
+working_docs/image_support/verification/verification_plots/

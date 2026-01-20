@@ -7,12 +7,13 @@ import pytest
 pytest.importorskip("matplotlib")
 
 import matplotlib
+
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 
-from bittr_tess_vetter.plotting.catalog import plot_nearby_ebs, plot_exofop_card
-from bittr_tess_vetter.validation.result_schema import ok_result, CheckResult
+from bittr_tess_vetter.plotting.catalog import plot_exofop_card, plot_nearby_ebs
+from bittr_tess_vetter.validation.result_schema import CheckResult, ok_result
 
 
 @pytest.fixture
@@ -411,3 +412,34 @@ class TestPlotExofopCard:
         # Should have at least one patch (the background rectangle)
         patches = ax.patches
         assert len(patches) >= 1
+
+    def test_wraps_long_notes(self):
+        """plot_exofop_card wraps long notes to avoid overflowing the card."""
+        long_notes = (
+            "This is a very long note intended to exceed the width of the card "
+            "and should therefore wrap across multiple lines without overflowing."
+        )
+        result = ok_result(
+            id="V07",
+            name="ExoFOP TOI Lookup",
+            metrics={"found": True},
+            confidence=0.8,
+            raw={
+                "plot_data": {
+                    "version": 1,
+                    "tic_id": 12345678,
+                    "found": True,
+                    "toi": 1234.01,
+                    "tfopwg_disposition": "PC",
+                    "planet_disposition": "Candidate",
+                    "comments": long_notes,
+                }
+            },
+        )
+
+        ax = plot_exofop_card(result)
+        assert ax.texts
+        text = ax.texts[0].get_text()
+        assert "Notes:" in text
+        # Expect wrapped lines (indented continuation).
+        assert "\n  " in text

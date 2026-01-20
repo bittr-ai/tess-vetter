@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-
 import matplotlib.pyplot as plt
+import pytest
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
@@ -93,18 +92,16 @@ class TestStyleContext:
         """style_context reverts rcParams even on exception."""
         original_fontsize = plt.rcParams["font.size"]
 
-        with pytest.raises(RuntimeError):
-            with style_context("presentation"):
-                raise RuntimeError("test error")
+        with pytest.raises(RuntimeError), style_context("presentation"):
+            raise RuntimeError("test error")
 
         # Font size still reverted
         assert plt.rcParams["font.size"] == original_fontsize
 
     def test_raises_on_unknown_style(self):
         """style_context raises ValueError for unknown style."""
-        with pytest.raises(ValueError, match="Unknown style"):
-            with style_context("nonexistent"):
-                pass
+        with pytest.raises(ValueError, match="Unknown style"), style_context("nonexistent"):
+            pass
 
 
 class TestExtractPlotData:

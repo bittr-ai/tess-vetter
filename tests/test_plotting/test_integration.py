@@ -322,8 +322,7 @@ class TestAPIModuleConsistency:
 
     def test_api_exports_match_plotting_module(self):
         """All plotting module exports should be accessible from api."""
-        from bittr_tess_vetter import plotting
-        from bittr_tess_vetter import api
+        from bittr_tess_vetter import api, plotting
 
         plotting_all = set(plotting.__all__)
         for name in plotting_all:
@@ -335,8 +334,7 @@ class TestAPIModuleConsistency:
 
     def test_api_plotting_imports_are_same_objects(self):
         """Plotting functions from api should be same objects as from plotting."""
-        from bittr_tess_vetter import plotting
-        from bittr_tess_vetter import api
+        from bittr_tess_vetter import api, plotting
 
         # Check a few key functions
         for name in ["plot_odd_even", "plot_vetting_summary", "plot_centroid_shift"]:

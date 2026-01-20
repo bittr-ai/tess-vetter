@@ -111,13 +111,14 @@ def plot_data_gaps(
         window_hours = data["transit_window_hours"]
 
         # Set default bar kwargs
-        bar_defaults = {
+        bar_defaults: dict[str, Any] = {
             "width": 0.8,
             "edgecolor": "black",
             "linewidth": 0.5,
             "alpha": 0.8,
         }
         bar_defaults.update(bar_kwargs)
+        bar_kw: Any = bar_defaults
 
         n_epochs = len(epoch_centers)
         x_positions = list(range(n_epochs))
@@ -129,7 +130,7 @@ def plot_data_gaps(
                 coverage,
                 color=bar_color,
                 label="Coverage",
-                **bar_defaults,
+                **bar_kw,
             )
 
         # Add threshold line if requested
@@ -291,11 +292,12 @@ def plot_asymmetry(
         right_mean = data["right_bin_mean"]
 
         # Set default scatter kwargs
-        scatter_defaults = {
+        scatter_defaults: dict[str, Any] = {
             "s": 4,
             "alpha": 0.5,
         }
         scatter_defaults.update(scatter_kwargs)
+        scatter_kw: Any = scatter_defaults
 
         # Plot data points
         if len(phase) > 0:
@@ -304,7 +306,7 @@ def plot_asymmetry(
                 flux,
                 c=data_color,
                 label="Data",
-                **scatter_defaults,
+                **scatter_kw,
             )
 
         # Add bin shading if requested
