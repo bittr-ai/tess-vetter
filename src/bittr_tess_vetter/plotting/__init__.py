@@ -31,8 +31,15 @@ import importlib.util
 # Check for matplotlib availability without importing it
 MATPLOTLIB_AVAILABLE = importlib.util.find_spec("matplotlib") is not None
 
-# Empty initially - will be populated as plot functions are added
-__all__: list[str] = []
+# Export plot functions if matplotlib is available
+if MATPLOTLIB_AVAILABLE:
+    from .checks import plot_odd_even
+
+    __all__: list[str] = [
+        "plot_odd_even",
+    ]
+else:
+    __all__: list[str] = []
 
 
 def __getattr__(name: str) -> object:

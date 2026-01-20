@@ -311,6 +311,18 @@ def check_odd_even_depth(
     if duration_days >= 0.5 * period:
         warnings.append("duration_too_long_relative_to_period")
         warnings.append("insufficient_data_for_odd_even_check")
+        # plot_data for empty case
+        plot_data = {
+            "version": 1,
+            "odd_epochs": [],
+            "odd_depths_ppm": [],
+            "odd_errs_ppm": [],
+            "even_epochs": [],
+            "even_depths_ppm": [],
+            "even_errs_ppm": [],
+            "mean_odd_ppm": 0.0,
+            "mean_even_ppm": 0.0,
+        }
         return VetterCheckResult(
             id="V01",
             name="odd_even_depth",
@@ -337,6 +349,7 @@ def check_odd_even_depth(
                 "method": "per_epoch_median",
                 "epoch_depths_odd_ppm": [],
                 "epoch_depths_even_ppm": [],
+                "plot_data": plot_data,
                 "_metrics_only": True,
             },
         )
@@ -479,6 +492,20 @@ def check_odd_even_depth(
     if insufficient_data:
         # Metrics-only: insufficient data to interpret odd/even behavior.
         warnings.append("insufficient_data_for_odd_even_check")
+        # Build plot_data from partial data available (capped at 50 elements)
+        odd_epoch_list = sorted(odd_epochs.keys())[:50]
+        even_epoch_list = sorted(even_epochs.keys())[:50]
+        plot_data = {
+            "version": 1,
+            "odd_epochs": [int(e) for e in odd_epoch_list],
+            "odd_depths_ppm": [float(odd_epochs[e]["depth"] * 1e6) for e in odd_epoch_list],
+            "odd_errs_ppm": [float(odd_epochs[e]["sigma"] * 1e6) for e in odd_epoch_list],
+            "even_epochs": [int(e) for e in even_epoch_list],
+            "even_depths_ppm": [float(even_epochs[e]["depth"] * 1e6) for e in even_epoch_list],
+            "even_errs_ppm": [float(even_epochs[e]["sigma"] * 1e6) for e in even_epoch_list],
+            "mean_odd_ppm": 0.0,
+            "mean_even_ppm": 0.0,
+        }
         return VetterCheckResult(
             id="V01",
             name="odd_even_depth",
@@ -505,6 +532,7 @@ def check_odd_even_depth(
                 "method": "per_epoch_median",
                 "epoch_depths_odd_ppm": [],
                 "epoch_depths_even_ppm": [],
+                "plot_data": plot_data,
                 "_metrics_only": True,
             },
         )
@@ -551,6 +579,21 @@ def check_odd_even_depth(
     epoch_depths_odd_ppm = [round(d * 1e6, 1) for d in odd_depths[:20]]
     epoch_depths_even_ppm = [round(d * 1e6, 1) for d in even_depths[:20]]
 
+    # Build plot_data for visualization (capped at 50 elements)
+    odd_epoch_list = sorted(odd_epochs.keys())[:50]
+    even_epoch_list = sorted(even_epochs.keys())[:50]
+    plot_data = {
+        "version": 1,
+        "odd_epochs": [int(e) for e in odd_epoch_list],
+        "odd_depths_ppm": [float(odd_epochs[e]["depth"] * 1e6) for e in odd_epoch_list],
+        "odd_errs_ppm": [float(odd_epochs[e]["sigma"] * 1e6) for e in odd_epoch_list],
+        "even_epochs": [int(e) for e in even_epoch_list],
+        "even_depths_ppm": [float(even_epochs[e]["depth"] * 1e6) for e in even_epoch_list],
+        "even_errs_ppm": [float(even_epochs[e]["sigma"] * 1e6) for e in even_epoch_list],
+        "mean_odd_ppm": float(depth_odd_ppm),
+        "mean_even_ppm": float(depth_even_ppm),
+    }
+
     return VetterCheckResult(
         id="V01",
         name="odd_even_depth",
@@ -577,6 +620,7 @@ def check_odd_even_depth(
             "method": "per_epoch_median",
             "epoch_depths_odd_ppm": epoch_depths_odd_ppm,
             "epoch_depths_even_ppm": epoch_depths_even_ppm,
+            "plot_data": plot_data,
             "_metrics_only": True,
         },
     )
