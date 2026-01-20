@@ -89,7 +89,10 @@ docs = [
   "nbformat>=5.10.0",
   "ipykernel>=6.29.0",
 ]
-all = ["bittr-tess-vetter[tls,fit,wotan,batman,mlx,exovetter,ldtk,triceratops]"]
+plotting = [
+  "matplotlib>=3.5.1",
+]
+all = ["bittr-tess-vetter[tls,fit,wotan,batman,mlx,exovetter,ldtk,triceratops,plotting]"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bittr_tess_vetter"]
