@@ -217,6 +217,41 @@ def run_modshift(
     n_transits = int(inputs_summary.get("n_transits_expected", 0))
     confidence = min(1.0, (n_transits / 5.0)) if n_transits > 0 else 0.5
 
+    # Plot data (lightweight): exovetter does not expose the full ModShift
+    # periodogram, so we synthesize a simple “bump” representation centered on
+    # the reported peak phases to enable stable plotting in notebooks/docs.
+    phase_pri = float(metrics.get("phase_pri", 0.0) or 0.0)
+    phase_sec = metrics.get("phase_sec")
+    phase_sec_f = float(phase_sec) if phase_sec is not None else None
+
+    phase_bins = np.linspace(0.0, 1.0, 200, dtype=np.float64)
+    periodogram = np.zeros_like(phase_bins)
+
+    def _circ_dist(x: np.ndarray, p: float) -> np.ndarray:
+        d = np.abs(x - p)
+        return np.minimum(d, 1.0 - d)
+
+    def _add_bump(p: float | None, amp: float) -> None:
+        if p is None or not np.isfinite(p):
+            return
+        sigma = 0.015
+        periodogram[:] += amp * np.exp(-0.5 * (_circ_dist(phase_bins, float(p)) / sigma) ** 2)
+
+    _add_bump(phase_pri, pri_abs)
+    _add_bump(phase_sec_f, sec_abs)
+    _add_bump(float(metrics.get("phase_ter", 0.0) or 0.0), ter_abs)
+    _add_bump(float(metrics.get("phase_pos", 0.0) or 0.0), pos_abs)
+
+    plot_data: dict[str, Any] = {
+        "version": 1,
+        "phase_bins": phase_bins.tolist(),
+        "periodogram": periodogram.tolist(),
+        "primary_phase": phase_pri,
+        "primary_signal": pri_abs,
+        "secondary_phase": phase_sec_f,
+        "secondary_signal": sec_abs if phase_sec_f is not None else None,
+    }
+
     return _metrics_result(
         check_id="V11",
         name="modshift",
@@ -239,6 +274,7 @@ def run_modshift(
             "tertiary_primary_ratio": round(ter_pri, 6),
             "positive_primary_ratio": round(pos_pri, 6),
             "raw_metrics": metrics,
+            "plot_data": plot_data,
         },
     )
 
@@ -332,6 +368,60 @@ def run_sweet(
         except (IndexError, TypeError, ValueError) as e:
             logger.debug("Failed to extract SWEET SNR values: %s", e)
 
+    # Plot data (lightweight): build a deterministic phase-folded view and simple
+    # linear least-squares sinusoid fits at P/2, P, and 2P. This enables plotting
+    # without relying on exovetter internals to expose fit arrays.
+    mask = lightcurve.valid_mask & np.isfinite(lightcurve.time) & np.isfinite(lightcurve.flux)
+    time = lightcurve.time[mask]
+    flux = lightcurve.flux[mask]
+
+    if time.size > 0 and float(candidate.period) > 0:
+        phase = ((time - float(candidate.t0)) / float(candidate.period)) % 1.0
+        flux_norm = flux / (np.nanmedian(flux) if np.isfinite(np.nanmedian(flux)) else 1.0)
+
+        # Subsample for plot stability
+        max_points = 600
+        if phase.size > max_points:
+            idx = np.linspace(0, phase.size - 1, max_points).astype(int)
+            phase = phase[idx]
+            flux_norm = flux_norm[idx]
+
+        def _fit_sinusoid(k: float) -> np.ndarray:
+            # Model: a*sin(2πkφ) + b*cos(2πkφ) + c
+            w = 2.0 * np.pi * k * phase
+            x = np.column_stack([np.sin(w), np.cos(w), np.ones_like(w)])
+            y = flux_norm
+            beta, *_ = np.linalg.lstsq(x, y, rcond=None)
+            return (x @ beta).astype(np.float64)
+
+        half_fit = _fit_sinusoid(2.0)  # P/2 => 2 cycles per phase
+        at_fit = _fit_sinusoid(1.0)  # P
+        double_fit = _fit_sinusoid(0.5)  # 2P => 0.5 cycles per phase
+
+        plot_data = {
+            "version": 1,
+            "phase": phase.astype(np.float64).tolist(),
+            "flux": flux_norm.astype(np.float64).tolist(),
+            "half_period_fit": half_fit.tolist(),
+            "at_period_fit": at_fit.tolist(),
+            "double_period_fit": double_fit.tolist(),
+            "snr_half_period": snr_half_period,
+            "snr_at_period": snr_at_period,
+            "snr_double_period": snr_double_period,
+        }
+    else:
+        plot_data = {
+            "version": 1,
+            "phase": [],
+            "flux": [],
+            "half_period_fit": None,
+            "at_period_fit": None,
+            "double_period_fit": None,
+            "snr_half_period": snr_half_period,
+            "snr_at_period": snr_at_period,
+            "snr_double_period": snr_double_period,
+        }
+
     return _metrics_result(
         check_id="V12",
         name="sweet",
@@ -342,6 +432,7 @@ def run_sweet(
             "snr_at_period": snr_at_period,
             "snr_double_period": snr_double_period,
             "raw_metrics": metrics,
+            "plot_data": plot_data,
         },
     )
 

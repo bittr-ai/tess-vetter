@@ -179,6 +179,20 @@ def check_data_gaps(
 
     worst = sorted(rows, key=lambda r: float(r["missing_frac"]), reverse=True)[: int(config.max_epoch_rows)]
 
+    # Plot data (compact): show per-epoch coverage for the worst-N epochs.
+    # This keeps plot payload small while still surfacing gap-edge behavior.
+    worst_sorted = sorted(worst, key=lambda r: int(r["epoch_index"]))
+    epoch_centers_btjd = [float(r["t_center_btjd"]) for r in worst_sorted]
+    coverage_fractions = [float(1.0 - float(r["missing_frac"])) for r in worst_sorted]
+    transit_window_hours = float(2.0 * float(config.window_mult) * float(duration_hours))
+
+    plot_data = {
+        "version": 1,
+        "epoch_centers_btjd": epoch_centers_btjd,
+        "coverage_fractions": coverage_fractions,
+        "transit_window_hours": transit_window_hours,
+    }
+
     return VetterCheckResult(
         id="V13",
         name="data_gaps",
@@ -204,6 +218,7 @@ def check_data_gaps(
             "n_epochs_excluded_no_coverage": int(n_epochs_excluded_no_coverage),
             "window_mult": float(config.window_mult),
             "worst_epochs": worst,
+            "plot_data": plot_data,
             "warnings": warnings,
             "_metrics_only": True,
         },
@@ -361,6 +376,24 @@ def check_transit_asymmetry(
         confidence *= 0.9
     confidence = float(np.clip(confidence, 0.2, 0.95))
 
+    # Plot data (compact): downsample phase/flux within the analysis window.
+    phase_w = phase[window_mask].astype(np.float64)
+    flux_w = flux_norm[window_mask].astype(np.float64)
+    if phase_w.size > 600:
+        idx = np.linspace(0, phase_w.size - 1, 600).astype(int)
+        phase_w = phase_w[idx]
+        flux_w = flux_w[idx]
+
+    plot_data = {
+        "version": 1,
+        "phase": phase_w.tolist(),
+        "flux": (flux_w + 1.0).tolist(),  # shift back near 1.0 for readability
+        "left_bin_mean": float(1.0 + mu_left),
+        "right_bin_mean": float(1.0 + mu_right),
+        "left_bin_phase_range": [-float(half_window_phase), 0.0],
+        "right_bin_phase_range": [0.0, float(half_window_phase)],
+    }
+
     return VetterCheckResult(
         id="V15",
         name="transit_asymmetry",
@@ -377,6 +410,7 @@ def check_transit_asymmetry(
             "n_left_points": n_left,
             "n_right_points": n_right,
             "baseline": round(baseline, 6),
+            "plot_data": plot_data,
             "warnings": warnings,
             "_metrics_only": True,
         },
