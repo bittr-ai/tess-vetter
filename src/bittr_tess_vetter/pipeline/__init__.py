@@ -269,6 +269,22 @@ def enrich_candidate(
     lightcurves: list[LightCurveData] = []
     sectors_loaded: list[int] = []
 
+    if config.no_download and not config.local_data_path:
+        wall_ms = time.perf_counter() * 1000.0 - start_time_ms
+        return _make_error_response(
+            "NoDownloadError",
+            "no_download=True requires local_data_path (cache-only MAST fetch is not implemented)",
+            wall_ms,
+        )
+
+    if not config.network_ok and not config.local_data_path:
+        wall_ms = time.perf_counter() * 1000.0 - start_time_ms
+        return _make_error_response(
+            "OfflineNoLocalDataError",
+            "network_ok=False requires local_data_path for offline enrichment",
+            wall_ms,
+        )
+
     if config.local_data_path:
         # Load from local files instead of MAST
         logger.info("Loading local light curves for TIC %d from %s", tic_id, config.local_data_path)
@@ -322,15 +338,6 @@ def enrich_candidate(
                 logger.info("Using 20s cadence data (allow_20s=True)")
 
         download_errors: list[str] = []
-
-        if config.no_download:
-            wall_ms = time.perf_counter() * 1000.0 - start_time_ms
-            logger.warning("no_download=True but no cached data available for TIC %d", tic_id)
-            return _make_error_response(
-                "NoDownloadError",
-                f"no_download=True but no cached data available for TIC {tic_id}",
-                wall_ms,
-            )
 
         for sector in available_sectors:
             try:
