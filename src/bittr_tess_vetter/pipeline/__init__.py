@@ -67,6 +67,8 @@ def _pipeline_version() -> str:
 def _load_lightcurves_from_local(
     tic_id: int,
     local_data_path: str,
+    *,
+    requested_sectors: list[int] | None = None,
 ) -> tuple[list[LightCurveData], list[int]]:
     """Load light curves from local CSV files.
 
@@ -104,7 +106,12 @@ def _load_lightcurves_from_local(
     lightcurves: list[LightCurveData] = []
     sectors_loaded: list[int] = []
 
-    for sector, lc_api in sorted(dataset.lc_by_sector.items()):
+    sector_items = sorted(dataset.lc_by_sector.items())
+    if requested_sectors is not None:
+        requested = {int(s) for s in requested_sectors}
+        sector_items = [(sector, lc) for (sector, lc) in sector_items if int(sector) in requested]
+
+    for sector, lc_api in sector_items:
         # Infer cadence from time spacing
         if len(lc_api.time) > 1:
             dt = float(lc_api.time[1] - lc_api.time[0])
@@ -187,6 +194,7 @@ def enrich_candidate(
     duration_hours: float,
     depth_ppm: float,
     config: FeatureConfig,
+    sectors: list[int] | None = None,
 ) -> tuple[RawEvidencePacket, EnrichedRow]:
     """Enrich a single transit candidate with vetting features.
 
@@ -217,6 +225,7 @@ def enrich_candidate(
     from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
     from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve, TPFStamp
     from bittr_tess_vetter.api.vet import vet_candidate as run_vetting
+    from bittr_tess_vetter.data_sources.sector_selection import select_sectors
     from bittr_tess_vetter.features import FEATURE_SCHEMA_VERSION
 
     start_time_ms = time.perf_counter() * 1000.0
@@ -269,6 +278,7 @@ def enrich_candidate(
     # Step 1 & 2: Load light curves (local or MAST)
     lightcurves: list[LightCurveData] = []
     sectors_loaded: list[int] = []
+    selection_summary: dict[str, Any] | None = None
 
     if config.no_download and not config.local_data_path:
         wall_ms = time.perf_counter() * 1000.0 - start_time_ms
@@ -291,8 +301,13 @@ def enrich_candidate(
         logger.info("Loading local light curves for TIC %d from %s", tic_id, config.local_data_path)
         try:
             lightcurves, sectors_loaded = _load_lightcurves_from_local(
-                tic_id, config.local_data_path
+                tic_id, config.local_data_path, requested_sectors=sectors
             )
+            selection_summary = {
+                "available_sectors": sectors_loaded,
+                "selected_sectors": sectors_loaded,
+                "excluded_sectors": {},
+            }
             logger.info(
                 "Loaded %d sectors from local data for TIC %d: %s",
                 len(sectors_loaded),
@@ -329,6 +344,20 @@ def enrich_candidate(
             "Found %d sectors for TIC %d: %s", len(available_sectors), tic_id, available_sectors
         )
 
+        selection = select_sectors(available_sectors=available_sectors, requested_sectors=sectors)
+        selection_summary = {
+            "available_sectors": selection.available_sectors,
+            "selected_sectors": selection.selected_sectors,
+            "excluded_sectors": selection.excluded_sectors,
+        }
+        if not selection.selected_sectors:
+            wall_ms = time.perf_counter() * 1000.0 - start_time_ms
+            return _make_error_response(
+                "NoSectorsSelectedError",
+                "No sectors selected (requested sectors not available)",
+                wall_ms,
+            )
+
         # Prefer 120s cadence by default, allow 20s if configured
         preferred_exptime: float | None = 120.0
         if config.allow_20s:
@@ -340,7 +369,7 @@ def enrich_candidate(
 
         download_errors: list[str] = []
 
-        for sector in available_sectors:
+        for sector in selection.selected_sectors:
             try:
                 lc_data = client.download_lightcurve(
                     tic_id,
@@ -522,6 +551,8 @@ def enrich_candidate(
             "period_days": period_days,
             "t0_btjd": t0_btjd,
             "duration_hours": duration_hours,
+            "sectors": sectors_loaded,
+            "cadence_seconds": stitched_lc_data.cadence_seconds,
         },
         "depth_ppm": {
             "input_depth_ppm": depth_ppm,
@@ -534,6 +565,7 @@ def enrich_candidate(
         "provenance": {
             "pipeline_version": pipeline_version,
             "sectors_used": sectors_loaded,
+            "sector_selection": selection_summary,
             "n_points": stitched_lc_data.n_points,
             "cadence_seconds": stitched_lc_data.cadence_seconds,
             "inputs_summary": bundle.inputs_summary,
@@ -681,6 +713,10 @@ def enrich_worklist(
         else:
             toi = row.get("toi")
             toi_str = str(toi) if toi is not None else None
+            requested_sectors = row.get("sectors")
+            sectors_list: list[int] | None = None
+            if isinstance(requested_sectors, list):
+                sectors_list = [int(s) for s in requested_sectors]
             try:
                 _raw, enriched = enrich_candidate(
                     tic_id=tic_id,
@@ -690,6 +726,7 @@ def enrich_worklist(
                     duration_hours=duration_hours,
                     depth_ppm=depth_ppm,
                     config=config,
+                    sectors=sectors_list,
                 )
                 append_jsonl(out_path, dict(enriched))
                 if enriched.get("status") == "OK":

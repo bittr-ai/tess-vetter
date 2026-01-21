@@ -52,4 +52,3 @@ def select_sectors(
 
 
 __all__ = ["select_sectors"]
-
