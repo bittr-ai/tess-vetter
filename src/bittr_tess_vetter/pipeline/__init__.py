@@ -304,15 +304,15 @@ def enrich_candidate(
     selection_summary: dict[str, Any] | None = None
     sector_exptimes: dict[int, set[int]] = {}
 
-    if config.no_download and not config.local_data_path:
+    if config.no_download and not config.local_data_path and not config.cache_dir:
         wall_ms = time.perf_counter() * 1000.0 - start_time_ms
         return _make_error_response(
             "NoDownloadError",
-            "no_download=True requires local_data_path (cache-only MAST fetch is not implemented)",
+            "no_download=True requires local_data_path or cache_dir",
             wall_ms,
         )
 
-    if not config.network_ok and not config.local_data_path:
+    if not config.network_ok and not config.local_data_path and not config.cache_dir:
         wall_ms = time.perf_counter() * 1000.0 - start_time_ms
         return _make_error_response(
             "OfflineNoLocalDataError",
@@ -343,11 +343,14 @@ def enrich_candidate(
             logger.warning("Local data not found for TIC %d: %s", tic_id, e)
             return _make_error_response("LocalDataNotFoundError", str(e), wall_ms)
     else:
-        # Standard MAST-based loading
+        # Standard MAST-based loading (or cache-only when no_download+cache_dir)
         logger.info("Searching for light curves for TIC %d", tic_id)
         try:
             client = _make_mast_client()
-            search_results = client.search_lightcurve(tic_id)
+            if config.no_download and config.cache_dir:
+                search_results = client.search_lightcurve_cached(tic_id)
+            else:
+                search_results = client.search_lightcurve(tic_id)
         except MASTClientError as e:
             wall_ms = time.perf_counter() * 1000.0 - start_time_ms
             logger.warning("MAST search failed for TIC %d: %s", tic_id, e)
@@ -410,12 +413,20 @@ def enrich_candidate(
         for sector in selection.selected_sectors:
             requested_exptime = sector_to_exptime.get(int(sector), 120.0)
             try:
-                lc_data = client.download_lightcurve(
-                    tic_id,
-                    sector,
-                    flux_type="pdcsap",
-                    exptime=requested_exptime,
-                )
+                if config.no_download and config.cache_dir:
+                    lc_data = client.download_lightcurve_cached(
+                        tic_id=int(tic_id),
+                        sector=int(sector),
+                        flux_type="pdcsap",
+                        exptime=float(requested_exptime),
+                    )
+                else:
+                    lc_data = client.download_lightcurve(
+                        tic_id,
+                        sector,
+                        flux_type="pdcsap",
+                        exptime=requested_exptime,
+                    )
                 lightcurves.append(lc_data)
                 sectors_loaded.append(sector)
                 logger.debug(
@@ -428,9 +439,17 @@ def enrich_candidate(
                 # Try fallback cadence if preferred failed
                 if requested_exptime == 120.0 and config.allow_20s:
                     try:
-                        lc_data = client.download_lightcurve(
-                            tic_id, sector, flux_type="pdcsap", exptime=20.0
-                        )
+                        if config.no_download and config.cache_dir:
+                            lc_data = client.download_lightcurve_cached(
+                                tic_id=int(tic_id),
+                                sector=int(sector),
+                                flux_type="pdcsap",
+                                exptime=20.0,
+                            )
+                        else:
+                            lc_data = client.download_lightcurve(
+                                tic_id, sector, flux_type="pdcsap", exptime=20.0
+                            )
                         lightcurves.append(lc_data)
                         sectors_loaded.append(sector)
                         logger.debug(
@@ -548,13 +567,13 @@ def enrich_candidate(
             logger.debug("Could not retrieve target info for TIC %d: %s", tic_id, e)
 
     # Step 4b: Load TPF for pixel-level vetting (V08-V10)
-    # Skip if no_download is set or we don't have network access
+    # Skip if we cannot access products (network_ok or cache_dir required).
     # TPF loading is slow, so we only load one sector (prefer most recent)
     tpf_stamp: TPFStamp | None = None
     tpf_sector_used: int | None = None
     tpf_exptime_used: float | None = None
     tpf_attempts: list[dict[str, Any]] = []
-    if not config.no_download and config.network_ok and sectors_loaded:
+    if sectors_loaded and (config.network_ok or config.cache_dir):
         # Prefer the most recent sector (likely best), but fall back through others.
         for tpf_sector_to_try in sorted({int(s) for s in sectors_loaded}, reverse=True):
             logger.info("Attempting to load TPF for TIC %d sector %d", tic_id, tpf_sector_to_try)
@@ -570,9 +589,14 @@ def enrich_candidate(
                 tpf_client = _make_mast_client()
                 for exptime in exptime_candidates:
                     try:
-                        time_arr, flux_arr, flux_err_arr, wcs, aperture_mask, quality_arr = (
-                            tpf_client.download_tpf(tic_id, tpf_sector_to_try, exptime=exptime)
-                        )
+                        if config.no_download and config.cache_dir:
+                            time_arr, flux_arr, flux_err_arr, wcs, aperture_mask, quality_arr = (
+                                tpf_client.download_tpf_cached(tic_id, tpf_sector_to_try, exptime=exptime)
+                            )
+                        else:
+                            time_arr, flux_arr, flux_err_arr, wcs, aperture_mask, quality_arr = (
+                                tpf_client.download_tpf(tic_id, tpf_sector_to_try, exptime=exptime)
+                            )
                         tpf_exptime_used = float(exptime)
                         tpf_attempts.append(
                             {"sector": int(tpf_sector_to_try), "exptime": float(exptime), "ok": True}

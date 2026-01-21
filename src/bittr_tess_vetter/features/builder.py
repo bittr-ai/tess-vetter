@@ -648,6 +648,10 @@ def build_features(
         inputs_summary["sectors"] = ephemeris["sectors"]
     if "cadence_seconds" in ephemeris:
         inputs_summary["cadence_seconds"] = ephemeris["cadence_seconds"]
+    # Cache/provenance hints (useful for training reproducibility).
+    if getattr(config, "cache_dir", None) is not None:
+        inputs_summary["cache_dir"] = str(getattr(config, "cache_dir"))
+    inputs_summary["cache_only"] = bool(getattr(config, "no_download", False))
 
     # -------------------------------------------------------------------------
     # Build the EnrichedRow

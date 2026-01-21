@@ -23,6 +23,8 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
+from pathlib import Path
+import re
 
 from bittr_tess_vetter.api.lightcurve import LightCurveData, LightCurveProvenance
 from bittr_tess_vetter.api.target import Target
@@ -359,6 +361,8 @@ class MASTClient:
         self.normalize = normalize
         self.cache_dir = cache_dir
         self._lk_imported = False
+        self._cache_index_built = False
+        self._cache_dirs_by_tic: dict[str, list[Path]] = {}
 
     def _ensure_lightkurve(self) -> Any:
         """Lazy import of lightkurve to avoid import-time overhead."""
@@ -385,6 +389,225 @@ class MASTClient:
                     "lightkurve is required for MAST queries. Install with: pip install lightkurve"
                 ) from e
         return self._lk
+
+    def _mast_download_root(self) -> Path | None:
+        """Return the cache root that contains `mastDownload/`, if configured."""
+        if not self.cache_dir:
+            return None
+        p = Path(self.cache_dir).expanduser()
+        if p.name == "mastDownload":
+            return p
+        if (p / "mastDownload").exists():
+            return p / "mastDownload"
+        return None
+
+    def _build_cache_index(self) -> None:
+        """Index cached mastDownload directories by TIC (fast lookup for cache-only mode)."""
+        if self._cache_index_built:
+            return
+        self._cache_index_built = True
+
+        root = self._mast_download_root()
+        if root is None:
+            return
+
+        # Directory names include the 16-digit TIC in both the TESS and HLSP layouts.
+        tic_pat = re.compile(r"(\\d{16})")
+
+        for subdir in ("TESS", "HLSP"):
+            base = root / subdir
+            if not base.exists():
+                continue
+            try:
+                with os.scandir(base) as it:
+                    for entry in it:
+                        if not entry.is_dir():
+                            continue
+                        m = tic_pat.search(entry.name)
+                        if not m:
+                            continue
+                        tic16 = m.group(1)
+                        self._cache_dirs_by_tic.setdefault(tic16, []).append(Path(entry.path))
+            except Exception:
+                continue
+
+    @staticmethod
+    def _parse_sector_from_name(name: str) -> int | None:
+        m = re.search(r"-s(\\d{4})-", name)
+        if m:
+            try:
+                return int(m.group(1))
+            except Exception:
+                return None
+        m = re.search(r"_s(\\d{4})_", name)
+        if m:
+            try:
+                return int(m.group(1))
+            except Exception:
+                return None
+        return None
+
+    @staticmethod
+    def _infer_exptime_seconds(path: Path) -> float:
+        name = path.name.lower()
+        if "a_fast" in name or "-fast" in name or "_fast" in name:
+            return 20.0
+        return 120.0
+
+    def search_lightcurve_cached(
+        self,
+        tic_id: int,
+        sector: int | None = None,
+        author: str | None = None,
+    ) -> list[SearchResult]:
+        """Search cached light curves without any network calls."""
+        root = self._mast_download_root()
+        if root is None:
+            return []
+        self._build_cache_index()
+        tic16 = f"{int(tic_id):016d}"
+        dirs = self._cache_dirs_by_tic.get(tic16, [])
+        if not dirs:
+            return []
+
+        out: list[SearchResult] = []
+        for d in dirs:
+            try:
+                for f in d.glob("*lc.fits*"):
+                    if tic16 not in f.name:
+                        continue
+                    sec = self._parse_sector_from_name(f.name) or self._parse_sector_from_name(d.name)
+                    if sec is None:
+                        continue
+                    if sector is not None and int(sec) != int(sector):
+                        continue
+                    out.append(
+                        SearchResult(
+                            tic_id=int(tic_id),
+                            sector=int(sec),
+                            author=str(author if author is not None else (self.author or "SPOC")),
+                            exptime=float(self._infer_exptime_seconds(f)),
+                            mission="TESS",
+                            distance=None,
+                        )
+                    )
+            except Exception:
+                continue
+        out.sort(key=lambda r: int(r.sector))
+        return out
+
+    def download_lightcurve_cached(
+        self,
+        tic_id: int,
+        sector: int,
+        flux_type: str = "pdcsap",
+        *,
+        exptime: float | None = None,
+    ) -> LightCurveData:
+        """Load a cached light curve from disk (no network)."""
+        root = self._mast_download_root()
+        if root is None:
+            raise LightCurveNotFoundError("cache_dir is not configured or has no mastDownload/")
+        self._build_cache_index()
+        tic16 = f"{int(tic_id):016d}"
+        dirs = self._cache_dirs_by_tic.get(tic16, [])
+        if not dirs:
+            raise LightCurveNotFoundError(f"No cached light curve directories for TIC {tic_id}")
+
+        candidates: list[Path] = []
+        for d in dirs:
+            try:
+                sec = self._parse_sector_from_name(d.name)
+                if sec is None or int(sec) != int(sector):
+                    continue
+                for f in d.glob("*lc.fits*"):
+                    if tic16 in f.name:
+                        candidates.append(f)
+            except Exception:
+                continue
+
+        if not candidates:
+            raise LightCurveNotFoundError(f"No cached light curve for TIC {tic_id} sector {sector}")
+
+        # Prefer cadence match if requested, else prefer 120s.
+        preferred = float(exptime) if exptime is not None else 120.0
+
+        def _cand_key(p: Path) -> tuple[float, int]:
+            dt = abs(self._infer_exptime_seconds(p) - preferred)
+            # Tie-break: prefer non-fast over fast.
+            fast = 1 if self._infer_exptime_seconds(p) < 60.0 else 0
+            return (dt, fast)
+
+        path = min(candidates, key=_cand_key)
+
+        lk = self._ensure_lightkurve()
+        try:
+            lc_any = lk.read(str(path))
+        except Exception as e:
+            raise MASTClientError(f"Failed to read cached light curve FITS: {path}: {e}") from e
+
+        # Select flux column
+        if flux_type == "pdcsap":
+            lc = lc_any.PDCSAP_FLUX if hasattr(lc_any, "PDCSAP_FLUX") else lc_any
+        elif flux_type == "sap":
+            lc = lc_any.SAP_FLUX if hasattr(lc_any, "SAP_FLUX") else lc_any
+        else:
+            raise ValueError(f"flux_type must be 'pdcsap' or 'sap', got '{flux_type}'")
+
+        try:
+            time = np.asarray(lc.time.value, dtype=np.float64)
+            flux = np.asarray(lc.flux.value, dtype=np.float64)
+            flux_err = (
+                np.asarray(lc.flux_err.value, dtype=np.float64)
+                if getattr(lc, "flux_err", None) is not None
+                else np.full_like(flux, np.nan)
+            )
+            quality = (
+                np.asarray(lc.quality, dtype=np.int32)
+                if getattr(lc, "quality", None) is not None
+                else np.zeros(time.shape, dtype=np.int32)
+            )
+        except Exception as e:
+            raise MASTClientError(f"Cached light curve parse failed for {path}: {e}") from e
+
+        # Valid mask: finite + quality filtering
+        finite = np.isfinite(time) & np.isfinite(flux)
+        valid_mask = finite & ((quality & int(self.quality_mask)) == 0)
+
+        if self.normalize:
+            med = np.nanmedian(flux[valid_mask]) if np.any(valid_mask) else np.nanmedian(flux)
+            if np.isfinite(med) and med != 0:
+                flux = flux / med
+                flux_err = flux_err / med
+
+        # Estimate cadence
+        cadence_seconds = float("nan")
+        if time.size > 1:
+            dt_days = np.nanmedian(np.diff(time))
+            cadence_seconds = float(dt_days) * 86400.0
+
+        return LightCurveData(
+            time=time,
+            flux=flux,
+            flux_err=flux_err,
+            quality=quality,
+            valid_mask=valid_mask,
+            tic_id=int(tic_id),
+            sector=int(sector),
+            cadence_seconds=cadence_seconds,
+            provenance=LightCurveProvenance(
+                source="MAST/lightkurve(cache_only)",
+                selected_author=str(author if author is not None else (self.author or "SPOC")),
+                selected_exptime_seconds=float(self._infer_exptime_seconds(path)),
+                preferred_author=str(self.author) if self.author is not None else None,
+                requested_exptime_seconds=float(exptime) if exptime is not None else None,
+                flux_type=flux_type,
+                quality_mask=int(self.quality_mask),
+                normalize=bool(self.normalize),
+                selection_reason="cache_only",
+                flux_err_kind="provided",
+            ),
+        )
 
     def search_lightcurve(
         self,
@@ -1411,6 +1634,67 @@ class MASTClient:
                 return float(val)
             except Exception:
                 return None
+
+    def download_tpf_cached(
+        self,
+        tic_id: int,
+        sector: int,
+        *,
+        exptime: float | None = None,
+    ) -> tuple[
+        np.ndarray, np.ndarray, np.ndarray | None, Any | None, np.ndarray | None, np.ndarray | None
+    ]:
+        """Load a cached TPF from disk (no network)."""
+        root = self._mast_download_root()
+        if root is None:
+            raise LightCurveNotFoundError("cache_dir is not configured or has no mastDownload/")
+        self._build_cache_index()
+        tic16 = f"{int(tic_id):016d}"
+        dirs = self._cache_dirs_by_tic.get(tic16, [])
+        if not dirs:
+            raise LightCurveNotFoundError(f"No cached TPF directories for TIC {tic_id}")
+
+        candidates: list[Path] = []
+        for d in dirs:
+            try:
+                sec = self._parse_sector_from_name(d.name)
+                if sec is None or int(sec) != int(sector):
+                    continue
+                for f in d.glob("*tp.fits*"):
+                    if tic16 in f.name:
+                        candidates.append(f)
+            except Exception:
+                continue
+
+        if not candidates:
+            raise LightCurveNotFoundError(f"No cached TPF for TIC {tic_id} sector {sector}")
+
+        preferred = float(exptime) if exptime is not None else 120.0
+
+        def _cand_key(p: Path) -> tuple[float, int]:
+            dt = abs(self._infer_exptime_seconds(p) - preferred)
+            fast = 1 if self._infer_exptime_seconds(p) < 60.0 else 0
+            return (dt, fast)
+
+        path = min(candidates, key=_cand_key)
+        lk = self._ensure_lightkurve()
+        try:
+            tpf = lk.read(str(path))
+        except Exception as e:
+            raise MASTClientError(f"Failed to read cached TPF FITS: {path}: {e}") from e
+
+        # Extract arrays; keep wcs/pipeline_mask when available.
+        time = np.asarray(tpf.time.value, dtype=np.float64)
+        flux = np.asarray(tpf.flux.value, dtype=np.float64)
+        flux_err = (
+            np.asarray(tpf.flux_err.value, dtype=np.float64)
+            if getattr(tpf, "flux_err", None) is not None
+            else None
+        )
+        wcs = getattr(tpf, "wcs", None)
+        aperture_mask = np.asarray(tpf.pipeline_mask, dtype=np.bool_) if hasattr(tpf, "pipeline_mask") else None
+        quality = np.asarray(tpf.quality, dtype=np.int32) if hasattr(tpf, "quality") else None
+        return time, flux, flux_err, wcs, aperture_mask, quality
 
         def _row_author(row: Any) -> str | None:
             try:
