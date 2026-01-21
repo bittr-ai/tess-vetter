@@ -35,6 +35,7 @@ Example
 from __future__ import annotations
 
 import dataclasses
+import json
 import logging
 import time
 from collections.abc import Iterator
@@ -584,13 +585,13 @@ def enrich_candidate(
 
 
 def enrich_worklist(
-    worklist_iter: Iterator[dict[str, Any]],  # noqa: ARG001
-    output_path: str | Path,  # noqa: ARG001
-    config: FeatureConfig,  # noqa: ARG001
+    worklist_iter: Iterator[dict[str, Any]],
+    output_path: str | Path,
+    config: FeatureConfig,
     *,
-    resume: bool = False,  # noqa: ARG001
-    limit: int | None = None,  # noqa: ARG001
-    progress_interval: int = 10,  # noqa: ARG001
+    resume: bool = False,
+    limit: int | None = None,
+    progress_interval: int = 10,
 ) -> EnrichmentSummary:
     """Batch-enrich a worklist of candidates to JSONL output.
 
@@ -613,9 +614,6 @@ def enrich_worklist(
     Returns:
         EnrichmentSummary with statistics from the run.
 
-    Raises:
-        NotImplementedError: This is a stub implementation.
-
     Note:
         - Output is written incrementally with file locking for concurrent safety.
         - Resume mode streams the existing output to build a skip set without
@@ -623,11 +621,121 @@ def enrich_worklist(
         - Candidate keys are generated as f"{tic_id}|{period_days}|{t0_btjd}"
           and are immutable throughout the pipeline.
     """
-    # TODO: Implement actual worklist enrichment logic
-    # This stub is a placeholder for the batch processing pipeline.
-    raise NotImplementedError(
-        "enrich_worklist is a stub. "
-        "The full implementation will integrate with the vetting pipeline."
+    from bittr_tess_vetter.api.jsonl import append_jsonl, stream_existing_candidate_keys
+
+    out_path = Path(output_path)
+    progress_path = out_path.with_suffix(out_path.suffix + ".progress.json")
+
+    start_time = time.time()
+    processed = 0
+    skipped_resume = 0
+    errors = 0
+    total_input = 0
+    last_candidate_key: str | None = None
+    error_class_counts: dict[str, int] = {}
+
+    skip_keys: set[str] = set()
+    if resume:
+        skip_keys = stream_existing_candidate_keys(out_path)
+
+    def _write_progress() -> None:
+        payload = {
+            "output_path": str(out_path),
+            "resume": bool(resume),
+            "total_input": int(total_input),
+            "processed": int(processed),
+            "skipped_resume": int(skipped_resume),
+            "errors": int(errors),
+            "wall_time_seconds": float(time.time() - start_time),
+            "error_class_counts": dict(sorted(error_class_counts.items())),
+            "last_candidate_key": last_candidate_key,
+            "updated_unix": time.time(),
+        }
+        try:
+            progress_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        except Exception:
+            return
+
+    for row in worklist_iter:
+        total_input += 1
+        if limit is not None and total_input > limit:
+            break
+
+        try:
+            tic_id = int(row["tic_id"])
+            period_days = float(row["period_days"])
+            t0_btjd = float(row["t0_btjd"])
+            duration_hours = float(row["duration_hours"])
+            depth_ppm = float(row["depth_ppm"])
+        except (KeyError, ValueError, TypeError) as e:
+            errors += 1
+            cls = type(e).__name__
+            error_class_counts[cls] = error_class_counts.get(cls, 0) + 1
+            continue
+
+        candidate_key = make_candidate_key(tic_id, period_days, t0_btjd)
+        last_candidate_key = candidate_key
+
+        if resume and candidate_key in skip_keys:
+            skipped_resume += 1
+        else:
+            toi = row.get("toi")
+            toi_str = str(toi) if toi is not None else None
+            try:
+                _raw, enriched = enrich_candidate(
+                    tic_id=tic_id,
+                    toi=toi_str,
+                    period_days=period_days,
+                    t0_btjd=t0_btjd,
+                    duration_hours=duration_hours,
+                    depth_ppm=depth_ppm,
+                    config=config,
+                )
+                append_jsonl(out_path, dict(enriched))
+                if enriched.get("status") == "OK":
+                    processed += 1
+                else:
+                    errors += 1
+                    cls = str(enriched.get("error_class") or "EnrichmentError")
+                    error_class_counts[cls] = error_class_counts.get(cls, 0) + 1
+            except Exception as e:
+                errors += 1
+                cls = type(e).__name__
+                error_class_counts[cls] = error_class_counts.get(cls, 0) + 1
+                append_jsonl(
+                    out_path,
+                    {
+                        "tic_id": tic_id,
+                        "toi": toi_str,
+                        "period_days": period_days,
+                        "t0_btjd": t0_btjd,
+                        "duration_hours": duration_hours,
+                        "depth_ppm": depth_ppm,
+                        "status": "ERROR",
+                        "error_class": cls,
+                        "error": str(e),
+                        "candidate_key": candidate_key,
+                        "pipeline_version": _pipeline_version(),
+                        "feature_schema_version": "unknown",
+                        "feature_config": dataclasses.asdict(config),
+                        "inputs_summary": {},
+                        "missing_feature_families": ["all"],
+                        "item_wall_ms": 0.0,
+                    },
+                )
+
+        count = processed + skipped_resume + errors
+        if progress_interval > 0 and count % progress_interval == 0:
+            _write_progress()
+
+    _write_progress()
+    return EnrichmentSummary(
+        total_input=total_input,
+        processed=processed,
+        skipped_resume=skipped_resume,
+        errors=errors,
+        wall_time_seconds=time.time() - start_time,
+        error_class_counts=error_class_counts,
     )
 
 

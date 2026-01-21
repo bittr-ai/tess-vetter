@@ -21,17 +21,7 @@ from typing import Any
 
 import click
 
-from bittr_tess_vetter.api.enrichment import candidate_key_from_row
-from bittr_tess_vetter.api.jsonl import append_jsonl, stream_existing_candidate_keys
 from bittr_tess_vetter.features import FeatureConfig
-
-
-def _stream_existing_keys(output_path: Path) -> set[str]:
-    try:
-        return stream_existing_candidate_keys(output_path)
-    except Exception as e:
-        click.echo(f"Warning: Could not read {output_path}: {e}", err=True)
-        return set()
 
 
 def _stream_worklist(input_path: Path) -> Iterator[dict[str, Any]]:
@@ -64,14 +54,6 @@ def _stream_worklist(input_path: Path) -> Iterator[dict[str, Any]]:
                     )
     except OSError as e:
         raise click.ClickException(f"Cannot read input file: {e}") from e
-
-
-def _write_enriched_row(output_path: Path, row: dict[str, Any]) -> None:
-    append_jsonl(output_path, row)
-
-
-def _make_candidate_key(row: dict[str, Any]) -> str:
-    return candidate_key_from_row(row)
 
 
 @click.group()
@@ -142,6 +124,13 @@ def cli() -> None:
     help="Process only first N candidates (for testing).",
 )
 @click.option(
+    "--progress-interval",
+    type=int,
+    default=10,
+    show_default=True,
+    help="Write progress update every N candidates.",
+)
+@click.option(
     "--local-data-path",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     default=None,
@@ -157,6 +146,7 @@ def enrich(
     no_download: bool,
     t0_refine: bool,
     limit: int | None,
+    progress_interval: int,
     local_data_path: Path | None,
 ) -> None:
     """Enrich a worklist of transit candidates with vetting features.
@@ -168,7 +158,7 @@ def enrich(
 
     Output rows contain the original ephemeris plus all extracted features.
     """
-    from bittr_tess_vetter.pipeline import EnrichmentSummary, enrich_candidate
+    from bittr_tess_vetter.pipeline import enrich_worklist
 
     # Build feature config from CLI flags
     config = FeatureConfig(
@@ -190,131 +180,19 @@ def enrich(
     if limit:
         click.echo(f"Limit: processing first {limit} candidates only")
 
-    # Build skip set if resuming
-    skip_keys: set[str] = set()
-    if resume:
-        click.echo("Scanning existing output for resume...")
-        skip_keys = _stream_existing_keys(output_path)
-        click.echo(f"Found {len(skip_keys)} existing candidate keys to skip")
-
     # Ensure output directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Process worklist
-    start_time = time.time()
-    total_input = 0
-    processed = 0
-    skipped_resume = 0
-    errors = 0
-    error_class_counts: dict[str, int] = {}
-    progress_interval = 10
-
-    for row in _stream_worklist(input_path):
-        total_input += 1
-
-        # Check limit
-        if limit and (processed + skipped_resume) >= limit:
-            click.echo(f"Reached limit of {limit} candidates")
-            break
-
-        # Extract required fields
-        try:
-            tic_id = int(row["tic_id"])
-            period_days = float(row["period_days"])
-            t0_btjd = float(row["t0_btjd"])
-            duration_hours = float(row["duration_hours"])
-            depth_ppm = float(row["depth_ppm"])
-        except (KeyError, ValueError, TypeError) as e:
-            click.echo(
-                f"Warning: Skipping row {total_input} due to missing/invalid field: {e}", err=True
-            )
-            errors += 1
-            error_class = type(e).__name__
-            error_class_counts[error_class] = error_class_counts.get(error_class, 0) + 1
-            continue
-
-        # Generate candidate key
-        candidate_key = _make_candidate_key(row)
-
-        # Skip if already processed (resume mode)
-        if candidate_key in skip_keys:
-            skipped_resume += 1
-            continue
-
-        toi = row.get("toi")
-        if toi is not None:
-            toi = str(toi)
-
-        # Enrich candidate
-        try:
-            _raw_evidence, enriched_row = enrich_candidate(
-                tic_id=tic_id,
-                toi=toi,
-                period_days=period_days,
-                t0_btjd=t0_btjd,
-                duration_hours=duration_hours,
-                depth_ppm=depth_ppm,
-                config=config,
-            )
-            # Write enriched row (type is EnrichedRow which is a TypedDict)
-            _write_enriched_row(output_path, dict(enriched_row))
-            processed += 1
-        except NotImplementedError:
-            # Expected during stub phase - write placeholder row
-            placeholder = {
-                "candidate_key": candidate_key,
-                "tic_id": tic_id,
-                "period_days": period_days,
-                "t0_btjd": t0_btjd,
-                "duration_hours": duration_hours,
-                "depth_ppm": depth_ppm,
-                "status": "ERROR",
-                "error_class": "NotImplementedError",
-                "error": "enrich_candidate is not yet implemented",
-            }
-            _write_enriched_row(output_path, placeholder)
-            errors += 1
-            error_class_counts["NotImplementedError"] = (
-                error_class_counts.get("NotImplementedError", 0) + 1
-            )
-        except Exception as e:
-            # Log error and continue
-            error_class = type(e).__name__
-            error_class_counts[error_class] = error_class_counts.get(error_class, 0) + 1
-            errors += 1
-            click.echo(f"Error processing {candidate_key}: {error_class}: {e}", err=True)
-            # Write error row
-            error_row = {
-                "candidate_key": candidate_key,
-                "tic_id": tic_id,
-                "period_days": period_days,
-                "t0_btjd": t0_btjd,
-                "duration_hours": duration_hours,
-                "depth_ppm": depth_ppm,
-                "status": "ERROR",
-                "error_class": error_class,
-                "error": str(e),
-            }
-            _write_enriched_row(output_path, error_row)
-
-        # Progress update
-        count = processed + errors + skipped_resume
-        if count % progress_interval == 0:
-            elapsed = time.time() - start_time
-            rate = count / elapsed if elapsed > 0 else 0
-            click.echo(f"Progress: {count} candidates ({rate:.1f}/s)")
-
-    wall_time = time.time() - start_time
-
-    # Build summary
-    summary = EnrichmentSummary(
-        total_input=total_input,
-        processed=processed,
-        skipped_resume=skipped_resume,
-        errors=errors,
-        wall_time_seconds=wall_time,
-        error_class_counts=error_class_counts,
+    start = time.time()
+    summary = enrich_worklist(
+        worklist_iter=_stream_worklist(input_path),
+        output_path=output_path,
+        config=config,
+        resume=resume,
+        limit=limit,
+        progress_interval=progress_interval,
     )
+    click.echo(f"Done in {time.time() - start:.1f}s")
 
     # Print summary
     click.echo("\n" + "=" * 50)
