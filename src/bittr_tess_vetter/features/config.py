@@ -50,6 +50,8 @@ class FeatureConfig:
         Enable transit uniformity analysis (default: False).
     enable_transit_shape_categorical : bool
         Enable categorical transit shape classification (default: False).
+    require_tpf : bool
+        If True, fail enrichment when no TPF could be loaded (default: False).
     """
 
     # Input handling
@@ -74,3 +76,6 @@ class FeatureConfig:
     enable_sector_consistency: bool = False
     enable_transit_uniformity: bool = False
     enable_transit_shape_categorical: bool = False
+
+    # Gating
+    require_tpf: bool = False

@@ -363,24 +363,35 @@ def enrich_candidate(
                 wall_ms,
             )
 
-        # Prefer 120s cadence by default, allow 20s if configured
-        preferred_exptime: float | None = 120.0
-        if config.allow_20s:
-            # Check if 20s is available
-            has_20s = any(abs(r.exptime - 20.0) < 1.0 for r in search_results)
-            if has_20s:
-                preferred_exptime = 20.0
-                logger.info("Using 20s cadence data (allow_20s=True)")
+        # Per-sector cadence choice (for requested downloads)
+        sector_exptimes: dict[int, set[int]] = {}
+        for r in search_results:
+            try:
+                sector_exptimes.setdefault(int(r.sector), set()).add(int(round(float(r.exptime))))
+            except Exception:
+                continue
+
+        sector_to_exptime: dict[int, float] = {}
+        for sector in selection.selected_sectors:
+            exps = sector_exptimes.get(int(sector), set())
+            if 120 in exps:
+                sector_to_exptime[int(sector)] = 120.0
+            elif 20 in exps and config.allow_20s:
+                sector_to_exptime[int(sector)] = 20.0
+            else:
+                # Should be excluded already by cadence gating, but keep a guardrail.
+                sector_to_exptime[int(sector)] = 120.0
 
         download_errors: list[str] = []
 
         for sector in selection.selected_sectors:
+            requested_exptime = sector_to_exptime.get(int(sector), 120.0)
             try:
                 lc_data = client.download_lightcurve(
                     tic_id,
                     sector,
                     flux_type="pdcsap",
-                    exptime=preferred_exptime,
+                    exptime=requested_exptime,
                 )
                 lightcurves.append(lc_data)
                 sectors_loaded.append(sector)
@@ -392,7 +403,7 @@ def enrich_candidate(
                 )
             except LightCurveNotFoundError as e:
                 # Try fallback cadence if preferred failed
-                if preferred_exptime == 120.0 and config.allow_20s:
+                if requested_exptime == 120.0 and config.allow_20s:
                     try:
                         lc_data = client.download_lightcurve(
                             tic_id, sector, flux_type="pdcsap", exptime=20.0
@@ -491,42 +502,49 @@ def enrich_candidate(
     tpf_sector_used: int | None = None
 
     if not config.no_download and config.network_ok and sectors_loaded:
-        # Prefer the most recent sector (likely best data quality)
-        tpf_sector_to_try = max(sectors_loaded)
-        logger.info("Attempting to load TPF for TIC %d sector %d", tic_id, tpf_sector_to_try)
+        # Prefer the most recent sector (likely best), but fall back through others.
+        for tpf_sector_to_try in sorted({int(s) for s in sectors_loaded}, reverse=True):
+            logger.info("Attempting to load TPF for TIC %d sector %d", tic_id, tpf_sector_to_try)
+            try:
+                tpf_client = MASTClient()
+                time_arr, flux_arr, flux_err_arr, wcs, aperture_mask, quality_arr = (
+                    tpf_client.download_tpf(tic_id, tpf_sector_to_try, exptime=120.0)
+                )
 
-        try:
-            # Create client for TPF download
-            tpf_client = MASTClient()
-            time_arr, flux_arr, flux_err_arr, wcs, aperture_mask, quality_arr = (
-                tpf_client.download_tpf(tic_id, tpf_sector_to_try, exptime=120.0)
-            )
+                tpf_stamp = TPFStamp(
+                    time=time_arr,
+                    flux=flux_arr,
+                    flux_err=flux_err_arr,
+                    wcs=wcs,
+                    aperture_mask=aperture_mask,
+                    quality=quality_arr,
+                )
+                tpf_sector_used = tpf_sector_to_try
+                logger.info(
+                    "Loaded TPF for TIC %d sector %d: %d cadences, %dx%d pixels",
+                    tic_id,
+                    tpf_sector_to_try,
+                    flux_arr.shape[0],
+                    flux_arr.shape[1],
+                    flux_arr.shape[2],
+                )
+                break
+            except LightCurveNotFoundError as e:
+                logger.debug("No TPF found for TIC %d sector %d: %s", tic_id, tpf_sector_to_try, e)
+            except MASTClientError as e:
+                logger.warning(
+                    "TPF download failed for TIC %d sector %d: %s", tic_id, tpf_sector_to_try, e
+                )
+            except Exception as e:
+                logger.warning("Unexpected error loading TPF for TIC %d: %s", tic_id, e)
 
-            tpf_stamp = TPFStamp(
-                time=time_arr,
-                flux=flux_arr,
-                flux_err=flux_err_arr,
-                wcs=wcs,
-                aperture_mask=aperture_mask,
-                quality=quality_arr,
-            )
-            tpf_sector_used = tpf_sector_to_try
-            logger.info(
-                "Loaded TPF for TIC %d sector %d: %d cadences, %dx%d pixels",
-                tic_id,
-                tpf_sector_to_try,
-                flux_arr.shape[0],
-                flux_arr.shape[1],
-                flux_arr.shape[2],
-            )
-        except LightCurveNotFoundError as e:
-            logger.debug("No TPF found for TIC %d sector %d: %s", tic_id, tpf_sector_to_try, e)
-        except MASTClientError as e:
-            logger.warning(
-                "TPF download failed for TIC %d sector %d: %s", tic_id, tpf_sector_to_try, e
-            )
-        except Exception as e:
-            logger.warning("Unexpected error loading TPF for TIC %d: %s", tic_id, e)
+    if config.require_tpf and tpf_stamp is None:
+        wall_ms = time.perf_counter() * 1000.0 - start_time_ms
+        return _make_error_response(
+            "TPFRequiredError",
+            "require_tpf=True but no TPF could be loaded",
+            wall_ms,
+        )
 
     # Step 5: Create API types for vetting
     ephemeris = Ephemeris(

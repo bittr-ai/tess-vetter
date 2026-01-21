@@ -111,6 +111,12 @@ def cli() -> None:
     help="Use cached data only.",
 )
 @click.option(
+    "--require-tpf",
+    is_flag=True,
+    default=False,
+    help="Fail items that cannot load TPF (for pixel-based checks).",
+)
+@click.option(
     "--t0-refine",
     is_flag=True,
     default=False,
@@ -144,6 +150,7 @@ def enrich(
     network_ok: bool,
     allow_20s: bool,
     no_download: bool,
+    require_tpf: bool,
     t0_refine: bool,
     limit: int | None,
     progress_interval: int,
@@ -166,6 +173,7 @@ def enrich(
         network_ok=network_ok,
         allow_20s=allow_20s,
         no_download=no_download,
+        require_tpf=require_tpf,
         enable_t0_refine=t0_refine,
         local_data_path=str(local_data_path) if local_data_path else None,
     )
