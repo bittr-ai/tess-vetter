@@ -16,7 +16,7 @@ from .aggregates import (
     build_aggregates,
 )
 from .config import FeatureConfig
-from .evidence import RawEvidencePacket
+from .evidence import RawEvidencePacket, is_skip_block
 from .schema import FEATURE_SCHEMA_VERSION, EnrichedRow
 
 # -----------------------------------------------------------------------------
@@ -76,7 +76,7 @@ def _extract_ghost_sectors(
     pixel_host_hypotheses: dict[str, Any] | None,
 ) -> list[GhostSectorInput] | None:
     """Extract ghost sector inputs from pixel_host_hypotheses."""
-    if not isinstance(pixel_host_hypotheses, dict):
+    if not isinstance(pixel_host_hypotheses, dict) or is_skip_block(pixel_host_hypotheses):
         return None
     ghost_summary = pixel_host_hypotheses.get("ghost_summary_by_sector")
     if not isinstance(ghost_summary, list) or not ghost_summary:
@@ -107,7 +107,7 @@ def _extract_localization(
     localization: dict[str, Any] | None,
 ) -> LocalizationInput | None:
     """Extract localization input from top-level localization dict."""
-    if not isinstance(localization, dict):
+    if not isinstance(localization, dict) or is_skip_block(localization):
         return None
     result: LocalizationInput = {}
     verdict = localization.get("verdict")
@@ -151,7 +151,7 @@ def _extract_pixel_host(
     check_results: list[dict[str, Any]],
 ) -> PixelHostInput | None:
     """Extract pixel host input from pixel_host_hypotheses and check results."""
-    if not isinstance(pixel_host_hypotheses, dict):
+    if not isinstance(pixel_host_hypotheses, dict) or is_skip_block(pixel_host_hypotheses):
         return None
     result: PixelHostInput = {}
 
@@ -631,7 +631,7 @@ def build_features(
     brightest_neighbor_delta_mag: float | None = None
     crowding_metric: float | None = None
 
-    if isinstance(candidate_evidence, dict):
+    if isinstance(candidate_evidence, dict) and not is_skip_block(candidate_evidence):
         gaia_crowding = candidate_evidence.get("gaia_crowding") or {}
         if isinstance(gaia_crowding, dict):
             n_gaia_neighbors_21arcsec = _as_int(gaia_crowding.get("n_gaia_neighbors_21arcsec"))

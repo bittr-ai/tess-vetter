@@ -234,6 +234,7 @@ def enrich_candidate(
     from bittr_tess_vetter.api.vet import vet_candidate as run_vetting
     from bittr_tess_vetter.data_sources.sector_selection import select_sectors
     from bittr_tess_vetter.features import FEATURE_SCHEMA_VERSION
+    from bittr_tess_vetter.features.evidence import make_skip_block
     from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
     from bittr_tess_vetter.platform.catalogs.gaia_client import query_gaia_by_position_sync
 
@@ -268,10 +269,10 @@ def enrich_candidate(
             },
             "depth_ppm": {"input_depth_ppm": depth_ppm},
             "check_results": [],
-            "pixel_host_hypotheses": None,
-            "localization": None,
-            "sector_quality_report": None,
-            "candidate_evidence": None,
+            "pixel_host_hypotheses": make_skip_block("pipeline_error"),
+            "localization": make_skip_block("pipeline_error"),
+            "sector_quality_report": make_skip_block("pipeline_error"),
+            "candidate_evidence": make_skip_block("pipeline_error"),
             "provenance": {
                 "pipeline_version": pipeline_version,
                 "error_class": error_class,
@@ -651,10 +652,11 @@ def enrich_candidate(
             wall_ms,
         )
 
-    # Step 4c: Compute pixel-level diagnostics into evidence packet fields (when TPF is available).
-    localization: dict[str, Any] | None = None
-    pixel_host_hypotheses: dict[str, Any] | None = None
-    sector_quality_report: dict[str, Any] | None = None
+    # Step 4c: Compute pixel-level diagnostics into evidence packet fields.
+    # Use explicit skip blocks instead of None for auditability.
+    localization: dict[str, Any] = make_skip_block("tpf_unavailable")
+    pixel_host_hypotheses: dict[str, Any] = make_skip_block("tpf_unavailable")
+    sector_quality_report: dict[str, Any] = make_skip_block("tpf_unavailable")
 
     if tpf_stamp is not None and tpf_sector_used is not None:
         # Localization diagnostics (WCS-optional; uses OOT-derived references).
@@ -943,7 +945,7 @@ def enrich_candidate(
         "pixel_host_hypotheses": pixel_host_hypotheses,
         "localization": localization,
         "sector_quality_report": sector_quality_report,
-        "candidate_evidence": None,
+        "candidate_evidence": make_skip_block("not_implemented"),
         "provenance": {
             "pipeline_version": pipeline_version,
             "sectors_used": sectors_loaded,
