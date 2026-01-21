@@ -36,4 +36,3 @@ class SectorSelection:
 
 
 __all__ = ["SectorLightCurve", "SectorSelection"]
-

@@ -344,7 +344,12 @@ def enrich_candidate(
             "Found %d sectors for TIC %d: %s", len(available_sectors), tic_id, available_sectors
         )
 
-        selection = select_sectors(available_sectors=available_sectors, requested_sectors=sectors)
+        selection = select_sectors(
+            available_sectors=available_sectors,
+            requested_sectors=sectors,
+            allow_20s=config.allow_20s,
+            search_results=search_results,
+        )
         selection_summary = {
             "available_sectors": selection.available_sectors,
             "selected_sectors": selection.selected_sectors,
@@ -433,6 +438,28 @@ def enrich_candidate(
             wall_ms = time.perf_counter() * 1000.0 - start_time_ms
             logger.warning("Stitching failed for TIC %d: %s", tic_id, e)
             return _make_error_response("StitchError", str(e), wall_ms)
+
+    # Post-stitch usability gating: ensure at least some valid samples exist.
+    # Note: `LightCurveData.valid_mask` already includes quality==0 and finite checks.
+    if stitched_lc_data.n_valid <= 0:
+        wall_ms = time.perf_counter() * 1000.0 - start_time_ms
+        return _make_error_response(
+            "NoUsablePointsError",
+            "Stitched light curve has no usable points after quality/finite filtering",
+            wall_ms,
+        )
+
+    # Minimal coverage gating: require the target epoch to fall inside the observed time span.
+    # This is intentionally conservative and avoids any model assumptions.
+    t_min = float(stitched_lc_data.time[stitched_lc_data.valid_mask].min())
+    t_max = float(stitched_lc_data.time[stitched_lc_data.valid_mask].max())
+    if not (t_min <= float(t0_btjd) <= t_max):
+        wall_ms = time.perf_counter() * 1000.0 - start_time_ms
+        return _make_error_response(
+            "InsufficientTimeCoverageError",
+            f"t0_btjd={t0_btjd} outside observed span [{t_min}, {t_max}]",
+            wall_ms,
+        )
 
     # Step 4: Get target info for coordinates and stellar parameters
     target = None
