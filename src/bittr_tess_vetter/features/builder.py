@@ -652,6 +652,13 @@ def build_features(
     if getattr(config, "cache_dir", None) is not None:
         inputs_summary["cache_dir"] = str(getattr(config, "cache_dir"))
     inputs_summary["cache_only"] = bool(getattr(config, "no_download", False))
+    if isinstance(provenance, dict):
+        ch = provenance.get("code_hash")
+        if isinstance(ch, str) and ch:
+            inputs_summary["btv_code_hash"] = ch
+        dv = provenance.get("dependency_versions")
+        if isinstance(dv, dict):
+            inputs_summary["btv_dependency_versions"] = {str(k): str(v) for k, v in dv.items()}
 
     # -------------------------------------------------------------------------
     # Build the EnrichedRow

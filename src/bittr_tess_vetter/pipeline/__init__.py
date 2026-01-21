@@ -223,6 +223,7 @@ def enrich_candidate(
     from bittr_tess_vetter.api.ghost_features import compute_ghost_features
     from bittr_tess_vetter.api.io import LightCurveNotFoundError, MASTClient, MASTClientError
     from bittr_tess_vetter.api.localization import TransitParams, compute_localization_diagnostics
+    from bittr_tess_vetter.api.evidence_contracts import compute_code_hash
     from bittr_tess_vetter.api.stellar_dilution import (
         HostHypothesis,
         compute_dilution_scenarios,
@@ -241,6 +242,25 @@ def enrich_candidate(
     start_time_ms = time.perf_counter() * 1000.0
     pipeline_version = _pipeline_version()
     candidate_key = make_candidate_key(tic_id, period_days, t0_btjd)
+    code_hash = compute_code_hash()
+
+    def _dependency_versions() -> dict[str, str]:
+        from importlib import metadata
+
+        pkgs = [
+            "numpy",
+            "lightkurve",
+            "astropy",
+            "astroquery",
+            "exovetter",
+        ]
+        out: dict[str, str] = {}
+        for p in pkgs:
+            try:
+                out[p] = str(metadata.version(p))
+            except Exception:
+                continue
+        return out
 
     def _make_mast_client() -> MASTClient:
         """Construct MASTClient with optional cache_dir (test-safe).
@@ -275,6 +295,8 @@ def enrich_candidate(
             "candidate_evidence": make_skip_block("pipeline_error"),
             "provenance": {
                 "pipeline_version": pipeline_version,
+                "code_hash": code_hash,
+                "dependency_versions": _dependency_versions(),
                 "error_class": error_class,
                 "error": error_msg,
             },
@@ -948,6 +970,8 @@ def enrich_candidate(
         "candidate_evidence": make_skip_block("not_implemented"),
         "provenance": {
             "pipeline_version": pipeline_version,
+            "code_hash": code_hash,
+            "dependency_versions": _dependency_versions(),
             "sectors_used": sectors_loaded,
             "sector_selection": selection_summary,
             "n_points": stitched_lc_data.n_points,

@@ -44,4 +44,7 @@ def test_multisector_drops_bad_time_coverage_sector(tmp_path: Path) -> None:
     assert row["status"] == "OK"
     validate_enriched_row(row)
     assert row["inputs_summary"]["sectors"] == [2]
-
+    assert isinstance(row["inputs_summary"].get("btv_code_hash"), str)
+    assert row["inputs_summary"]["btv_code_hash"]
+    dep = row["inputs_summary"].get("btv_dependency_versions")
+    assert isinstance(dep, dict)
