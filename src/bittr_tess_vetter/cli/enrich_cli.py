@@ -21,45 +21,17 @@ from typing import Any
 
 import click
 
+from bittr_tess_vetter.api.enrichment import candidate_key_from_row
+from bittr_tess_vetter.api.jsonl import append_jsonl, stream_existing_candidate_keys
 from bittr_tess_vetter.features import FeatureConfig
 
 
 def _stream_existing_keys(output_path: Path) -> set[str]:
-    """Stream-read existing output file to collect candidate keys.
-
-    This function reads the output file line-by-line to build a set of
-    already-processed candidate keys without loading the entire file
-    into memory.
-
-    Args:
-        output_path: Path to the existing output JSONL file.
-
-    Returns:
-        Set of candidate_key strings already in the output file.
-    """
-    existing_keys: set[str] = set()
-    if not output_path.exists():
-        return existing_keys
-
     try:
-        with output_path.open("r", encoding="utf-8") as f:
-            for line_num, line in enumerate(f, 1):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    row = json.loads(line)
-                    if "candidate_key" in row:
-                        existing_keys.add(row["candidate_key"])
-                except json.JSONDecodeError:
-                    click.echo(
-                        f"Warning: Skipping malformed JSON at line {line_num} in {output_path}",
-                        err=True,
-                    )
-    except OSError as e:
+        return stream_existing_candidate_keys(output_path)
+    except Exception as e:
         click.echo(f"Warning: Could not read {output_path}: {e}", err=True)
-
-    return existing_keys
+        return set()
 
 
 def _stream_worklist(input_path: Path) -> Iterator[dict[str, Any]]:
@@ -95,34 +67,11 @@ def _stream_worklist(input_path: Path) -> Iterator[dict[str, Any]]:
 
 
 def _write_enriched_row(output_path: Path, row: dict[str, Any]) -> None:
-    """Append an enriched row to the output file with file locking.
-
-    Uses filelock for concurrent-safe append operations.
-
-    Args:
-        output_path: Path to the output JSONL file.
-        row: Enriched row dictionary to write.
-    """
-    from filelock import FileLock
-
-    lock_path = output_path.with_suffix(output_path.suffix + ".lock")
-    lock = FileLock(str(lock_path), timeout=30)
-
-    with lock, output_path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(row, separators=(",", ":")))
-        f.write("\n")
+    append_jsonl(output_path, row)
 
 
 def _make_candidate_key(row: dict[str, Any]) -> str:
-    """Generate candidate key from a worklist row.
-
-    Args:
-        row: Candidate dictionary with tic_id, period_days, t0_btjd.
-
-    Returns:
-        Candidate key in format "tic_id|period_days|t0_btjd".
-    """
-    return f"{row['tic_id']}|{row['period_days']}|{row['t0_btjd']}"
+    return candidate_key_from_row(row)
 
 
 @click.group()
