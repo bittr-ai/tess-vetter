@@ -571,6 +571,7 @@ def enrich_candidate(
     stellar = None
     ra_deg: float | None = None
     dec_deg: float | None = None
+    candidate_evidence: dict[str, Any] = make_skip_block("network_disabled")
 
     if config.network_ok:
         try:
@@ -588,6 +589,55 @@ def enrich_candidate(
             )
         except MASTClientError as e:
             logger.debug("Could not retrieve target info for TIC %d: %s", tic_id, e)
+
+    # Step 4a: Candidate-level evidence (Gaia crowding), network-gated.
+    if not getattr(config, "enable_candidate_evidence", True):
+        candidate_evidence = make_skip_block("disabled_by_config")
+    elif not config.network_ok:
+        candidate_evidence = make_skip_block("network_disabled")
+    elif ra_deg is None or dec_deg is None:
+        candidate_evidence = make_skip_block("coords_unavailable")
+    else:
+        try:
+            gaia = query_gaia_by_position_sync(float(ra_deg), float(dec_deg), radius_arcsec=60.0)
+            primary_mag = gaia.source.phot_g_mean_mag if gaia.source else None
+            neighbors_21 = [n for n in gaia.neighbors if float(n.separation_arcsec) <= 21.0]
+            n_neighbors_21 = int(len(neighbors_21))
+
+            brightest_delta: float | None = None
+            deltas = [float(n.delta_mag) for n in neighbors_21 if n.delta_mag is not None]
+            if deltas:
+                brightest_delta = float(min(deltas))
+
+            crowding_metric: float | None = None
+            target_flux_fraction: float | None = None
+            if primary_mag is not None:
+                mags: list[float] = [float(primary_mag)]
+                for n in neighbors_21:
+                    if n.phot_g_mean_mag is not None:
+                        mags.append(float(n.phot_g_mean_mag))
+                if mags:
+                    target_flux_fraction = float(
+                        compute_flux_fraction_from_mag_list(float(primary_mag), mags)
+                    )
+                    crowding_metric = float(max(0.0, min(1.0, 1.0 - target_flux_fraction)))
+
+            candidate_evidence = {
+                "gaia_crowding": {
+                    "cone_radius_arcsec": 60.0,
+                    "aperture_radius_arcsec": 21.0,
+                    "n_gaia_neighbors_21arcsec": n_neighbors_21,
+                    "brightest_neighbor_delta_mag": brightest_delta,
+                    "target_flux_fraction_21arcsec": target_flux_fraction,
+                    "crowding_metric": crowding_metric,
+                }
+            }
+        except Exception as e:
+            candidate_evidence = make_skip_block(
+                "gaia_query_failed",
+                error_class=type(e).__name__,
+                error=str(e),
+            )
 
     # Step 4b: Load TPF for pixel-level vetting (V08-V10)
     # Skip if we cannot access products (network_ok or cache_dir required).
@@ -967,7 +1017,7 @@ def enrich_candidate(
         "pixel_host_hypotheses": pixel_host_hypotheses,
         "localization": localization,
         "sector_quality_report": sector_quality_report,
-        "candidate_evidence": make_skip_block("not_implemented"),
+        "candidate_evidence": candidate_evidence,
         "provenance": {
             "pipeline_version": pipeline_version,
             "code_hash": code_hash,

@@ -53,6 +53,9 @@ class FeatureConfig:
         Enable transit uniformity analysis (default: False).
     enable_transit_shape_categorical : bool
         Enable categorical transit shape classification (default: False).
+    enable_candidate_evidence : bool
+        Enable candidate-level evidence blocks (e.g., Gaia crowding summary)
+        when network is allowed (default: True).
     require_tpf : bool
         If True, fail enrichment when no TPF could be loaded (default: False).
     """
@@ -80,6 +83,7 @@ class FeatureConfig:
     enable_sector_consistency: bool = False
     enable_transit_uniformity: bool = False
     enable_transit_shape_categorical: bool = False
+    enable_candidate_evidence: bool = True
 
     # Gating
     require_tpf: bool = False
