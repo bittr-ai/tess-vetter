@@ -195,20 +195,44 @@ def run_modshift(
         )
 
     metrics = _as_jsonable_metrics(metrics)
-    pri = float(metrics.get("pri", 0.0) or 0.0)
-    sec = float(metrics.get("sec", 0.0) or 0.0)
-    ter = float(metrics.get("ter", 0.0) or 0.0)
-    pos = float(metrics.get("pos", 0.0) or 0.0)
     fred = float(metrics.get("Fred", 0.0) or 0.0)
     fa = float(metrics.get("false_alarm_threshold", 0.0) or 0.0)
 
-    # ModShift signals can be negative depending on sign conventions
-    # (e.g., dips represented as negative). Ratios should be computed against
-    # the magnitude of the primary signal.
-    pri_abs = abs(pri)
-    sec_abs = abs(sec)
-    ter_abs = abs(ter)
-    pos_abs = abs(pos)
+    # exovetter ModShift returns both:
+    # - `pri/sec/ter/pos`: often large integers (phase-bin indices) and NOT reliable as signal strengths
+    # - `sigma_pri/sigma_sec/sigma_ter/sigma_pos`: the signal significances we want for ratios
+    #
+    # Use sigma_* when available; fall back to pri/sec/... only if sigma_* missing.
+    def _f(key: str) -> float | None:
+        v = metrics.get(key)
+        if v is None:
+            return None
+        try:
+            x = float(v)
+        except Exception:
+            return None
+        return x if np.isfinite(x) else None
+
+    pri_sig = _f("sigma_pri")
+    sec_sig = _f("sigma_sec")
+    ter_sig = _f("sigma_ter")
+    pos_sig = _f("sigma_pos")
+
+    if pri_sig is None:
+        pri_sig = _f("pri") or 0.0
+    if sec_sig is None:
+        sec_sig = _f("sec") or 0.0
+    if ter_sig is None:
+        ter_sig = _f("ter") or 0.0
+    if pos_sig is None:
+        pos_sig = _f("pos") or 0.0
+
+    # ModShift signals can be negative depending on sign conventions.
+    # Ratios should be computed against the magnitude of the primary signal.
+    pri_abs = abs(float(pri_sig))
+    sec_abs = abs(float(sec_sig))
+    ter_abs = abs(float(ter_sig))
+    pos_abs = abs(float(pos_sig))
 
     sec_pri = (sec_abs / pri_abs) if pri_abs > 0 else 0.0
     ter_pri = (ter_abs / pri_abs) if pri_abs > 0 else 0.0
@@ -220,9 +244,20 @@ def run_modshift(
     # Plot data (lightweight): exovetter does not expose the full ModShift
     # periodogram, so we synthesize a simple “bump” representation centered on
     # the reported peak phases to enable stable plotting in notebooks/docs.
-    phase_pri = float(metrics.get("phase_pri", 0.0) or 0.0)
-    phase_sec = metrics.get("phase_sec")
-    phase_sec_f = float(phase_sec) if phase_sec is not None else None
+    def _phase(v: object | None) -> float | None:
+        if v is None:
+            return None
+        try:
+            x = float(v)
+        except Exception:
+            return None
+        if not np.isfinite(x):
+            return None
+        # exovetter can emit phases outside [0,1); normalize defensively.
+        return float(x % 1.0)
+
+    phase_pri = _phase(metrics.get("phase_pri")) or 0.0
+    phase_sec_f = _phase(metrics.get("phase_sec"))
 
     phase_bins = np.linspace(0.0, 1.0, 200, dtype=np.float64)
     periodogram = np.zeros_like(phase_bins)
@@ -239,8 +274,8 @@ def run_modshift(
 
     _add_bump(phase_pri, pri_abs)
     _add_bump(phase_sec_f, sec_abs)
-    _add_bump(float(metrics.get("phase_ter", 0.0) or 0.0), ter_abs)
-    _add_bump(float(metrics.get("phase_pos", 0.0) or 0.0), pos_abs)
+    _add_bump(_phase(metrics.get("phase_ter")) or 0.0, ter_abs)
+    _add_bump(_phase(metrics.get("phase_pos")) or 0.0, pos_abs)
 
     plot_data: dict[str, Any] = {
         "version": 1,
@@ -264,10 +299,10 @@ def run_modshift(
             "tertiary_signal": round(ter_abs, 6),
             "positive_signal": round(pos_abs, 6),
             # Signed values for debugging / traceability
-            "primary_signal_signed": round(pri, 6),
-            "secondary_signal_signed": round(sec, 6),
-            "tertiary_signal_signed": round(ter, 6),
-            "positive_signal_signed": round(pos, 6),
+            "primary_signal_signed": round(float(pri_sig), 6),
+            "secondary_signal_signed": round(float(sec_sig), 6),
+            "tertiary_signal_signed": round(float(ter_sig), 6),
+            "positive_signal_signed": round(float(pos_sig), 6),
             "fred": round(fred, 6),
             "false_alarm_threshold": round(fa, 6),
             "secondary_primary_ratio": round(sec_pri, 6),

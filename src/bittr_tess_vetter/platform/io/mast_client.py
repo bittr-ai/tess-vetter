@@ -1221,3 +1221,283 @@ class MASTClient:
             raise LightCurveNotFoundError(f"Failed to download any light curves for TIC {tic_id}")
 
         return light_curves
+
+    def search_tpf(
+        self,
+        tic_id: int,
+        sector: int | None = None,
+        author: str | None = None,
+    ) -> list[SearchResult]:
+        """Search for available TESS Target Pixel Files for a target.
+
+        Args:
+            tic_id: TESS Input Catalog identifier
+            sector: Specific sector to search (None for all sectors)
+            author: Override default author filter (None uses instance default)
+
+        Returns:
+            List of SearchResult objects describing available TPFs,
+            sorted by sector number.
+
+        Raises:
+            MASTClientError: If the search fails due to network or API errors.
+
+        Example:
+            >>> client = MASTClient()
+            >>> results = client.search_tpf(261136679)
+            >>> print(f"Found {len(results)} TPFs")
+        """
+        lk = self._ensure_lightkurve()
+
+        search_author = author if author is not None else self.author
+        target = f"TIC {tic_id}"
+
+        logger.info(f"Searching MAST for TPF {target}, sector={sector}, author={search_author}")
+
+        try:
+            search_result = lk.search_targetpixelfile(
+                target,
+                mission="TESS",
+                sector=sector,
+                author=search_author,
+            )
+        except Exception as e:
+            logger.error(f"MAST TPF search failed for {target}: {e}")
+            raise MASTClientError(f"Failed to search MAST for TPF TIC {tic_id}: {e}") from e
+
+        if search_result is None or len(search_result) == 0:
+            logger.info(f"No TPFs found for {target}")
+            return []
+
+        results = []
+        for i in range(len(search_result)):
+            row = search_result[i]
+            try:
+                sector_num = int(row.mission[0].split()[-1]) if hasattr(row, "mission") else 0
+                if hasattr(row, "sequence_number"):
+                    sector_num = int(row.sequence_number)
+
+                def _to_float(val: object, default: float = 0.0) -> float:
+                    if val is None:
+                        return default
+                    if hasattr(val, "value"):
+                        val = val.value
+                    if hasattr(val, "item"):
+                        return float(val.item())
+                    if hasattr(val, "__getitem__") and hasattr(val, "__len__"):
+                        return float(val[0]) if len(val) > 0 else default
+                    return float(val)
+
+                exptime_val = _to_float(row.exptime, 120.0) if hasattr(row, "exptime") else 120.0
+
+                distance_val = None
+                if hasattr(row, "distance") and row.distance is not None:
+                    distance_val = _to_float(row.distance)
+
+                result = SearchResult(
+                    tic_id=tic_id,
+                    sector=sector_num,
+                    author=str(row.author) if hasattr(row, "author") else "Unknown",
+                    exptime=exptime_val,
+                    mission="TESS",
+                    distance=distance_val,
+                )
+                results.append(result)
+            except (ValueError, AttributeError, IndexError) as e:
+                logger.warning(f"Failed to parse TPF search result row {i}: {e}")
+                continue
+
+        results.sort(key=lambda r: r.sector)
+        logger.info(f"Found {len(results)} TPFs for {target}")
+
+        return results
+
+    def download_tpf(
+        self,
+        tic_id: int,
+        sector: int,
+        exptime: float | None = None,
+        author: str | None = None,
+    ) -> tuple[
+        np.ndarray, np.ndarray, np.ndarray | None, Any | None, np.ndarray | None, np.ndarray | None
+    ]:
+        """Download and process a TESS Target Pixel File.
+
+        This method downloads a TPF from MAST and returns the raw arrays needed
+        to construct a TPFStamp object.
+
+        Args:
+            tic_id: TESS Input Catalog identifier
+            sector: TESS sector number
+            exptime: Exposure time in seconds (e.g., 20 or 120). If provided,
+                filters search results to only include products with matching
+                exposure time. If None, prefers 120s cadence.
+            author: Override default author filter (None uses instance default).
+
+        Returns:
+            Tuple of (time, flux, flux_err, wcs, aperture_mask, quality):
+                - time: Time array in BTJD, shape (n_cadences,)
+                - flux: Flux cube, shape (n_cadences, n_rows, n_cols)
+                - flux_err: Flux error cube (optional), same shape as flux
+                - wcs: WCS object for coordinate transforms (optional)
+                - aperture_mask: Pipeline aperture mask, shape (n_rows, n_cols)
+                - quality: Quality flags, shape (n_cadences,)
+
+        Raises:
+            LightCurveNotFoundError: If no TPF exists for the parameters.
+            MASTClientError: If download fails due to network or processing errors.
+
+        Example:
+            >>> client = MASTClient()
+            >>> time, flux, flux_err, wcs, aperture, quality = client.download_tpf(261136679, sector=1)
+            >>> print(f"TPF shape: {flux.shape}")
+        """
+        lk = self._ensure_lightkurve()
+        target = f"TIC {tic_id}"
+
+        logger.info(f"Downloading TPF for {target}, sector {sector}")
+
+        # Search for the specific sector
+        try:
+            search_author = author if author is not None else self.author
+            search_result = lk.search_targetpixelfile(
+                target,
+                mission="TESS",
+                sector=sector,
+                author=search_author,
+            )
+        except Exception as e:
+            logger.error(f"MAST TPF search failed for {target} sector {sector}: {e}")
+            raise MASTClientError(
+                f"Failed to search MAST for TPF TIC {tic_id} sector {sector}: {e}"
+            ) from e
+
+        if search_result is None or len(search_result) == 0:
+            raise LightCurveNotFoundError(f"No TPF found for TIC {tic_id} sector {sector}")
+
+        def _coerce_float(val: object) -> float | None:
+            if val is None:
+                return None
+            if hasattr(val, "value"):
+                val = val.value
+            if hasattr(val, "item"):
+                try:
+                    return float(val.item())
+                except Exception:
+                    return None
+            if hasattr(val, "__getitem__") and hasattr(val, "__len__"):
+                try:
+                    if len(val) == 0:
+                        return None
+                    return float(val[0])
+                except Exception:
+                    return None
+            try:
+                return float(val)
+            except Exception:
+                return None
+
+        def _row_author(row: Any) -> str | None:
+            try:
+                if hasattr(row, "author") and row.author is not None:
+                    return str(row.author)
+            except Exception:
+                return None
+            return None
+
+        def _row_exptime(row: Any) -> float | None:
+            if not hasattr(row, "exptime"):
+                return None
+            return _coerce_float(getattr(row, "exptime", None))
+
+        # Select best matching product
+        candidate_indices = list(range(len(search_result)))
+        requested_exptime = exptime
+        if requested_exptime is not None:
+            candidate_indices = [
+                i
+                for i in candidate_indices
+                if (_row_exptime(search_result[i]) is not None)
+                and abs(float(_row_exptime(search_result[i]) or 0.0) - requested_exptime) < 1.0
+            ]
+
+            if not candidate_indices:
+                available_exptimes: list[float] = []
+                for i in range(len(search_result)):
+                    exptime_i = _row_exptime(search_result[i])
+                    if exptime_i is not None:
+                        available_exptimes.append(float(exptime_i))
+                raise LightCurveNotFoundError(
+                    f"No TPF found for TIC {tic_id} sector {sector} "
+                    f"with exptime={requested_exptime}s. Available exptimes: {available_exptimes}"
+                )
+
+        preferred_author = author if author is not None else self.author
+        preferred_exptime = requested_exptime if requested_exptime is not None else 120.0
+
+        def _selection_key(i: int) -> tuple[int, float, str, float, int]:
+            row = search_result[i]
+            author_i = _row_author(row) or ""
+            exptime_i = _row_exptime(row)
+
+            author_match = 1
+            if preferred_author is not None and author_i.lower() == preferred_author.lower():
+                author_match = 0
+
+            exptime_delta = (
+                abs(float(exptime_i) - preferred_exptime) if exptime_i is not None else 1e9
+            )
+            exptime_val = float(exptime_i) if exptime_i is not None else 1e9
+            return (author_match, exptime_delta, author_i, exptime_val, i)
+
+        selected_index = min(candidate_indices, key=_selection_key)
+        selected_row = search_result[selected_index]
+
+        # Download the TPF
+        try:
+            tpf_result = selected_row.download()
+            # Handle LightCurveCollection vs single TPF
+            tpf = (
+                tpf_result[0]
+                if type(tpf_result).__name__ == "TargetPixelFileCollection"
+                else tpf_result
+            )
+        except Exception as e:
+            logger.error(f"TPF download failed for {target} sector {sector}: {e}")
+            raise MASTClientError(
+                f"Failed to download TPF for TIC {tic_id} sector {sector}: {e}"
+            ) from e
+
+        # Extract data arrays
+        try:
+            time = np.asarray(tpf.time.value, dtype=np.float64)
+            flux = np.asarray(tpf.flux.value, dtype=np.float64)
+
+            # Flux errors (optional)
+            flux_err = None
+            if hasattr(tpf, "flux_err") and tpf.flux_err is not None:
+                flux_err = np.asarray(tpf.flux_err.value, dtype=np.float64)
+
+            # WCS (optional)
+            wcs = getattr(tpf, "wcs", None)
+
+            # Aperture mask
+            aperture_mask = None
+            if hasattr(tpf, "pipeline_mask") and tpf.pipeline_mask is not None:
+                aperture_mask = np.asarray(tpf.pipeline_mask, dtype=bool)
+
+            # Quality flags
+            quality = None
+            if hasattr(tpf, "quality") and tpf.quality is not None:
+                quality = np.asarray(tpf.quality, dtype=np.int32)
+
+            logger.info(
+                f"Downloaded TPF for TIC {tic_id} sector {sector}: "
+                f"{flux.shape[0]} cadences, {flux.shape[1]}x{flux.shape[2]} pixels"
+            )
+
+            return time, flux, flux_err, wcs, aperture_mask, quality
+
+        except Exception as e:
+            logger.error(f"Failed to extract data from TPF: {e}")
+            raise MASTClientError(f"Failed to process TPF data: {e}") from e

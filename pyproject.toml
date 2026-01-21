@@ -32,7 +32,13 @@ dependencies = [
   "pydantic>=2.4.0",  # CVE-2024-3772 fix
   "astropy>=5.0.0",
   "requests>=2.32.4",  # CVE-2024-47081 fix
+  "click>=8.0.0",  # CLI framework
+  "filelock>=3.12.0",  # Concurrent-safe file writes
+  "pandas>=2.3.3",
 ]
+
+[project.scripts]
+btv = "bittr_tess_vetter.cli.enrich_cli:main"
 
 [project.optional-dependencies]
 # Transit detection (TLS + numba for JIT compilation)
