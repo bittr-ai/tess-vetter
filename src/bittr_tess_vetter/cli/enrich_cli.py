@@ -137,6 +137,12 @@ def cli() -> None:
     help="Write progress update every N candidates.",
 )
 @click.option(
+    "--cache-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Optional lightkurve/MAST cache directory for downloads and reuse.",
+)
+@click.option(
     "--local-data-path",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     default=None,
@@ -154,6 +160,7 @@ def enrich(
     t0_refine: bool,
     limit: int | None,
     progress_interval: int,
+    cache_dir: Path | None,
     local_data_path: Path | None,
 ) -> None:
     """Enrich a worklist of transit candidates with vetting features.
@@ -161,7 +168,8 @@ def enrich(
     Reads candidates from the input JSONL worklist, runs the vetting pipeline
     on each candidate, and writes enriched rows to the output JSONL file.
 
-    Each input row must have: tic_id, period_days, t0_btjd, duration_hours, depth_ppm.
+    Each input row must have: tic_id, period_days, t0_btjd, duration_hours.
+    depth_ppm is optional (recommended for full feature coverage).
 
     Output rows contain the original ephemeris plus all extracted features.
     """
@@ -175,12 +183,15 @@ def enrich(
         no_download=no_download,
         require_tpf=require_tpf,
         enable_t0_refine=t0_refine,
+        cache_dir=str(cache_dir) if cache_dir else None,
         local_data_path=str(local_data_path) if local_data_path else None,
     )
 
     click.echo(f"Input:  {input_path}")
     click.echo(f"Output: {output_path}")
     click.echo(f"Config: bulk={bulk}, network_ok={network_ok}, allow_20s={allow_20s}")
+    if cache_dir:
+        click.echo(f"Cache dir: {cache_dir}")
     if local_data_path:
         click.echo(f"Local data: {local_data_path}")
     if resume:

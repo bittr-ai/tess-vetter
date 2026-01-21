@@ -192,7 +192,7 @@ def enrich_candidate(
     period_days: float,
     t0_btjd: float,
     duration_hours: float,
-    depth_ppm: float,
+    depth_ppm: float | None,
     config: FeatureConfig,
     sectors: list[int] | None = None,
 ) -> tuple[RawEvidencePacket, EnrichedRow]:
@@ -206,7 +206,7 @@ def enrich_candidate(
         period_days: Orbital period in days.
         t0_btjd: Transit epoch in BTJD.
         duration_hours: Transit duration in hours.
-        depth_ppm: Transit depth in parts per million.
+        depth_ppm: Transit depth in parts per million (optional).
         config: Feature extraction configuration.
 
     Returns:
@@ -240,6 +240,20 @@ def enrich_candidate(
     start_time_ms = time.perf_counter() * 1000.0
     pipeline_version = _pipeline_version()
     candidate_key = make_candidate_key(tic_id, period_days, t0_btjd)
+
+    def _make_mast_client() -> MASTClient:
+        """Construct MASTClient with optional cache_dir (test-safe).
+
+        Some tests monkeypatch MASTClient with a no-kwargs lambda; keep a
+        backwards-compatible fallback when the injected constructor rejects
+        keyword args.
+        """
+        if config.cache_dir is None:
+            return MASTClient()
+        try:
+            return MASTClient(cache_dir=config.cache_dir)
+        except TypeError:
+            return MASTClient()
 
     # Helper to create error response
     def _make_error_response(
@@ -332,7 +346,7 @@ def enrich_candidate(
         # Standard MAST-based loading
         logger.info("Searching for light curves for TIC %d", tic_id)
         try:
-            client = MASTClient()
+            client = _make_mast_client()
             search_results = client.search_lightcurve(tic_id)
         except MASTClientError as e:
             wall_ms = time.perf_counter() * 1000.0 - start_time_ms
@@ -519,7 +533,7 @@ def enrich_candidate(
     if config.network_ok:
         try:
             # Create client for target info query (may not exist if using local data)
-            target_client = MASTClient()
+            target_client = _make_mast_client()
             target = target_client.get_target_info(tic_id)
             ra_deg = target.ra
             dec_deg = target.dec
@@ -553,7 +567,7 @@ def enrich_candidate(
             if not exptime_candidates:
                 exptime_candidates = [120.0]
             try:
-                tpf_client = MASTClient()
+                tpf_client = _make_mast_client()
                 for exptime in exptime_candidates:
                     try:
                         time_arr, flux_arr, flux_err_arr, wcs, aperture_mask, quality_arr = (
@@ -1044,12 +1058,23 @@ def enrich_worklist(
             period_days = float(row["period_days"])
             t0_btjd = float(row["t0_btjd"])
             duration_hours = float(row["duration_hours"])
-            depth_ppm = float(row["depth_ppm"])
         except (KeyError, ValueError, TypeError) as e:
             errors += 1
             cls = type(e).__name__
             error_class_counts[cls] = error_class_counts.get(cls, 0) + 1
             continue
+
+        depth_ppm_raw = row.get("depth_ppm")
+        if depth_ppm_raw is None:
+            depth_ppm = None
+        else:
+            try:
+                depth_ppm = float(depth_ppm_raw)
+            except (ValueError, TypeError) as e:
+                errors += 1
+                cls = type(e).__name__
+                error_class_counts[cls] = error_class_counts.get(cls, 0) + 1
+                continue
 
         candidate_key = make_candidate_key(tic_id, period_days, t0_btjd)
         last_candidate_key = candidate_key

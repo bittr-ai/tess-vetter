@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import os
 import time as time_module
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -342,6 +343,7 @@ class MASTClient:
         quality_mask: int = DEFAULT_QUALITY_MASK,
         author: str | None = "SPOC",
         normalize: bool = True,
+        cache_dir: str | None = None,
     ) -> None:
         """Initialize MAST client.
 
@@ -355,13 +357,26 @@ class MASTClient:
         self.quality_mask = quality_mask
         self.author = author
         self.normalize = normalize
+        self.cache_dir = cache_dir
         self._lk_imported = False
 
     def _ensure_lightkurve(self) -> Any:
         """Lazy import of lightkurve to avoid import-time overhead."""
         if not self._lk_imported:
             try:
+                if self.cache_dir:
+                    # Best-effort: ensure lightkurve reads/writes from a shared cache directory.
+                    # This helps bulk enrichment reuse existing local caches across repos.
+                    os.environ.setdefault("LIGHTKURVE_CACHE_DIR", str(self.cache_dir))
                 import lightkurve as lk
+
+                if self.cache_dir:
+                    try:
+                        if hasattr(lk, "config") and hasattr(lk.config, "set_cache_dir"):
+                            lk.config.set_cache_dir(self.cache_dir)
+                    except Exception:
+                        # Non-fatal: fall back to env var only.
+                        pass
 
                 self._lk = lk
                 self._lk_imported = True

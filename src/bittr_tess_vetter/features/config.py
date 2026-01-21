@@ -22,6 +22,9 @@ class FeatureConfig:
         Optimize for bulk processing (default: True).
     no_download : bool
         Skip downloading any new data (default: False).
+    cache_dir : str | None
+        Optional cache directory for MAST/lightkurve artifacts. When set, btv
+        configures lightkurve to use this directory for both reads and writes.
     local_data_path : str | None
         Path to local data directory containing tic{tic_id}/ subdirectories
         with sector*_pdcsap.csv files. If set, light curves are loaded from
@@ -59,6 +62,7 @@ class FeatureConfig:
     network_ok: bool = False
     bulk_mode: bool = True
     no_download: bool = False
+    cache_dir: str | None = None
     local_data_path: str | None = None
 
     # Optional operations
