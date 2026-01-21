@@ -217,16 +217,25 @@ def enrich_candidate(
         The candidate_key is generated as f"{tic_id}|{period_days}|{t0_btjd}"
         and is immutable - it does not change based on T0 refinement.
     """
-    from bittr_tess_vetter.api.io import (
-        LightCurveNotFoundError,
-        MASTClient,
-        MASTClientError,
+    import numpy as np
+
+    from bittr_tess_vetter.api.aperture_family import compute_aperture_family_depth_curve
+    from bittr_tess_vetter.api.ghost_features import compute_ghost_features
+    from bittr_tess_vetter.api.io import LightCurveNotFoundError, MASTClient, MASTClientError
+    from bittr_tess_vetter.api.localization import TransitParams, compute_localization_diagnostics
+    from bittr_tess_vetter.api.stellar_dilution import (
+        HostHypothesis,
+        compute_dilution_scenarios,
+        compute_flux_fraction_from_mag_list,
+        evaluate_physics_flags,
     )
     from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
     from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve, TPFStamp
     from bittr_tess_vetter.api.vet import vet_candidate as run_vetting
     from bittr_tess_vetter.data_sources.sector_selection import select_sectors
     from bittr_tess_vetter.features import FEATURE_SCHEMA_VERSION
+    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+    from bittr_tess_vetter.platform.catalogs.gaia_client import query_gaia_by_position_sync
 
     start_time_ms = time.perf_counter() * 1000.0
     pipeline_version = _pipeline_version()
@@ -519,7 +528,7 @@ def enrich_candidate(
                 "Target info: ra=%.4f, dec=%.4f, Teff=%s",
                 ra_deg or 0.0,
                 dec_deg or 0.0,
-                stellar.teff if stellar else None,
+                getattr(stellar, "teff", None) if stellar else None,
             )
         except MASTClientError as e:
             logger.debug("Could not retrieve target info for TIC %d: %s", tic_id, e)
@@ -531,7 +540,6 @@ def enrich_candidate(
     tpf_sector_used: int | None = None
     tpf_exptime_used: float | None = None
     tpf_attempts: list[dict[str, Any]] = []
-
     if not config.no_download and config.network_ok and sectors_loaded:
         # Prefer the most recent sector (likely best), but fall back through others.
         for tpf_sector_to_try in sorted({int(s) for s in sectors_loaded}, reverse=True):
@@ -605,6 +613,238 @@ def enrich_candidate(
             wall_ms,
         )
 
+    # Step 4c: Compute pixel-level diagnostics into evidence packet fields (when TPF is available).
+    localization: dict[str, Any] | None = None
+    pixel_host_hypotheses: dict[str, Any] | None = None
+    sector_quality_report: dict[str, Any] | None = None
+
+    if tpf_stamp is not None and tpf_sector_used is not None:
+        # Localization diagnostics (WCS-optional; uses OOT-derived references).
+        try:
+            transit_params = TransitParams(
+                period=float(period_days),
+                t0=float(t0_btjd),
+                duration=float(duration_hours / 24.0),
+            )
+            diag, _images = compute_localization_diagnostics(
+                tpf_data=np.asarray(tpf_stamp.flux, dtype=np.float64),
+                time=np.asarray(tpf_stamp.time, dtype=np.float64),
+                transit_params=transit_params,
+            )
+            px_scale_arcsec = 21.0
+            if getattr(tpf_stamp, "wcs", None) is not None:
+                try:
+                    from bittr_tess_vetter.api.wcs_utils import compute_pixel_scale
+
+                    px_scale_arcsec = float(compute_pixel_scale(tpf_stamp.wcs))
+                except Exception:
+                    px_scale_arcsec = 21.0
+            dist_px = float(diag.dist_diff_to_ootbright_px)
+            dist_arcsec = float(dist_px * px_scale_arcsec)
+
+            if dist_px <= 1.0:
+                verdict = "on_target"
+            elif dist_px >= 2.0:
+                verdict = "off_target"
+            else:
+                verdict = "ambiguous"
+
+            localization = {
+                "verdict": verdict,
+                "target_distance_arcsec": dist_arcsec,
+                "uncertainty_semimajor_arcsec": None,
+                "target_distance_pixels": dist_px,
+                "pixel_scale_arcsec": px_scale_arcsec,
+                "diagnostics": diag.to_dict(),
+            }
+        except Exception as e:
+            localization = {
+                "verdict": "invalid",
+                "warnings": [f"localization_failed:{type(e).__name__}:{e}"],
+            }
+
+        # Ghost / scattered-light features (aperture sign consistency, etc.)
+        ghost_row: dict[str, Any] | None = None
+        try:
+            ap_mask = np.asarray(tpf_stamp.aperture_mask, dtype=bool)
+            gf = compute_ghost_features(
+                np.asarray(tpf_stamp.flux, dtype=np.float64),
+                np.asarray(tpf_stamp.time, dtype=np.float64),
+                ap_mask,
+                float(period_days),
+                float(t0_btjd),
+                float(duration_hours),
+                tic_id=int(tic_id),
+                sector=int(tpf_sector_used),
+            )
+            ghost_row = {
+                "sector": int(tpf_sector_used),
+                "ghost_like_score_adjusted": float(gf.ghost_like_score),
+                "scattered_light_risk": float(gf.scattered_light_risk),
+                "aperture_contrast": float(gf.aperture_contrast),
+                "aperture_sign_consistent": bool(gf.aperture_sign_consistent),
+                "spatial_uniformity": float(gf.spatial_uniformity),
+                "prf_likeness": float(gf.prf_likeness),
+            }
+        except Exception as e:
+            ghost_row = {
+                "sector": int(tpf_sector_used),
+                "ghost_like_score_adjusted": None,
+                "scattered_light_risk": None,
+                "aperture_sign_consistent": None,
+                "warnings": [f"ghost_failed:{type(e).__name__}:{e}"],
+            }
+
+        # Aperture family depth curve (requires TPFFitsData container; WCS is unused by the metric).
+        aperture_family: dict[str, Any] | None = None
+        try:
+            from astropy.wcs import WCS
+
+            ref = TPFFitsRef(
+                tic_id=int(tic_id),
+                sector=int(tpf_sector_used),
+                author="spoc",
+                exptime_seconds=int(tpf_exptime_used) if tpf_exptime_used is not None else None,
+            )
+            wcs_obj = tpf_stamp.wcs if getattr(tpf_stamp, "wcs", None) is not None else WCS(naxis=2)
+            tpf_fits = TPFFitsData(
+                ref=ref,
+                time=np.asarray(tpf_stamp.time, dtype=np.float64),
+                flux=np.asarray(tpf_stamp.flux, dtype=np.float64),
+                flux_err=np.asarray(tpf_stamp.flux_err, dtype=np.float64)
+                if getattr(tpf_stamp, "flux_err", None) is not None
+                else None,
+                wcs=wcs_obj,
+                aperture_mask=np.asarray(tpf_stamp.aperture_mask, dtype=np.int32),
+                quality=np.asarray(tpf_stamp.quality, dtype=np.int32)
+                if getattr(tpf_stamp, "quality", None) is not None
+                else np.zeros(int(np.asarray(tpf_stamp.time).shape[0]), dtype=np.int32),
+                camera=0,
+                ccd=0,
+                meta={},
+            )
+            afr = compute_aperture_family_depth_curve(
+                tpf_fits=tpf_fits,
+                period=float(period_days),
+                t0=float(t0_btjd),
+                duration_hours=float(duration_hours),
+            )
+            aperture_family = afr.to_dict()
+        except Exception as e:
+            aperture_family = {"warnings": [f"aperture_family_failed:{type(e).__name__}:{e}"]}
+
+        pixel_host_hypotheses = {
+            "consensus_best_source_id": f"tic:{int(tic_id)}",
+            "host_ambiguity": "unknown",
+            "disagreement_flag": "stable",
+            "flip_rate": 0.0,
+            "timeseries_verdict": None,
+            "timeseries_delta_chi2": None,
+            "ghost_summary_by_sector": [ghost_row] if ghost_row is not None else [],
+            "host_plausibility_auto": {"skipped": True, "reason": "network_or_coords_unavailable"},
+        }
+        sector_quality_report = {
+            "tpf_sector_used": int(tpf_sector_used),
+            "aperture_family": aperture_family,
+        }
+
+        # Host plausibility (Gaia cone search) - network gated.
+        if (
+            config.network_ok
+            and config.enable_host_plausibility
+            and ra_deg is not None
+            and dec_deg is not None
+            and depth_ppm is not None
+        ):
+            try:
+                gaia = query_gaia_by_position_sync(float(ra_deg), float(dec_deg), radius_arcsec=60.0)
+                primary_mag = gaia.source.phot_g_mean_mag if gaia.source else None
+
+                # Estimate stellar radius (solar radii) for implied-size checks.
+                radius_rsun = None
+                if stellar is not None and getattr(stellar, "radius", None) is not None:
+                    radius_rsun = float(stellar.radius)
+                elif gaia.astrophysical is not None and gaia.astrophysical.radius_gspphot is not None:
+                    radius_rsun = float(gaia.astrophysical.radius_gspphot)
+
+                mags: list[float] = []
+                if primary_mag is not None:
+                    mags.append(float(primary_mag))
+                for n in gaia.neighbors:
+                    if n.phot_g_mean_mag is not None:
+                        mags.append(float(n.phot_g_mean_mag))
+
+                def _flux_fraction(mag: float | None) -> float | None:
+                    if mag is None or not mags:
+                        return None
+                    return float(compute_flux_fraction_from_mag_list(float(mag), mags))
+
+                primary_id = str(gaia.source.source_id) if gaia.source else f"tic:{int(tic_id)}"
+                primary_h = HostHypothesis(
+                    source_id=int(gaia.source.source_id) if gaia.source else int(tic_id),
+                    name="primary",
+                    separation_arcsec=0.0,
+                    g_mag=float(primary_mag) if primary_mag is not None else None,
+                    estimated_flux_fraction=float(_flux_fraction(primary_mag) or 1.0),
+                    radius_rsun=radius_rsun,
+                )
+                companions: list[HostHypothesis] = []
+                for n in gaia.neighbors:
+                    companions.append(
+                        HostHypothesis(
+                            source_id=int(n.source_id),
+                            name="neighbor",
+                            separation_arcsec=float(n.separation_arcsec),
+                            g_mag=float(n.phot_g_mean_mag) if n.phot_g_mean_mag is not None else None,
+                            estimated_flux_fraction=float(_flux_fraction(n.phot_g_mean_mag) or 0.0),
+                            radius_rsun=None,
+                        )
+                    )
+
+                scenarios = compute_dilution_scenarios(
+                    observed_depth_ppm=float(depth_ppm),
+                    primary=primary_h,
+                    companions=companions,
+                )
+                host_ambiguous = any(float(c.separation_arcsec) <= 21.0 for c in companions)
+                flags = evaluate_physics_flags(scenarios, host_ambiguous=host_ambiguous)
+
+                scenario_dicts: list[dict[str, Any]] = []
+                impossible_ids: list[str] = []
+                for sc in scenarios:
+                    sid = str(sc.host.source_id)
+                    phys_impossible = bool(sc.planet_radius_inconsistent or sc.stellar_companion_likely)
+                    if phys_impossible:
+                        impossible_ids.append(sid)
+                    scenario_dicts.append(
+                        {
+                            "source_id": sid,
+                            "flux_fraction": float(sc.host.estimated_flux_fraction),
+                            "true_depth_ppm": float(sc.true_depth_ppm),
+                            "depth_correction_factor": float(sc.depth_correction_factor),
+                            "physically_impossible": phys_impossible,
+                        }
+                    )
+
+                pixel_host_hypotheses["host_plausibility_auto"] = {
+                    "skipped": False,
+                    "primary_source_id": primary_id,
+                    "cone_radius_arcsec": 60.0,
+                    "physics_flags": {
+                        "requires_resolved_followup": bool(flags.requires_resolved_followup),
+                        "planet_radius_inconsistent": bool(flags.planet_radius_inconsistent),
+                        "rationale": str(flags.rationale),
+                    },
+                    "physically_impossible_source_ids": impossible_ids,
+                    "scenarios": scenario_dicts,
+                }
+            except Exception as e:
+                pixel_host_hypotheses["host_plausibility_auto"] = {
+                    "skipped": True,
+                    "reason": f"gaia_query_failed:{type(e).__name__}",
+                    "error": str(e),
+                }
+
     # Step 5: Create API types for vetting
     ephemeris = Ephemeris(
         period_days=period_days,
@@ -662,9 +902,9 @@ def enrich_candidate(
             "input_depth_ppm": depth_ppm,
         },
         "check_results": check_results_dicts,
-        "pixel_host_hypotheses": None,
-        "localization": None,
-        "sector_quality_report": None,
+        "pixel_host_hypotheses": pixel_host_hypotheses,
+        "localization": localization,
+        "sector_quality_report": sector_quality_report,
         "candidate_evidence": None,
         "provenance": {
             "pipeline_version": pipeline_version,
