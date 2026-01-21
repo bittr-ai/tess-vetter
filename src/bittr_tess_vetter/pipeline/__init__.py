@@ -279,6 +279,7 @@ def enrich_candidate(
     lightcurves: list[LightCurveData] = []
     sectors_loaded: list[int] = []
     selection_summary: dict[str, Any] | None = None
+    sector_exptimes: dict[int, set[int]] = {}
 
     if config.no_download and not config.local_data_path:
         wall_ms = time.perf_counter() * 1000.0 - start_time_ms
@@ -364,7 +365,6 @@ def enrich_candidate(
             )
 
         # Per-sector cadence choice (for requested downloads)
-        sector_exptimes: dict[int, set[int]] = {}
         for r in search_results:
             try:
                 sector_exptimes.setdefault(int(r.sector), set()).add(int(round(float(r.exptime))))
@@ -433,6 +433,52 @@ def enrich_candidate(
                 wall_ms,
             )
 
+    # Post-download per-sector gating: drop unusable sectors where possible.
+    # This prevents a single broken sector from failing the whole candidate.
+    excluded = selection_summary.get("excluded_sectors") if isinstance(selection_summary, dict) else None
+    if excluded is None:
+        excluded = {}
+        selection_summary = selection_summary or {}
+        selection_summary["excluded_sectors"] = excluded
+
+    def _exclude_sector(sector: int, reason: str) -> None:
+        if int(sector) not in excluded:
+            excluded[int(sector)] = reason
+
+    kept_lightcurves: list[LightCurveData] = []
+    kept_sectors: list[int] = []
+    for lc in lightcurves:
+        sector = int(lc.sector)
+        if lc.n_valid <= 0:
+            _exclude_sector(sector, "no_usable_points")
+            continue
+        t_min = float(lc.time[lc.valid_mask].min())
+        t_max = float(lc.time[lc.valid_mask].max())
+        if not (t_min <= float(t0_btjd) <= t_max):
+            _exclude_sector(sector, "insufficient_time_coverage")
+            continue
+        kept_lightcurves.append(lc)
+        kept_sectors.append(sector)
+
+    lightcurves = kept_lightcurves
+    sectors_loaded = kept_sectors
+
+    if isinstance(selection_summary, dict):
+        selection_summary["selected_sectors"] = sectors_loaded
+
+    if not lightcurves:
+        wall_ms = time.perf_counter() * 1000.0 - start_time_ms
+        if any(v == "no_usable_points" for v in excluded.values()):
+            error_class = "NoUsablePointsError"
+            msg = "All sectors excluded: no usable points"
+        elif any(v == "insufficient_time_coverage" for v in excluded.values()):
+            error_class = "InsufficientTimeCoverageError"
+            msg = "All sectors excluded: insufficient time coverage for t0"
+        else:
+            error_class = "SectorGatingError"
+            msg = "All sectors excluded by gating rules"
+        return _make_error_response(error_class, msg, wall_ms)
+
     # Step 3: Stitch multi-sector light curves if needed
     if len(lightcurves) == 1:
         stitched_lc_data = lightcurves[0]
@@ -450,27 +496,10 @@ def enrich_candidate(
             logger.warning("Stitching failed for TIC %d: %s", tic_id, e)
             return _make_error_response("StitchError", str(e), wall_ms)
 
-    # Post-stitch usability gating: ensure at least some valid samples exist.
-    # Note: `LightCurveData.valid_mask` already includes quality==0 and finite checks.
+    # Sanity check: stitched series should have usable points if any sector survived gating.
     if stitched_lc_data.n_valid <= 0:
         wall_ms = time.perf_counter() * 1000.0 - start_time_ms
-        return _make_error_response(
-            "NoUsablePointsError",
-            "Stitched light curve has no usable points after quality/finite filtering",
-            wall_ms,
-        )
-
-    # Minimal coverage gating: require the target epoch to fall inside the observed time span.
-    # This is intentionally conservative and avoids any model assumptions.
-    t_min = float(stitched_lc_data.time[stitched_lc_data.valid_mask].min())
-    t_max = float(stitched_lc_data.time[stitched_lc_data.valid_mask].max())
-    if not (t_min <= float(t0_btjd) <= t_max):
-        wall_ms = time.perf_counter() * 1000.0 - start_time_ms
-        return _make_error_response(
-            "InsufficientTimeCoverageError",
-            f"t0_btjd={t0_btjd} outside observed span [{t_min}, {t_max}]",
-            wall_ms,
-        )
+        return _make_error_response("NoUsablePointsError", "No usable points after stitching", wall_ms)
 
     # Step 4: Get target info for coordinates and stellar parameters
     target = None
@@ -500,16 +529,46 @@ def enrich_candidate(
     # TPF loading is slow, so we only load one sector (prefer most recent)
     tpf_stamp: TPFStamp | None = None
     tpf_sector_used: int | None = None
+    tpf_exptime_used: float | None = None
+    tpf_attempts: list[dict[str, Any]] = []
 
     if not config.no_download and config.network_ok and sectors_loaded:
         # Prefer the most recent sector (likely best), but fall back through others.
         for tpf_sector_to_try in sorted({int(s) for s in sectors_loaded}, reverse=True):
             logger.info("Attempting to load TPF for TIC %d sector %d", tic_id, tpf_sector_to_try)
+            exps = sector_exptimes.get(int(tpf_sector_to_try), {120})
+            exptime_candidates: list[float] = []
+            if 120 in exps:
+                exptime_candidates.append(120.0)
+            if 20 in exps and config.allow_20s:
+                exptime_candidates.append(20.0)
+            if not exptime_candidates:
+                exptime_candidates = [120.0]
             try:
                 tpf_client = MASTClient()
-                time_arr, flux_arr, flux_err_arr, wcs, aperture_mask, quality_arr = (
-                    tpf_client.download_tpf(tic_id, tpf_sector_to_try, exptime=120.0)
-                )
+                for exptime in exptime_candidates:
+                    try:
+                        time_arr, flux_arr, flux_err_arr, wcs, aperture_mask, quality_arr = (
+                            tpf_client.download_tpf(tic_id, tpf_sector_to_try, exptime=exptime)
+                        )
+                        tpf_exptime_used = float(exptime)
+                        tpf_attempts.append(
+                            {"sector": int(tpf_sector_to_try), "exptime": float(exptime), "ok": True}
+                        )
+                        break
+                    except Exception as e:
+                        tpf_attempts.append(
+                            {
+                                "sector": int(tpf_sector_to_try),
+                                "exptime": float(exptime),
+                                "ok": False,
+                                "error_class": type(e).__name__,
+                                "error": str(e),
+                            }
+                        )
+                        continue
+                else:
+                    raise LightCurveNotFoundError("No TPF product matched allowed cadence")
 
                 tpf_stamp = TPFStamp(
                     time=time_arr,
@@ -616,6 +675,8 @@ def enrich_candidate(
             "inputs_summary": bundle.inputs_summary,
             "duration_ms": bundle.provenance.get("duration_ms"),
             "tpf_sector_used": tpf_sector_used,
+            "tpf_exptime_used": tpf_exptime_used,
+            "tpf_attempts": tpf_attempts,
             "has_tpf": tpf_stamp is not None,
         },
     }
