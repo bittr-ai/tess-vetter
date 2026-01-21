@@ -522,7 +522,8 @@ class TestScoreTopKPeriods:
         flux_mx = mx.array(flux_np)
         flux_err_mx = mx.array(flux_err_np)
 
-        periods_top_k = mx.array([3.0, 3.5, 4.0])
+        # Use periods closer together so scores are more similar
+        periods_top_k = mx.array([3.4, 3.5, 3.6])
 
         # Low temperature = sharper weights
         result_cold = score_top_k_periods(
@@ -543,7 +544,7 @@ class TestScoreTopKPeriods:
             periods_days_top_k=periods_top_k,
             t0_btjd=t0,
             duration_hours=duration_hours,
-            temperature=2.0,
+            temperature=10.0,  # Much higher temperature
         )
 
         mx.eval(result_cold.weights, result_hot.weights)
@@ -551,8 +552,12 @@ class TestScoreTopKPeriods:
         weights_cold = np.array(result_cold.weights)
         weights_hot = np.array(result_hot.weights)
 
-        # Cold weights should have higher max (more peaked)
-        assert np.max(weights_cold) > np.max(weights_hot)
+        # Entropy of hot weights should be higher (more uniform)
+        # Entropy = -sum(p * log(p)); higher = more uniform
+        eps = 1e-10
+        entropy_cold = -np.sum(weights_cold * np.log(weights_cold + eps))
+        entropy_hot = -np.sum(weights_hot * np.log(weights_hot + eps))
+        assert entropy_hot > entropy_cold
 
 
 # =============================================================================

@@ -212,19 +212,41 @@ def score_top_k_periods(
     """Score a small candidate period set and compute deterministic soft weights."""
     mx = _require_mlx()
 
-    def _score_one(p: Any) -> Any:
-        return score_fixed_period(
-            time=time,
-            flux=flux,
-            flux_err=flux_err,
-            period_days=float(p),
-            t0_btjd=t0_btjd,
-            duration_hours=duration_hours,
-            ingress_egress_fraction=ingress_egress_fraction,
-            sharpness=sharpness,
-        )
+    # Convert scalar parameters to MLX arrays once, outside vmap
+    t0_mx = mx.array(t0_btjd)
+    duration_days_mx = mx.array(duration_hours / 24.0)
+    half_duration = duration_days_mx / 2.0
+    ingress = mx.maximum(duration_days_mx * mx.array(ingress_egress_fraction), mx.array(1e-6))
+    k_sharpness = mx.array(sharpness) / ingress
 
-    scores = mx.vmap(_score_one)(periods_days_top_k)
+    # Precompute weights for flux_err
+    y = mx.array(1.0) - flux
+    if flux_err is None:
+        w = mx.ones_like(y)
+    else:
+        sigma2 = mx.maximum(flux_err * flux_err, mx.array(1e-12))
+        w = mx.array(1.0) / sigma2
+
+    def _score_one_pure_mlx(period_days_mx: Any) -> Any:
+        """Score at a single period using pure MLX operations (vmap-safe)."""
+        # Phase in [-0.5, 0.5)
+        phase = (time - t0_mx) / period_days_mx
+        phase = phase - mx.floor(phase + mx.array(0.5))
+        dt = mx.abs(phase * period_days_mx)
+
+        # Smoothed template
+        template = mx.sigmoid(k_sharpness * (half_duration - dt))
+        template = mx.clip(template, 0.0, 1.0)
+
+        # Matched-filter score
+        eps = mx.array(1e-12)
+        denom = mx.sum(w * template * template) + eps
+        depth_hat = mx.sum(w * template * y) / denom
+        depth_sigma = mx.sqrt(mx.array(1.0) / denom)
+        score = depth_hat / mx.maximum(depth_sigma, eps)
+        return score
+
+    scores = mx.vmap(_score_one_pure_mlx)(periods_days_top_k)
     weights = mx.softmax(scores / mx.array(max(temperature, 1e-6)))
     return MlxTopKScoreResult(
         top_k_periods=periods_days_top_k,
