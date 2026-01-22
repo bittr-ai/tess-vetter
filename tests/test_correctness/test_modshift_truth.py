@@ -83,3 +83,37 @@ def test_feature_schema_splits_v11_vs_v11b_ratio() -> None:
 
     # Separate V11b-derived ratio stored distinctly.
     assert row["v11b_secondary_primary_ratio"] == 3.0 / 10.0
+
+
+def test_exovetter_modshift_prefers_sigma_fields(monkeypatch) -> None:
+    """Correctness: when exovetter provides sigma_* and pri/sec, ratio uses sigma_*."""
+
+    class _FakeModShift:
+        def __init__(self, lc_name: str = "flux") -> None:
+            self.lc_name = lc_name
+
+        def run(self, tce, lk_obj, plot: bool = False):  # noqa: ANN001
+            # pri/sec are not signal strengths; sigma_* are the intended significances.
+            return {
+                "pri": 1000.0,
+                "sec": 10.0,
+                "sigma_pri": -10.0,  # negative sign conventions should be handled
+                "sigma_sec": 1.0,
+                "Fred": 12.0,
+                "false_alarm_threshold": 0.0,
+            }
+
+    try:
+        import exovetter.vetters as vetters
+    except Exception:
+        # If exovetter isn't installed, the check wrapper will skip; that's OK.
+        return
+
+    monkeypatch.setattr(vetters, "ModShift", _FakeModShift, raising=True)
+
+    candidate = TransitCandidate(period=5.0, t0=1.0, duration_hours=2.0, depth=0.001, snr=10.0)
+    r = run_modshift(candidate=candidate, lightcurve=_make_synthetic_lc(with_secondary=False))
+
+    ratio = float(r.details.get("secondary_primary_ratio") or 0.0)
+    # Expected sigma-based ratio: |1| / |10| = 0.1 (not pri/sec = 0.01)
+    assert abs(ratio - 0.1) < 1e-6
