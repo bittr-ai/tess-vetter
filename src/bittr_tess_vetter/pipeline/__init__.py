@@ -233,6 +233,13 @@ def enrich_candidate(
     from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
     from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve, TPFStamp
     from bittr_tess_vetter.api.vet import vet_candidate as run_vetting
+    from bittr_tess_vetter.api.pixel_prf import (
+        aggregate_timeseries_evidence,
+        extract_transit_windows,
+        fit_all_hypotheses_timeseries,
+        get_prf_model,
+        select_best_hypothesis_timeseries,
+    )
     from bittr_tess_vetter.data_sources.sector_selection import select_sectors
     from bittr_tess_vetter.features import FEATURE_SCHEMA_VERSION
     from bittr_tess_vetter.features.evidence import make_skip_block
@@ -243,6 +250,8 @@ def enrich_candidate(
     pipeline_version = _pipeline_version()
     candidate_key = make_candidate_key(tic_id, period_days, t0_btjd)
     code_hash = compute_code_hash()
+    period_days_f = float(period_days)
+    gaia_query: Any | None = None
 
     def _dependency_versions() -> dict[str, str]:
         from importlib import metadata
@@ -512,6 +521,7 @@ def enrich_candidate(
 
     kept_lightcurves: list[LightCurveData] = []
     kept_sectors: list[int] = []
+    period_days_f = float(period_days)
     for lc in lightcurves:
         sector = int(lc.sector)
         if lc.n_valid <= 0:
@@ -519,7 +529,14 @@ def enrich_candidate(
             continue
         t_min = float(lc.time[lc.valid_mask].min())
         t_max = float(lc.time[lc.valid_mask].max())
-        if not (t_min <= float(t0_btjd) <= t_max):
+        # Keep sectors that contain at least one *predicted* transit epoch.
+        # The provided t0_btjd may lie far outside the sector range; that's OK.
+        #
+        # We compute the nearest epoch to the sector midpoint by shifting t0 by an integer number of periods.
+        t_mid = 0.5 * (t_min + t_max)
+        n = int(np.round((t_mid - float(t0_btjd)) / period_days_f)) if period_days_f > 0 else 0
+        t0_eff = float(t0_btjd) + float(n) * period_days_f
+        if not (t_min <= t0_eff <= t_max):
             _exclude_sector(sector, "insufficient_time_coverage")
             continue
         kept_lightcurves.append(lc)
@@ -599,9 +616,11 @@ def enrich_candidate(
         candidate_evidence = make_skip_block("coords_unavailable")
     else:
         try:
-            gaia = query_gaia_by_position_sync(float(ra_deg), float(dec_deg), radius_arcsec=60.0)
-            primary_mag = gaia.source.phot_g_mean_mag if gaia.source else None
-            neighbors_21 = [n for n in gaia.neighbors if float(n.separation_arcsec) <= 21.0]
+            gaia_query = query_gaia_by_position_sync(float(ra_deg), float(dec_deg), radius_arcsec=60.0)
+            primary_mag = gaia_query.source.phot_g_mean_mag if gaia_query.source else None
+            neighbors_21 = [
+                n for n in gaia_query.neighbors if float(getattr(n, "separation_arcsec", 1e9)) <= 21.0
+            ]
             n_neighbors_21 = int(len(neighbors_21))
 
             brightest_delta: float | None = None
@@ -647,74 +666,111 @@ def enrich_candidate(
     tpf_exptime_used: float | None = None
     tpf_attempts: list[dict[str, Any]] = []
     if sectors_loaded and (config.network_ok or config.cache_dir):
+        tpf_client = _make_mast_client()
+        tried_sectors: set[int] = set()
+
+        def _exptime_candidates_for_sector(sec: int) -> list[float]:
+            exps = sector_exptimes.get(int(sec), {120, 20})
+            out: list[float] = []
+            if 120 in exps:
+                out.append(120.0)
+            if 20 in exps and config.allow_20s:
+                out.append(20.0)
+            if not out:
+                out = [120.0]
+            return out
+
+        def _try_load_tpf_for_sector(sec: int, *, fallback: bool) -> bool:
+            nonlocal tpf_stamp, tpf_sector_used, tpf_exptime_used
+            tried_sectors.add(int(sec))
+            logger.info(
+                "Attempting to load TPF for TIC %d sector %d%s",
+                tic_id,
+                int(sec),
+                " (fallback)" if fallback else "",
+            )
+            for exptime in _exptime_candidates_for_sector(int(sec)):
+                try:
+                    if config.no_download and config.cache_dir:
+                        time_arr, flux_arr, flux_err_arr, wcs, aperture_mask, quality_arr = (
+                            tpf_client.download_tpf_cached(tic_id, int(sec), exptime=exptime)
+                        )
+                    else:
+                        time_arr, flux_arr, flux_err_arr, wcs, aperture_mask, quality_arr = (
+                            tpf_client.download_tpf(tic_id, int(sec), exptime=exptime)
+                        )
+                    tpf_exptime_used = float(exptime)
+                    tpf_attempts.append(
+                        {
+                            "sector": int(sec),
+                            "exptime": float(exptime),
+                            "ok": True,
+                            "fallback": bool(fallback),
+                        }
+                    )
+                    tpf_stamp = TPFStamp(
+                        time=time_arr,
+                        flux=flux_arr,
+                        flux_err=flux_err_arr,
+                        wcs=wcs,
+                        aperture_mask=aperture_mask,
+                        quality=quality_arr,
+                    )
+                    tpf_sector_used = int(sec)
+                    logger.info(
+                        "Loaded TPF for TIC %d sector %d: %d cadences, %dx%d pixels",
+                        tic_id,
+                        int(sec),
+                        flux_arr.shape[0],
+                        flux_arr.shape[1],
+                        flux_arr.shape[2],
+                    )
+                    return True
+                except Exception as e:
+                    tpf_attempts.append(
+                        {
+                            "sector": int(sec),
+                            "exptime": float(exptime),
+                            "ok": False,
+                            "fallback": bool(fallback),
+                            "error_class": type(e).__name__,
+                            "error": str(e),
+                        }
+                    )
+                    continue
+            return False
+
         # Prefer the most recent sector (likely best), but fall back through others.
         for tpf_sector_to_try in sorted({int(s) for s in sectors_loaded}, reverse=True):
-            logger.info("Attempting to load TPF for TIC %d sector %d", tic_id, tpf_sector_to_try)
-            exps = sector_exptimes.get(int(tpf_sector_to_try), {120})
-            exptime_candidates: list[float] = []
-            if 120 in exps:
-                exptime_candidates.append(120.0)
-            if 20 in exps and config.allow_20s:
-                exptime_candidates.append(20.0)
-            if not exptime_candidates:
-                exptime_candidates = [120.0]
             try:
-                tpf_client = _make_mast_client()
-                for exptime in exptime_candidates:
-                    try:
-                        if config.no_download and config.cache_dir:
-                            time_arr, flux_arr, flux_err_arr, wcs, aperture_mask, quality_arr = (
-                                tpf_client.download_tpf_cached(tic_id, tpf_sector_to_try, exptime=exptime)
-                            )
-                        else:
-                            time_arr, flux_arr, flux_err_arr, wcs, aperture_mask, quality_arr = (
-                                tpf_client.download_tpf(tic_id, tpf_sector_to_try, exptime=exptime)
-                            )
-                        tpf_exptime_used = float(exptime)
-                        tpf_attempts.append(
-                            {"sector": int(tpf_sector_to_try), "exptime": float(exptime), "ok": True}
-                        )
-                        break
-                    except Exception as e:
-                        tpf_attempts.append(
-                            {
-                                "sector": int(tpf_sector_to_try),
-                                "exptime": float(exptime),
-                                "ok": False,
-                                "error_class": type(e).__name__,
-                                "error": str(e),
-                            }
-                        )
-                        continue
-                else:
-                    raise LightCurveNotFoundError("No TPF product matched allowed cadence")
-
-                tpf_stamp = TPFStamp(
-                    time=time_arr,
-                    flux=flux_arr,
-                    flux_err=flux_err_arr,
-                    wcs=wcs,
-                    aperture_mask=aperture_mask,
-                    quality=quality_arr,
-                )
-                tpf_sector_used = tpf_sector_to_try
-                logger.info(
-                    "Loaded TPF for TIC %d sector %d: %d cadences, %dx%d pixels",
-                    tic_id,
-                    tpf_sector_to_try,
-                    flux_arr.shape[0],
-                    flux_arr.shape[1],
-                    flux_arr.shape[2],
-                )
-                break
-            except LightCurveNotFoundError as e:
-                logger.debug("No TPF found for TIC %d sector %d: %s", tic_id, tpf_sector_to_try, e)
-            except MASTClientError as e:
-                logger.warning(
-                    "TPF download failed for TIC %d sector %d: %s", tic_id, tpf_sector_to_try, e
-                )
+                if _try_load_tpf_for_sector(int(tpf_sector_to_try), fallback=False):
+                    break
             except Exception as e:
                 logger.warning("Unexpected error loading TPF for TIC %d: %s", tic_id, e)
+
+        # If we still couldn't load a TPF, we can fall back to any other sector where a TPF exists
+        # (either in cache-only mode, or via a MAST search if downloads are allowed). This avoids
+        # "missing pixel families" when the LC sector selection doesn't match available TPF sectors.
+        if tpf_stamp is None:
+            fallback_sectors: list[int] = []
+            try:
+                if config.no_download and config.cache_dir:
+                    res = tpf_client.search_tpf_cached(tic_id)
+                    fallback_sectors = sorted({int(r.sector) for r in res}, reverse=True)
+                else:
+                    res = tpf_client.search_tpf(tic_id)
+                    fallback_sectors = sorted({int(r.sector) for r in res}, reverse=True)
+            except Exception:
+                fallback_sectors = []
+
+            for sec in fallback_sectors:
+                if int(sec) in tried_sectors:
+                    continue
+                try:
+                    if _try_load_tpf_for_sector(int(sec), fallback=True):
+                        break
+                except Exception as e:
+                    logger.warning("Unexpected error loading fallback TPF for TIC %d: %s", tic_id, e)
 
     if config.require_tpf and tpf_stamp is None:
         wall_ms = time.perf_counter() * 1000.0 - start_time_ms
@@ -852,6 +908,9 @@ def enrich_candidate(
             "flip_rate": 0.0,
             "timeseries_verdict": None,
             "timeseries_delta_chi2": None,
+            "timeseries_best_source_id": None,
+            "timeseries_n_windows": None,
+            "timeseries_agrees_with_consensus": None,
             "ghost_summary_by_sector": [ghost_row] if ghost_row is not None else [],
             "host_plausibility_auto": {"skipped": True, "reason": "network_or_coords_unavailable"},
         }
@@ -859,6 +918,127 @@ def enrich_candidate(
             "tpf_sector_used": int(tpf_sector_used),
             "aperture_family": aperture_family,
         }
+
+        # Pixel-level timeseries model competition (host hypothesis disambiguation).
+        if config.enable_pixel_timeseries:
+            try:
+                windows = extract_transit_windows(
+                    np.asarray(tpf_stamp.flux, dtype=np.float64),
+                    np.asarray(tpf_stamp.time, dtype=np.float64),
+                    period=period_days_f,
+                    t0=float(t0_btjd),
+                    duration_hours=float(duration_hours),
+                    errors=np.asarray(tpf_stamp.flux_err, dtype=np.float64)
+                    if getattr(tpf_stamp, "flux_err", None) is not None
+                    else None,
+                )
+                if len(windows) > int(config.pixel_timeseries_max_windows):
+                    windows = windows[: int(config.pixel_timeseries_max_windows)]
+
+                if not windows:
+                    pixel_host_hypotheses["timeseries_verdict"] = "NO_EVIDENCE"
+                    pixel_host_hypotheses["timeseries_delta_chi2"] = 0.0
+                    pixel_host_hypotheses["timeseries_n_windows"] = 0
+                else:
+                    n_rows, n_cols = (int(tpf_stamp.stamp_shape[0]), int(tpf_stamp.stamp_shape[1]))
+
+                    # Target hypothesis position: prefer aperture centroid, else stamp center.
+                    row0 = (n_rows - 1) / 2.0
+                    col0 = (n_cols - 1) / 2.0
+                    ap = getattr(tpf_stamp, "aperture_mask", None)
+                    if ap is not None:
+                        ap_mask = np.asarray(ap) > 0
+                        if ap_mask.ndim == 2 and int(np.sum(ap_mask)) > 0:
+                            rr, cc = np.where(ap_mask)
+                            row0 = float(np.mean(rr))
+                            col0 = float(np.mean(cc))
+
+                    hypotheses: list[dict[str, float | str]] = [
+                        {"source_id": "target", "row": float(row0), "col": float(col0)}
+                    ]
+
+                    # Add Gaia neighbors that fall inside the stamp, if WCS available.
+                    wcs = getattr(tpf_stamp, "wcs", None)
+                    if (
+                        config.network_ok
+                        and gaia_query is not None
+                        and wcs is not None
+                        and int(config.pixel_timeseries_max_hypotheses) > 1
+                    ):
+                        neighbors = sorted(
+                            list(getattr(gaia_query, "neighbors", []) or []),
+                            key=lambda n: float(getattr(n, "separation_arcsec", 1e9)),
+                        )
+
+                        def _world_to_pixel(ra_deg: float, dec_deg: float) -> tuple[float, float] | None:
+                            try:
+                                if hasattr(wcs, "world_to_pixel_values"):
+                                    x, y = wcs.world_to_pixel_values(ra_deg, dec_deg)
+                                    return float(y), float(x)  # row, col
+                                if hasattr(wcs, "all_world2pix"):
+                                    x, y = wcs.all_world2pix(ra_deg, dec_deg, 0)
+                                    return float(y), float(x)
+                            except Exception:
+                                return None
+                            return None
+
+                        max_neighbors = max(0, int(config.pixel_timeseries_max_hypotheses) - 1)
+                        for n in neighbors:
+                            if len(hypotheses) - 1 >= max_neighbors:
+                                break
+                            rrcc = _world_to_pixel(float(n.ra), float(n.dec))
+                            if rrcc is None:
+                                continue
+                            r, c = rrcc
+                            if 0 <= r < n_rows and 0 <= c < n_cols:
+                                hypotheses.append(
+                                    {"source_id": str(int(n.source_id)), "row": float(r), "col": float(c)}
+                                )
+
+                    # Always add at least one competitor hypothesis for a finite delta_chi2.
+                    if len(hypotheses) == 1:
+                        hypotheses.append({"source_id": "bg", "row": 0.0, "col": 0.0})
+
+                    prf_model = get_prf_model("parametric")
+                    fits_by_source = fit_all_hypotheses_timeseries(
+                        windows=windows,
+                        hypotheses=hypotheses,
+                        prf_model=prf_model,
+                        fit_baseline=True,
+                        baseline_order=0,
+                    )
+                    evidence = {
+                        sid: aggregate_timeseries_evidence(fits) for sid, fits in fits_by_source.items()
+                    }
+                    best_source_id, verdict, delta_chi2 = select_best_hypothesis_timeseries(
+                        evidence, margin_threshold=float(config.pixel_timeseries_margin_threshold)
+                    )
+
+                    delta_val: float | None = float(delta_chi2) if np.isfinite(delta_chi2) else None
+                    consensus = str(pixel_host_hypotheses.get("consensus_best_source_id") or "")
+                    agrees: bool | None = None
+                    if best_source_id:
+                        if best_source_id == "target" and consensus.startswith("tic:"):
+                            agrees = True
+                        elif best_source_id == consensus:
+                            agrees = True
+                        else:
+                            agrees = False
+
+                    pixel_host_hypotheses["timeseries_verdict"] = verdict
+                    pixel_host_hypotheses["timeseries_delta_chi2"] = delta_val
+                    pixel_host_hypotheses["timeseries_best_source_id"] = best_source_id
+                    pixel_host_hypotheses["timeseries_n_windows"] = int(len(windows))
+                    pixel_host_hypotheses["timeseries_agrees_with_consensus"] = agrees
+            except Exception as e:
+                pixel_host_hypotheses["timeseries_verdict"] = "NO_EVIDENCE"
+                pixel_host_hypotheses["timeseries_delta_chi2"] = None
+                pixel_host_hypotheses["timeseries_best_source_id"] = None
+                pixel_host_hypotheses["timeseries_n_windows"] = None
+                pixel_host_hypotheses["timeseries_agrees_with_consensus"] = None
+                pixel_host_hypotheses.setdefault("warnings", []).append(
+                    f"pixel_timeseries_failed:{type(e).__name__}:{e}"
+                )
 
         # Host plausibility (Gaia cone search) - network gated.
         if (
@@ -869,7 +1049,9 @@ def enrich_candidate(
             and depth_ppm is not None
         ):
             try:
-                gaia = query_gaia_by_position_sync(float(ra_deg), float(dec_deg), radius_arcsec=60.0)
+                gaia = gaia_query or query_gaia_by_position_sync(
+                    float(ra_deg), float(dec_deg), radius_arcsec=60.0
+                )
                 primary_mag = gaia.source.phot_g_mean_mag if gaia.source else None
 
                 # Estimate stellar radius (solar radii) for implied-size checks.
@@ -995,6 +1177,84 @@ def enrich_candidate(
 
     # Step 7: Build RawEvidencePacket from pipeline results
     check_results_dicts = [r.model_dump() for r in bundle.results]
+
+    # Add PF01 prefilter-style metrics (used by feature builder for SNR/depth proxies).
+    #
+    # Note: We run enrichment from an externally supplied ephemeris, so there is no
+    # upstream "detection" stage to produce PF01. We compute it directly from the
+    # stitched light curve so model training has consistent depth/SNR features.
+    def _robust_sigma_mad(x: np.ndarray) -> float | None:
+        x = x[np.isfinite(x)]
+        if x.size < 10:
+            return None
+        med = float(np.median(x))
+        mad = float(np.median(np.abs(x - med)))
+        if not np.isfinite(mad) or mad <= 0:
+            return None
+        return 1.4826 * mad
+
+    def _compute_pf01_metrics() -> dict[str, Any]:
+        if depth_ppm is None:
+            return {}
+        depth_frac = float(depth_ppm) * 1e-6
+        if not np.isfinite(depth_frac) or depth_frac <= 0:
+            return {}
+        if period_days_f <= 0:
+            return {}
+
+        t = stitched_lc_data.time
+        f = stitched_lc_data.flux
+        m = stitched_lc_data.valid_mask
+        if t.size == 0 or f.size != t.size or m.size != t.size:
+            return {}
+
+        dur_days = float(duration_hours) / 24.0
+        if dur_days <= 0:
+            return {}
+
+        # Time to nearest transit center (days), using modular arithmetic.
+        dt = (t - float(t0_btjd) + 0.5 * period_days_f) % period_days_f - 0.5 * period_days_f
+        in_tr = m & (np.abs(dt) <= 0.5 * dur_days)
+        oot = m & ~in_tr
+
+        n_in = int(np.sum(in_tr))
+        n_out = int(np.sum(oot))
+        if n_in < 3 or n_out < 10:
+            return {"n_in_transit": n_in, "n_out_of_transit": n_out}
+
+        # Depth estimate from median in/out-of-transit levels.
+        oot_med = float(np.median(f[oot]))
+        in_med = float(np.median(f[in_tr]))
+        depth_est_frac = oot_med - in_med
+        depth_est_ppm = float(depth_est_frac) * 1e6 if np.isfinite(depth_est_frac) else None
+
+        sigma = _robust_sigma_mad(f[oot] - oot_med)
+        snr_proxy = None
+        if sigma is not None and sigma > 0 and np.isfinite(sigma):
+            snr_proxy = float(depth_frac / sigma * np.sqrt(float(n_in)))
+
+        out: dict[str, Any] = {
+            "n_in_transit": n_in,
+            "n_out_of_transit": n_out,
+        }
+        if depth_est_ppm is not None and np.isfinite(depth_est_ppm):
+            out["depth_est_ppm"] = depth_est_ppm
+        if snr_proxy is not None and np.isfinite(snr_proxy):
+            out["snr_proxy"] = snr_proxy
+            out["snr"] = snr_proxy
+        return out
+
+    pf01_metrics = _compute_pf01_metrics()
+    if pf01_metrics:
+        check_results_dicts.append(
+            {
+                "id": "PF01",
+                "name": "Prefilter SNR/depth metrics",
+                "passed": None,
+                "confidence": 0.5,
+                "metrics": pf01_metrics,
+            }
+        )
 
     raw: RawEvidencePacket = {
         "target": {

@@ -170,10 +170,10 @@ def _extract_pixel_host(
     ts_verdict = pixel_host_hypotheses.get("timeseries_verdict") or pixel_host_hypotheses.get(
         "pixel_timeseries_verdict"
     )
-    ts_delta = _as_float(
-        pixel_host_hypotheses.get("timeseries_delta_chi2")
-        or pixel_host_hypotheses.get("pixel_timeseries_delta_chi2")
-    )
+    ts_delta_raw = pixel_host_hypotheses.get("timeseries_delta_chi2")
+    if ts_delta_raw is None:
+        ts_delta_raw = pixel_host_hypotheses.get("pixel_timeseries_delta_chi2")
+    ts_delta = _as_float(ts_delta_raw)
     ts_best = pixel_host_hypotheses.get("timeseries_best_source_id")
     ts_n_windows = _as_int(pixel_host_hypotheses.get("timeseries_n_windows"))
     ts_agrees = pixel_host_hypotheses.get("timeseries_agrees_with_consensus")
@@ -223,11 +223,15 @@ def _extract_host_plausibility_from_auto(
             result["requires_resolved_followup"] = requires_followup
 
     rationale = host_plausibility_auto.get("rationale")
+    if rationale is None and isinstance(physics_flags, dict):
+        rationale = physics_flags.get("rationale")
     if rationale is not None:
         result["rationale"] = str(rationale)
 
     # Physically impossible source IDs
     impossible_ids = host_plausibility_auto.get("physically_impossible_host_source_ids")
+    if impossible_ids is None:
+        impossible_ids = host_plausibility_auto.get("physically_impossible_source_ids")
     if isinstance(impossible_ids, list):
         result["physically_impossible_source_ids"] = [str(sid) for sid in impossible_ids]
 
@@ -239,14 +243,19 @@ def _extract_host_plausibility_from_auto(
         for sc in scenarios_raw:
             if not isinstance(sc, dict):
                 continue
-            host = sc.get("host") or {}
-            if not isinstance(host, dict):
-                continue
             scenario: HostScenario = {}
-            source_id = host.get("source_id")
+            # Support both legacy layout (scenario.host.source_id) and the newer
+            # flat layout used by our enrichment pipeline (scenario.source_id).
+            host = sc.get("host")
+            if isinstance(host, dict):
+                source_id = host.get("source_id")
+            else:
+                source_id = sc.get("source_id")
             if source_id is not None:
                 scenario["source_id"] = str(source_id)
-                scenario["physically_impossible"] = str(source_id) in impossible_set
+                scenario["physically_impossible"] = bool(
+                    sc.get("physically_impossible") or (str(source_id) in impossible_set)
+                )
             flux_frac = _as_float(sc.get("flux_fraction"))
             if flux_frac is not None:
                 scenario["flux_fraction"] = flux_frac
@@ -423,7 +432,9 @@ def build_features(
         raise ValueError(msg)
     duration_hours = float(duration_hours)
 
-    depth_ppm = _as_float(depth_info.get("value"))
+    # Depth is optional but, when provided, must round-trip from the worklist.
+    # Our RawEvidencePacket stores it as input_depth_ppm (legacy adapters used "value").
+    depth_ppm = _as_float(depth_info.get("input_depth_ppm") or depth_info.get("value"))
 
     # Build canonical candidate key (stable; independent of any refinement).
     candidate_key = f"{tic_id}|{period_days}|{t0_btjd}"
@@ -462,8 +473,12 @@ def build_features(
     # -------------------------------------------------------------------------
     # V02: Secondary Eclipse Analysis
     # -------------------------------------------------------------------------
-    secondary_significant = _as_bool(v02.get("significant_secondary"))
     secondary_depth_sigma = _as_float(v02.get("secondary_depth_sigma"))
+    secondary_significant = _as_bool(v02.get("significant_secondary"))
+    if secondary_significant is None and secondary_depth_sigma is not None:
+        # V02 emits the continuous `secondary_depth_sigma` metric but not a boolean.
+        # Use a conservative threshold consistent with "significant" language.
+        secondary_significant = bool(secondary_depth_sigma >= 3.0)
 
     if secondary_depth_sigma is None:
         missing_feature_families.append("SECONDARY")
@@ -491,9 +506,25 @@ def build_features(
     # -------------------------------------------------------------------------
     transit_shape_ratio = _as_float(v05.get("shape_ratio"))
     transit_shape_raw = v05.get("shape")
-    transit_shape: str | None = (
-        str(transit_shape_raw) if isinstance(transit_shape_raw, str) else None
-    )
+    transit_shape: str | None = str(transit_shape_raw) if isinstance(transit_shape_raw, str) else None
+    # V05 currently provides continuous shape metrics but no discrete label; derive one.
+    if transit_shape is None:
+        t_flat = _as_float(v05.get("t_flat_hours"))
+        t_total = _as_float(v05.get("t_total_hours"))
+        ratio = None
+        if t_flat is not None and t_total is not None and t_total > 0:
+            ratio = t_flat / t_total
+        # Fallback to legacy shape_ratio (depth_bottom/depth_edge); U-shape tends to have >1.
+        if ratio is None and transit_shape_ratio is not None:
+            # Map to an approximate flatness proxy in [0,1] (heuristic).
+            ratio = max(0.0, min(1.0, 1.0 - 1.0 / max(1.0, transit_shape_ratio)))
+        if ratio is not None:
+            if ratio <= 0.10:
+                transit_shape = "V"
+            elif ratio >= 0.30:
+                transit_shape = "U"
+            else:
+                transit_shape = "AMBIG"
 
     if transit_shape_ratio is None:
         missing_feature_families.append("TRANSIT_SHAPE")

@@ -412,7 +412,7 @@ class MASTClient:
             return
 
         # Directory names include the 16-digit TIC in both the TESS and HLSP layouts.
-        tic_pat = re.compile(r"(\\d{16})")
+        tic_pat = re.compile(r"(\d{16})")
 
         for subdir in ("TESS", "HLSP"):
             base = root / subdir
@@ -433,13 +433,13 @@ class MASTClient:
 
     @staticmethod
     def _parse_sector_from_name(name: str) -> int | None:
-        m = re.search(r"-s(\\d{4})-", name)
+        m = re.search(r"-s(\d{4})-", name)
         if m:
             try:
                 return int(m.group(1))
             except Exception:
                 return None
-        m = re.search(r"_s(\\d{4})_", name)
+        m = re.search(r"_s(\d{4})_", name)
         if m:
             try:
                 return int(m.group(1))
@@ -474,6 +474,48 @@ class MASTClient:
         for d in dirs:
             try:
                 for f in d.glob("*lc.fits*"):
+                    if tic16 not in f.name:
+                        continue
+                    sec = self._parse_sector_from_name(f.name) or self._parse_sector_from_name(d.name)
+                    if sec is None:
+                        continue
+                    if sector is not None and int(sec) != int(sector):
+                        continue
+                    out.append(
+                        SearchResult(
+                            tic_id=int(tic_id),
+                            sector=int(sec),
+                            author=str(author if author is not None else (self.author or "SPOC")),
+                            exptime=float(self._infer_exptime_seconds(f)),
+                            mission="TESS",
+                            distance=None,
+                        )
+                    )
+            except Exception:
+                continue
+        out.sort(key=lambda r: int(r.sector))
+        return out
+
+    def search_tpf_cached(
+        self,
+        tic_id: int,
+        sector: int | None = None,
+        author: str | None = None,
+    ) -> list[SearchResult]:
+        """Search cached TPF products without any network calls."""
+        root = self._mast_download_root()
+        if root is None:
+            return []
+        self._build_cache_index()
+        tic16 = f"{int(tic_id):016d}"
+        dirs = self._cache_dirs_by_tic.get(tic16, [])
+        if not dirs:
+            return []
+
+        out: list[SearchResult] = []
+        for d in dirs:
+            try:
+                for f in d.glob("*tp.fits*"):
                     if tic16 not in f.name:
                         continue
                     sec = self._parse_sector_from_name(f.name) or self._parse_sector_from_name(d.name)
@@ -597,7 +639,7 @@ class MASTClient:
             cadence_seconds=cadence_seconds,
             provenance=LightCurveProvenance(
                 source="MAST/lightkurve(cache_only)",
-                selected_author=str(author if author is not None else (self.author or "SPOC")),
+                selected_author=str(self.author or "SPOC"),
                 selected_exptime_seconds=float(self._infer_exptime_seconds(path)),
                 preferred_author=str(self.author) if self.author is not None else None,
                 requested_exptime_seconds=float(exptime) if exptime is not None else None,
