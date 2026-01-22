@@ -28,12 +28,13 @@ def test_enrich_candidate_fails_when_t0_outside_observed_span(tmp_path: Path) ->
     _raw, row = enrich_candidate(
         tic_id,
         toi=None,
-        period_days=10.0,
-        t0_btjd=200.0,  # outside [90, 120]
+        # Choose an ephemeris with no predicted transit epoch inside [90, 120].
+        # The pipeline shifts t0 by integer periods to find an epoch near each sector.
+        period_days=1000.0,
+        t0_btjd=200.0,  # outside [90, 120] and too far to shift into range
         duration_hours=2.0,
         depth_ppm=500.0,
         config=FeatureConfig(network_ok=False, bulk_mode=True, local_data_path=str(base)),
     )
     assert row["status"] == "ERROR"
     assert row["error_class"] == "InsufficientTimeCoverageError"
-

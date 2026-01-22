@@ -24,7 +24,7 @@ def test_multisector_drops_bad_time_coverage_sector(tmp_path: Path) -> None:
     tic_id = 123
     base = tmp_path / "data"
 
-    # sector1 does not cover t0=100
+    # sector1 does not cover any transit epoch for this ephemeris
     _write_sector_csv(base / f"tic{tic_id}" / "sector1_pdcsap.csv", time_btjd=np.linspace(0.0, 10.0, 300))
     # sector2 covers t0=100
     _write_sector_csv(
@@ -34,7 +34,7 @@ def test_multisector_drops_bad_time_coverage_sector(tmp_path: Path) -> None:
     _raw, row = enrich_candidate(
         tic_id,
         toi=None,
-        period_days=10.0,
+        period_days=40.0,
         t0_btjd=100.0,
         duration_hours=2.0,
         depth_ppm=500.0,

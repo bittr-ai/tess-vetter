@@ -58,6 +58,15 @@ class FeatureConfig:
         when network is allowed (default: True).
     require_tpf : bool
         If True, fail enrichment when no TPF could be loaded (default: False).
+    pixel_timeseries_max_hypotheses : int
+        Maximum number of host hypotheses to compare in pixel-timeseries analysis
+        (default: 4 = target + up to 3 neighbors).
+    pixel_timeseries_max_windows : int
+        Maximum number of transit windows to fit in pixel-timeseries analysis
+        (default: 8).
+    pixel_timeseries_margin_threshold : float
+        Delta chi-squared threshold for a resolved ON/OFF-target verdict
+        (default: 2.0).
     """
 
     # Input handling
@@ -87,3 +96,8 @@ class FeatureConfig:
 
     # Gating
     require_tpf: bool = False
+
+    # Pixel-timeseries tuning (runtime guardrails)
+    pixel_timeseries_max_hypotheses: int = 4
+    pixel_timeseries_max_windows: int = 8
+    pixel_timeseries_margin_threshold: float = 2.0
