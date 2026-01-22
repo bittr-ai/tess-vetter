@@ -3,7 +3,7 @@
 from typing import Literal, TypedDict
 
 # Schema version - bump on any semantic change to feature definitions
-FEATURE_SCHEMA_VERSION = "6.0.0"
+FEATURE_SCHEMA_VERSION = "6.0.1"
 
 
 class EnrichedRow(TypedDict, total=False):
@@ -158,6 +158,9 @@ class EnrichedRow(TypedDict, total=False):
 
     modshift_fred: float | None
     """ModShift FRED statistic (false-alarm rate estimate)."""
+
+    v11b_secondary_primary_ratio: float | None
+    """Secondary/primary ratio derived from V11b (sig_sec / sig_pri)."""
 
     v11b_sig_pri: float | None
     """V11b primary signal significance."""

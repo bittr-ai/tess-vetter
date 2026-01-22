@@ -549,6 +549,9 @@ def build_features(
     v11b_sig_pri = _as_float(v11b.get("sig_pri"))
     v11b_sig_sec = _as_float(v11b.get("sig_sec"))
     v11b_fred = _as_float(v11b.get("fred"))
+    v11b_secondary_primary_ratio: float | None = None
+    if v11b_sig_pri is not None and v11b_sig_sec is not None and v11b_sig_pri > 0:
+        v11b_secondary_primary_ratio = v11b_sig_sec / v11b_sig_pri
 
     if v11b_sig_pri is None:
         missing_feature_families.append("MODSHIFT_TESS")
@@ -737,6 +740,8 @@ def build_features(
         "modshift_secondary_primary_ratio": modshift_secondary_ratio,
         "modshift_significant_secondary": modshift_significant_secondary,
         "modshift_fred": modshift_fred,
+        # ModShift TESS ratio (V11b-derived)
+        "v11b_secondary_primary_ratio": v11b_secondary_primary_ratio,
         # ModShift TESS (V11b)
         "v11b_sig_pri": v11b_sig_pri,
         "v11b_sig_sec": v11b_sig_sec,
