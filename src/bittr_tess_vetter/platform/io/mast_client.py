@@ -368,6 +368,15 @@ class MASTClient:
         """Lazy import of lightkurve to avoid import-time overhead."""
         if not self._lk_imported:
             try:
+                # Best-effort: bound astroquery MAST call latency so a single hung request
+                # doesn't stall bulk enrichment for many minutes.
+                try:
+                    from astroquery.mast import Conf as MastConf
+
+                    MastConf.timeout = float(os.getenv("BTV_MAST_TIMEOUT_SECONDS", "60"))
+                except Exception:
+                    pass
+
                 if self.cache_dir:
                     # Best-effort: ensure lightkurve reads/writes from a shared cache directory.
                     # This helps bulk enrichment reuse existing local caches across repos.
@@ -1676,6 +1685,101 @@ class MASTClient:
                 return float(val)
             except Exception:
                 return None
+
+        preferred_exptime = 120.0 if exptime is None else float(exptime)
+
+        def _matches_exptime(row: Any, target_exptime: float) -> bool:
+            if not hasattr(row, "exptime"):
+                # If the attribute is missing, we cannot filter reliably; accept only when
+                # the caller didn't request a specific cadence.
+                return exptime is None
+            v = _coerce_float(getattr(row, "exptime", None))
+            if v is None:
+                return False
+            return abs(float(v) - float(target_exptime)) < 1.0
+
+        # Choose product row(s).
+        # - If an exptime is requested, prefer those rows.
+        # - Otherwise, prefer 120s cadence where available.
+        candidates: list[Any] = []
+        try:
+            for i in range(len(search_result)):
+                candidates.append(search_result[i])
+        except Exception:
+            candidates = []
+
+        if not candidates:
+            raise LightCurveNotFoundError(f"No TPF rows found for TIC {tic_id} sector {sector}")
+
+        selected_rows: list[Any]
+        if exptime is not None:
+            selected_rows = [r for r in candidates if _matches_exptime(r, preferred_exptime)]
+        else:
+            selected_rows = [r for r in candidates if _matches_exptime(r, 120.0)]
+            if not selected_rows:
+                selected_rows = candidates
+
+        if not selected_rows:
+            raise LightCurveNotFoundError(
+                f"No TPF products matched exptime={exptime} for TIC {tic_id} sector {sector}"
+            )
+
+        # Prefer closest distance-to-target if available, otherwise take first.
+        def _distance_val(row: Any) -> float:
+            v = None
+            if hasattr(row, "distance"):
+                v = _coerce_float(getattr(row, "distance", None))
+            return float(v) if v is not None else float("inf")
+
+        selected_rows.sort(key=_distance_val)
+        selected = selected_rows[0]
+
+        try:
+            tpf = selected.download()
+        except Exception as e:
+            logger.error(f"TPF download failed for {target} sector {sector}: {e}")
+            raise MASTClientError(f"Failed to download TPF TIC {tic_id} sector {sector}: {e}") from e
+
+        if tpf is None:
+            raise MASTClientError(f"TPF download returned None for TIC {tic_id} sector {sector}")
+
+        try:
+            time_val = getattr(tpf, "time", None)
+            if hasattr(time_val, "value"):
+                time_val = time_val.value
+            time_arr = np.asarray(time_val, dtype=np.float64)
+
+            flux_val = getattr(tpf, "flux", None)
+            if hasattr(flux_val, "value"):
+                flux_val = flux_val.value
+            flux_arr = np.asarray(flux_val, dtype=np.float64)
+
+            flux_err_val = getattr(tpf, "flux_err", None)
+            if flux_err_val is None:
+                flux_err_arr = None
+            else:
+                if hasattr(flux_err_val, "value"):
+                    flux_err_val = flux_err_val.value
+                flux_err_arr = np.asarray(flux_err_val, dtype=np.float64)
+
+            quality_val = getattr(tpf, "quality", None)
+            if quality_val is None:
+                quality_arr = None
+            else:
+                if hasattr(quality_val, "value"):
+                    quality_val = quality_val.value
+                quality_arr = np.asarray(quality_val, dtype=np.int32)
+
+            wcs = getattr(tpf, "wcs", None)
+
+            aperture_mask = None
+            if hasattr(tpf, "pipeline_mask") and getattr(tpf, "pipeline_mask") is not None:
+                aperture_mask = np.asarray(getattr(tpf, "pipeline_mask"), dtype=np.int32)
+        except Exception as e:
+            logger.error(f"Failed to extract arrays from downloaded TPF for {target}: {e}")
+            raise MASTClientError(f"Failed to process TPF TIC {tic_id} sector {sector}: {e}") from e
+
+        return time_arr, flux_arr, flux_err_arr, wcs, aperture_mask, quality_arr
 
     def download_tpf_cached(
         self,
