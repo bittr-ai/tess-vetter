@@ -78,8 +78,10 @@ def _is_likely_folded(time: np.ndarray, period_days: float) -> bool:
     baseline = float(np.nanmax(time) - np.nanmin(time))
     if not np.isfinite(baseline):
         return False
-    if baseline < 1.5 * period_days:
-        return True
+    # Do not treat "baseline shorter than the period" as folded: long-period
+    # candidates observed for a single sector can have baseline < P but are still
+    # provided in absolute BTJD time. The reliable folded-input indicator is that
+    # the time axis itself lives in a [0, ~P] range.
     return bool(np.nanmin(time) >= 0 and np.nanmax(time) <= period_days * 1.1)
 
 
