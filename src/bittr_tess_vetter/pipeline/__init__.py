@@ -583,6 +583,90 @@ def enrich_candidate(
         wall_ms = time.perf_counter() * 1000.0 - start_time_ms
         return _make_error_response("NoUsablePointsError", "No usable points after stitching", wall_ms)
 
+    # Guardrail: if the provided ephemeris yields no in-transit cadences in the stitched light curve,
+    # downstream checks (ModShift, depth stability, pixel evidence) will be unreliable or fail.
+    # Prefer an explicit error over emitting misleading "missing families".
+    def _count_in_out(*, time_arr: np.ndarray, t0: float, dur_h: float) -> tuple[int, int]:
+        duration_days = float(dur_h) / 24.0
+        phase = ((time_arr - float(t0)) % period_days_f) / period_days_f
+        phase = np.where(phase > 0.5, phase - 1.0, phase)
+        half_duration_phase = (duration_days / 2.0) / period_days_f
+        in_transit = np.abs(phase) <= half_duration_phase
+        n_in = int(np.sum(in_transit))
+        n_out = int(np.sum(~in_transit))
+        return n_in, n_out
+
+    try:
+        t_valid = np.asarray(stitched_lc_data.time[stitched_lc_data.valid_mask], dtype=np.float64)
+        n_in_lc, n_out_lc = _count_in_out(
+            time_arr=t_valid, t0=float(t0_btjd), dur_h=float(duration_hours)
+        )
+    except Exception:
+        n_in_lc, n_out_lc = 0, 0
+
+    if n_in_lc <= 0:
+        # Optional: attempt a bounded local t0 refinement to rescue slightly-off ephemerides.
+        if getattr(config, "enable_t0_refine", False):
+            try:
+                from bittr_tess_vetter.validation.ephemeris_refinement import (
+                    EphemerisRefinementCandidate,
+                    EphemerisRefinementConfig,
+                    refine_one_candidate_numpy,
+                )
+
+                max_minutes = float(getattr(config, "t0_refine_max_minutes", 60.0))
+                t0_window_phase = float(max_minutes / (period_days_f * 24.0 * 60.0))
+                refine_cfg = EphemerisRefinementConfig(t0_window_phase=float(max(1e-4, t0_window_phase)))
+                cand = EphemerisRefinementCandidate(
+                    period_days=float(period_days_f),
+                    t0_btjd=float(t0_btjd),
+                    duration_hours=float(duration_hours),
+                )
+                ref = refine_one_candidate_numpy(
+                    time=np.asarray(stitched_lc_data.time, dtype=np.float64),
+                    flux=np.asarray(stitched_lc_data.flux, dtype=np.float64),
+                    flux_err=np.asarray(stitched_lc_data.flux_err, dtype=np.float64)
+                    if stitched_lc_data.flux_err is not None
+                    else None,
+                    candidate=cand,
+                    config=refine_cfg,
+                )
+                # Accept only if it actually yields in-transit cadences and meaningfully improves score.
+                n_in_ref, _n_out_ref = _count_in_out(
+                    time_arr=t_valid,
+                    t0=float(ref.t0_refined_btjd),
+                    dur_h=float(ref.duration_refined_hours),
+                )
+                if (
+                    float(ref.score_z) >= float(getattr(config, "t0_refine_min_delta_score", 2.0))
+                    and n_in_ref > 0
+                ):
+                    logger.info(
+                        "Refined t0 for TIC %d: t0 %.6f -> %.6f (score_z=%.2f)",
+                        tic_id,
+                        float(t0_btjd),
+                        float(ref.t0_refined_btjd),
+                        float(ref.score_z),
+                    )
+                    t0_btjd = float(ref.t0_refined_btjd)
+                    duration_hours = float(ref.duration_refined_hours)
+                else:
+                    raise ValueError("t0_refine did not recover any in-transit cadences")
+            except Exception as e:
+                wall_ms = time.perf_counter() * 1000.0 - start_time_ms
+                return _make_error_response(
+                    "NoInTransitCadencesError",
+                    f"Provided ephemeris yields zero in-transit cadences (t0_refine failed: {type(e).__name__}: {e})",
+                    wall_ms,
+                )
+        else:
+            wall_ms = time.perf_counter() * 1000.0 - start_time_ms
+            return _make_error_response(
+                "NoInTransitCadencesError",
+                "Provided ephemeris yields zero in-transit cadences in available light curve data",
+                wall_ms,
+            )
+
     # Step 4: Get target info for coordinates and stellar parameters
     target = None
     stellar = None
@@ -616,7 +700,22 @@ def enrich_candidate(
         candidate_evidence = make_skip_block("coords_unavailable")
     else:
         try:
-            gaia_query = query_gaia_by_position_sync(float(ra_deg), float(dec_deg), radius_arcsec=60.0)
+            gaia_cache_path = None
+            if config.cache_dir:
+                try:
+                    gaia_cache_path = str(Path(config.cache_dir) / "btv_gaia_cache.sqlite")
+                except Exception:
+                    gaia_cache_path = None
+            # Keep this query fast for bulk enrichment; if Gaia is slow/unavailable,
+            # we prefer a skip block over stalling the entire run.
+            gaia_query = query_gaia_by_position_sync(
+                float(ra_deg),
+                float(dec_deg),
+                radius_arcsec=60.0,
+                timeout=20,
+                max_retries=1,
+                cache_path=gaia_cache_path,
+            )
             primary_mag = gaia_query.source.phot_g_mean_mag if gaia_query.source else None
             neighbors_21 = [
                 n for n in gaia_query.neighbors if float(getattr(n, "separation_arcsec", 1e9)) <= 21.0
@@ -668,6 +767,32 @@ def enrich_candidate(
     if sectors_loaded and (config.network_ok or config.cache_dir):
         tpf_client = _make_mast_client()
         tried_sectors: set[int] = set()
+        cached_tpf_sectors: set[int] | None = None
+        tpf_no_transit_coverage = False
+        tpf_fallback: tuple[TPFStamp, int, float] | None = None
+
+        # In cache-only mode, avoid probing sectors that cannot possibly exist in cache.
+        if config.no_download and config.cache_dir:
+            try:
+                res = tpf_client.search_tpf_cached(tic_id)
+                cached_tpf_sectors = {int(r.sector) for r in res}
+            except Exception:
+                cached_tpf_sectors = set()
+
+        def _tpf_transit_coverage_ok(time_arr: np.ndarray) -> tuple[bool, int, int]:
+            """Return whether the time array contains usable in/out-of-transit cadence coverage."""
+            if time_arr.ndim != 1 or time_arr.size < 3:
+                return False, 0, 0
+            duration_days = float(duration_hours) / 24.0
+            phase = ((time_arr - float(t0_btjd)) % period_days_f) / period_days_f
+            phase = np.where(phase > 0.5, phase - 1.0, phase)
+            half_duration_phase = (duration_days / 2.0) / period_days_f
+            in_transit = np.abs(phase) <= half_duration_phase
+            n_in = int(np.sum(in_transit))
+            n_out = int(np.sum(~in_transit))
+            # Require some robustness for medians/difference images.
+            ok = n_in >= 3 and n_out >= 10
+            return ok, n_in, n_out
 
         def _exptime_candidates_for_sector(sec: int) -> list[float]:
             exps = sector_exptimes.get(int(sec), {120, 20})
@@ -681,7 +806,7 @@ def enrich_candidate(
             return out
 
         def _try_load_tpf_for_sector(sec: int, *, fallback: bool) -> bool:
-            nonlocal tpf_stamp, tpf_sector_used, tpf_exptime_used
+            nonlocal tpf_stamp, tpf_sector_used, tpf_exptime_used, tpf_fallback
             tried_sectors.add(int(sec))
             logger.info(
                 "Attempting to load TPF for TIC %d sector %d%s",
@@ -699,6 +824,41 @@ def enrich_candidate(
                         time_arr, flux_arr, flux_err_arr, wcs, aperture_mask, quality_arr = (
                             tpf_client.download_tpf(tic_id, int(sec), exptime=exptime)
                         )
+                    ok_cov, n_in, n_out = _tpf_transit_coverage_ok(
+                        np.asarray(time_arr, dtype=np.float64)
+                    )
+                    if not ok_cov:
+                        if tpf_fallback is None:
+                            tpf_fallback = (
+                                TPFStamp(
+                                    time=time_arr,
+                                    flux=flux_arr,
+                                    flux_err=flux_err_arr,
+                                    wcs=wcs,
+                                    aperture_mask=aperture_mask,
+                                    quality=quality_arr,
+                                ),
+                                int(sec),
+                                float(exptime),
+                            )
+                        tpf_attempts.append(
+                            {
+                                "sector": int(sec),
+                                "exptime": float(exptime),
+                                "ok": False,
+                                "fallback": bool(fallback),
+                                "reason": "no_transit_coverage",
+                                "n_in_transit": int(n_in),
+                                "n_out_of_transit": int(n_out),
+                            }
+                        )
+                        logger.info(
+                            "TPF sector %d has no usable transit coverage (n_in=%d, n_out=%d); trying next sector",
+                            int(sec),
+                            int(n_in),
+                            int(n_out),
+                        )
+                        continue
                     tpf_exptime_used = float(exptime)
                     tpf_attempts.append(
                         {
@@ -706,6 +866,8 @@ def enrich_candidate(
                             "exptime": float(exptime),
                             "ok": True,
                             "fallback": bool(fallback),
+                            "n_in_transit": int(n_in),
+                            "n_out_of_transit": int(n_out),
                         }
                     )
                     tpf_stamp = TPFStamp(
@@ -741,7 +903,11 @@ def enrich_candidate(
             return False
 
         # Prefer the most recent sector (likely best), but fall back through others.
-        for tpf_sector_to_try in sorted({int(s) for s in sectors_loaded}, reverse=True):
+        candidate_sectors = sorted({int(s) for s in sectors_loaded}, reverse=True)
+        if cached_tpf_sectors is not None:
+            candidate_sectors = [s for s in candidate_sectors if s in cached_tpf_sectors]
+
+        for tpf_sector_to_try in candidate_sectors:
             try:
                 if _try_load_tpf_for_sector(int(tpf_sector_to_try), fallback=False):
                     break
@@ -772,6 +938,11 @@ def enrich_candidate(
                 except Exception as e:
                     logger.warning("Unexpected error loading fallback TPF for TIC %d: %s", tic_id, e)
 
+        # If no sector had usable transit coverage but we did load a TPF stamp, keep it as a fallback.
+        if tpf_stamp is None and tpf_fallback is not None:
+            tpf_stamp, tpf_sector_used, tpf_exptime_used = tpf_fallback
+            tpf_no_transit_coverage = True
+
     if config.require_tpf and tpf_stamp is None:
         wall_ms = time.perf_counter() * 1000.0 - start_time_ms
         return _make_error_response(
@@ -787,137 +958,174 @@ def enrich_candidate(
     sector_quality_report: dict[str, Any] = make_skip_block("tpf_unavailable")
 
     if tpf_stamp is not None and tpf_sector_used is not None:
-        # Localization diagnostics (WCS-optional; uses OOT-derived references).
-        try:
-            transit_params = TransitParams(
-                period=float(period_days),
-                t0=float(t0_btjd),
-                duration=float(duration_hours / 24.0),
+        if tpf_no_transit_coverage:
+            localization = make_skip_block(
+                "no_transit_coverage",
+                details={
+                    "tpf_sector_used": int(tpf_sector_used),
+                    "tpf_exptime_used": float(tpf_exptime_used) if tpf_exptime_used is not None else None,
+                },
             )
-            diag, _images = compute_localization_diagnostics(
-                tpf_data=np.asarray(tpf_stamp.flux, dtype=np.float64),
-                time=np.asarray(tpf_stamp.time, dtype=np.float64),
-                transit_params=transit_params,
-            )
-            px_scale_arcsec = 21.0
-            if getattr(tpf_stamp, "wcs", None) is not None:
-                try:
-                    from bittr_tess_vetter.api.wcs_utils import compute_pixel_scale
-
-                    px_scale_arcsec = float(compute_pixel_scale(tpf_stamp.wcs))
-                except Exception:
-                    px_scale_arcsec = 21.0
-            dist_px = float(diag.dist_diff_to_ootbright_px)
-            dist_arcsec = float(dist_px * px_scale_arcsec)
-
-            if dist_px <= 1.0:
-                verdict = "on_target"
-            elif dist_px >= 2.0:
-                verdict = "off_target"
-            else:
-                verdict = "ambiguous"
-
-            localization = {
-                "verdict": verdict,
-                "target_distance_arcsec": dist_arcsec,
-                "uncertainty_semimajor_arcsec": None,
-                "target_distance_pixels": dist_px,
-                "pixel_scale_arcsec": px_scale_arcsec,
-                "diagnostics": diag.to_dict(),
+            pixel_host_hypotheses = {
+                "consensus_best_source_id": f"tic:{int(tic_id)}",
+                "host_ambiguity": "unknown",
+                "disagreement_flag": "stable",
+                "flip_rate": 0.0,
+                "timeseries_verdict": None,
+                "timeseries_delta_chi2": None,
+                "timeseries_best_source_id": None,
+                "timeseries_n_windows": None,
+                "timeseries_agrees_with_consensus": None,
+                "ghost_summary_by_sector": [],
+                "host_plausibility_auto": {"skipped": True, "reason": "no_transit_coverage"},
             }
-        except Exception as e:
-            localization = {
-                "verdict": "invalid",
-                "warnings": [f"localization_failed:{type(e).__name__}:{e}"],
+            sector_quality_report = {
+                "tpf_sector_used": int(tpf_sector_used),
+                "warnings": [
+                    "No usable in/out-of-transit cadence coverage for provided ephemeris; "
+                    "skipping localization/ghost/aperture-family"
+                ],
             }
+        else:
+            # Localization diagnostics (WCS-optional; uses OOT-derived references).
+            try:
+                transit_params = TransitParams(
+                    period=float(period_days),
+                    t0=float(t0_btjd),
+                    duration=float(duration_hours / 24.0),
+                )
+                diag, _images = compute_localization_diagnostics(
+                    tpf_data=np.asarray(tpf_stamp.flux, dtype=np.float64),
+                    time=np.asarray(tpf_stamp.time, dtype=np.float64),
+                    transit_params=transit_params,
+                )
+                px_scale_arcsec = 21.0
+                if getattr(tpf_stamp, "wcs", None) is not None:
+                    try:
+                        from bittr_tess_vetter.api.wcs_utils import compute_pixel_scale
 
-        # Ghost / scattered-light features (aperture sign consistency, etc.)
-        ghost_row: dict[str, Any] | None = None
-        try:
-            ap_mask = np.asarray(tpf_stamp.aperture_mask, dtype=bool)
-            gf = compute_ghost_features(
-                np.asarray(tpf_stamp.flux, dtype=np.float64),
-                np.asarray(tpf_stamp.time, dtype=np.float64),
-                ap_mask,
-                float(period_days),
-                float(t0_btjd),
-                float(duration_hours),
-                tic_id=int(tic_id),
-                sector=int(tpf_sector_used),
-            )
-            ghost_row = {
-                "sector": int(tpf_sector_used),
-                "ghost_like_score_adjusted": float(gf.ghost_like_score),
-                "scattered_light_risk": float(gf.scattered_light_risk),
-                "aperture_contrast": float(gf.aperture_contrast),
-                "aperture_sign_consistent": bool(gf.aperture_sign_consistent),
-                "spatial_uniformity": float(gf.spatial_uniformity),
-                "prf_likeness": float(gf.prf_likeness),
+                        px_scale_arcsec = float(compute_pixel_scale(tpf_stamp.wcs))
+                    except Exception:
+                        px_scale_arcsec = 21.0
+                dist_px = float(diag.dist_diff_to_ootbright_px)
+                dist_arcsec = float(dist_px * px_scale_arcsec)
+
+                if dist_px <= 1.0:
+                    verdict = "on_target"
+                elif dist_px >= 2.0:
+                    verdict = "off_target"
+                else:
+                    verdict = "ambiguous"
+
+                localization = {
+                    "verdict": verdict,
+                    "target_distance_arcsec": dist_arcsec,
+                    "uncertainty_semimajor_arcsec": None,
+                    "target_distance_pixels": dist_px,
+                    "pixel_scale_arcsec": px_scale_arcsec,
+                    "diagnostics": diag.to_dict(),
+                }
+            except Exception as e:
+                localization = {
+                    "verdict": "invalid",
+                    "warnings": [f"localization_failed:{type(e).__name__}:{e}"],
+                }
+
+            # Ghost / scattered-light features (aperture sign consistency, etc.)
+            ghost_row: dict[str, Any] | None = None
+            try:
+                ap_mask = np.asarray(tpf_stamp.aperture_mask, dtype=bool)
+                gf = compute_ghost_features(
+                    np.asarray(tpf_stamp.flux, dtype=np.float64),
+                    np.asarray(tpf_stamp.time, dtype=np.float64),
+                    ap_mask,
+                    float(period_days),
+                    float(t0_btjd),
+                    float(duration_hours),
+                    tic_id=int(tic_id),
+                    sector=int(tpf_sector_used),
+                )
+                ghost_row = {
+                    "sector": int(tpf_sector_used),
+                    "ghost_like_score_adjusted": float(gf.ghost_like_score),
+                    "scattered_light_risk": float(gf.scattered_light_risk),
+                    "aperture_contrast": float(gf.aperture_contrast),
+                    "aperture_sign_consistent": bool(gf.aperture_sign_consistent),
+                    "spatial_uniformity": float(gf.spatial_uniformity),
+                    "prf_likeness": float(gf.prf_likeness),
+                }
+            except Exception as e:
+                ghost_row = {
+                    "sector": int(tpf_sector_used),
+                    "ghost_like_score_adjusted": None,
+                    "scattered_light_risk": None,
+                    "aperture_sign_consistent": None,
+                    "warnings": [f"ghost_failed:{type(e).__name__}:{e}"],
+                }
+
+            # Aperture family depth curve (requires TPFFitsData container; WCS is unused by the metric).
+            aperture_family: dict[str, Any] | None = None
+            try:
+                from astropy.wcs import WCS
+
+                ref = TPFFitsRef(
+                    tic_id=int(tic_id),
+                    sector=int(tpf_sector_used),
+                    author="spoc",
+                    exptime_seconds=int(tpf_exptime_used) if tpf_exptime_used is not None else None,
+                )
+                wcs_obj = (
+                    tpf_stamp.wcs
+                    if getattr(tpf_stamp, "wcs", None) is not None
+                    else WCS(naxis=2)
+                )
+                tpf_fits = TPFFitsData(
+                    ref=ref,
+                    time=np.asarray(tpf_stamp.time, dtype=np.float64),
+                    flux=np.asarray(tpf_stamp.flux, dtype=np.float64),
+                    flux_err=np.asarray(tpf_stamp.flux_err, dtype=np.float64)
+                    if getattr(tpf_stamp, "flux_err", None) is not None
+                    else None,
+                    wcs=wcs_obj,
+                    aperture_mask=np.asarray(tpf_stamp.aperture_mask, dtype=np.int32),
+                    quality=np.asarray(tpf_stamp.quality, dtype=np.int32)
+                    if getattr(tpf_stamp, "quality", None) is not None
+                    else np.zeros(int(np.asarray(tpf_stamp.time).shape[0]), dtype=np.int32),
+                    camera=0,
+                    ccd=0,
+                    meta={},
+                )
+                afr = compute_aperture_family_depth_curve(
+                    tpf_fits=tpf_fits,
+                    period=float(period_days),
+                    t0=float(t0_btjd),
+                    duration_hours=float(duration_hours),
+                )
+                aperture_family = afr.to_dict()
+            except Exception as e:
+                aperture_family = {"warnings": [f"aperture_family_failed:{type(e).__name__}:{e}"]}
+
+            pixel_host_hypotheses = {
+                "consensus_best_source_id": f"tic:{int(tic_id)}",
+                "host_ambiguity": "unknown",
+                "disagreement_flag": "stable",
+                "flip_rate": 0.0,
+                "timeseries_verdict": None,
+                "timeseries_delta_chi2": None,
+                "timeseries_best_source_id": None,
+                "timeseries_n_windows": None,
+                "timeseries_agrees_with_consensus": None,
+                "ghost_summary_by_sector": [ghost_row] if ghost_row is not None else [],
+                "host_plausibility_auto": {
+                    "skipped": True,
+                    "reason": "network_or_coords_unavailable",
+                },
             }
-        except Exception as e:
-            ghost_row = {
-                "sector": int(tpf_sector_used),
-                "ghost_like_score_adjusted": None,
-                "scattered_light_risk": None,
-                "aperture_sign_consistent": None,
-                "warnings": [f"ghost_failed:{type(e).__name__}:{e}"],
+            sector_quality_report = {
+                "tpf_sector_used": int(tpf_sector_used),
+                "aperture_family": aperture_family,
             }
-
-        # Aperture family depth curve (requires TPFFitsData container; WCS is unused by the metric).
-        aperture_family: dict[str, Any] | None = None
-        try:
-            from astropy.wcs import WCS
-
-            ref = TPFFitsRef(
-                tic_id=int(tic_id),
-                sector=int(tpf_sector_used),
-                author="spoc",
-                exptime_seconds=int(tpf_exptime_used) if tpf_exptime_used is not None else None,
-            )
-            wcs_obj = tpf_stamp.wcs if getattr(tpf_stamp, "wcs", None) is not None else WCS(naxis=2)
-            tpf_fits = TPFFitsData(
-                ref=ref,
-                time=np.asarray(tpf_stamp.time, dtype=np.float64),
-                flux=np.asarray(tpf_stamp.flux, dtype=np.float64),
-                flux_err=np.asarray(tpf_stamp.flux_err, dtype=np.float64)
-                if getattr(tpf_stamp, "flux_err", None) is not None
-                else None,
-                wcs=wcs_obj,
-                aperture_mask=np.asarray(tpf_stamp.aperture_mask, dtype=np.int32),
-                quality=np.asarray(tpf_stamp.quality, dtype=np.int32)
-                if getattr(tpf_stamp, "quality", None) is not None
-                else np.zeros(int(np.asarray(tpf_stamp.time).shape[0]), dtype=np.int32),
-                camera=0,
-                ccd=0,
-                meta={},
-            )
-            afr = compute_aperture_family_depth_curve(
-                tpf_fits=tpf_fits,
-                period=float(period_days),
-                t0=float(t0_btjd),
-                duration_hours=float(duration_hours),
-            )
-            aperture_family = afr.to_dict()
-        except Exception as e:
-            aperture_family = {"warnings": [f"aperture_family_failed:{type(e).__name__}:{e}"]}
-
-        pixel_host_hypotheses = {
-            "consensus_best_source_id": f"tic:{int(tic_id)}",
-            "host_ambiguity": "unknown",
-            "disagreement_flag": "stable",
-            "flip_rate": 0.0,
-            "timeseries_verdict": None,
-            "timeseries_delta_chi2": None,
-            "timeseries_best_source_id": None,
-            "timeseries_n_windows": None,
-            "timeseries_agrees_with_consensus": None,
-            "ghost_summary_by_sector": [ghost_row] if ghost_row is not None else [],
-            "host_plausibility_auto": {"skipped": True, "reason": "network_or_coords_unavailable"},
-        }
-        sector_quality_report = {
-            "tpf_sector_used": int(tpf_sector_used),
-            "aperture_family": aperture_family,
-        }
+            # end tpf_no_transit_coverage branch
 
         # Pixel-level timeseries model competition (host hypothesis disambiguation).
         if config.enable_pixel_timeseries:
@@ -1049,8 +1257,19 @@ def enrich_candidate(
             and depth_ppm is not None
         ):
             try:
+                gaia_cache_path = None
+                if config.cache_dir:
+                    try:
+                        gaia_cache_path = str(Path(config.cache_dir) / "btv_gaia_cache.sqlite")
+                    except Exception:
+                        gaia_cache_path = None
                 gaia = gaia_query or query_gaia_by_position_sync(
-                    float(ra_deg), float(dec_deg), radius_arcsec=60.0
+                    float(ra_deg),
+                    float(dec_deg),
+                    radius_arcsec=60.0,
+                    timeout=20,
+                    max_retries=1,
+                    cache_path=gaia_cache_path,
                 )
                 primary_mag = gaia.source.phot_g_mean_mag if gaia.source else None
 
@@ -1438,13 +1657,21 @@ def enrich_worklist(
 
         candidate_key = make_candidate_key(tic_id, period_days, t0_btjd)
         last_candidate_key = candidate_key
+        # Heartbeat: write progress at candidate start so long-running downloads
+        # still show liveness even before the first row is appended.
+        _write_progress()
 
         if resume and candidate_key in skip_keys:
             skipped_resume += 1
         else:
             toi = row.get("toi")
             toi_str = str(toi) if toi is not None else None
+            # Accept common worklist conventions.
+            # - `sectors`: preferred generic key
+            # - `sectors_lc`: legacy/astro-arc-tess key for light-curve sectors
             requested_sectors = row.get("sectors")
+            if requested_sectors is None:
+                requested_sectors = row.get("sectors_lc")
             sectors_list: list[int] | None = None
             if isinstance(requested_sectors, list):
                 sectors_list = [int(s) for s in requested_sectors]
