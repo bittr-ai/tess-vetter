@@ -481,7 +481,11 @@ def build_features(
         secondary_significant = bool(secondary_depth_sigma >= 3.0)
 
     if secondary_depth_sigma is None:
-        missing_feature_families.append("SECONDARY")
+        # Some secondary-epoch checks can be intentionally uncomputable when the
+        # baseline flux is invalid (e.g., median <= 0 due to pathological product).
+        # Treat this as a non-critical skip rather than a missing family.
+        if not (isinstance(v02, dict) and "Invalid baseline" in str(v02.get("note") or "")):
+            missing_feature_families.append("SECONDARY")
 
     # -------------------------------------------------------------------------
     # V03: Duration Ratio
@@ -494,7 +498,13 @@ def build_features(
     # -------------------------------------------------------------------------
     # V04: Depth Scatter / Consistency
     # -------------------------------------------------------------------------
+    # The depth-stability check can emit different key sets depending on whether
+    # there are enough transits to compute scatter robustly.
+    # - Standard: rms_scatter, dmm, dom_ratio
+    # - Sparse (e.g., 1 transit): depth_scatter_ppm (and a note)
     depth_rms_scatter = _as_float(v04.get("rms_scatter"))
+    if depth_rms_scatter is None:
+        depth_rms_scatter = _as_float(v04.get("depth_scatter_ppm"))
     v04_dmm = _as_float(v04.get("dmm"))
     v04_dom_ratio = _as_float(v04.get("dom_ratio"))
 
