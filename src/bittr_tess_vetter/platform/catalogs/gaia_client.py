@@ -24,6 +24,8 @@ Technical Notes:
 from __future__ import annotations
 
 import logging
+import os
+import sqlite3
 from datetime import UTC, datetime
 from typing import Any, ClassVar
 
@@ -349,6 +351,9 @@ class GaiaClient:
         self,
         tap_url: str = GAIA_TAP_ENDPOINT,
         timeout: int = 60,
+        max_retries: int = 3,
+        cache_path: str | None = None,
+        cache_ttl_days: float | None = None,
     ) -> None:
         """Initialize the Gaia client.
 
@@ -358,6 +363,97 @@ class GaiaClient:
         """
         self.tap_url = tap_url
         self.timeout = timeout
+        self.max_retries = int(max_retries)
+        self.cache_path = cache_path
+        self.cache_ttl_days = cache_ttl_days
+
+    def _cache_conn(self) -> sqlite3.Connection | None:
+        if not self.cache_path:
+            return None
+        try:
+            os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
+        except Exception:
+            # Allow cache_path with no directory component.
+            pass
+        try:
+            conn = sqlite3.connect(self.cache_path)
+        except Exception:
+            return None
+        try:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS gaia_cache (
+                    cache_key TEXT PRIMARY KEY,
+                    created_unix REAL NOT NULL,
+                    payload_json TEXT NOT NULL
+                )
+                """
+            )
+            conn.commit()
+        except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            return None
+        return conn
+
+    def _cache_key_position(self, ra: float, dec: float, radius_arcsec: float) -> str:
+        # Quantize to keep keys stable across float repr differences.
+        ra_q = round(float(ra), 6)
+        dec_q = round(float(dec), 6)
+        r_q = round(float(radius_arcsec), 2)
+        return f"pos:dr3:{ra_q}:{dec_q}:r{r_q}"
+
+    def _cache_get(self, cache_key: str) -> dict[str, Any] | None:
+        conn = self._cache_conn()
+        if conn is None:
+            return None
+        try:
+            row = conn.execute(
+                "SELECT created_unix, payload_json FROM gaia_cache WHERE cache_key=?",
+                (cache_key,),
+            ).fetchone()
+            if not row:
+                return None
+            created_unix, payload_json = row
+            if self.cache_ttl_days is not None:
+                import time
+
+                age_days = (time.time() - float(created_unix)) / 86400.0
+                if age_days > float(self.cache_ttl_days):
+                    return None
+            import json
+
+            return json.loads(payload_json)
+        except Exception:
+            return None
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    def _cache_put(self, cache_key: str, payload: dict[str, Any]) -> None:
+        conn = self._cache_conn()
+        if conn is None:
+            return
+        try:
+            import json
+            import time
+
+            conn.execute(
+                "INSERT OR REPLACE INTO gaia_cache(cache_key, created_unix, payload_json) VALUES (?, ?, ?)",
+                (cache_key, float(time.time()), json.dumps(payload, sort_keys=True)),
+            )
+            conn.commit()
+        except Exception:
+            return
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
     def _execute_tap_query(self, query: str) -> list[dict[str, Any]]:
         """Execute a synchronous TAP query.
@@ -382,7 +478,7 @@ class GaiaClient:
             "QUERY": query,
         }
 
-        max_retries = 3
+        max_retries = max(1, int(self.max_retries))
         last_exception: Exception | None = None
 
         for attempt in range(max_retries):
@@ -746,6 +842,9 @@ def query_gaia_by_id_sync(
     cone_radius_arcsec: float = 60.0,
     tap_url: str = GAIA_TAP_ENDPOINT,
     timeout: int = 60,
+    max_retries: int = 3,
+    cache_path: str | None = None,
+    cache_ttl_days: float | None = None,
 ) -> GaiaQueryResult:
     """Synchronous wrapper to query Gaia DR3 by source_id.
 
@@ -760,7 +859,13 @@ def query_gaia_by_id_sync(
     """
     import asyncio
 
-    client = GaiaClient(tap_url=tap_url, timeout=timeout)
+    client = GaiaClient(
+        tap_url=tap_url,
+        timeout=timeout,
+        max_retries=max_retries,
+        cache_path=cache_path,
+        cache_ttl_days=cache_ttl_days,
+    )
     return asyncio.run(client.query_by_gaia_id(gaia_id, cone_radius_arcsec))
 
 
@@ -770,6 +875,9 @@ def query_gaia_by_position_sync(
     radius_arcsec: float = 60.0,
     tap_url: str = GAIA_TAP_ENDPOINT,
     timeout: int = 60,
+    max_retries: int = 3,
+    cache_path: str | None = None,
+    cache_ttl_days: float | None = None,
 ) -> GaiaQueryResult:
     """Synchronous wrapper to query Gaia DR3 by position.
 
@@ -785,8 +893,27 @@ def query_gaia_by_position_sync(
     """
     import asyncio
 
-    client = GaiaClient(tap_url=tap_url, timeout=timeout)
-    return asyncio.run(client.query_by_position(ra, dec, radius_arcsec))
+    client = GaiaClient(
+        tap_url=tap_url,
+        timeout=timeout,
+        max_retries=max_retries,
+        cache_path=cache_path,
+        cache_ttl_days=cache_ttl_days,
+    )
+    # Cache only the position query (this is what bulk enrichment needs).
+    cache_key = client._cache_key_position(float(ra), float(dec), float(radius_arcsec))
+    cached = client._cache_get(cache_key)
+    if cached is not None:
+        try:
+            return GaiaQueryResult.model_validate(cached)
+        except Exception:
+            pass
+    result = asyncio.run(client.query_by_position(ra, dec, radius_arcsec))
+    try:
+        client._cache_put(cache_key, result.model_dump(mode="json"))
+    except Exception:
+        pass
+    return result
 
 
 __all__ = [
