@@ -387,6 +387,10 @@ def build_features(
     pixel_host_hypotheses = raw.get("pixel_host_hypotheses")
     localization = raw.get("localization")
     candidate_evidence = raw.get("candidate_evidence")
+    ephemeris_specificity_block = raw.get("ephemeris_specificity")
+    alias_diagnostics_block = raw.get("alias_diagnostics")
+    systematics_proxy_block = raw.get("systematics_proxy")
+    lc_stats = raw.get("lc_stats") or {}
     provenance = raw.get("provenance") or {}
 
     # Extract check metrics by ID
@@ -398,8 +402,11 @@ def build_features(
     v05 = _get_check_metrics(check_results, "V05")
     v08 = _get_check_metrics(check_results, "V08")
     v09 = _get_check_metrics(check_results, "V09")
+    v10 = _get_check_metrics(check_results, "V10")
     v11 = _get_check_metrics(check_results, "V11")
     v11b = _get_check_metrics(check_results, "V11b")
+    v13 = _get_check_metrics(check_results, "V13")
+    v15 = _get_check_metrics(check_results, "V15")
 
     # Track missing feature families
     missing_feature_families: list[str] = []
@@ -575,6 +582,7 @@ def build_features(
     # V09: Difference Image Localization
     # -------------------------------------------------------------------------
     diff_image_distance_to_target_pixels = _as_float(v09.get("distance_to_target_pixels"))
+    v09_localization_reliable = _as_bool(v09.get("localization_reliable"))
 
     # -------------------------------------------------------------------------
     # Build aggregates via the aggregates subpackage
@@ -617,6 +625,65 @@ def build_features(
     # Pixel timeseries features
     pixel_timeseries_verdict = pixel_host_summary.get("pixel_timeseries_verdict")
     pixel_timeseries_delta_chi2 = pixel_host_summary.get("pixel_timeseries_delta_chi2")
+    pixel_flip_rate = _as_float(pixel_host_summary.get("pixel_flip_rate"))
+
+    # -------------------------------------------------------------------------
+    # V10/V13/V15 false-alarm metrics (existing check outputs; exported as scalar features)
+    # -------------------------------------------------------------------------
+    v10_aperture_depth_sign_flip = _as_bool(v10.get("aperture_depth_sign_flip"))
+    v13_missing_frac_max = _as_float(v13.get("missing_frac_max"))
+    v13_n_epochs_missing_ge_0p25 = _as_int(v13.get("n_epochs_missing_ge_0p25"))
+    v15_asymmetry_sigma = _as_float(v15.get("asymmetry_sigma"))
+
+    # -------------------------------------------------------------------------
+    # V11b extra metrics (tertiary + CHI)
+    # -------------------------------------------------------------------------
+    v11b_sig_ter = _as_float(v11b.get("sig_ter"))
+    v11b_chi = _as_float(v11b.get("chi"))
+
+    # -------------------------------------------------------------------------
+    # LC-only diagnostics blocks from pipeline (ephemeris specificity / alias / systematics proxy)
+    # -------------------------------------------------------------------------
+    smooth_score: float | None = None
+    null_pvalue: float | None = None
+    few_point_fraction: float | None = None
+    if isinstance(ephemeris_specificity_block, dict) and not is_skip_block(ephemeris_specificity_block):
+        smooth_score = _as_float(ephemeris_specificity_block.get("smooth_score"))
+        null_pvalue = _as_float(ephemeris_specificity_block.get("null_pvalue"))
+        few_point_fraction = _as_float(ephemeris_specificity_block.get("few_point_fraction"))
+
+    systematics_proxy_score: float | None = None
+    if isinstance(systematics_proxy_block, dict) and not is_skip_block(systematics_proxy_block):
+        systematics_proxy_score = _as_float(systematics_proxy_block.get("score"))
+
+    def _map_alias_class(raw_class: object | None) -> str | None:
+        if not isinstance(raw_class, str):
+            return None
+        if raw_class == "ALIAS_STRONG":
+            return "STRONG_ALIAS"
+        if raw_class == "ALIAS_WEAK":
+            return "ALIAS_RISK"
+        if raw_class == "NONE":
+            return "CLEAN"
+        return None
+
+    alias_class: str | None = None
+    if isinstance(alias_diagnostics_block, dict) and not is_skip_block(alias_diagnostics_block):
+        alias_class = _map_alias_class(alias_diagnostics_block.get("alias_class"))
+
+    # -------------------------------------------------------------------------
+    # LC stats
+    # -------------------------------------------------------------------------
+    lc_cadence_seconds = _as_float(lc_stats.get("lc_cadence_seconds") or ephemeris.get("cadence_seconds"))
+    lc_n_valid = _as_int(lc_stats.get("lc_n_valid"))
+
+    # Track missingness for LC-only diagnostics explicitly (these are cheap and should usually exist).
+    if config.enable_ephemeris_specificity and smooth_score is None:
+        missing_feature_families.append("EPHEMERIS_SPECIFICITY")
+    if config.enable_alias_diagnostics and alias_class is None:
+        missing_feature_families.append("ALIAS_DIAGNOSTICS")
+    if config.enable_systematics_proxy and systematics_proxy_score is None:
+        missing_feature_families.append("SYSTEMATICS_PROXY")
 
     # Host plausibility features
     host_requires_resolved_followup = host_plausibility_summary.get(
@@ -756,12 +823,29 @@ def build_features(
         "v11b_sig_pri": v11b_sig_pri,
         "v11b_sig_sec": v11b_sig_sec,
         "v11b_fred": v11b_fred,
+        "v11b_sig_ter": v11b_sig_ter,
+        "v11b_chi": v11b_chi,
         # Pixel Localization
         "centroid_shift_pixels": centroid_shift_pixels,
         "diff_image_distance_to_target_pixels": diff_image_distance_to_target_pixels,
         "localization_verdict": localization_verdict,
         "pixel_timeseries_verdict": pixel_timeseries_verdict,
         "pixel_timeseries_delta_chi2": pixel_timeseries_delta_chi2,
+        # Pixel QA / false-alarm checks
+        "v09_localization_reliable": v09_localization_reliable,
+        "v10_aperture_depth_sign_flip": v10_aperture_depth_sign_flip,
+        "v13_missing_frac_max": v13_missing_frac_max,
+        "v13_n_epochs_missing_ge_0p25": v13_n_epochs_missing_ge_0p25,
+        "v15_asymmetry_sigma": v15_asymmetry_sigma,
+        "pixel_flip_rate": pixel_flip_rate,
+        # LC-only diagnostics
+        "smooth_score": smooth_score,
+        "null_pvalue": null_pvalue,
+        "few_point_fraction": few_point_fraction,
+        "systematics_proxy_score": systematics_proxy_score,
+        "alias_class": alias_class,
+        "lc_cadence_seconds": lc_cadence_seconds,
+        "lc_n_valid": lc_n_valid,
         # Ghost / Aperture
         "ghost_like_score_adjusted_median": ghost_like_score_adjusted_median,
         "scattered_light_risk_median": scattered_light_risk_median,
