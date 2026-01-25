@@ -690,6 +690,15 @@ def enrich_candidate(
             )
         except MASTClientError as e:
             logger.debug("Could not retrieve target info for TIC %d: %s", tic_id, e)
+            # Fallback: extract RA/Dec from the downloaded light curve metadata when possible.
+            # This keeps Gaia-derived features available even if the TIC query endpoint is flaky.
+            try:
+                if lightcurves:
+                    prov = lightcurves[0].provenance
+                    ra_deg = getattr(prov, "ra_deg", None) if prov is not None else None
+                    dec_deg = getattr(prov, "dec_deg", None) if prov is not None else None
+            except Exception:
+                pass
 
     # Step 4a: Candidate-level evidence (Gaia crowding), network-gated.
     if not getattr(config, "enable_candidate_evidence", True):
@@ -1475,6 +1484,212 @@ def enrich_candidate(
             }
         )
 
+    # ---------------------------------------------------------------------
+    # LC-only diagnostics (ephemeris specificity, alias, systematics proxy)
+    # ---------------------------------------------------------------------
+    from bittr_tess_vetter.features.evidence import make_skip_block
+
+    def _prepare_lc_for_diagnostics(
+        *,
+        max_points: int = 50_000,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, Any]] | None:
+        t = stitched_lc_data.time
+        f = stitched_lc_data.flux
+        vm = stitched_lc_data.valid_mask
+        if t.size == 0 or f.size != t.size or vm.size != t.size:
+            return None
+
+        finite = np.isfinite(t) & np.isfinite(f)
+        mask = vm & finite
+        t = np.asarray(t[mask], dtype=np.float64)
+        f = np.asarray(f[mask], dtype=np.float64)
+
+        # Flux errors are optional depending on product / stitching mode.
+        fe_raw = getattr(stitched_lc_data, "flux_err", None)
+        fe: np.ndarray
+        if fe_raw is None:
+            # Conservative fallback: constant sigma from robust OOT scatter.
+            med = float(np.median(f)) if f.size else 0.0
+            sigma = _robust_sigma_mad(f - med)
+            if sigma is None or not np.isfinite(sigma) or sigma <= 0:
+                sigma = float(np.std(f)) if f.size else 1.0
+            sigma = float(max(sigma, 1e-8))
+            fe = np.full_like(f, sigma, dtype=np.float64)
+        else:
+            fe0 = np.asarray(fe_raw, dtype=np.float64)
+            if fe0.size != vm.size:
+                return None
+            fe = np.asarray(fe0[mask], dtype=np.float64)
+            # Replace invalid/zero errors with a robust constant to keep scoring stable.
+            med = float(np.median(f)) if f.size else 0.0
+            sigma = _robust_sigma_mad(f - med)
+            if sigma is None or not np.isfinite(sigma) or sigma <= 0:
+                sigma = float(np.std(f)) if f.size else 1.0
+            sigma = float(max(sigma, 1e-8))
+            fe = np.where(np.isfinite(fe) & (fe > 0), fe, sigma)
+
+        n_raw = int(t.size)
+        downsampled = False
+        if n_raw > int(max_points):
+            idx = np.linspace(0, n_raw - 1, int(max_points), dtype=int)
+            t = t[idx]
+            f = f[idx]
+            fe = fe[idx]
+            downsampled = True
+
+        stats: dict[str, Any] = {
+            "lc_n_valid": int(t.size),
+            "lc_n_raw_valid": int(n_raw),
+            "lc_downsampled": bool(downsampled),
+            "lc_cadence_seconds": stitched_lc_data.cadence_seconds,
+        }
+        return t, f, fe, stats
+
+    prepared = _prepare_lc_for_diagnostics()
+    if prepared is None:
+        ephemeris_specificity = make_skip_block("lc_unavailable")
+        alias_diagnostics = make_skip_block("lc_unavailable")
+        systematics_proxy = make_skip_block("lc_unavailable")
+        lc_stats: dict[str, Any] = {"lc_n_valid": 0, "lc_cadence_seconds": stitched_lc_data.cadence_seconds}
+    else:
+        lc_t, lc_f, lc_fe, lc_stats = prepared
+
+        ephemeris_specificity: dict[str, Any]
+        if not getattr(config, "enable_ephemeris_specificity", False):
+            ephemeris_specificity = make_skip_block("disabled")
+        else:
+            try:
+                from bittr_tess_vetter.validation.ephemeris_specificity import (
+                    SmoothTemplateConfig,
+                    compute_concentration_metrics,
+                    compute_phase_shift_null,
+                    score_fixed_period_numpy,
+                )
+
+                st_cfg = SmoothTemplateConfig()
+                res = score_fixed_period_numpy(
+                    time=lc_t,
+                    flux=lc_f,
+                    flux_err=lc_fe,
+                    period_days=float(period_days),
+                    t0_btjd=float(t0_btjd),
+                    duration_hours=float(duration_hours),
+                    config=st_cfg,
+                )
+                null = compute_phase_shift_null(
+                    time=lc_t,
+                    flux=lc_f,
+                    flux_err=lc_fe,
+                    period_days=float(period_days),
+                    t0_btjd=float(t0_btjd),
+                    duration_hours=float(duration_hours),
+                    observed_score=float(res.score),
+                    n_trials=int(getattr(config, "ephemeris_specificity_n_phase_shifts", 80)),
+                    strategy="grid",
+                    random_seed=0,
+                    config=st_cfg,
+                )
+                conc = compute_concentration_metrics(
+                    time=lc_t,
+                    flux=lc_f,
+                    flux_err=lc_fe,
+                    template=res.template,
+                    period_days=float(period_days),
+                    t0_btjd=float(t0_btjd),
+                    duration_hours=float(duration_hours),
+                )
+
+                ephemeris_specificity = {
+                    "smooth_score": float(res.score),
+                    "null_pvalue": float(null.p_value_one_sided),
+                    "few_point_fraction": float(conc.top_5_fraction_abs),
+                    "depth_hat_ppm": float(res.depth_hat * 1e6),
+                    "depth_sigma_ppm": float(res.depth_sigma * 1e6),
+                    "null_z": float(null.z_score),
+                    "null_n_trials": int(null.n_trials),
+                    "in_transit_contribution_abs": float(conc.in_transit_contribution_abs),
+                    "n_in_transit": int(conc.n_in_transit),
+                }
+            except Exception as e:
+                ephemeris_specificity = make_skip_block(
+                    "compute_failed",
+                    error_class=type(e).__name__,
+                    error=str(e),
+                )
+
+        alias_diagnostics: dict[str, Any]
+        if not getattr(config, "enable_alias_diagnostics", False):
+            alias_diagnostics = make_skip_block("disabled")
+        else:
+            try:
+                from bittr_tess_vetter.validation.alias_diagnostics import (
+                    classify_alias,
+                    compute_harmonic_scores,
+                )
+
+                hs = compute_harmonic_scores(
+                    lc_t,
+                    lc_f,
+                    lc_fe,
+                    float(period_days),
+                    float(t0_btjd),
+                    duration_hours=float(duration_hours),
+                )
+                base = 0.0
+                for s in hs:
+                    if s.harmonic == "P":
+                        base = float(s.score)
+                        break
+                cls, best_harm, ratio = classify_alias(hs, base_score=float(base))
+                alias_diagnostics = {
+                    "alias_class": str(cls),
+                    "best_harmonic": str(best_harm),
+                    "ratio": float(ratio),
+                    "base_score": float(base),
+                    "harmonic_scores": [
+                        {
+                            "harmonic": str(s.harmonic),
+                            "period": float(s.period),
+                            "score": float(s.score),
+                            "depth_ppm": float(s.depth_ppm),
+                            "duration_hours": float(s.duration_hours) if s.duration_hours is not None else None,
+                        }
+                        for s in hs
+                    ],
+                }
+            except Exception as e:
+                alias_diagnostics = make_skip_block(
+                    "compute_failed",
+                    error_class=type(e).__name__,
+                    error=str(e),
+                )
+
+        systematics_proxy: dict[str, Any]
+        if not getattr(config, "enable_systematics_proxy", False):
+            systematics_proxy = make_skip_block("disabled")
+        else:
+            try:
+                from bittr_tess_vetter.validation.systematics_proxy import compute_systematics_proxy
+
+                sp = compute_systematics_proxy(
+                    time=lc_t,
+                    flux=lc_f,
+                    valid_mask=None,
+                    period_days=float(period_days),
+                    t0_btjd=float(t0_btjd),
+                    duration_hours=float(duration_hours),
+                )
+                if sp is None:
+                    systematics_proxy = make_skip_block("insufficient_data")
+                else:
+                    systematics_proxy = sp.to_dict()
+            except Exception as e:
+                systematics_proxy = make_skip_block(
+                    "compute_failed",
+                    error_class=type(e).__name__,
+                    error=str(e),
+                )
+
     raw: RawEvidencePacket = {
         "target": {
             "tic_id": tic_id,
@@ -1497,6 +1712,10 @@ def enrich_candidate(
         "localization": localization,
         "sector_quality_report": sector_quality_report,
         "candidate_evidence": candidate_evidence,
+        "ephemeris_specificity": ephemeris_specificity,
+        "alias_diagnostics": alias_diagnostics,
+        "systematics_proxy": systematics_proxy,
+        "lc_stats": lc_stats,
         "provenance": {
             "pipeline_version": pipeline_version,
             "code_hash": code_hash,
