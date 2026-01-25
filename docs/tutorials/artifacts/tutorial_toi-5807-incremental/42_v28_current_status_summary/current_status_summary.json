@@ -1,0 +1,107 @@
+{
+  "baseline": {
+    "duration_hours": 4.046,
+    "period_days": 14.2423724,
+    "sectors_used": [
+      82,
+      83
+    ],
+    "stellar_mass_msun": 1.47,
+    "stellar_radius_rsun": 1.65,
+    "t0_btjd": 3540.26317,
+    "tic_id": 188646744,
+    "toi": "TOI-5807.01"
+  },
+  "localization": {
+    "centroid_shift_summary": {
+      "82": {
+        "centroid_shift_arcsec": 0.09029882097528287,
+        "significance_sigma": 1.5773074291877522,
+        "v09_flags": [
+          "DIFFIMG_MAX_AT_EDGE",
+          "DIFFIMG_TARGET_DEPTH_NONPOSITIVE",
+          "DIFFIMG_UNRELIABLE"
+        ]
+      },
+      "83": {
+        "centroid_shift_arcsec": 0.35706258426488147,
+        "significance_sigma": 3.2717716041539373,
+        "v09_flags": [
+          "DIFFIMG_MAX_AT_EDGE",
+          "DIFFIMG_TARGET_DEPTH_NONPOSITIVE",
+          "DIFFIMG_UNRELIABLE"
+        ]
+      }
+    }
+  },
+  "radius": {
+    "physics_flags_from_v26": {
+      "planet_radius_inconsistent": false,
+      "rationale": "Transit depth consistent with planetary interpretation",
+      "requires_resolved_followup": false
+    },
+    "planet_radius_rearth_if_on_target_from_v26": {
+      "max": 2.791165596624512,
+      "median": 2.6789442198133018,
+      "min": 2.5438046790402646,
+      "stellar_radius_rsun": 1.65
+    }
+  },
+  "remaining_warnings": [
+    "Depth is preprocessing-dependent (see V24 depth range).",
+    "Difference image (V09) is flagged as unreliable in both sectors (see V25)."
+  ],
+  "sensitivity": {
+    "depth_ppm_range_from_v24": {
+      "max": 240.51652026335634,
+      "median": 221.56494376329715,
+      "min": 199.7750411103505
+    },
+    "fpp_range_no_ao": {
+      "max": 0.000832,
+      "min": 1e-06
+    },
+    "fpp_range_with_ao": {
+      "max": 3.4e-05,
+      "min": 0.0
+    }
+  },
+  "tricera": {
+    "v22_fast_no_ao": {
+      "depth_ppm_used": 210.63541978183497,
+      "disposition": "VALIDATED",
+      "fpp": 0.00262,
+      "n_nearby_sources": 347,
+      "nfpp": 0.0,
+      "prob_planet": 0.940532,
+      "sectors_used": [
+        82,
+        83
+      ]
+    },
+    "v23_fast_with_ao": {
+      "depth_ppm_used": 210.63541978183497,
+      "disposition": "VALIDATED",
+      "fpp": 7.1e-05,
+      "n_nearby_sources": 347,
+      "nfpp": 0.0,
+      "prob_planet": 0.975362,
+      "sectors_used": [
+        82,
+        83
+      ]
+    },
+    "v27_higher_fidelity_with_ao": {
+      "depth_ppm_used": 210.63541978183497,
+      "disposition": "VALIDATED",
+      "fpp": 3e-06,
+      "n_nearby_sources": 347,
+      "nfpp": 0.0,
+      "prob_planet": 0.987428,
+      "sectors_used": [
+        82,
+        83
+      ]
+    }
+  }
+}

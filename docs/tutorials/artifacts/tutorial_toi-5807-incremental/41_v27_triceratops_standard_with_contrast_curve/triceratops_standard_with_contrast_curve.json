@@ -1,0 +1,140 @@
+{
+  "cache_dir": "persistent_cache/tutorial_toi-5807-incremental/41_v27_triceratops_standard_with_contrast_curve/cache_pdcsap_detrended",
+  "cached_flux_type": "pdcsap",
+  "contrast_curve_path": "docs/tutorials/data/tic188646744/PHARO_Kcont_plot.tbl",
+  "depth_err_ppm_est": 11.135188616478434,
+  "depth_ppm_used": 210.63541978183497,
+  "detrend": {
+    "bin_hours": 6.0,
+    "duration_buffer_factor": 2.0,
+    "sigma_clip": 5.0
+  },
+  "fpp_result": {
+    "aperture_modeled": true,
+    "base_seed": 123,
+    "brightest_contaminant_dmag": null,
+    "contrast_curve": {
+      "file": "contrast_curve.txt",
+      "filter": "K",
+      "filter_raw": "Kcont"
+    },
+    "degenerate_reason": null,
+    "disposition": "VALIDATED",
+    "engine": "triceratops_plus_vendor",
+    "fpp": 3e-06,
+    "gaia_query_complete": true,
+    "n_fail": 0,
+    "n_nearby_sources": 347,
+    "n_success": 1,
+    "nfpp": 0.0,
+    "posterior_prob_nan_count": 0,
+    "posterior_sum_total": 0.9999999999999999,
+    "prob_beb": 0.0,
+    "prob_eb": 0.0,
+    "prob_neb": 0.0,
+    "prob_ntp": 0.0,
+    "prob_planet": 0.987428,
+    "replicates": 1,
+    "run_seed": 123,
+    "runtime_seconds": 180.1,
+    "scenario_prob_top": [
+      {
+        "prob": 0.5001105702021881,
+        "scenario": "TP"
+      },
+      {
+        "prob": 0.4873177434791122,
+        "scenario": "DTP"
+      },
+      {
+        "prob": 0.012568740229827591,
+        "scenario": "PTP"
+      },
+      {
+        "prob": 2.9413539195040025e-06,
+        "scenario": "STP"
+      },
+      {
+        "prob": 3.4901495496045815e-09,
+        "scenario": "SEB"
+      },
+      {
+        "prob": 1.236716875737806e-09,
+        "scenario": "NEB"
+      },
+      {
+        "prob": 6.23196247141477e-12,
+        "scenario": "NEBx2P"
+      },
+      {
+        "prob": 8.582565070136315e-13,
+        "scenario": "SEBx2P"
+      },
+      {
+        "prob": 6.728670520760806e-13,
+        "scenario": "BEB"
+      },
+      {
+        "prob": 3.2302015804767083e-13,
+        "scenario": "BEBx2P"
+      },
+      {
+        "prob": 2.721534424200009e-34,
+        "scenario": "DEBx2P"
+      },
+      {
+        "prob": 2.9252776445183784e-52,
+        "scenario": "NTP"
+      },
+      {
+        "prob": 1.9222361630911486e-68,
+        "scenario": "EBx2P"
+      },
+      {
+        "prob": 2.8756819956189425e-71,
+        "scenario": "PEBx2P"
+      },
+      {
+        "prob": 9.795050765951685e-86,
+        "scenario": "EB"
+      }
+    ],
+    "sectors_used": [
+      82,
+      83
+    ],
+    "target_in_crowded_field": true,
+    "tic_id": 188646744,
+    "triceratops_runtime": {
+      "empirical_sigma_used": 0.00022230109144990906,
+      "exptime_days": 0.0013888756502637989,
+      "external_filters": [],
+      "flux_err_scalar_used": 0.00022230109144990906,
+      "half_window_days": 0.33716666666666667,
+      "max_points": 3000,
+      "mc_draws": 200000,
+      "min_flux_err": 5e-05,
+      "n_external_lcs": 0,
+      "n_points_raw": 35459,
+      "n_points_used": 1943,
+      "n_points_windowed": 1943,
+      "use_empirical_noise_floor": true,
+      "window_duration_mult": 2.0
+    }
+  },
+  "logs": {
+    "stderr": "persistent_cache/tutorial_toi-5807-incremental/41_v27_triceratops_standard_with_contrast_curve/triceratops_stderr.log",
+    "stdout": "persistent_cache/tutorial_toi-5807-incremental/41_v27_triceratops_standard_with_contrast_curve/triceratops_stdout.log"
+  },
+  "sectors": [
+    82,
+    83
+  ],
+  "triceratops_overrides": {
+    "max_points": 3000,
+    "mc_draws": 200000,
+    "min_flux_err": 5e-05,
+    "use_empirical_noise_floor": true,
+    "window_duration_mult": 2.0
+  }
+}

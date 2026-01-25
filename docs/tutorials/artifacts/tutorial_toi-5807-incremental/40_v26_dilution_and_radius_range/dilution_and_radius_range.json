@@ -1,0 +1,92 @@
+{
+  "companion_hypotheses": [],
+  "companions_used": [],
+  "depth_ppm_range_from_v24": {
+    "max": 240.51652026335634,
+    "median": 221.56494376329715,
+    "min": 199.7750411103505
+  },
+  "gaia_primary_g_mag": 7.18363,
+  "n_gaia_neighbors_within_60_arcsec": 8,
+  "physics_flags": {
+    "planet_radius_inconsistent": false,
+    "rationale": "Transit depth consistent with planetary interpretation",
+    "requires_resolved_followup": false
+  },
+  "planet_radius_rearth_if_on_target": {
+    "max": 2.791165596624512,
+    "median": 2.6789442198133018,
+    "min": 2.5438046790402646,
+    "stellar_radius_rsun": 1.65
+  },
+  "primary_hypothesis": {
+    "estimated_flux_fraction": 1.0,
+    "g_mag": 7.18363,
+    "name": "TIC 188646744",
+    "radius_rsun": 1.65,
+    "separation_arcsec": 0.0,
+    "source_id": 188646744
+  },
+  "scenarios": {
+    "depth_max": [
+      {
+        "depth_correction_factor": 1.0,
+        "host": {
+          "estimated_flux_fraction": 1.0,
+          "g_mag": 7.18363,
+          "name": "TIC 188646744",
+          "radius_rsun": 1.65,
+          "separation_arcsec": 0.0,
+          "source_id": 188646744
+        },
+        "implied_companion_radius_rearth": 2.791445600949852,
+        "implied_companion_radius_rjup": 0.2547454636526361,
+        "implied_companion_radius_rsun": 0.025589181823907296,
+        "observed_depth_ppm": 240.51652026335634,
+        "planet_radius_inconsistent": false,
+        "stellar_companion_likely": false,
+        "true_depth_ppm": 240.51652026335634
+      }
+    ],
+    "depth_mid": [
+      {
+        "depth_correction_factor": 1.0,
+        "host": {
+          "estimated_flux_fraction": 1.0,
+          "g_mag": 7.18363,
+          "name": "TIC 188646744",
+          "radius_rsun": 1.65,
+          "separation_arcsec": 0.0,
+          "source_id": 188646744
+        },
+        "implied_companion_radius_rearth": 2.679212966307526,
+        "implied_companion_radius_rjup": 0.24450318827417716,
+        "implied_companion_radius_rsun": 0.024560345262141094,
+        "observed_depth_ppm": 221.56494376329715,
+        "planet_radius_inconsistent": false,
+        "stellar_companion_likely": false,
+        "true_depth_ppm": 221.56494376329715
+      }
+    ],
+    "depth_min": [
+      {
+        "depth_correction_factor": 1.0,
+        "host": {
+          "estimated_flux_fraction": 1.0,
+          "g_mag": 7.18363,
+          "name": "TIC 188646744",
+          "radius_rsun": 1.65,
+          "separation_arcsec": 0.0,
+          "source_id": 188646744
+        },
+        "implied_companion_radius_rearth": 2.544059868597564,
+        "implied_companion_radius_rjup": 0.23216920672408034,
+        "implied_companion_radius_rsun": 0.02332139681543387,
+        "observed_depth_ppm": 199.7750411103505,
+        "planet_radius_inconsistent": false,
+        "stellar_companion_likely": false,
+        "true_depth_ppm": 199.7750411103505
+      }
+    ]
+  }
+}

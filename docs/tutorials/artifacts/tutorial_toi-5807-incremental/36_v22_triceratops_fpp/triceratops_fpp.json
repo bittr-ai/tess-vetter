@@ -1,0 +1,143 @@
+{
+  "cache_dir": "persistent_cache/tutorial_toi-5807-incremental/36_v22_triceratops_fpp/cache_pdcsap_detrended",
+  "cached_flux_type": "pdcsap",
+  "depth_err_ppm_est": 11.135188616478434,
+  "depth_ppm_used": 210.63541978183497,
+  "detrend": {
+    "bin_hours": 6.0,
+    "duration_buffer_factor": 2.0,
+    "sigma_clip": 5.0
+  },
+  "fpp_result": {
+    "aperture_modeled": true,
+    "base_seed": 42,
+    "brightest_contaminant_dmag": null,
+    "degenerate_reason": null,
+    "disposition": "VALIDATED",
+    "engine": "triceratops_plus_vendor",
+    "fpp": 0.00262,
+    "fpp_summary": {
+      "median": 0.00262,
+      "p16": 0.00203,
+      "p84": 0.003796,
+      "values": [
+        0.00435,
+        0.001752,
+        0.00262
+      ]
+    },
+    "gaia_query_complete": true,
+    "n_fail": 0,
+    "n_nearby_sources": 347,
+    "n_success": 3,
+    "nfpp": 0.0,
+    "nfpp_summary": {
+      "median": 0.0,
+      "p16": 0.0,
+      "p84": 0.0,
+      "values": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "posterior_prob_nan_count": 0,
+    "posterior_sum_total": 1.0,
+    "prob_beb": 0.0,
+    "prob_eb": 0.0,
+    "prob_neb": 0.0,
+    "prob_ntp": 0.0,
+    "prob_planet": 0.940532,
+    "replicates": 3,
+    "run_seed": 43,
+    "runtime_seconds": 201.6,
+    "scenario_prob_top": [
+      {
+        "prob": 0.7058785162900754,
+        "scenario": "TP"
+      },
+      {
+        "prob": 0.23465305434029476,
+        "scenario": "DTP"
+      },
+      {
+        "prob": 0.05771604965500075,
+        "scenario": "PTP"
+      },
+      {
+        "prob": 0.0017521186837901291,
+        "scenario": "STP"
+      },
+      {
+        "prob": 2.387685647496889e-07,
+        "scenario": "SEB"
+      },
+      {
+        "prob": 2.182413449122627e-08,
+        "scenario": "NEB"
+      },
+      {
+        "prob": 2.6861600575833255e-10,
+        "scenario": "BEBx2P"
+      },
+      {
+        "prob": 1.6047825131721405e-10,
+        "scenario": "NEBx2P"
+      },
+      {
+        "prob": 9.045548708651375e-12,
+        "scenario": "BEB"
+      },
+      {
+        "prob": 6.255541436475856e-19,
+        "scenario": "SEBx2P"
+      },
+      {
+        "prob": 8.693604180266417e-45,
+        "scenario": "NTP"
+      },
+      {
+        "prob": 3.222076333126311e-60,
+        "scenario": "PEBx2P"
+      },
+      {
+        "prob": 1.8874920139273494e-64,
+        "scenario": "EBx2P"
+      },
+      {
+        "prob": 2.7673743071529695e-67,
+        "scenario": "BTP"
+      },
+      {
+        "prob": 6.807240745092117e-82,
+        "scenario": "DEBx2P"
+      }
+    ],
+    "sectors_used": [
+      82,
+      83
+    ],
+    "target_in_crowded_field": true,
+    "tic_id": 188646744,
+    "triceratops_runtime": {
+      "empirical_sigma_used": 0.0002209518574593499,
+      "exptime_days": 0.0013888756502637989,
+      "external_filters": [],
+      "flux_err_scalar_used": 0.0002209518574593499,
+      "half_window_days": 0.33716666666666667,
+      "max_points": 1500,
+      "mc_draws": 50000,
+      "min_flux_err": 5e-05,
+      "n_external_lcs": 0,
+      "n_points_raw": 35459,
+      "n_points_used": 1500,
+      "n_points_windowed": 1943,
+      "use_empirical_noise_floor": true,
+      "window_duration_mult": 2.0
+    }
+  },
+  "sectors": [
+    82,
+    83
+  ]
+}
