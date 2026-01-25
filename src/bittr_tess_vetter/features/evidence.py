@@ -52,6 +52,14 @@ class RawEvidencePacket(TypedDict, total=False):
         Per-sector data quality metrics.
     candidate_evidence : dict[str, Any] | SkipBlock
         Aggregated candidate-level evidence summary.
+    ephemeris_specificity : dict[str, Any] | SkipBlock
+        Light-curve-only ephemeris-specificity diagnostics (smooth score, phase-shift null, etc.).
+    alias_diagnostics : dict[str, Any] | SkipBlock
+        Light-curve-only alias/harmonic diagnostics (classification + supporting scores).
+    systematics_proxy : dict[str, Any] | SkipBlock
+        Light-curve-only systematics proxy block (cheap false-alarm heuristics).
+    lc_stats : dict[str, Any]
+        Light curve summary stats (cadence, n_valid, downsampling, etc.).
     provenance : dict[str, Any]
         Pipeline provenance: versions, timestamps, input files.
     """
@@ -64,6 +72,10 @@ class RawEvidencePacket(TypedDict, total=False):
     localization: dict[str, Any] | SkipBlock
     sector_quality_report: dict[str, Any] | SkipBlock
     candidate_evidence: dict[str, Any] | SkipBlock
+    ephemeris_specificity: dict[str, Any] | SkipBlock
+    alias_diagnostics: dict[str, Any] | SkipBlock
+    systematics_proxy: dict[str, Any] | SkipBlock
+    lc_stats: dict[str, Any]
     provenance: dict[str, Any]
 
 

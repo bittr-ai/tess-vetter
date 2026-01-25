@@ -3,7 +3,7 @@
 from typing import Literal, TypedDict
 
 # Schema version - bump on any semantic change to feature definitions
-FEATURE_SCHEMA_VERSION = "6.0.1"
+FEATURE_SCHEMA_VERSION = "6.0.2"
 
 
 class EnrichedRow(TypedDict, total=False):
@@ -20,6 +20,7 @@ class EnrichedRow(TypedDict, total=False):
     Version History
     ---------------
     6.0.0 : Initial v6 schema with explicit family grouping
+    6.0.2 : Add LC-only diagnostic fields (V09/V10/V13/V15, ephemeris specificity, alias)
     """
 
     # =========================================================================
@@ -171,6 +172,35 @@ class EnrichedRow(TypedDict, total=False):
     v11b_fred: float | None
     """V11b FRED statistic."""
 
+    v11b_sig_ter: float | None
+    """V11b tertiary signal significance."""
+
+    v11b_chi: float | None
+    """V11b depth-consistency statistic (CHI)."""
+
+    # =========================================================================
+    # LC-only systematics / specificity diagnostics
+    # =========================================================================
+
+    smooth_score: float | None
+    """Smooth-template score at the provided ephemeris (higher is more transit-like)."""
+
+    null_pvalue: float | None
+    """One-sided phase-shift null p-value (lower is more ephemeris-specific)."""
+
+    few_point_fraction: float | None
+    """Fraction of absolute contribution from the top few points (higher is more suspicious)."""
+
+    systematics_proxy_score: float | None
+    """Cheap LC-only systematics risk score in [0,1] (higher is worse)."""
+
+    # =========================================================================
+    # Alias / harmonic diagnostics (LC-only)
+    # =========================================================================
+
+    alias_class: str | None
+    """Alias classification: CLEAN / ALIAS_RISK / STRONG_ALIAS."""
+
     # =========================================================================
     # Pixel Localization
     # =========================================================================
@@ -189,6 +219,38 @@ class EnrichedRow(TypedDict, total=False):
 
     pixel_timeseries_delta_chi2: float | None
     """Delta chi-squared from pixel timeseries model comparison."""
+
+    # =========================================================================
+    # Pixel QA / false-alarm checks (existing vetting checks)
+    # =========================================================================
+
+    v09_localization_reliable: bool | None
+    """V09 localization reliability flag (difference image not edge-dominated)."""
+
+    v10_aperture_depth_sign_flip: bool | None
+    """V10 aperture-depth sign flip flag (depth changes sign with aperture)."""
+
+    v13_missing_frac_max: float | None
+    """V13 maximum missing cadence fraction across transit epochs."""
+
+    v13_n_epochs_missing_ge_0p25: int | None
+    """V13 number of epochs with missing_frac >= 0.25."""
+
+    v15_asymmetry_sigma: float | None
+    """V15 transit-window asymmetry significance (sigma)."""
+
+    # =========================================================================
+    # LC metadata / quality
+    # =========================================================================
+
+    lc_cadence_seconds: float | None
+    """Light curve cadence in seconds (effective, after selection)."""
+
+    lc_n_valid: int | None
+    """Number of valid cadences used in the stitched light curve."""
+
+    pixel_flip_rate: float | None
+    """Rate at which pixel-host verdict flips across controls/windows (lower is better)."""
 
     # =========================================================================
     # Ghost / Aperture Analysis

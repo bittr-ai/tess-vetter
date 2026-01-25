@@ -47,12 +47,23 @@ class FeatureConfig:
         Enable difference image scoring (default: False).
     enable_ephemeris_match : bool
         Enable ephemeris matching features (default: False).
+    enable_alias_diagnostics : bool
+        Enable alias/harmonic diagnostics computed from the stitched light curve
+        (default: True; cheap, LC-only).
     enable_sector_consistency : bool
         Enable cross-sector consistency checks (default: False).
     enable_transit_uniformity : bool
         Enable transit uniformity analysis (default: False).
     enable_transit_shape_categorical : bool
         Enable categorical transit shape classification (default: False).
+    enable_ephemeris_specificity : bool
+        Enable ephemeris-specificity diagnostics (smooth-template score + phase-shift null)
+        computed from the stitched light curve (default: True).
+    ephemeris_specificity_n_phase_shifts : int
+        Number of phase shifts to evaluate in the null test. This can be reduced for
+        bulk enrichment runs (default: 80).
+    enable_systematics_proxy : bool
+        Enable a cheap LC-only systematics proxy score (default: True).
     enable_candidate_evidence : bool
         Enable candidate-level evidence blocks (e.g., Gaia crowding summary)
         when network is allowed (default: True).
@@ -89,9 +100,13 @@ class FeatureConfig:
     enable_sector_quality: bool = True
     enable_diff_image_score: bool = False
     enable_ephemeris_match: bool = False
+    enable_alias_diagnostics: bool = True
     enable_sector_consistency: bool = False
     enable_transit_uniformity: bool = False
     enable_transit_shape_categorical: bool = False
+    enable_ephemeris_specificity: bool = True
+    ephemeris_specificity_n_phase_shifts: int = 80
+    enable_systematics_proxy: bool = True
     enable_candidate_evidence: bool = True
 
     # Gating
