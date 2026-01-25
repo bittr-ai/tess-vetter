@@ -249,6 +249,41 @@ def _select_flux_and_base_valid(
     return flux_raw, flux_err_raw, base_valid, f"quality_mask_relaxed+{label}"
 
 
+def _extract_ra_dec_from_lk_meta(obj: Any) -> tuple[float | None, float | None]:
+    """Best-effort RA/Dec extraction from a lightkurve LightCurve object."""
+    meta = getattr(obj, "meta", None)
+    if not isinstance(meta, dict):
+        return None, None
+
+    def _coerce(v: object | None) -> float | None:
+        if v is None:
+            return None
+        try:
+            # astropy Quantity
+            if hasattr(v, "value"):
+                v = getattr(v, "value")
+        except Exception:
+            pass
+        try:
+            x = float(v)  # type: ignore[arg-type]
+        except Exception:
+            return None
+        return x if np.isfinite(x) else None
+
+    for ra_key, dec_key in [
+        ("RA_OBJ", "DEC_OBJ"),
+        ("RA", "DEC"),
+        ("ra", "dec"),
+        ("ra_obj", "dec_obj"),
+    ]:
+        ra = _coerce(meta.get(ra_key))
+        dec = _coerce(meta.get(dec_key))
+        if ra is not None and dec is not None:
+            return ra, dec
+
+    return None, None
+
+
 @dataclass
 class SearchResult:
     """Result from a light curve search.
@@ -637,6 +672,8 @@ class MASTClient:
             dt_days = np.nanmedian(np.diff(time))
             cadence_seconds = float(dt_days) * 86400.0
 
+        ra_deg, dec_deg = _extract_ra_dec_from_lk_meta(lc)
+
         return LightCurveData(
             time=time,
             flux=flux,
@@ -655,6 +692,8 @@ class MASTClient:
                 flux_type=flux_type,
                 quality_mask=int(self.quality_mask),
                 normalize=bool(self.normalize),
+                ra_deg=ra_deg,
+                dec_deg=dec_deg,
                 selection_reason="cache_only",
                 flux_err_kind="provided",
             ),
@@ -1086,6 +1125,8 @@ class MASTClient:
             f"Download complete: {len(time)} points for TIC {tic_id} sector {sector}",
         )
 
+        ra_deg, dec_deg = _extract_ra_dec_from_lk_meta(lc)
+
         return LightCurveData(
             time=time,
             flux=flux,
@@ -1104,6 +1145,8 @@ class MASTClient:
                 flux_type=flux_type,
                 quality_mask=int(mask),
                 normalize=bool(self.normalize),
+                ra_deg=ra_deg,
+                dec_deg=dec_deg,
                 selection_reason=selection_reason,
                 flux_err_kind=(
                     "estimated_missing" if flux_err_kind == "estimated_missing" else "provided"

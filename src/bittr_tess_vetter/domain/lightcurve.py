@@ -51,6 +51,8 @@ class LightCurveProvenance:
     flux_type: str
     quality_mask: int
     normalize: bool
+    ra_deg: float | None = None
+    dec_deg: float | None = None
     selection_reason: str | None = None
     flux_err_kind: Literal["provided", "estimated_missing"] = "provided"
 
