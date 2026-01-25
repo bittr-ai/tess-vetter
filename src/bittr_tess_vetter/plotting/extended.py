@@ -204,6 +204,7 @@ def plot_ephemeris_reliability(
     null_color: str | None = None,
     show_legend: bool = True,
     show_null_distribution: bool = True,
+    show_period_neighborhood: bool = True,
     annotate_p_value: bool = True,
     style: str = "default",
     **plot_kwargs: Any,
@@ -228,6 +229,8 @@ def plot_ephemeris_reliability(
         Whether to show the legend.
     show_null_distribution : bool, default=True
         Whether to show the null score distribution.
+    show_period_neighborhood : bool, default=True
+        Whether to include a small inset showing score vs nearby periods.
     annotate_p_value : bool, default=True
         Whether to annotate the p-value.
     style : str, default="default"
@@ -289,6 +292,9 @@ def plot_ephemeris_reliability(
 
         phase_shifts = data["phase_shifts"]
         null_scores = data["null_scores"]
+        periods = data["period_neighborhood"]
+        period_scores = data["neighborhood_scores"]
+        inset_created = False
 
         # Set default plot kwargs
         plot_defaults: dict[str, Any] = {
@@ -321,17 +327,39 @@ def plot_ephemeris_reliability(
                     label="On-ephemeris",
                 )
 
+        # Period neighborhood inset (optional)
+        if show_period_neighborhood and len(periods) > 0 and len(period_scores) > 0:
+            try:
+                inset = ax.inset_axes([0.58, 0.10, 0.40, 0.35])
+                inset.plot(periods, period_scores, color=score_color, alpha=0.9, linewidth=1.2)
+                best_idx = int(np.argmax(period_scores))
+                inset.scatter([periods[best_idx]], [period_scores[best_idx]], color=score_color, s=20, zorder=5)
+                inset.set_title("Nearby periods", fontsize=8)
+                inset.set_xlabel("P (days)", fontsize=7)
+                inset.set_ylabel("Score", fontsize=7)
+                inset.tick_params(axis="both", labelsize=7)
+                inset.grid(True, alpha=0.2)
+                inset_created = True
+            except Exception:
+                pass
+
         # Annotate p-value if available and requested
         if annotate_p_value and result.metrics:
             p_value = result.metrics.get("phase_shift_null_p_value")
             if p_value is not None:
+                # When the inset is present, reserve the upper-right for the legend
+                # (and avoid the on-ephemeris point at x≈0). Place p-value lower-left.
+                if inset_created:
+                    x, y, ha, va = 0.02, 0.05, "left", "bottom"
+                else:
+                    x, y, ha, va = 0.95, 0.95, "right", "top"
                 ax.text(
-                    0.95,
-                    0.95,
+                    x,
+                    y,
                     f"p-value: {p_value:.3f}",
                     transform=ax.transAxes,
-                    ha="right",
-                    va="top",
+                    ha=ha,
+                    va=va,
                     fontsize=9,
                     bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.8},
                 )
@@ -343,7 +371,8 @@ def plot_ephemeris_reliability(
 
         # Add legend if requested
         if show_legend:
-            ax.legend(loc="lower right")
+            # Avoid overlapping the inset axes when enabled.
+            ax.legend(loc="upper right" if inset_created else "lower right")
 
     return ax
 
