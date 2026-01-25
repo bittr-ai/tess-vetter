@@ -57,6 +57,50 @@ def _smooth_template_config(extra: dict[str, Any]) -> Any:
     )
 
 
+def _phase_fold_01(*, time: np.ndarray, period_days: float, t0_btjd: float) -> np.ndarray:
+    """Return phase in [0, 1)."""
+    period = float(period_days)
+    phase = (np.asarray(time, dtype=np.float64) - float(t0_btjd)) % period
+    return (phase / period).astype(np.float64)
+
+
+def _bin_phase_median(
+    *,
+    phase_01: np.ndarray,
+    flux: np.ndarray,
+    n_bins: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return (phase_centers, median_flux) with empty bins removed."""
+    phase = np.asarray(phase_01, dtype=np.float64)
+    y = np.asarray(flux, dtype=np.float64)
+    n_bins = int(max(20, min(int(n_bins), 2000)))
+    edges = np.linspace(0.0, 1.0, n_bins + 1, dtype=np.float64)
+    idx = np.digitize(phase, edges) - 1
+
+    centers: list[float] = []
+    medians: list[float] = []
+    for b in range(n_bins):
+        m = idx == b
+        if not np.any(m):
+            continue
+        centers.append(float((edges[b] + edges[b + 1]) / 2.0))
+        medians.append(float(np.median(y[m])))
+    return np.asarray(centers, dtype=np.float64), np.asarray(medians, dtype=np.float64)
+
+
+def _box_template_phase_01(
+    *,
+    phase_01: np.ndarray,
+    period_days: float,
+    duration_hours: float,
+) -> np.ndarray:
+    duration_phase = (float(duration_hours) / 24.0) / float(period_days)
+    half = duration_phase / 2.0
+    ph = np.asarray(phase_01, dtype=np.float64)
+    in_tr = (ph < half) | (ph > 1.0 - half)
+    return in_tr.astype(np.float64)
+
+
 class ModelCompetitionCheck:
     id = "V16"
     name = "Model Competition"
@@ -124,10 +168,62 @@ class ModelCompetitionCheck:
                 "alias_tolerance": float(extra.get("alias_tolerance", 0.01)),
             }
 
+            # Plot data (schema version 1): binned phase-folded flux and model overlays.
+            plot_phase = _phase_fold_01(
+                time=time,
+                period_days=float(inputs.candidate.period),
+                t0_btjd=float(inputs.candidate.t0),
+            )
+            n_plot_bins = int(extra.get("n_plot_bins", 240))
+            phase_grid, flux_binned = _bin_phase_median(
+                phase_01=plot_phase,
+                flux=flux,
+                n_bins=n_plot_bins,
+            )
+
+            template = _box_template_phase_01(
+                phase_01=phase_grid,
+                period_days=float(inputs.candidate.period),
+                duration_hours=float(inputs.candidate.duration_hours),
+            )
+
+            fit_transit = fits["transit_only"].fitted_params
+            depth_transit = float(fit_transit.get("depth", 0.0))
+            transit_model = (1.0 - depth_transit * template).astype(np.float64)
+
+            fit_eb = fits["eb_like"].fitted_params
+            depth_avg = float(fit_eb.get("depth_avg", 0.0))
+            depth_secondary = float(fit_eb.get("depth_secondary", 0.0))
+            half_dur_phase = (float(inputs.candidate.duration_hours) / 24.0) / (2.0 * float(inputs.candidate.period))
+            secondary_template = (np.abs(phase_grid - 0.5) < half_dur_phase).astype(np.float64)
+            eb_model = (1.0 - depth_avg * template - depth_secondary * secondary_template).astype(np.float64)
+
+            fit_sin = fits["transit_sinusoid"].fitted_params
+            depth_sin = float(fit_sin.get("depth", 0.0))
+            n_harm = int(fit_sin.get("n_harmonics", int(extra.get("n_harmonics", 2))))
+            t_eval = float(inputs.candidate.t0) + phase_grid * float(inputs.candidate.period)
+            sin_offset = depth_sin * template
+            for k in range(1, max(0, n_harm) + 1):
+                amp = float(fit_sin.get(f"amplitude_k{k}", 0.0))
+                phir = float(fit_sin.get(f"phase_k{k}_rad", 0.0))
+                a_cos = amp * float(np.sin(phir))
+                a_sin = amp * float(np.cos(phir))
+                omega = 2.0 * np.pi * float(k) / float(inputs.candidate.period)
+                sin_offset = sin_offset + a_cos * np.cos(omega * t_eval) + a_sin * np.sin(omega * t_eval)
+            sinusoid_model = (1.0 - sin_offset).astype(np.float64)
+
             raw = {
                 "fits": {k: v.to_dict() for k, v in fits.items()},
                 "artifact_prior": prior.to_dict(),
                 "warnings": list(res.warnings),
+                "plot_data": {
+                    "version": 1,
+                    "phase": [float(x) for x in phase_grid],
+                    "flux": [float(x) for x in flux_binned],
+                    "transit_model": [float(x) for x in transit_model],
+                    "eb_like_model": [float(x) for x in eb_model],
+                    "sinusoid_model": [float(x) for x in sinusoid_model],
+                },
             }
 
             return ok_result(self.id, self.name, metrics=metrics, flags=flags, notes=notes, provenance=provenance, raw=raw)
@@ -197,6 +293,46 @@ class EphemerisReliabilityRegimeCheck:
             }
 
             raw = res.to_dict()
+            # Plot data (schema version 1): include phase-shift null inputs and period neighborhood.
+            from bittr_tess_vetter.validation.ephemeris_specificity import (
+                phase_shift_t0s,
+                scores_for_t0s_numpy,
+            )
+
+            period_days = float(inputs.candidate.period)
+            t0_btjd = float(inputs.candidate.t0)
+            duration_hours = float(inputs.candidate.duration_hours)
+            n_shifts = int(extra.get("n_phase_shifts", 200))
+            strategy = str(extra.get("phase_shift_strategy", "grid"))
+
+            t0s = phase_shift_t0s(
+                t0=t0_btjd,
+                period=period_days,
+                n=n_shifts,
+                strategy=strategy,
+                random_seed=int(config.random_seed or 0),
+            )
+            shifted_scores = scores_for_t0s_numpy(
+                time=time,
+                flux=flux,
+                flux_err=flux_err,
+                period_days=period_days,
+                t0s=t0s,
+                duration_hours=duration_hours,
+                config=stc,
+            )
+            phase_shifts = np.concatenate([[0.0], (t0s - t0_btjd) / period_days]).astype(np.float64)
+            null_scores = np.concatenate(
+                [[float(res.base.score)], np.asarray(shifted_scores, dtype=np.float64)]
+            ).astype(np.float64)
+
+            raw["plot_data"] = {
+                "version": 1,
+                "phase_shifts": [float(x) for x in phase_shifts],
+                "null_scores": [float(x) for x in null_scores],
+                "period_neighborhood": [float(x) for x in res.period_neighborhood.period_grid_days],
+                "neighborhood_scores": [float(x) for x in res.period_neighborhood.scores],
+            }
             provenance = {
                 "ingress_egress_fraction": float(stc.ingress_egress_fraction),
                 "sharpness": float(stc.sharpness),
@@ -255,6 +391,13 @@ class EphemerisSensitivitySweepCheck:
 
             # Do not surface stable=True/False as a verdict; keep in raw.
             raw = res.to_dict()
+            raw["plot_data"] = {
+                "version": 1,
+                "stable": bool(raw.get("stable", False)),
+                "n_variants_total": int(raw.get("n_variants_total", 0) or 0),
+                "n_variants_ok": int(raw.get("n_variants_ok", 0) or 0),
+                "sweep_table": list(raw.get("sweep_table") or []),
+            }
             provenance = {
                 "ingress_egress_fraction": float(stc.ingress_egress_fraction),
                 "sharpness": float(stc.sharpness),
@@ -344,6 +487,12 @@ class AliasDiagnosticsCheck:
             raw = {
                 "harmonic_scores": [s.__dict__ for s in scores],
                 "phase_shift_events": [e.__dict__ for e in events],
+                "plot_data": {
+                    "version": 1,
+                    "harmonic_labels": [str(s.harmonic) for s in scores],
+                    "harmonic_periods": [float(s.period) for s in scores],
+                    "harmonic_scores": [float(s.score) for s in scores],
+                },
             }
             provenance = {
                 "n_phase_bins": int(extra.get("n_phase_bins", 10)),
@@ -367,7 +516,10 @@ class GhostFeaturesCheck:
         try:
             extra = config.extra_params
 
-            from bittr_tess_vetter.validation.ghost_features import compute_ghost_features
+            from bittr_tess_vetter.validation.ghost_features import (
+                compute_difference_image,
+                compute_ghost_features,
+            )
 
             tpf_data = np.asarray(inputs.tpf.flux, dtype=np.float64)
             time = np.asarray(inputs.tpf.time, dtype=np.float64)
@@ -407,7 +559,24 @@ class GhostFeaturesCheck:
                 "aperture_pixels_used": int(features.aperture_pixels_used),
             }
 
-            return ok_result(self.id, self.name, metrics=metrics, raw=features.to_dict())
+            # Plot data: difference image + aperture overlay for visualization.
+            diff_image = compute_difference_image(
+                tpf_data=tpf_data,
+                time=time,
+                period=float(inputs.candidate.period),
+                t0=float(inputs.candidate.t0),
+                duration_hours=float(inputs.candidate.duration_hours),
+            )
+
+            raw = features.to_dict()
+            raw["plot_data"] = {
+                "version": 1,
+                "difference_image": diff_image.astype(float).tolist(),
+                "aperture_mask": aperture_mask.astype(bool).tolist(),
+                "in_aperture_depth": float(features.in_aperture_depth),
+                "out_aperture_depth": float(features.out_aperture_depth),
+            }
+            return ok_result(self.id, self.name, metrics=metrics, raw=raw)
         except Exception as e:
             return error_result(self.id, self.name, error=type(e).__name__, notes=[str(e)])
 
@@ -480,6 +649,19 @@ class SectorConsistencyCheck:
                 "outlier_sectors": [int(s) for s in outliers],
                 "measurements": [m.to_dict() for m in rows],
                 "params": {"chi2_threshold": chi2_threshold, "min_sectors": min_sectors},
+            }
+            # Plot data: per-sector depths with errors + weighted mean.
+            depths = np.asarray([float(r.depth_ppm) for r in rows], dtype=np.float64)
+            errs = np.asarray([float(r.depth_err_ppm) for r in rows], dtype=np.float64)
+            w = 1.0 / np.maximum(errs * errs, 1e-12)
+            weighted_mean = float(np.sum(w * depths) / np.sum(w)) if float(np.sum(w)) > 0 else float("nan")
+            raw["plot_data"] = {
+                "version": 1,
+                "sectors": [int(r.sector) for r in rows],
+                "depths_ppm": [float(x) for x in depths],
+                "depth_errs_ppm": [float(x) for x in errs],
+                "weighted_mean_ppm": float(weighted_mean),
+                "outlier_sectors": [int(s) for s in outliers],
             }
             return ok_result(self.id, self.name, metrics=metrics, raw=raw)
         except Exception as e:
