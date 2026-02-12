@@ -74,14 +74,15 @@ def _validate_build_inputs(
         )
 
     # Point budgets
-    if max_lc_points <= 0:
-        raise ValueError(
-            f"max_lc_points must be positive, got {max_lc_points}"
-        )
-    if max_phase_points <= 0:
-        raise ValueError(
-            f"max_phase_points must be positive, got {max_phase_points}"
-        )
+    def _validate_point_budget(name: str, value: Any) -> None:
+        # Require integer-like values and explicitly reject booleans.
+        if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
+            raise ValueError(f"{name} must be a positive integer, got {value!r}")
+        if int(value) <= 0:
+            raise ValueError(f"{name} must be a positive integer, got {value}")
+
+    _validate_point_budget("max_lc_points", max_lc_points)
+    _validate_point_budget("max_phase_points", max_phase_points)
 
 
 def build_report(

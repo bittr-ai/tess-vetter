@@ -730,6 +730,18 @@ def test_validate_rejects_negative_max_phase_points() -> None:
         _validate_build_inputs(_VALID_EPH, 30.0, max_lc_points=100, max_phase_points=-5)
 
 
+@pytest.mark.parametrize("value", [1000.0, 1.5, float("nan"), float("inf"), True, False])
+def test_validate_rejects_non_integer_max_lc_points(value: float) -> None:
+    with pytest.raises(ValueError, match="max_lc_points"):
+        _validate_build_inputs(_VALID_EPH, 30.0, max_lc_points=value, max_phase_points=100)
+
+
+@pytest.mark.parametrize("value", [1000.0, 1.5, float("nan"), float("inf"), True, False])
+def test_validate_rejects_non_integer_max_phase_points(value: float) -> None:
+    with pytest.raises(ValueError, match="max_phase_points"):
+        _validate_build_inputs(_VALID_EPH, 30.0, max_lc_points=100, max_phase_points=value)
+
+
 @pytest.mark.parametrize("field,value", [
     ("period_days", float("nan")),
     ("period_days", float("inf")),
