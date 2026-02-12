@@ -454,9 +454,19 @@ def test_enrichment_total_budget_exhaustion_skips_remaining_blocks(monkeypatch) 
         _time.sleep(0.02)
         return generate_report_api._skipped_enrichment_block("CATALOG_DONE")
 
+    def _slow_pixel(**kwargs):  # type: ignore[no-untyped-def]
+        import time as _time
+
+        _time.sleep(0.02)
+        return generate_report_api._skipped_enrichment_block("PIXEL_DONE")
+
     monkeypatch.setattr(
         "bittr_tess_vetter.api.generate_report._run_catalog_context",
         _slow_catalog,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.api.generate_report._run_pixel_diagnostics",
+        _slow_pixel,
     )
     cfg = EnrichmentConfig(
         include_catalog_context=True,
@@ -477,3 +487,68 @@ def test_enrichment_total_budget_exhaustion_skips_remaining_blocks(monkeypatch) 
     assert "NETWORK_BUDGET_EXHAUSTED" in enrichment["pixel_diagnostics"]["flags"]
     assert enrichment["followup_context"]["status"] == "skipped"
     assert "NETWORK_BUDGET_EXHAUSTED" in enrichment["followup_context"]["flags"]
+
+
+def test_enrichment_honors_max_concurrent_requests(monkeypatch) -> None:
+    """Catalog+pixel blocks should run serially/concurrently per max_concurrent_requests."""
+    client = _mock_client(sectors=[1])
+
+    def _slow_catalog(**kwargs):  # type: ignore[no-untyped-def]
+        import time as _time
+
+        _time.sleep(0.08)
+        return generate_report_api._skipped_enrichment_block("CATALOG_DONE")
+
+    def _slow_pixel(**kwargs):  # type: ignore[no-untyped-def]
+        import time as _time
+
+        _time.sleep(0.08)
+        return generate_report_api._skipped_enrichment_block("PIXEL_DONE")
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.api.generate_report._run_catalog_context",
+        _slow_catalog,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.api.generate_report._run_pixel_diagnostics",
+        _slow_pixel,
+    )
+
+    serial_cfg = EnrichmentConfig(
+        include_catalog_context=True,
+        include_pixel_diagnostics=True,
+        include_followup_context=False,
+        max_network_seconds=1.0,
+        per_request_timeout_seconds=1.0,
+        max_concurrent_requests=1,
+    )
+    started = time.monotonic()
+    generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        include_enrichment=True,
+        enrichment_config=serial_cfg,
+    )
+    serial_elapsed = time.monotonic() - started
+
+    parallel_cfg = EnrichmentConfig(
+        include_catalog_context=True,
+        include_pixel_diagnostics=True,
+        include_followup_context=False,
+        max_network_seconds=1.0,
+        per_request_timeout_seconds=1.0,
+        max_concurrent_requests=2,
+    )
+    started = time.monotonic()
+    generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        include_enrichment=True,
+        enrichment_config=parallel_cfg,
+    )
+    parallel_elapsed = time.monotonic() - started
+
+    assert serial_elapsed > 0.12
+    assert parallel_elapsed < serial_elapsed - 0.03

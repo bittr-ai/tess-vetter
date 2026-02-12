@@ -15,6 +15,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from typing import Any
 
@@ -264,88 +265,116 @@ def _build_enrichment_data(
     """Build enrichment blocks using existing pipeline tiers."""
     started = time.monotonic()
     budget_s = max(float(config.max_network_seconds), 0.0)
+    max_workers = max(int(config.max_concurrent_requests), 1)
 
     def budget_exhausted() -> bool:
         return budget_s > 0 and (time.monotonic() - started) >= budget_s
 
-    pixel_block: EnrichmentBlockData | None = None
-    catalog_block: EnrichmentBlockData | None = None
-    followup_block: EnrichmentBlockData | None = None
+    blocks: dict[str, EnrichmentBlockData | None] = {
+        "catalog_context": None,
+        "pixel_diagnostics": None,
+        "followup_context": None,
+    }
 
+    def _error_block(exc: Exception) -> EnrichmentBlockData:
+        is_timeout = isinstance(exc, TimeoutError)
+        return EnrichmentBlockData(
+            status="error",
+            flags=["ENRICHMENT_TIMEOUT" if is_timeout else "ENRICHMENT_BLOCK_ERROR"],
+            quality={"is_degraded": True},
+            checks={},
+            provenance={
+                "error": type(exc).__name__,
+                "message": str(exc),
+                "timeout_seconds": float(config.per_request_timeout_seconds),
+            },
+            payload={},
+        )
+
+    requested_blocks: list[tuple[str, Any, dict[str, Any]]] = []
     if config.include_catalog_context:
-        if budget_exhausted():
-            catalog_block = _skipped_enrichment_block("NETWORK_BUDGET_EXHAUSTED")
-        else:
-            try:
-                catalog_block = _invoke_block_with_timeout(
-                    timeout_seconds=config.per_request_timeout_seconds,
-                    func=_run_catalog_context,
-                    lc_api=lc_api,
-                    candidate_api=candidate_api,
-                    tic_id=tic_id,
-                    stellar=stellar,
-                    target=target,
-                    network=config.network,
-                    max_catalog_rows=int(config.max_catalog_rows),
-                    config=config,
-                )
-            except Exception as exc:
-                if not config.fail_open:
-                    raise
-                is_timeout = isinstance(exc, TimeoutError)
-                catalog_block = EnrichmentBlockData(
-                    status="error",
-                    flags=["ENRICHMENT_TIMEOUT" if is_timeout else "ENRICHMENT_BLOCK_ERROR"],
-                    quality={"is_degraded": True},
-                    checks={},
-                    provenance={
-                        "error": type(exc).__name__,
-                        "message": str(exc),
-                        "timeout_seconds": float(config.per_request_timeout_seconds),
-                    },
-                    payload={},
-                )
-
+        requested_blocks.append(
+            (
+                "catalog_context",
+                _run_catalog_context,
+                {
+                    "lc_api": lc_api,
+                    "candidate_api": candidate_api,
+                    "tic_id": tic_id,
+                    "stellar": stellar,
+                    "target": target,
+                    "network": config.network,
+                    "max_catalog_rows": int(config.max_catalog_rows),
+                    "config": config,
+                },
+            )
+        )
     if config.include_pixel_diagnostics:
+        requested_blocks.append(
+            (
+                "pixel_diagnostics",
+                _run_pixel_diagnostics,
+                {
+                    "lc_api": lc_api,
+                    "candidate_api": candidate_api,
+                    "tic_id": tic_id,
+                    "sectors_used": sectors_used,
+                    "sector_times": sector_times,
+                    "stellar": stellar,
+                    "target": target,
+                    "mast_client": mast_client,
+                    "config": config,
+                },
+            )
+        )
+
+    if requested_blocks:
         if budget_exhausted():
-            pixel_block = _skipped_enrichment_block("NETWORK_BUDGET_EXHAUSTED")
+            for block_name, _, _ in requested_blocks:
+                blocks[block_name] = _skipped_enrichment_block("NETWORK_BUDGET_EXHAUSTED")
         else:
+            executor = ThreadPoolExecutor(max_workers=max_workers)
+            futures: dict[str, Future[EnrichmentBlockData]] = {}
             try:
-                pixel_block = _invoke_block_with_timeout(
-                    timeout_seconds=config.per_request_timeout_seconds,
-                    func=_run_pixel_diagnostics,
-                    lc_api=lc_api,
-                    candidate_api=candidate_api,
-                    tic_id=tic_id,
-                    sectors_used=sectors_used,
-                    sector_times=sector_times,
-                    stellar=stellar,
-                    target=target,
-                    mast_client=mast_client,
-                    config=config,
-                )
-            except Exception as exc:
-                if not config.fail_open:
-                    raise
-                is_timeout = isinstance(exc, TimeoutError)
-                pixel_block = EnrichmentBlockData(
-                    status="error",
-                    flags=["ENRICHMENT_TIMEOUT" if is_timeout else "ENRICHMENT_BLOCK_ERROR"],
-                    quality={"is_degraded": True},
-                    checks={},
-                    provenance={
-                        "error": type(exc).__name__,
-                        "message": str(exc),
-                        "timeout_seconds": float(config.per_request_timeout_seconds),
-                    },
-                    payload={},
-                )
+                for block_name, block_func, kwargs in requested_blocks:
+                    futures[block_name] = executor.submit(
+                        _invoke_block_with_timeout,
+                        timeout_seconds=config.per_request_timeout_seconds,
+                        func=block_func,
+                        **kwargs,
+                    )
+                if budget_s > 0:
+                    remaining_s = max(0.0, budget_s - (time.monotonic() - started))
+                    _, pending = wait(list(futures.values()), timeout=remaining_s)
+                else:
+                    pending = set()
+
+                pending_names: set[str] = set()
+                for name, future in futures.items():
+                    if future in pending:
+                        future.cancel()
+                        pending_names.add(name)
+
+                for name in pending_names:
+                    blocks[name] = _skipped_enrichment_block("NETWORK_BUDGET_EXHAUSTED")
+
+                for name, future in futures.items():
+                    if name in pending_names:
+                        continue
+                    try:
+                        blocks[name] = future.result()
+                    except Exception as exc:
+                        if not config.fail_open:
+                            raise
+                        blocks[name] = _error_block(exc)
+            finally:
+                executor.shutdown(wait=False, cancel_futures=True)
 
     if config.include_followup_context:
         if budget_exhausted():
-            followup_block = _skipped_enrichment_block("NETWORK_BUDGET_EXHAUSTED")
+            blocks["followup_context"] = _skipped_enrichment_block("NETWORK_BUDGET_EXHAUSTED")
         else:
-            followup_block = _build_followup_context(
+            blocks["followup_context"] = _build_followup_context(
                 tic_id=tic_id,
                 sectors_used=sectors_used,
                 target=target,
@@ -354,9 +383,9 @@ def _build_enrichment_data(
 
     return ReportEnrichmentData(
         version="0.1.0",
-        pixel_diagnostics=pixel_block,
-        catalog_context=catalog_block,
-        followup_context=followup_block,
+        pixel_diagnostics=blocks["pixel_diagnostics"],
+        catalog_context=blocks["catalog_context"],
+        followup_context=blocks["followup_context"],
     )
 
 
