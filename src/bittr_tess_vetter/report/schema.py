@@ -88,6 +88,49 @@ class VariabilitySummaryModel(BaseModel):
     semantics: dict[str, float | int | str | bool | None] = Field(default_factory=dict)
 
 
+class AliasScalarSummaryModel(BaseModel):
+    """Scalar alias diagnostics rollup for summary consumers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    best_harmonic: str | None = None
+    best_ratio_over_p: float | None = None
+    score_p: float | None = None
+    score_p_over_2: float | None = None
+    score_2p: float | None = None
+    depth_ppm_peak: float | None = None
+
+
+class TimingSummaryModel(BaseModel):
+    """Scalar timing rollup derived from per-epoch timing series."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    n_epochs_measured: int = 0
+    rms_seconds: float | None = None
+    periodicity_score: float | None = None
+    linear_trend_sec_per_epoch: float | None = None
+    max_abs_oc_seconds: float | None = None
+    max_snr: float | None = None
+    outlier_count: int = 0
+    outlier_fraction: float | None = None
+    deepest_epoch: int | None = None
+
+
+class SecondaryScanSummaryModel(BaseModel):
+    """Scalar secondary-scan coverage and strongest-dip rollup."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    phase_coverage_fraction: float | None = None
+    largest_phase_gap: float | None = None
+    n_bins_with_error: int | None = None
+    strongest_dip_phase: float | None = None
+    strongest_dip_depth_ppm: float | None = None
+    is_degraded: bool | None = None
+    quality_flag_count: int = 0
+
+
 class BundleSummaryModel(BaseModel):
     """Aggregate check counts."""
 
@@ -120,6 +163,9 @@ class ReportSummaryModel(BaseModel):
     references: list[ReferenceEntryModel] = Field(default_factory=list)
     enrichment: dict[str, Any] | None = None
     lc_robustness_summary: dict[str, Any] | None = None
+    alias_scalar_summary: AliasScalarSummaryModel | None = None
+    timing_summary: TimingSummaryModel | None = None
+    secondary_scan_summary: SecondaryScanSummaryModel | None = None
 
 
 class ReportPlotDataModel(BaseModel):

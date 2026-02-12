@@ -115,3 +115,52 @@ def test_report_payload_rejects_invalid_typed_reference_shape() -> None:
 
     with pytest.raises(Exception):
         ReportPayloadModel.model_validate(payload)
+
+
+def test_report_payload_schema_includes_new_deterministic_summary_blocks() -> None:
+    schema = report_payload_json_schema()
+    summary_props = schema["$defs"]["ReportSummaryModel"]["properties"]
+    assert "alias_scalar_summary" in summary_props
+    assert "timing_summary" in summary_props
+    assert "secondary_scan_summary" in summary_props
+
+
+def test_report_payload_rejects_non_scalar_values_in_new_summary_blocks() -> None:
+    lc = _make_minimal_lc()
+    candidate = Candidate(
+        ephemeris=Ephemeris(period_days=1.0, t0_btjd=0.0, duration_hours=1.0),
+        depth_ppm=500.0,
+    )
+    payload = build_report(lc, candidate, include_additional_plots=False).to_json()
+    payload = copy.deepcopy(payload)
+    payload["summary"]["alias_scalar_summary"] = {
+        "best_harmonic": "P",
+        "best_ratio_over_p": 1.0,
+        "score_p": 0.5,
+        "score_p_over_2": 0.3,
+        "score_2p": 0.2,
+        "depth_ppm_peak": [1000.0],
+    }
+    payload["summary"]["timing_summary"] = {
+        "n_epochs_measured": 3,
+        "rms_seconds": 25.0,
+        "periodicity_score": 0.5,
+        "linear_trend_sec_per_epoch": 0.2,
+        "max_abs_oc_seconds": 30.0,
+        "max_snr": 12.0,
+        "outlier_count": 1,
+        "outlier_fraction": [1 / 3],
+        "deepest_epoch": 1,
+    }
+    payload["summary"]["secondary_scan_summary"] = {
+        "phase_coverage_fraction": 0.4,
+        "largest_phase_gap": 0.6,
+        "n_bins_with_error": 2,
+        "strongest_dip_phase": 0.0,
+        "strongest_dip_depth_ppm": 1500.0,
+        "is_degraded": True,
+        "quality_flag_count": [1],
+    }
+
+    with pytest.raises(Exception):
+        ReportPayloadModel.model_validate(payload)

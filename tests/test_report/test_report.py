@@ -26,12 +26,16 @@ from bittr_tess_vetter.api.types import (
     ok_result,
 )
 from bittr_tess_vetter.report import (
+    AliasHarmonicSummaryData,
     EnrichmentBlockData,
     FullLCPlotData,
     LCSummary,
     PhaseFoldedPlotData,
     ReportData,
     ReportEnrichmentData,
+    SecondaryScanPlotData,
+    SecondaryScanQuality,
+    TransitTimingPlotData,
     build_report,
 )
 from bittr_tess_vetter.report._build import (
@@ -75,6 +79,16 @@ def _make_box_transit_lc(
     flux[in_transit] *= 1.0 - depth_frac
 
     return time, flux, flux_err
+
+
+def _assert_scalar_only_summary_block(block: dict[str, object], *, block_name: str) -> None:
+    """Assert summary block has only scalar leaf values."""
+    assert isinstance(block, dict), f"{block_name} must be a dict"
+    scalar_types = (bool, int, float, str)
+    for key, value in block.items():
+        assert value is None or isinstance(value, scalar_types), (
+            f"{block_name}.{key} must be scalar, got {type(value).__name__}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -435,6 +449,140 @@ def test_summary_references_cover_method_refs() -> None:
         for ref in check.get("method_refs", [])
     }
     assert method_refs.issubset(ref_keys)
+
+
+def test_alias_scalar_summary_regression_deterministic_and_scalar_only() -> None:
+    """Alias scalar summary should be deterministic, scalar-only, and compact."""
+    report = ReportData(
+        alias_summary=AliasHarmonicSummaryData(
+            harmonic_labels=["P", "P/2", "2P"],
+            periods=[10.0, 5.0, 20.0],
+            scores=[0.6, 0.2, 0.1],
+            best_harmonic="P",
+            best_ratio_over_p=1.0,
+        ),
+        checks_run=[],
+    )
+
+    payload_a = report.to_json()
+    payload_b = report.to_json()
+
+    block_a = payload_a["summary"]["alias_scalar_summary"]
+    block_b = payload_b["summary"]["alias_scalar_summary"]
+    assert block_a == block_b, "alias_scalar_summary must be deterministic"
+
+    assert set(block_a.keys()) == {
+        "best_harmonic",
+        "best_ratio_over_p",
+        "score_p",
+        "score_p_over_2",
+        "score_2p",
+        "depth_ppm_peak",
+    }
+    assert block_a["best_harmonic"] == "P"
+    assert block_a["best_ratio_over_p"] == pytest.approx(1.0)
+    assert block_a["score_p"] == pytest.approx(0.6)
+    assert block_a["score_p_over_2"] == pytest.approx(0.2)
+    assert block_a["score_2p"] == pytest.approx(0.1)
+    assert (
+        block_a["depth_ppm_peak"] is None
+        or isinstance(block_a["depth_ppm_peak"], float)
+    )
+
+    _assert_scalar_only_summary_block(block_a, block_name="alias_scalar_summary")
+
+
+def test_timing_summary_regression_rules_and_scalar_only() -> None:
+    """Timing summary should enforce deterministic denominator and tie-break rules."""
+    report = ReportData(
+        timing_series=TransitTimingPlotData(
+            epochs=[4, 1, 3],
+            oc_seconds=[15.0, -30.0, 30.0],
+            snr=[8.0, 12.0, 10.0],
+            rms_seconds=25.0,
+            periodicity_score=0.5,
+            linear_trend_sec_per_epoch=0.2,
+        ),
+        checks_run=[],
+    )
+
+    payload_a = report.to_json()
+    payload_b = report.to_json()
+
+    block_a = payload_a["summary"]["timing_summary"]
+    block_b = payload_b["summary"]["timing_summary"]
+    assert block_a == block_b, "timing_summary must be deterministic"
+
+    assert set(block_a.keys()) == {
+        "n_epochs_measured",
+        "rms_seconds",
+        "periodicity_score",
+        "linear_trend_sec_per_epoch",
+        "max_abs_oc_seconds",
+        "max_snr",
+        "outlier_count",
+        "outlier_fraction",
+        "deepest_epoch",
+    }
+    if block_a["n_epochs_measured"] > 0 and block_a["outlier_fraction"] is not None:
+        expected_fraction = block_a["outlier_count"] / block_a["n_epochs_measured"]
+        assert block_a["outlier_fraction"] == pytest.approx(expected_fraction)
+    assert block_a["deepest_epoch"] == 1
+    assert block_a["rms_seconds"] == pytest.approx(25.0)
+    assert block_a["linear_trend_sec_per_epoch"] == pytest.approx(0.2)
+    assert block_a["max_abs_oc_seconds"] == pytest.approx(30.0)
+
+    _assert_scalar_only_summary_block(block_a, block_name="timing_summary")
+
+
+def test_secondary_scan_summary_regression_naming_unit_and_scalar_only() -> None:
+    """Secondary scan summary should expose ppm depth naming and scalar-only fields."""
+    report = ReportData(
+        secondary_scan=SecondaryScanPlotData(
+            phase=[-0.2, 0.0, 0.2],
+            flux=[1.0, 0.9985, 1.0],
+            bin_centers=[-0.1, 0.1],
+            bin_flux=[0.999, 1.0],
+            bin_err=[0.0002, 0.0002],
+            bin_minutes=30.0,
+            primary_phase=0.0,
+            secondary_phase=0.5,
+            strongest_dip_phase=0.0,
+            strongest_dip_flux=0.9985,
+            quality=SecondaryScanQuality(
+                n_raw_points=3,
+                n_bins=2,
+                n_bins_with_error=2,
+                phase_coverage_fraction=0.4,
+                largest_phase_gap=0.6,
+                is_degraded=True,
+                flags=["LOW_BIN_COUNT"],
+            ),
+        ),
+        checks_run=[],
+    )
+
+    payload_a = report.to_json()
+    payload_b = report.to_json()
+
+    block_a = payload_a["summary"]["secondary_scan_summary"]
+    block_b = payload_b["summary"]["secondary_scan_summary"]
+    assert block_a == block_b, "secondary_scan_summary must be deterministic"
+
+    assert set(block_a.keys()) == {
+        "phase_coverage_fraction",
+        "largest_phase_gap",
+        "n_bins_with_error",
+        "strongest_dip_phase",
+        "strongest_dip_depth_ppm",
+        "is_degraded",
+        "quality_flag_count",
+    }
+    assert "strongest_dip_flux" not in block_a
+    assert block_a["strongest_dip_depth_ppm"] == pytest.approx(1500.0)
+    assert block_a["quality_flag_count"] == 1
+
+    _assert_scalar_only_summary_block(block_a, block_name="secondary_scan_summary")
 
 
 # ---------------------------------------------------------------------------

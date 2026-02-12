@@ -483,6 +483,161 @@ def _build_variability_summary(
     }
 
 
+def _build_alias_scalar_summary(
+    alias_summary: AliasHarmonicSummaryData | None,
+) -> dict[str, Any]:
+    """Build scalar-only alias summary from compact harmonic diagnostics."""
+    if alias_summary is None:
+        return {
+            "best_harmonic": None,
+            "best_ratio_over_p": None,
+            "score_p": None,
+            "score_p_over_2": None,
+            "score_2p": None,
+            "depth_ppm_peak": None,
+        }
+
+    score_by_label: dict[str, float] = {}
+    for label, score in zip(
+        alias_summary.harmonic_labels,
+        alias_summary.scores,
+        strict=False,
+    ):
+        value = _coerce_finite_float(score)
+        if value is not None:
+            score_by_label[str(label)] = value
+
+    # Prefer explicit harmonic depths when available.
+    depth_ppm_peak: float | None = None
+    if hasattr(alias_summary, "harmonic_depth_ppm"):
+        maybe_depths = getattr(alias_summary, "harmonic_depth_ppm")
+        if isinstance(maybe_depths, list):
+            depths = [d for d in (_coerce_finite_float(v) for v in maybe_depths) if d is not None]
+            if depths:
+                depth_ppm_peak = float(max(depths))
+    if depth_ppm_peak is None and score_by_label:
+        # Fallback to the strongest harmonic scalar when only scores are available.
+        depth_ppm_peak = float(max(score_by_label.values()))
+
+    return {
+        "best_harmonic": str(alias_summary.best_harmonic) if alias_summary.best_harmonic else None,
+        "best_ratio_over_p": _coerce_finite_float(alias_summary.best_ratio_over_p),
+        "score_p": score_by_label.get("P"),
+        "score_p_over_2": score_by_label.get("P/2"),
+        "score_2p": score_by_label.get("2P"),
+        "depth_ppm_peak": depth_ppm_peak,
+    }
+
+
+def _build_timing_summary(
+    timing_series: TransitTimingPlotData | None,
+) -> dict[str, Any]:
+    """Build scalar timing rollup from existing per-epoch timing series."""
+    if timing_series is None:
+        return {
+            "n_epochs_measured": 0,
+            "rms_seconds": None,
+            "periodicity_score": None,
+            "linear_trend_sec_per_epoch": None,
+            "max_abs_oc_seconds": None,
+            "max_snr": None,
+            "outlier_count": 0,
+            "outlier_fraction": None,
+            "deepest_epoch": None,
+        }
+
+    epochs = [int(e) for e in timing_series.epochs]
+    oc_seconds = [_coerce_finite_float(v) for v in timing_series.oc_seconds]
+    snr_values = [_coerce_finite_float(v) for v in timing_series.snr]
+    n_epochs_measured = len(epochs)
+
+    finite_oc = [abs(v) for v in oc_seconds if v is not None]
+    max_abs_oc_seconds = float(max(finite_oc)) if finite_oc else None
+
+    finite_snr = [v for v in snr_values if v is not None]
+    max_snr = float(max(finite_snr)) if finite_snr else None
+
+    # Outlier policy is deterministic and derived from existing O-C + RMS only.
+    rms_seconds = _coerce_finite_float(timing_series.rms_seconds)
+    outlier_count = 0
+    if rms_seconds is not None and rms_seconds > 0:
+        threshold = 3.0 * rms_seconds
+        outlier_count = sum(
+            1
+            for value in oc_seconds
+            if value is not None and abs(value) > threshold
+        )
+
+    outlier_fraction = (
+        float(outlier_count) / float(n_epochs_measured)
+        if n_epochs_measured > 0
+        else None
+    )
+
+    deepest_epoch: int | None = None
+    best_snr: float | None = None
+    for epoch, snr in zip(epochs, snr_values, strict=False):
+        if snr is None:
+            continue
+        if best_snr is None or snr > best_snr or (snr == best_snr and epoch < deepest_epoch):
+            best_snr = snr
+            deepest_epoch = int(epoch)
+
+    return {
+        "n_epochs_measured": n_epochs_measured,
+        "rms_seconds": rms_seconds,
+        "periodicity_score": _coerce_finite_float(timing_series.periodicity_score),
+        "linear_trend_sec_per_epoch": _coerce_finite_float(
+            timing_series.linear_trend_sec_per_epoch
+        ),
+        "max_abs_oc_seconds": max_abs_oc_seconds,
+        "max_snr": max_snr,
+        "outlier_count": int(outlier_count),
+        "outlier_fraction": outlier_fraction,
+        "deepest_epoch": deepest_epoch,
+    }
+
+
+def _build_secondary_scan_summary(
+    secondary_scan: SecondaryScanPlotData | None,
+) -> dict[str, Any]:
+    """Build scalar secondary-scan quality and dip rollup."""
+    if secondary_scan is None:
+        return {
+            "phase_coverage_fraction": None,
+            "largest_phase_gap": None,
+            "n_bins_with_error": None,
+            "strongest_dip_phase": None,
+            "strongest_dip_depth_ppm": None,
+            "is_degraded": None,
+            "quality_flag_count": 0,
+        }
+
+    quality = secondary_scan.quality
+    strongest_dip_depth_ppm = None
+    strongest_dip_flux = _coerce_finite_float(secondary_scan.strongest_dip_flux)
+    if strongest_dip_flux is not None:
+        strongest_dip_depth_ppm = float((1.0 - strongest_dip_flux) * 1e6)
+
+    quality_flag_count = 0
+    if quality is not None and quality.flags is not None:
+        quality_flag_count = int(len(quality.flags))
+
+    return {
+        "phase_coverage_fraction": (
+            _coerce_finite_float(quality.phase_coverage_fraction) if quality is not None else None
+        ),
+        "largest_phase_gap": (
+            _coerce_finite_float(quality.largest_phase_gap) if quality is not None else None
+        ),
+        "n_bins_with_error": int(quality.n_bins_with_error) if quality is not None else None,
+        "strongest_dip_phase": _coerce_finite_float(secondary_scan.strongest_dip_phase),
+        "strongest_dip_depth_ppm": strongest_dip_depth_ppm,
+        "is_degraded": bool(quality.is_degraded) if quality is not None else None,
+        "quality_flag_count": quality_flag_count,
+    }
+
+
 @dataclass
 class ReportData:
     """LC-only report data packet.
@@ -582,9 +737,17 @@ class ReportData:
         summary["variability_summary"] = _build_variability_summary(
             self.lc_summary, self.timing_series
         )
+        summary["alias_scalar_summary"] = _build_alias_scalar_summary(self.alias_summary)
+        summary["timing_summary"] = _build_timing_summary(self.timing_series)
+        summary["secondary_scan_summary"] = _build_secondary_scan_summary(
+            self.secondary_scan
+        )
         reference_ids.update(refs_for_summary_block("odd_even_summary"))
         reference_ids.update(refs_for_summary_block("noise_summary"))
         reference_ids.update(refs_for_summary_block("variability_summary"))
+        reference_ids.update(refs_for_summary_block("alias_scalar_summary"))
+        reference_ids.update(refs_for_summary_block("timing_summary"))
+        reference_ids.update(refs_for_summary_block("secondary_scan_summary"))
         summary["references"] = reference_entries(reference_ids)
 
         if self.bundle is not None:
