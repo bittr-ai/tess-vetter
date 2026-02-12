@@ -844,42 +844,56 @@ def _local_detrend_js() -> str:
   var d = REPORT.local_detrend;
   if (!d || !d.windows || d.windows.length === 0) return;
 
-  var allFlux = [];
+  var allResidual = [];
   for (var i = 0; i < d.windows.length; i++) {{
     var w = d.windows[i];
-    for (var j = 0; j < w.flux.length; j++) allFlux.push(w.flux[j]);
+    for (var j = 0; j < w.flux.length; j++) {{
+      var f = w.flux[j];
+      var b = w.baseline_flux[j];
+      if (isFinite(f) && isFinite(b)) allResidual.push(f - b);
+    }}
   }}
-  var yBase = percentileRange(allFlux, 2, 98, 0.0);
-  var span = (yBase && yBase[1] > yBase[0]) ? (yBase[1] - yBase[0]) : 0.002;
-  var offset = span * 1.55;
+  var yBase = percentileRange(allResidual, 2, 98, 0.0);
+  var span = (yBase && yBase[1] > yBase[0]) ? (yBase[1] - yBase[0]) : 0.0008;
+  var offset = span * 1.8;
 
   var traces = [];
   for (var i = 0; i < d.windows.length; i++) {{
     var w = d.windows[i];
-    var yRaw = [];
-    var yBaseLine = [];
+    var yResidual = [];
+    var yZeroLine = [];
+    var residualPpm = [];
     for (var j = 0; j < w.flux.length; j++) {{
-      yRaw.push(w.flux[j] + i * offset);
-      yBaseLine.push(w.baseline_flux[j] + i * offset);
+      var f = w.flux[j];
+      var b = w.baseline_flux[j];
+      if (isFinite(f) && isFinite(b)) {{
+        var r = f - b;
+        yResidual.push(r + i * offset);
+        residualPpm.push(r * 1e6);
+      }} else {{
+        yResidual.push(null);
+        residualPpm.push(null);
+      }}
+      yZeroLine.push(i * offset);
     }}
     traces.push({{
       x: w.dt_hours,
-      y: yRaw,
+      y: yResidual,
       mode: 'markers',
       type: 'scattergl',
       marker: {{ color: '{_OOT_COLOR}', size: 3, opacity: 0.45 }},
-      name: 'E' + w.epoch + ' raw',
+      name: 'E' + w.epoch + ' residual',
       showlegend: false,
-      hovertemplate: 'Epoch ' + w.epoch + '<br>dt=%{{x:.2f}} h<br>flux=%{{customdata:.6f}}<extra></extra>',
-      customdata: w.flux,
+      hovertemplate: 'Epoch ' + w.epoch + '<br>dt=%{{x:.2f}} h<br>resid=%{{customdata:.0f}} ppm<extra></extra>',
+      customdata: residualPpm,
     }});
     traces.push({{
       x: w.dt_hours,
-      y: yBaseLine,
+      y: yZeroLine,
       mode: 'lines',
       type: 'scatter',
       line: {{ color: '{_ACCENT}', width: 1.3 }},
-      name: 'E' + w.epoch + ' baseline',
+      name: 'E' + w.epoch + ' baseline zero',
       showlegend: false,
       hoverinfo: 'skip',
     }});
@@ -887,8 +901,12 @@ def _local_detrend_js() -> str:
     var xIT = [], yIT = [];
     for (var j = 0; j < w.dt_hours.length; j++) {{
       if (w.in_transit_mask[j]) {{
+        var f = w.flux[j];
+        var b = w.baseline_flux[j];
+        if (!isFinite(f) || !isFinite(b)) continue;
+        var r = f - b;
         xIT.push(w.dt_hours[j]);
-        yIT.push(w.flux[j] + i * offset);
+        yIT.push(r + i * offset);
       }}
     }}
     if (xIT.length > 0) {{
@@ -924,7 +942,7 @@ def _local_detrend_js() -> str:
       range: [-d.window_half_hours, d.window_half_hours],
     }}),
     yaxis: Object.assign({{}}, {_plotly_layout_defaults()}.yaxis, {{
-      title: {{ text: 'Flux + Local Baseline (Stacked)', standoff: 8 }},
+      title: {{ text: 'Flux - Local Baseline (Stacked)', standoff: 8 }},
       showticklabels: false,
     }}),
     shapes: shapes,
@@ -1071,14 +1089,14 @@ def _oot_context_js() -> str:
   var d = REPORT.oot_context;
   if (!d) return;
   var hasHist = d.hist_centers && d.hist_centers.length > 0;
-  var hasSample = d.flux_sample && d.flux_sample.length > 0;
+  var hasSample = d.flux_residual_ppm_sample && d.flux_residual_ppm_sample.length > 0;
   if (!hasHist && !hasSample) return;
 
   var traces = [];
   if (hasSample) {{
     traces.push({{
       x: d.sample_indices,
-      y: d.flux_sample,
+      y: d.flux_residual_ppm_sample,
       mode: 'markers',
       type: 'scattergl',
       marker: {{ color: '{_OOT_COLOR}', size: 2, opacity: 0.35 }},
@@ -1117,7 +1135,7 @@ def _oot_context_js() -> str:
       title: {{ text: 'Sample Index (OOT)', standoff: 8 }},
     }}),
     yaxis2: Object.assign({{}}, {_plotly_layout_defaults()}.yaxis, {{
-      title: {{ text: 'Normalized Flux', standoff: 8 }},
+      title: {{ text: 'OOT Residual (ppm)', standoff: 8 }},
     }}),
     annotations: annText ? [{{
       text: annText,

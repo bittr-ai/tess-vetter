@@ -315,6 +315,7 @@ def test_json_schema_keys_and_types() -> None:
     assert isinstance(j["local_detrend"]["baseline_method"], str)
     assert isinstance(j["oot_context"], dict)
     assert isinstance(j["oot_context"]["flux_sample"], list)
+    assert isinstance(j["oot_context"]["flux_residual_ppm_sample"], list)
     assert isinstance(j["oot_context"]["hist_centers"], list)
     assert isinstance(j["oot_context"]["hist_counts"], list)
     assert isinstance(j["oot_context"]["n_oot_points"], int)

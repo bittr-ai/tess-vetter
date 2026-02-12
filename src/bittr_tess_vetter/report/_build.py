@@ -843,6 +843,7 @@ def _build_oot_context_plot_data(
     if len(time) == 0:
         return OOTContextPlotData(
             flux_sample=[],
+            flux_residual_ppm_sample=[],
             sample_indices=[],
             hist_centers=[],
             hist_counts=[],
@@ -865,6 +866,7 @@ def _build_oot_context_plot_data(
     if n_oot == 0:
         return OOTContextPlotData(
             flux_sample=[],
+            flux_residual_ppm_sample=[],
             sample_indices=[],
             hist_centers=[],
             hist_counts=[],
@@ -893,9 +895,11 @@ def _build_oot_context_plot_data(
     residual_ppm = (flux_oot - median) * 1e6
     counts, edges = np.histogram(residual_ppm, bins=40)
     centers = (edges[:-1] + edges[1:]) / 2.0
+    residual_sample_ppm = (flux_sample - median) * 1e6
 
     return OOTContextPlotData(
         flux_sample=flux_sample.tolist(),
+        flux_residual_ppm_sample=residual_sample_ppm.tolist(),
         sample_indices=sample_idx.tolist(),
         hist_centers=centers.tolist(),
         hist_counts=counts.astype(int).tolist(),

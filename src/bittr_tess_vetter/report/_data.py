@@ -180,6 +180,7 @@ class OOTContextPlotData:
     """Out-of-transit flux distribution + scatter context payload."""
 
     flux_sample: list[float]
+    flux_residual_ppm_sample: list[float]
     sample_indices: list[int]
     hist_centers: list[float]
     hist_counts: list[int]
