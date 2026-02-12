@@ -215,6 +215,9 @@ def test_build_report_integration() -> None:
     assert report.phase_folded.bin_minutes == 30.0
     assert report.phase_folded.y_range_suggested is not None
     assert report.phase_folded.depth_reference_flux is not None
+    assert report.per_transit_stack is not None
+    assert report.odd_even_phase is not None
+    assert report.secondary_scan is not None
 
 
 # ---------------------------------------------------------------------------
@@ -297,6 +300,17 @@ def test_json_schema_keys_and_types() -> None:
         j["phase_folded"]["depth_reference_flux"] is None
         or isinstance(j["phase_folded"]["depth_reference_flux"], float)
     )
+
+    # Additional LC-only panels
+    assert isinstance(j["per_transit_stack"], dict)
+    assert isinstance(j["per_transit_stack"]["windows"], list)
+    assert isinstance(j["per_transit_stack"]["window_half_hours"], float)
+    assert isinstance(j["odd_even_phase"], dict)
+    assert isinstance(j["odd_even_phase"]["odd_phase"], list)
+    assert isinstance(j["odd_even_phase"]["even_phase"], list)
+    assert isinstance(j["secondary_scan"], dict)
+    assert isinstance(j["secondary_scan"]["phase"], list)
+    assert isinstance(j["secondary_scan"]["bin_centers"], list)
 
     # Round-trip through json.dumps should work without custom encoders
     serialized = json.dumps(j)
@@ -573,6 +587,23 @@ def test_phase_depth_reference_absent_without_depth_ppm() -> None:
     assert report.phase_folded.depth_reference_flux is None
 
 
+def test_build_report_without_additional_plots() -> None:
+    """Payload control: additional panels can be disabled."""
+    time, flux, flux_err = _make_box_transit_lc()
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    report = build_report(lc, candidate, include_additional_plots=False)
+    assert report.per_transit_stack is None
+    assert report.odd_even_phase is None
+    assert report.secondary_scan is None
+    j = report.to_json()
+    assert "per_transit_stack" not in j
+    assert "odd_even_phase" not in j
+    assert "secondary_scan" not in j
+
+
 # ---------------------------------------------------------------------------
 # Edge case: all points in transit for downsampling
 # ---------------------------------------------------------------------------
@@ -737,34 +768,70 @@ _VALID_EPH = Ephemeris(period_days=3.5, t0_btjd=1000.0, duration_hours=2.5)
 
 def test_validate_rejects_zero_max_lc_points() -> None:
     with pytest.raises(ValueError, match="max_lc_points"):
-        _validate_build_inputs(_VALID_EPH, 30.0, max_lc_points=0, max_phase_points=100)
+        _validate_build_inputs(
+            _VALID_EPH, 30.0, max_lc_points=0, max_phase_points=100,
+            max_transit_windows=24, max_points_per_window=300,
+        )
 
 
 def test_validate_rejects_negative_max_lc_points() -> None:
     with pytest.raises(ValueError, match="max_lc_points"):
-        _validate_build_inputs(_VALID_EPH, 30.0, max_lc_points=-1, max_phase_points=100)
+        _validate_build_inputs(
+            _VALID_EPH, 30.0, max_lc_points=-1, max_phase_points=100,
+            max_transit_windows=24, max_points_per_window=300,
+        )
 
 
 def test_validate_rejects_zero_max_phase_points() -> None:
     with pytest.raises(ValueError, match="max_phase_points"):
-        _validate_build_inputs(_VALID_EPH, 30.0, max_lc_points=100, max_phase_points=0)
+        _validate_build_inputs(
+            _VALID_EPH, 30.0, max_lc_points=100, max_phase_points=0,
+            max_transit_windows=24, max_points_per_window=300,
+        )
 
 
 def test_validate_rejects_negative_max_phase_points() -> None:
     with pytest.raises(ValueError, match="max_phase_points"):
-        _validate_build_inputs(_VALID_EPH, 30.0, max_lc_points=100, max_phase_points=-5)
+        _validate_build_inputs(
+            _VALID_EPH, 30.0, max_lc_points=100, max_phase_points=-5,
+            max_transit_windows=24, max_points_per_window=300,
+        )
 
 
 @pytest.mark.parametrize("value", [1000.0, 1.5, float("nan"), float("inf"), True, False])
 def test_validate_rejects_non_integer_max_lc_points(value: float) -> None:
     with pytest.raises(ValueError, match="max_lc_points"):
-        _validate_build_inputs(_VALID_EPH, 30.0, max_lc_points=value, max_phase_points=100)
+        _validate_build_inputs(
+            _VALID_EPH, 30.0, max_lc_points=value, max_phase_points=100,
+            max_transit_windows=24, max_points_per_window=300,
+        )
 
 
 @pytest.mark.parametrize("value", [1000.0, 1.5, float("nan"), float("inf"), True, False])
 def test_validate_rejects_non_integer_max_phase_points(value: float) -> None:
     with pytest.raises(ValueError, match="max_phase_points"):
-        _validate_build_inputs(_VALID_EPH, 30.0, max_lc_points=100, max_phase_points=value)
+        _validate_build_inputs(
+            _VALID_EPH, 30.0, max_lc_points=100, max_phase_points=value,
+            max_transit_windows=24, max_points_per_window=300,
+        )
+
+
+@pytest.mark.parametrize("field,value", [
+    ("max_transit_windows", 0),
+    ("max_transit_windows", -1),
+    ("max_points_per_window", 0),
+    ("max_points_per_window", -10),
+])
+def test_validate_rejects_non_positive_transit_window_budgets(field: str, value: int) -> None:
+    kwargs = {
+        "max_lc_points": 100,
+        "max_phase_points": 100,
+        "max_transit_windows": 24,
+        "max_points_per_window": 300,
+    }
+    kwargs[field] = value
+    with pytest.raises(ValueError, match=field):
+        _validate_build_inputs(_VALID_EPH, 30.0, **kwargs)
 
 
 @pytest.mark.parametrize("field,value", [
@@ -780,18 +847,27 @@ def test_validate_rejects_non_finite_ephemeris(field: str, value: float) -> None
     kwargs[field] = value
     eph = Ephemeris(**kwargs)
     with pytest.raises(ValueError, match=field):
-        _validate_build_inputs(eph, 30.0, max_lc_points=100, max_phase_points=100)
+        _validate_build_inputs(
+            eph, 30.0, max_lc_points=100, max_phase_points=100,
+            max_transit_windows=24, max_points_per_window=300,
+        )
 
 
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), 0.0, -1.0])
 def test_validate_rejects_bad_bin_minutes(value: float) -> None:
     with pytest.raises(ValueError, match="bin_minutes"):
-        _validate_build_inputs(_VALID_EPH, value, max_lc_points=100, max_phase_points=100)
+        _validate_build_inputs(
+            _VALID_EPH, value, max_lc_points=100, max_phase_points=100,
+            max_transit_windows=24, max_points_per_window=300,
+        )
 
 
 def test_validate_accepts_valid_inputs() -> None:
     """Smoke test: valid inputs should not raise."""
-    _validate_build_inputs(_VALID_EPH, 30.0, max_lc_points=50_000, max_phase_points=10_000)
+    _validate_build_inputs(
+        _VALID_EPH, 30.0, max_lc_points=50_000, max_phase_points=10_000,
+        max_transit_windows=24, max_points_per_window=300,
+    )
 
 
 # ---------------------------------------------------------------------------

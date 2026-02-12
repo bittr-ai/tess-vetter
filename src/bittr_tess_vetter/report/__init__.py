@@ -13,8 +13,12 @@ from bittr_tess_vetter.report._build import build_report
 from bittr_tess_vetter.report._data import (
     FullLCPlotData,
     LCSummary,
+    OddEvenPhasePlotData,
+    PerTransitStackPlotData,
     PhaseFoldedPlotData,
     ReportData,
+    SecondaryScanPlotData,
+    TransitWindowData,
 )
 from bittr_tess_vetter.report._render_html import render_html
 
@@ -25,4 +29,8 @@ __all__ = [
     "LCSummary",
     "FullLCPlotData",
     "PhaseFoldedPlotData",
+    "TransitWindowData",
+    "PerTransitStackPlotData",
+    "OddEvenPhasePlotData",
+    "SecondaryScanPlotData",
 ]

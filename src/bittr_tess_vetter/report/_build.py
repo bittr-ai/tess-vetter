@@ -28,8 +28,12 @@ from bittr_tess_vetter.compute.transit import (
 from bittr_tess_vetter.report._data import (
     FullLCPlotData,
     LCSummary,
+    OddEvenPhasePlotData,
+    PerTransitStackPlotData,
     PhaseFoldedPlotData,
     ReportData,
+    SecondaryScanPlotData,
+    TransitWindowData,
 )
 from bittr_tess_vetter.validation.base import (
     count_transits,
@@ -48,6 +52,8 @@ def _validate_build_inputs(
     bin_minutes: float,
     max_lc_points: int,
     max_phase_points: int,
+    max_transit_windows: int,
+    max_points_per_window: int,
 ) -> None:
     """Validate numeric inputs for build_report().
 
@@ -83,6 +89,8 @@ def _validate_build_inputs(
 
     _validate_point_budget("max_lc_points", max_lc_points)
     _validate_point_budget("max_phase_points", max_phase_points)
+    _validate_point_budget("max_transit_windows", max_transit_windows)
+    _validate_point_budget("max_points_per_window", max_points_per_window)
 
 
 def build_report(
@@ -97,6 +105,9 @@ def build_report(
     check_config: dict[str, dict[str, Any]] | None = None,
     max_lc_points: int = 50_000,
     max_phase_points: int = 10_000,
+    include_additional_plots: bool = True,
+    max_transit_windows: int = 24,
+    max_points_per_window: int = 300,
 ) -> ReportData:
     """Assemble LC-only report data packet.
 
@@ -118,6 +129,11 @@ def build_report(
         max_phase_points: Downsample phase-folded raw arrays if longer
             than this.  Near-transit points (within the duration-based
             display window) are preserved at full resolution.
+        include_additional_plots: If True, include per-transit stack,
+            odd/even phase, and secondary scan payloads.
+        max_transit_windows: Max number of transit windows to include
+            in the per-transit stack panel.
+        max_points_per_window: Max points per per-transit window.
 
     Returns:
         ReportData with all Phase 1 contents populated.
@@ -125,7 +141,14 @@ def build_report(
     ephemeris = candidate.ephemeris
 
     # 0. Validate inputs
-    _validate_build_inputs(ephemeris, bin_minutes, max_lc_points, max_phase_points)
+    _validate_build_inputs(
+        ephemeris,
+        bin_minutes,
+        max_lc_points,
+        max_phase_points,
+        max_transit_windows,
+        max_points_per_window,
+    )
 
     # 1. Determine enabled checks
     enabled = set(_DEFAULT_ENABLED)
@@ -160,6 +183,29 @@ def build_report(
         lc, ephemeris, bin_minutes, candidate.depth_ppm, max_phase_points
     )
 
+    per_transit_stack: PerTransitStackPlotData | None = None
+    odd_even_phase: OddEvenPhasePlotData | None = None
+    secondary_scan: SecondaryScanPlotData | None = None
+    if include_additional_plots:
+        per_transit_stack = _build_per_transit_stack_plot_data(
+            lc,
+            ephemeris,
+            max_windows=max_transit_windows,
+            max_points_per_window=max_points_per_window,
+        )
+        odd_even_phase = _build_odd_even_phase_plot_data(
+            lc,
+            ephemeris,
+            bin_minutes=bin_minutes,
+            max_points=max_phase_points,
+        )
+        secondary_scan = _build_secondary_scan_plot_data(
+            lc,
+            ephemeris,
+            bin_minutes=bin_minutes,
+            max_points=max_phase_points,
+        )
+
     # 7. Assemble ReportData
     return ReportData(
         tic_id=tic_id,
@@ -171,6 +217,9 @@ def build_report(
         bundle=bundle,
         full_lc=full_lc,
         phase_folded=phase_folded,
+        per_transit_stack=per_transit_stack,
+        odd_even_phase=odd_even_phase,
+        secondary_scan=secondary_scan,
         checks_run=[r.id for r in results],
     )
 
@@ -521,6 +570,225 @@ def _depth_ppm_to_flux(depth_ppm: float | None) -> float | None:
     if depth_ppm is None or not np.isfinite(depth_ppm) or depth_ppm <= 0.0:
         return None
     return float(1.0 - (depth_ppm / 1e6))
+
+
+def _get_valid_time_flux(lc: LightCurve) -> tuple[np.ndarray, np.ndarray]:
+    """Return finite, mask-filtered time/flux arrays."""
+    time = np.asarray(lc.time, dtype=np.float64)
+    flux = np.asarray(lc.flux, dtype=np.float64)
+    valid = np.isfinite(time) & np.isfinite(flux)
+    if lc.valid_mask is not None:
+        valid = valid & np.asarray(lc.valid_mask, dtype=np.bool_)
+    return time[valid], flux[valid]
+
+
+def _thin_evenly(arr: np.ndarray, max_points: int) -> np.ndarray:
+    """Evenly thin a 1D array to at most max_points elements."""
+    if len(arr) <= max_points:
+        return arr
+    pick = np.round(np.linspace(0, len(arr) - 1, max_points)).astype(int)
+    return arr[pick]
+
+
+def _build_per_transit_stack_plot_data(
+    lc: LightCurve,
+    ephemeris: Ephemeris,
+    *,
+    max_windows: int,
+    max_points_per_window: int,
+) -> PerTransitStackPlotData:
+    """Build per-transit window payload for small-multiples panel."""
+    time, flux = _get_valid_time_flux(lc)
+    if len(time) == 0:
+        return PerTransitStackPlotData(windows=[], window_half_hours=0.0, max_windows=max_windows)
+
+    period = ephemeris.period_days
+    t0 = ephemeris.t0_btjd
+    duration_hours = ephemeris.duration_hours
+    half_window_days = 3.0 * duration_hours / 24.0
+    half_window_hours = 3.0 * duration_hours
+
+    n_start = int(np.ceil((np.min(time) - t0) / period))
+    n_end = int(np.floor((np.max(time) - t0) / period))
+
+    epochs = np.arange(n_start, n_end + 1, dtype=int)
+    if len(epochs) == 0:
+        return PerTransitStackPlotData(windows=[], window_half_hours=half_window_hours, max_windows=max_windows)
+
+    if len(epochs) > max_windows:
+        epochs = _thin_evenly(epochs, max_windows)
+
+    windows: list[TransitWindowData] = []
+    for n in epochs:
+        t_mid = t0 + float(n) * period
+        in_window = np.abs(time - t_mid) <= half_window_days
+        if not np.any(in_window):
+            continue
+        t_w = time[in_window]
+        f_w = flux[in_window]
+
+        if len(t_w) > max_points_per_window:
+            pick = np.round(np.linspace(0, len(t_w) - 1, max_points_per_window)).astype(int)
+            t_w = t_w[pick]
+            f_w = f_w[pick]
+
+        dt_hours = (t_w - t_mid) * 24.0
+        in_mask = np.abs(dt_hours) <= (duration_hours / 2.0)
+
+        windows.append(
+            TransitWindowData(
+                epoch=int(n),
+                t_mid_btjd=float(t_mid),
+                dt_hours=dt_hours.tolist(),
+                flux=f_w.tolist(),
+                in_transit_mask=in_mask.tolist(),
+            )
+        )
+
+    return PerTransitStackPlotData(
+        windows=windows,
+        window_half_hours=float(half_window_hours),
+        max_windows=int(max_windows),
+    )
+
+
+def _build_odd_even_phase_plot_data(
+    lc: LightCurve,
+    ephemeris: Ephemeris,
+    *,
+    bin_minutes: float,
+    max_points: int,
+) -> OddEvenPhasePlotData:
+    """Build odd/even phase-fold comparison payload."""
+    time, flux = _get_valid_time_flux(lc)
+    if len(time) == 0:
+        return OddEvenPhasePlotData(
+            phase_range=(-0.1, 0.1),
+            odd_phase=[],
+            odd_flux=[],
+            even_phase=[],
+            even_flux=[],
+            odd_bin_centers=[],
+            even_bin_centers=[],
+            odd_bin_flux=[],
+            even_bin_flux=[],
+            bin_minutes=bin_minutes,
+        )
+
+    period = ephemeris.period_days
+    t0 = ephemeris.t0_btjd
+    duration_phase = (ephemeris.duration_hours / 24.0) / period
+    half_window = min(max(3.0 * duration_phase, 0.015), 0.5)
+    phase_range = (-half_window, half_window)
+
+    phase, flux_folded = fold_transit(time, flux, period, t0)
+    # Transit index/parity for each point.
+    epoch = np.floor((time - t0 + period / 2.0) / period).astype(int)
+    sort_idx = np.argsort(((time - t0) / period + 0.5) % 1.0 - 0.5)
+    parity_sorted = epoch[sort_idx] % 2
+
+    odd_mask = parity_sorted == 1
+    even_mask = ~odd_mask
+
+    odd_phase = phase[odd_mask]
+    odd_flux = flux_folded[odd_mask]
+    even_phase = phase[even_mask]
+    even_flux = flux_folded[even_mask]
+
+    if len(odd_phase) > max_points:
+        odd_phase, odd_flux = _downsample_phase_preserving_transit(
+            odd_phase, odd_flux, max_points, near_transit_half_phase=half_window
+        )
+    if len(even_phase) > max_points:
+        even_phase, even_flux = _downsample_phase_preserving_transit(
+            even_phase, even_flux, max_points, near_transit_half_phase=half_window
+        )
+
+    odd_centers, odd_bin_flux, _ = _bin_phase_data(
+        odd_phase, odd_flux, period, bin_minutes, phase_range=phase_range
+    )
+    even_centers, even_bin_flux, _ = _bin_phase_data(
+        even_phase, even_flux, period, bin_minutes, phase_range=phase_range
+    )
+
+    return OddEvenPhasePlotData(
+        phase_range=phase_range,
+        odd_phase=odd_phase.tolist(),
+        odd_flux=odd_flux.tolist(),
+        even_phase=even_phase.tolist(),
+        even_flux=even_flux.tolist(),
+        odd_bin_centers=odd_centers,
+        even_bin_centers=even_centers,
+        odd_bin_flux=odd_bin_flux,
+        even_bin_flux=even_bin_flux,
+        bin_minutes=bin_minutes,
+    )
+
+
+def _build_secondary_scan_plot_data(
+    lc: LightCurve,
+    ephemeris: Ephemeris,
+    *,
+    bin_minutes: float,
+    max_points: int,
+) -> SecondaryScanPlotData:
+    """Build full-orbit phase scan payload for secondary-eclipse triage."""
+    time, flux = _get_valid_time_flux(lc)
+    if len(time) == 0:
+        return SecondaryScanPlotData(
+            phase=[],
+            flux=[],
+            bin_centers=[],
+            bin_flux=[],
+            bin_err=[],
+            bin_minutes=bin_minutes,
+            primary_phase=0.0,
+            secondary_phase=0.5,
+            strongest_dip_phase=None,
+            strongest_dip_flux=None,
+        )
+
+    period = ephemeris.period_days
+    phase, flux_folded = fold_transit(time, flux, period, ephemeris.t0_btjd)
+
+    if len(phase) > max_points:
+        phase, flux_folded = _downsample_phase_preserving_transit(
+            phase, flux_folded, max_points, near_transit_half_phase=0.1
+        )
+
+    centers, bflux, berr = _bin_phase_data(
+        phase,
+        flux_folded,
+        period,
+        bin_minutes,
+        phase_range=(-0.5, 0.5),
+    )
+
+    strongest_dip_phase: float | None = None
+    strongest_dip_flux: float | None = None
+    if centers and bflux:
+        dur_phase = (ephemeris.duration_hours / 24.0) / period
+        # Ignore immediate primary window when searching strongest non-zero-phase dip.
+        mask = np.array([abs(c) > max(dur_phase, 0.01) for c in centers], dtype=bool)
+        if np.any(mask):
+            bflux_arr = np.asarray(bflux, dtype=np.float64)[mask]
+            centers_arr = np.asarray(centers, dtype=np.float64)[mask]
+            idx = int(np.argmin(bflux_arr))
+            strongest_dip_flux = float(bflux_arr[idx])
+            strongest_dip_phase = float(centers_arr[idx])
+
+    return SecondaryScanPlotData(
+        phase=phase.tolist(),
+        flux=flux_folded.tolist(),
+        bin_centers=centers,
+        bin_flux=bflux,
+        bin_err=berr,
+        bin_minutes=bin_minutes,
+        primary_phase=0.0,
+        secondary_phase=0.5,
+        strongest_dip_phase=strongest_dip_phase,
+        strongest_dip_flux=strongest_dip_flux,
+    )
 
 
 def _bin_phase_data(

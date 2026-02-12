@@ -72,6 +72,58 @@ class PhaseFoldedPlotData:
     depth_reference_flux: float | None = None  # display-only horizontal reference line in normalized flux
 
 
+@dataclass(frozen=True)
+class TransitWindowData:
+    """One observed transit window for per-transit stack visualization."""
+
+    epoch: int
+    t_mid_btjd: float
+    dt_hours: list[float]  # relative time from t_mid in hours
+    flux: list[float]
+    in_transit_mask: list[bool]
+
+
+@dataclass(frozen=True)
+class PerTransitStackPlotData:
+    """Plot-ready data for per-transit small-multiples panel."""
+
+    windows: list[TransitWindowData]
+    window_half_hours: float
+    max_windows: int
+
+
+@dataclass(frozen=True)
+class OddEvenPhasePlotData:
+    """Plot-ready arrays for odd/even phase-fold comparison panel."""
+
+    phase_range: tuple[float, float]
+    odd_phase: list[float]
+    odd_flux: list[float]
+    even_phase: list[float]
+    even_flux: list[float]
+    odd_bin_centers: list[float]
+    even_bin_centers: list[float]
+    odd_bin_flux: list[float]
+    even_bin_flux: list[float]
+    bin_minutes: float
+
+
+@dataclass(frozen=True)
+class SecondaryScanPlotData:
+    """Plot-ready arrays for full-orbit secondary-eclipse/phase scan."""
+
+    phase: list[float]
+    flux: list[float]
+    bin_centers: list[float]
+    bin_flux: list[float]
+    bin_err: list[float | None]
+    bin_minutes: float
+    primary_phase: float
+    secondary_phase: float
+    strongest_dip_phase: float | None
+    strongest_dip_flux: float | None
+
+
 def _scrub_non_finite(obj: Any) -> Any:
     """Replace NaN/Inf float values with None for JSON safety (RFC 8259)."""
     if isinstance(obj, float):
@@ -118,6 +170,9 @@ class ReportData:
     # --- Plot-Ready Arrays (not from checks) ---
     full_lc: FullLCPlotData | None = None
     phase_folded: PhaseFoldedPlotData | None = None
+    per_transit_stack: PerTransitStackPlotData | None = None
+    odd_even_phase: OddEvenPhasePlotData | None = None
+    secondary_scan: SecondaryScanPlotData | None = None
 
     # --- Metadata ---
     version: str = "1.0.0"
@@ -176,5 +231,11 @@ class ReportData:
             result["full_lc"] = asdict(self.full_lc)
         if self.phase_folded is not None:
             result["phase_folded"] = asdict(self.phase_folded)
+        if self.per_transit_stack is not None:
+            result["per_transit_stack"] = asdict(self.per_transit_stack)
+        if self.odd_even_phase is not None:
+            result["odd_even_phase"] = asdict(self.odd_even_phase)
+        if self.secondary_scan is not None:
+            result["secondary_scan"] = asdict(self.secondary_scan)
 
         return _scrub_non_finite(result)

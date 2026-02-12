@@ -209,6 +209,9 @@ def test_render_html_contains_plot_divs() -> None:
     html = render_html(report)
     assert 'id="full-lc-plot"' in html
     assert 'id="phase-plot"' in html
+    assert 'id="per-transit-plot"' in html
+    assert 'id="odd-even-plot"' in html
+    assert 'id="secondary-scan-plot"' in html
 
 
 def test_render_html_embeds_json_data() -> None:
@@ -226,6 +229,9 @@ def test_render_html_contains_plotly_newplot_calls() -> None:
     html = render_html(report)
     assert "Plotly.newPlot('full-lc-plot'" in html
     assert "Plotly.newPlot('phase-plot'" in html
+    assert "Plotly.newPlot('per-transit-plot'" in html
+    assert "Plotly.newPlot('odd-even-plot'" in html
+    assert "Plotly.newPlot('secondary-scan-plot'" in html
 
 
 def test_render_html_contains_bundle_summary() -> None:
@@ -310,6 +316,7 @@ def test_render_html_with_minimal_report() -> None:
     assert "<!DOCTYPE html>" in html
     # Should not crash; plot divs are present but JS will skip rendering
     assert 'id="full-lc-plot"' in html
+    assert 'id="per-transit-plot"' in html
 
 
 def test_render_html_check_data_attributes() -> None:

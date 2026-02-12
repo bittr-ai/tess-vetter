@@ -68,6 +68,21 @@ def render_html(report: ReportData, *, title: str | None = None) -> str:
   <div id="phase-plot" class="plot-container"></div>
 </div>
 
+<div class="plot-panel">
+  <h2>Per-Transit Stack</h2>
+  <div id="per-transit-plot" class="plot-container"></div>
+</div>
+
+<div class="plot-panel">
+  <h2>Odd vs Even Transits</h2>
+  <div id="odd-even-plot" class="plot-container"></div>
+</div>
+
+<div class="plot-panel">
+  <h2>Secondary Eclipse / Phase Scan</h2>
+  <div id="secondary-scan-plot" class="plot-container"></div>
+</div>
+
 {_checks_section(data)}
 
 <script>
@@ -79,6 +94,12 @@ var REPORT = {data_json};
 {_full_lc_js()}
 
 {_phase_folded_js()}
+
+{_per_transit_stack_js()}
+
+{_odd_even_js()}
+
+{_secondary_scan_js()}
 </script>
 
 <footer class="footer">
@@ -650,4 +671,235 @@ def _phase_folded_js() -> str:
   }});
 
   Plotly.newPlot('phase-plot', [traceRaw, traceBin], layout, {{responsive: true}});
+}})();"""
+
+
+def _per_transit_stack_js() -> str:
+    return f"""\
+(function() {{
+  var d = REPORT.per_transit_stack;
+  if (!d || !d.windows || d.windows.length === 0) return;
+
+  var allFlux = [];
+  for (var i = 0; i < d.windows.length; i++) {{
+    var w = d.windows[i];
+    for (var j = 0; j < w.flux.length; j++) allFlux.push(w.flux[j]);
+  }}
+  var yBase = percentileRange(allFlux, 2, 98, 0.0);
+  var span = (yBase && yBase[1] > yBase[0]) ? (yBase[1] - yBase[0]) : 0.002;
+  var offset = span * 1.4;
+
+  var traces = [];
+  for (var i = 0; i < d.windows.length; i++) {{
+    var w = d.windows[i];
+    var y = [];
+    for (var j = 0; j < w.flux.length; j++) y.push(w.flux[j] + i * offset);
+    traces.push({{
+      x: w.dt_hours,
+      y: y,
+      mode: 'markers',
+      type: 'scattergl',
+      marker: {{ color: '{_OOT_COLOR}', size: 3, opacity: 0.55 }},
+      name: 'E' + w.epoch,
+      showlegend: false,
+      hovertemplate: 'Epoch ' + w.epoch + '<br>dt=%{{x:.2f}} h<br>flux=%{{customdata:.6f}}<extra></extra>',
+      customdata: w.flux,
+    }});
+
+    var xIT = [], yIT = [];
+    for (var j = 0; j < w.dt_hours.length; j++) {{
+      if (w.in_transit_mask[j]) {{
+        xIT.push(w.dt_hours[j]);
+        yIT.push(w.flux[j] + i * offset);
+      }}
+    }}
+    if (xIT.length > 0) {{
+      traces.push({{
+        x: xIT,
+        y: yIT,
+        mode: 'markers',
+        type: 'scattergl',
+        marker: {{ color: '{_TRANSIT_COLOR}', size: 4, opacity: 0.85 }},
+        showlegend: false,
+        hoverinfo: 'skip',
+      }});
+    }}
+  }}
+
+  var shapes = [
+    {{
+      type: 'rect',
+      x0: -(d.window_half_hours / 3.0) / 2.0,
+      x1: (d.window_half_hours / 3.0) / 2.0,
+      y0: 0, y1: 1,
+      xref: 'x', yref: 'paper',
+      fillcolor: '{_TRANSIT_COLOR}',
+      opacity: 0.06,
+      line: {{ width: 0 }},
+    }}
+  ];
+
+  var layout = Object.assign({{}}, {_plotly_layout_defaults()}, {{
+    xaxis: Object.assign({{}}, {_plotly_layout_defaults()}.xaxis, {{
+      title: {{ text: 'Hours From Transit Midpoint', standoff: 8 }},
+      range: [-d.window_half_hours, d.window_half_hours],
+    }}),
+    yaxis: Object.assign({{}}, {_plotly_layout_defaults()}.yaxis, {{
+      title: {{ text: 'Flux (Stacked Offsets)', standoff: 8 }},
+      showticklabels: false,
+    }}),
+    shapes: shapes,
+  }});
+
+  Plotly.newPlot('per-transit-plot', traces, layout, {{responsive: true}});
+}})();"""
+
+
+def _odd_even_js() -> str:
+    return f"""\
+(function() {{
+  var d = REPORT.odd_even_phase;
+  if (!d) return;
+
+  var traces = [];
+  if (d.odd_phase && d.odd_phase.length > 0) {{
+    traces.push({{
+      x: d.odd_phase, y: d.odd_flux,
+      mode: 'markers',
+      type: 'scattergl',
+      marker: {{ color: '{_OOT_COLOR}', size: 2, opacity: 0.28 }},
+      name: 'Odd (raw)',
+    }});
+  }}
+  if (d.even_phase && d.even_phase.length > 0) {{
+    traces.push({{
+      x: d.even_phase, y: d.even_flux,
+      mode: 'markers',
+      type: 'scattergl',
+      marker: {{ color: '{_ACCENT}', size: 2, opacity: 0.28 }},
+      name: 'Even (raw)',
+    }});
+  }}
+  if (d.odd_bin_centers && d.odd_bin_centers.length > 0) {{
+    traces.push({{
+      x: d.odd_bin_centers, y: d.odd_bin_flux,
+      mode: 'lines+markers',
+      type: 'scatter',
+      line: {{ color: '{_OOT_COLOR}', width: 2 }},
+      marker: {{ size: 5 }},
+      name: 'Odd (binned)',
+    }});
+  }}
+  if (d.even_bin_centers && d.even_bin_centers.length > 0) {{
+    traces.push({{
+      x: d.even_bin_centers, y: d.even_bin_flux,
+      mode: 'lines+markers',
+      type: 'scatter',
+      line: {{ color: '{_ACCENT}', width: 2 }},
+      marker: {{ size: 5 }},
+      name: 'Even (binned)',
+    }});
+  }}
+  if (traces.length === 0) return;
+
+  var allFlux = [];
+  if (d.odd_flux) allFlux = allFlux.concat(d.odd_flux);
+  if (d.even_flux) allFlux = allFlux.concat(d.even_flux);
+  var yRange = percentileRange(allFlux, 2, 98, 0.12);
+
+  var yaxisCfg = Object.assign({{}}, {_plotly_layout_defaults()}.yaxis, {{
+    title: {{ text: 'Normalized Flux', standoff: 8 }},
+  }});
+  if (yRange) yaxisCfg.range = yRange;
+
+  var layout = Object.assign({{}}, {_plotly_layout_defaults()}, {{
+    xaxis: Object.assign({{}}, {_plotly_layout_defaults()}.xaxis, {{
+      title: {{ text: 'Orbital Phase', standoff: 8 }},
+      range: d.phase_range,
+    }}),
+    yaxis: yaxisCfg,
+  }});
+
+  Plotly.newPlot('odd-even-plot', traces, layout, {{responsive: true}});
+}})();"""
+
+
+def _secondary_scan_js() -> str:
+    return f"""\
+(function() {{
+  var d = REPORT.secondary_scan;
+  if (!d) return;
+
+  var traceRaw = {{
+    x: d.phase, y: d.flux,
+    mode: 'markers',
+    type: 'scattergl',
+    marker: {{ color: '{_OOT_COLOR}', size: 2, opacity: 0.25 }},
+    name: 'Raw',
+  }};
+
+  var binErr = [];
+  for (var i = 0; i < d.bin_err.length; i++) {{
+    binErr.push(d.bin_err[i] === null ? 0 : d.bin_err[i]);
+  }}
+  var traceBin = {{
+    x: d.bin_centers, y: d.bin_flux,
+    mode: 'lines+markers',
+    type: 'scatter',
+    line: {{ color: '{_BIN_COLOR}', width: 2 }},
+    marker: {{ color: '{_BIN_COLOR}', size: 5 }},
+    error_y: {{ type: 'data', array: binErr, visible: true }},
+    name: 'Binned (' + d.bin_minutes + ' min)',
+  }};
+
+  var shapes = [
+    {{
+      type: 'line',
+      x0: d.primary_phase, x1: d.primary_phase,
+      y0: 0, y1: 1,
+      xref: 'x', yref: 'paper',
+      line: {{ color: '{_TRANSIT_COLOR}', width: 1.5, dash: 'dot' }},
+    }},
+    {{
+      type: 'line',
+      x0: d.secondary_phase, x1: d.secondary_phase,
+      y0: 0, y1: 1,
+      xref: 'x', yref: 'paper',
+      line: {{ color: '{_ACCENT}', width: 1.5, dash: 'dot' }},
+    }},
+  ];
+
+  var ann = [];
+  if (d.strongest_dip_phase !== null && d.strongest_dip_flux !== null) {{
+    ann.push({{
+      x: d.strongest_dip_phase,
+      y: d.strongest_dip_flux,
+      xref: 'x',
+      yref: 'y',
+      text: 'strongest dip',
+      showarrow: true,
+      arrowcolor: '{_TEXT_DIM}',
+      font: {{ color: '{_TEXT_DIM}', size: 10 }},
+      ax: 0,
+      ay: -30,
+    }});
+  }}
+
+  var yRange = percentileRange(d.flux, 2, 98, 0.12);
+  var yaxisCfg = Object.assign({{}}, {_plotly_layout_defaults()}.yaxis, {{
+    title: {{ text: 'Normalized Flux', standoff: 8 }},
+  }});
+  if (yRange) yaxisCfg.range = yRange;
+
+  var layout = Object.assign({{}}, {_plotly_layout_defaults()}, {{
+    xaxis: Object.assign({{}}, {_plotly_layout_defaults()}.xaxis, {{
+      title: {{ text: 'Orbital Phase', standoff: 8 }},
+      range: [-0.5, 0.5],
+    }}),
+    yaxis: yaxisCfg,
+    shapes: shapes,
+    annotations: ann,
+  }});
+
+  Plotly.newPlot('secondary-scan-plot', [traceRaw, traceBin], layout, {{responsive: true}});
 }})();"""
