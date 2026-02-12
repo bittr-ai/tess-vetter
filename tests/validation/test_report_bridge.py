@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from bittr_tess_vetter.api.alias_diagnostics import harmonic_power_summary
 from bittr_tess_vetter.api.lc_only import vet_lc_only
 from bittr_tess_vetter.api.timing import timing_series
 from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from bittr_tess_vetter.validation.alias_diagnostics import (
+    classify_alias,
+    compute_secondary_significance,
+    detect_phase_shift_events,
+)
 from bittr_tess_vetter.validation.report_bridge import (
+    compute_alias_scalar_signals,
     compute_alias_summary,
     compute_timing_series,
     run_lc_checks,
@@ -88,3 +95,67 @@ def test_compute_alias_summary_matches_current_wrapper_behavior() -> None:
     )
 
     assert got.to_dict() == expected.to_dict()
+
+
+def test_compute_alias_scalar_signals_matches_underlying_primitives() -> None:
+    lc = _make_box_transit_lc(noise_ppm=30.0, seed=11)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+    # Inject deterministic non-primary structure to exercise all scalar outputs.
+    time = np.asarray(lc.time, dtype=np.float64)
+    flux = np.asarray(lc.flux, dtype=np.float64).copy()
+    phase = ((time - eph.t0_btjd) / eph.period_days) % 1.0
+
+    secondary = np.abs(phase - 0.5) < 0.015
+    phase_shift = np.abs(phase - 0.3) < 0.015
+    flux[secondary] *= 1.0 - 0.0035
+    flux[phase_shift] *= 1.0 - 0.0025
+    lc = LightCurve(time=time, flux=flux, flux_err=lc.flux_err)
+
+    internal = lc.to_internal()
+    summary = compute_alias_summary(
+        internal,
+        period_days=eph.period_days,
+        t0_btjd=eph.t0_btjd,
+        duration_hours=eph.duration_hours,
+    )
+    got = compute_alias_scalar_signals(
+        internal,
+        period_days=eph.period_days,
+        t0_btjd=eph.t0_btjd,
+        duration_hours=eph.duration_hours,
+        harmonic_summary=summary,
+    )
+
+    mask = np.asarray(internal.valid_mask, dtype=np.bool_)
+    time_v = np.asarray(internal.time, dtype=np.float64)[mask]
+    flux_v = np.asarray(internal.flux, dtype=np.float64)[mask]
+    flux_err_v = np.asarray(internal.flux_err, dtype=np.float64)[mask]
+    base_score = next((h.score for h in summary.harmonics if h.harmonic == "P"), 0.0)
+    expected_classification, _best, _ratio = classify_alias(summary.harmonics, base_score=base_score)
+    expected_events = detect_phase_shift_events(
+        time=time_v,
+        flux=flux_v,
+        flux_err=flux_err_v,
+        period=eph.period_days,
+        t0=eph.t0_btjd,
+        n_phase_bins=10,
+        significance_threshold=3.0,
+    )
+    expected_secondary = compute_secondary_significance(
+        time=time_v,
+        flux=flux_v,
+        flux_err=flux_err_v,
+        period=eph.period_days,
+        t0=eph.t0_btjd,
+        duration_hours=eph.duration_hours,
+    )
+
+    assert got["classification"] == expected_classification
+    assert got["phase_shift_event_count"] == len(expected_events)
+    expected_peak = max((e.significance for e in expected_events), default=None)
+    if expected_peak is None:
+        assert got["phase_shift_peak_sigma"] is None
+    else:
+        assert got["phase_shift_peak_sigma"] == pytest.approx(expected_peak)
+    assert got["secondary_significance"] == pytest.approx(expected_secondary)

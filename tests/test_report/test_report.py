@@ -620,10 +620,17 @@ def test_lc_robustness_summary_includes_vshape_and_asymmetry_scalars() -> None:
     payload = build_report(lc, candidate).to_json()
 
     block = payload["summary"]["lc_robustness_summary"]
+    checks = payload["summary"]["checks"]
     assert "v_shape_metric" in block
     assert "asymmetry_sigma" in block
     assert block["v_shape_metric"] is None or isinstance(block["v_shape_metric"], float)
     assert block["asymmetry_sigma"] is None or isinstance(block["asymmetry_sigma"], float)
+    expected_v_shape = checks["V05"]["metrics"].get("tflat_ttotal_ratio")
+    expected_asymmetry = checks["V15"]["metrics"].get("asymmetry_sigma")
+    if expected_v_shape is not None:
+        assert block["v_shape_metric"] == pytest.approx(float(expected_v_shape))
+    if expected_asymmetry is not None:
+        assert block["asymmetry_sigma"] == pytest.approx(float(expected_asymmetry))
 
 
 # ---------------------------------------------------------------------------
