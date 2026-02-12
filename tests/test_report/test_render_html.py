@@ -19,10 +19,12 @@ from bittr_tess_vetter.api.types import (
     skipped_result,
 )
 from bittr_tess_vetter.report import (
+    EnrichmentBlockData,
     FullLCPlotData,
     LCSummary,
     PhaseFoldedPlotData,
     ReportData,
+    ReportEnrichmentData,
     build_report,
     render_html,
 )
@@ -234,6 +236,46 @@ def test_render_html_hides_lc_robustness_summary_when_absent() -> None:
     report = _build_mock_report()
     html = render_html(report)
     assert "LC Robustness Summary" not in html
+
+
+def test_render_html_shows_enrichment_summary_when_present() -> None:
+    """Enrichment summary panel is rendered when enrichment data exists."""
+    report = _build_mock_report()
+    report.enrichment = ReportEnrichmentData(
+        version="0.1.0",
+        pixel_diagnostics=EnrichmentBlockData(
+            status="ok",
+            flags=[],
+            quality={"is_degraded": False},
+            checks={},
+            provenance={"block": "pixel_diagnostics", "cache_hit": True},
+            payload={"selected_sector": 11, "n_checks": 2},
+        ),
+        catalog_context=EnrichmentBlockData(
+            status="skipped",
+            flags=["NETWORK_BUDGET_EXHAUSTED"],
+            quality={"is_degraded": False},
+            checks={},
+            provenance={"block": "catalog_context"},
+            payload={},
+        ),
+        followup_context=None,
+    )
+
+    html = render_html(report)
+    assert "Enrichment Summary" in html
+    assert "Pixel Diagnostics" in html
+    assert "Catalog Context" in html
+    assert "Followup Context" in html
+    assert "NETWORK_BUDGET_EXHAUSTED" in html
+    assert "selected_sector" in html
+
+
+def test_render_html_hides_enrichment_summary_when_absent() -> None:
+    """Enrichment summary panel is omitted when enrichment data is absent."""
+    report = _build_mock_report()
+    html = render_html(report)
+    assert "Enrichment Summary" not in html
 
 
 def test_render_html_embeds_json_data() -> None:

@@ -95,6 +95,8 @@ def render_html(report: ReportData, *, title: str | None = None) -> str:
 
 {_lc_robustness_section(data)}
 
+{_enrichment_section(data)}
+
 {_checks_section(data)}
 
 <script>
@@ -449,6 +451,91 @@ def _lc_robustness_section(data: dict[str, Any]) -> str:
 {"".join(vitals)}
   </div>
 </div>"""
+
+
+def _enrichment_section(data: dict[str, Any]) -> str:
+    enrichment = data.get("enrichment")
+    if not enrichment:
+        return ""
+
+    cards = [
+        _enrichment_block_card("Pixel Diagnostics", enrichment.get("pixel_diagnostics")),
+        _enrichment_block_card("Catalog Context", enrichment.get("catalog_context")),
+        _enrichment_block_card("Followup Context", enrichment.get("followup_context")),
+    ]
+
+    return f"""\
+<div class="checks-panel">
+  <h2>Enrichment Summary</h2>
+  <p class="section-note">Optional non-LC context blocks with deterministic status and provenance.</p>
+  <div class="checks-grid">
+{"".join(cards)}
+  </div>
+</div>"""
+
+
+def _enrichment_block_card(label: str, block: dict[str, Any] | None) -> str:
+    if block is None:
+        status = "skipped"
+        flags: list[str] = ["BLOCK_DISABLED"]
+        quality: dict[str, Any] = {}
+        provenance: dict[str, Any] = {}
+        payload: dict[str, Any] = {}
+    else:
+        status = str(block.get("status", "skipped"))
+        flags = list(block.get("flags", []))
+        quality = dict(block.get("quality", {}))
+        provenance = dict(block.get("provenance", {}))
+        payload = dict(block.get("payload", {}))
+
+    status_cls = status if status in {"ok", "error", "skipped"} else "skipped"
+    flags_html = (
+        f'<div class="check-flags">{_esc(", ".join(str(f) for f in flags))}</div>' if flags else ""
+    )
+
+    quality_items = "".join(
+        f"<span><strong>{_esc(str(k))}:</strong> {_esc(str(v))}</span>"
+        for k, v in sorted(quality.items())
+    )
+    quality_html = f'<div class="check-metrics">{quality_items}</div>' if quality_items else ""
+
+    prov_bits: list[str] = []
+    block_name = provenance.get("block")
+    if block_name is not None:
+        prov_bits.append(f"<span><strong>block:</strong> {_esc(str(block_name))}</span>")
+    budget = provenance.get("budget")
+    if isinstance(budget, dict):
+        for k in ("budget_applied", "n_points", "max_pixel_points"):
+            if k in budget:
+                prov_bits.append(f"<span><strong>{_esc(k)}:</strong> {_esc(str(budget[k]))}</span>")
+    if "cache_hit" in provenance:
+        prov_bits.append(f"<span><strong>cache_hit:</strong> {_esc(str(provenance['cache_hit']))}</span>")
+    if "sector_selected" in provenance:
+        prov_bits.append(
+            f"<span><strong>sector_selected:</strong> {_esc(str(provenance['sector_selected']))}</span>"
+        )
+    if "selected_sector" in payload:
+        prov_bits.append(
+            f"<span><strong>selected_sector:</strong> {_esc(str(payload['selected_sector']))}</span>"
+        )
+    if "n_checks" in payload:
+        prov_bits.append(f"<span><strong>n_checks:</strong> {_esc(str(payload['n_checks']))}</span>")
+    if "catalog_rows" in payload:
+        prov_bits.append(
+            f"<span><strong>catalog_rows:</strong> {_esc(str(payload['catalog_rows']))}</span>"
+        )
+    prov_html = f'<div class="check-metrics">{"".join(prov_bits)}</div>' if prov_bits else ""
+
+    return f"""\
+    <div class="check-card {status_cls}">
+      <div class="check-header">
+        <span class="check-id">{_esc(label)}</span>
+        <span class="check-status {status_cls}">{_esc(status)}</span>
+      </div>
+      {quality_html}
+      {prov_html}
+      {flags_html}
+    </div>"""
 
 
 # -- Checks section -----------------------------------------------------------
