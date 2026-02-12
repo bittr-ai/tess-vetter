@@ -7,6 +7,8 @@ The report module never renders -- it only assembles data.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 from dataclasses import asdict, dataclass, field
 from typing import Any
@@ -320,6 +322,33 @@ def _scrub_non_finite(obj: Any) -> Any:
     return obj
 
 
+def _normalize_for_hash(obj: Any) -> Any:
+    """Normalize payload for deterministic hashing."""
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    if isinstance(obj, dict):
+        return {k: _normalize_for_hash(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_normalize_for_hash(v) for v in obj]
+    if isinstance(obj, tuple):
+        return [_normalize_for_hash(v) for v in obj]
+    return obj
+
+
+def _canonical_sha256(payload: dict[str, Any]) -> str:
+    normalized = _normalize_for_hash(payload)
+    encoded = json.dumps(
+        normalized,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 @dataclass
 class ReportData:
     """LC-only report data packet.
@@ -366,46 +395,50 @@ class ReportData:
     checks_run: list[str] = field(default_factory=list)  # ordered IDs
 
     def to_json(self) -> dict[str, Any]:
-        """Serialize to JSON-compatible dict.
-
-        - CheckResult objects serialize via .model_dump()
-        - Numpy arrays are already converted to lists in plot data
-        - LCSummary and plot data are dataclasses -> asdict()
-        - NaN/Inf values are scrubbed to None for RFC 8259 compliance
-        """
-        result: dict[str, Any] = {
-            "version": self.version,
+        """Serialize to modular JSON contract: summary + plot_data."""
+        summary: dict[str, Any] = {
             "tic_id": self.tic_id,
             "toi": self.toi,
-            "checks_run": self.checks_run,
+            "checks_run": list(self.checks_run),
         }
+        plot_data: dict[str, Any] = {}
 
-        # Candidate ephemeris
         if self.candidate is not None:
             eph = self.candidate.ephemeris
-            result["ephemeris"] = {
+            summary["ephemeris"] = {
                 "period_days": eph.period_days,
                 "t0_btjd": eph.t0_btjd,
                 "duration_hours": eph.duration_hours,
             }
-            result["input_depth_ppm"] = self.candidate.depth_ppm
+            summary["input_depth_ppm"] = self.candidate.depth_ppm
 
-        # Stellar params (provenance)
         if self.stellar is not None:
-            result["stellar"] = self.stellar.model_dump()
+            summary["stellar"] = self.stellar.model_dump()
 
-        # LC Summary
         if self.lc_summary is not None:
-            result["lc_summary"] = asdict(self.lc_summary)
+            summary["lc_summary"] = asdict(self.lc_summary)
 
-        # Check results -- full serialization including plot_data
-        result["checks"] = {}
+        checks_summary: dict[str, Any] = {}
+        check_overlays: dict[str, Any] = {}
         for check_id, cr in self.checks.items():
-            result["checks"][check_id] = cr.model_dump()
+            checks_summary[check_id] = {
+                "id": cr.id,
+                "name": cr.name,
+                "status": cr.status,
+                "confidence": cr.confidence,
+                "metrics": cr.metrics,
+                "flags": cr.flags,
+                "notes": cr.notes,
+                "provenance": cr.provenance,
+            }
+            if isinstance(cr.raw, dict) and "plot_data" in cr.raw:
+                check_overlays[check_id] = cr.raw["plot_data"]
+        summary["checks"] = checks_summary
+        if check_overlays:
+            plot_data["check_overlays"] = check_overlays
 
-        # Bundle summary
         if self.bundle is not None:
-            result["bundle_summary"] = {
+            summary["bundle_summary"] = {
                 "n_checks": len(self.bundle.results),
                 "n_ok": self.bundle.n_passed,
                 "n_failed": self.bundle.n_failed,
@@ -413,28 +446,61 @@ class ReportData:
                 "failed_ids": self.bundle.failed_check_ids,
             }
 
-        # Plot-ready arrays (full LC + phase folded)
-        if self.full_lc is not None:
-            result["full_lc"] = asdict(self.full_lc)
-        if self.phase_folded is not None:
-            result["phase_folded"] = asdict(self.phase_folded)
-        if self.per_transit_stack is not None:
-            result["per_transit_stack"] = asdict(self.per_transit_stack)
-        if self.local_detrend is not None:
-            result["local_detrend"] = asdict(self.local_detrend)
-        if self.oot_context is not None:
-            result["oot_context"] = asdict(self.oot_context)
-        if self.timing_series is not None:
-            result["timing_series"] = asdict(self.timing_series)
-        if self.alias_summary is not None:
-            result["alias_summary"] = asdict(self.alias_summary)
-        if self.lc_robustness is not None:
-            result["lc_robustness"] = asdict(self.lc_robustness)
         if self.enrichment is not None:
-            result["enrichment"] = asdict(self.enrichment)
-        if self.odd_even_phase is not None:
-            result["odd_even_phase"] = asdict(self.odd_even_phase)
-        if self.secondary_scan is not None:
-            result["secondary_scan"] = asdict(self.secondary_scan)
+            summary["enrichment"] = asdict(self.enrichment)
 
+        if self.lc_robustness is not None:
+            rb = self.lc_robustness.robustness
+            rn = self.lc_robustness.red_noise
+            fp = self.lc_robustness.fp_signals
+            summary["lc_robustness_summary"] = {
+                "version": self.lc_robustness.version,
+                "n_epochs_stored": len(self.lc_robustness.per_epoch),
+                "n_epochs_measured": rb.n_epochs_measured,
+                "dominance_index": rb.dominance_index,
+                "loto_snr_min": rb.loto_snr_min,
+                "loto_snr_mean": rb.loto_snr_mean,
+                "loto_snr_max": rb.loto_snr_max,
+                "loto_depth_shift_ppm_max": rb.loto_depth_shift_ppm_max,
+                "beta_30m": rn.beta_30m,
+                "beta_60m": rn.beta_60m,
+                "beta_duration": rn.beta_duration,
+                "odd_even_depth_diff_sigma": fp.odd_even_depth_diff_sigma,
+                "secondary_depth_sigma": fp.secondary_depth_sigma,
+                "phase_0p5_bin_depth_ppm": fp.phase_0p5_bin_depth_ppm,
+            }
+            plot_data["lc_robustness"] = asdict(self.lc_robustness)
+
+        if self.full_lc is not None:
+            plot_data["full_lc"] = asdict(self.full_lc)
+        if self.phase_folded is not None:
+            plot_data["phase_folded"] = asdict(self.phase_folded)
+        if self.per_transit_stack is not None:
+            plot_data["per_transit_stack"] = asdict(self.per_transit_stack)
+        if self.local_detrend is not None:
+            plot_data["local_detrend"] = asdict(self.local_detrend)
+        if self.oot_context is not None:
+            plot_data["oot_context"] = asdict(self.oot_context)
+        if self.timing_series is not None:
+            plot_data["timing_series"] = asdict(self.timing_series)
+        if self.alias_summary is not None:
+            plot_data["alias_summary"] = asdict(self.alias_summary)
+        if self.odd_even_phase is not None:
+            plot_data["odd_even_phase"] = asdict(self.odd_even_phase)
+        if self.secondary_scan is not None:
+            plot_data["secondary_scan"] = asdict(self.secondary_scan)
+
+        summary = _scrub_non_finite(summary)
+        plot_data = _scrub_non_finite(plot_data)
+        result: dict[str, Any] = {
+            "schema_version": self.version,
+            "summary": summary,
+            "plot_data": plot_data,
+            "payload_meta": {
+                "summary_version": "1",
+                "plot_data_version": "1",
+                "summary_hash": _canonical_sha256(summary),
+                "plot_data_hash": _canonical_sha256(plot_data),
+            },
+        }
         return _scrub_non_finite(result)

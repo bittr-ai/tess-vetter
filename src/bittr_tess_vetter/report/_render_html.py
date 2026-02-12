@@ -39,8 +39,14 @@ def render_html(report: ReportData, *, title: str | None = None) -> str:
     Returns:
         A complete HTML document as a string with embedded Plotly charts.
     """
-    data = report.to_json()
-    page_title = title or _build_default_title(data)
+    return render_html_from_payload(report.to_json(), title=title)
+
+
+def render_html_from_payload(payload: dict[str, Any], *, title: str | None = None) -> str:
+    """Render from already-serialized report payload."""
+    data = payload
+    summary = _summary_view(data)
+    page_title = title or _build_default_title(summary)
     data_json = json.dumps(data, indent=None, allow_nan=False)
 
     return f"""\
@@ -55,8 +61,8 @@ def render_html(report: ReportData, *, title: str | None = None) -> str:
 </head>
 <body>
 
-{_header_section(data)}
-{_lc_summary_section(data)}
+{_header_section(summary)}
+{_lc_summary_section(summary)}
 
 <div class="plot-panel">
   <h2>Full Light Curve</h2>
@@ -93,11 +99,11 @@ def render_html(report: ReportData, *, title: str | None = None) -> str:
   <div id="oot-context-plot" class="plot-container"></div>
 </div>
 
-{_lc_robustness_section(data)}
+{_lc_robustness_section(summary)}
 
-{_enrichment_section(data)}
+{_enrichment_section(summary)}
 
-{_checks_section(data)}
+{_checks_section(summary)}
 
 <script>
 // Embed report data
@@ -121,7 +127,7 @@ var REPORT = {data_json};
 </script>
 
 <footer class="footer">
-  <span>bittr-tess-vetter &middot; report v{_esc(str(data.get("version", "?")))}</span>
+  <span>bittr-tess-vetter &middot; report v{_esc(str(data.get("schema_version", "?")))}</span>
 </footer>
 </body>
 </html>"""
@@ -137,6 +143,14 @@ def _build_default_title(data: dict[str, Any]) -> str:
     elif data.get("tic_id") is not None:
         parts.append(f"TIC {data['tic_id']}")
     return " - ".join(parts)
+
+
+def _summary_view(data: dict[str, Any]) -> dict[str, Any]:
+    return dict(data.get("summary", data))
+
+
+def _plots_view(data: dict[str, Any]) -> dict[str, Any]:
+    return dict(data.get("plot_data", data))
 
 
 def _esc(text: str) -> str:
@@ -404,14 +418,9 @@ def _lc_summary_section(data: dict[str, Any]) -> str:
 
 
 def _lc_robustness_section(data: dict[str, Any]) -> str:
-    lc_robustness = data.get("lc_robustness")
+    lc_robustness = data.get("lc_robustness_summary")
     if not lc_robustness:
         return ""
-
-    rb = lc_robustness.get("robustness", {})
-    rn = lc_robustness.get("red_noise", {})
-    fp = lc_robustness.get("fp_signals", {})
-    per_epoch = lc_robustness.get("per_epoch", [])
 
     def _vital(label: str, value: str) -> str:
         return f"""\
@@ -421,26 +430,26 @@ def _lc_robustness_section(data: dict[str, Any]) -> str:
       </div>"""
 
     loto_triplet = (
-        f"{_fmt(rb.get('loto_snr_min'), 2)} / "
-        f"{_fmt(rb.get('loto_snr_mean'), 2)} / "
-        f"{_fmt(rb.get('loto_snr_max'), 2)}"
+        f"{_fmt(lc_robustness.get('loto_snr_min'), 2)} / "
+        f"{_fmt(lc_robustness.get('loto_snr_mean'), 2)} / "
+        f"{_fmt(lc_robustness.get('loto_snr_max'), 2)}"
     )
     beta_triplet = (
-        f"{_fmt(rn.get('beta_30m'), 2)} / "
-        f"{_fmt(rn.get('beta_60m'), 2)} / "
-        f"{_fmt(rn.get('beta_duration'), 2)}"
+        f"{_fmt(lc_robustness.get('beta_30m'), 2)} / "
+        f"{_fmt(lc_robustness.get('beta_60m'), 2)} / "
+        f"{_fmt(lc_robustness.get('beta_duration'), 2)}"
     )
 
     vitals = [
         _vital("LC Robustness Version", _fmt(lc_robustness.get("version"))),
-        _vital("Epochs (stored/measured)", f"{len(per_epoch)} / {_fmt(rb.get('n_epochs_measured'))}"),
-        _vital("Dominance Index", _fmt(rb.get("dominance_index"), 3)),
+        _vital("Epochs (stored/measured)", f"{_fmt(lc_robustness.get('n_epochs_stored'))} / {_fmt(lc_robustness.get('n_epochs_measured'))}"),
+        _vital("Dominance Index", _fmt(lc_robustness.get("dominance_index"), 3)),
         _vital("LOTO SNR (min/mean/max)", loto_triplet),
-        _vital("LOTO Depth Shift", _fmt(rb.get("loto_depth_shift_ppm_max"), 1, " ppm")),
+        _vital("LOTO Depth Shift", _fmt(lc_robustness.get("loto_depth_shift_ppm_max"), 1, " ppm")),
         _vital("Red Noise β (30m/60m/dur)", beta_triplet),
-        _vital("Odd-Even Δ Depth", _fmt(fp.get("odd_even_depth_diff_sigma"), 2, " sigma")),
-        _vital("Secondary Depth", _fmt(fp.get("secondary_depth_sigma"), 2, " sigma")),
-        _vital("Phase 0.5 Depth", _fmt(fp.get("phase_0p5_bin_depth_ppm"), 1, " ppm")),
+        _vital("Odd-Even Δ Depth", _fmt(lc_robustness.get("odd_even_depth_diff_sigma"), 2, " sigma")),
+        _vital("Secondary Depth", _fmt(lc_robustness.get("secondary_depth_sigma"), 2, " sigma")),
+        _vital("Phase 0.5 Depth", _fmt(lc_robustness.get("phase_0p5_bin_depth_ppm"), 1, " ppm")),
     ]
 
     return f"""\
@@ -663,7 +672,7 @@ function percentileRange(values, lo, hi, pad) {
 def _full_lc_js() -> str:
     return f"""\
 (function() {{
-  var d = REPORT.full_lc;
+  var d = REPORT.plot_data ? REPORT.plot_data.full_lc : null;
   if (!d) return;
 
   var ootTime = [], ootFlux = [], itTime = [], itFlux = [];
@@ -715,7 +724,7 @@ def _full_lc_js() -> str:
 def _phase_folded_js() -> str:
     return f"""\
 (function() {{
-  var d = REPORT.phase_folded;
+  var d = REPORT.plot_data ? REPORT.plot_data.phase_folded : null;
   if (!d) return;
 
   var phaseRange = d.phase_range;
@@ -798,7 +807,7 @@ def _phase_folded_js() -> str:
   ];
 
   // Transit depth reference line (if input_depth_ppm is available)
-  var depthPpm = (REPORT.input_depth_ppm != null) ? REPORT.input_depth_ppm : null;
+  var depthPpm = (REPORT.summary && REPORT.summary.input_depth_ppm != null) ? REPORT.summary.input_depth_ppm : null;
   if (depthPpm !== null) {{
     var depthFlux = 1.0 - depthPpm / 1e6;
     shapes.push({{
@@ -831,7 +840,7 @@ def _phase_folded_js() -> str:
 def _per_transit_stack_js() -> str:
     return f"""\
 (function() {{
-  var d = REPORT.per_transit_stack;
+  var d = REPORT.plot_data ? REPORT.plot_data.per_transit_stack : null;
   if (!d || !d.windows || d.windows.length === 0) return;
 
   var allFlux = [];
@@ -912,7 +921,7 @@ def _per_transit_stack_js() -> str:
 def _odd_even_js() -> str:
     return f"""\
 (function() {{
-  var d = REPORT.odd_even_phase;
+  var d = REPORT.plot_data ? REPORT.plot_data.odd_even_phase : null;
   if (!d) return;
 
   var traces = [];
@@ -981,7 +990,7 @@ def _odd_even_js() -> str:
 def _local_detrend_js() -> str:
     return f"""\
 (function() {{
-  var d = REPORT.local_detrend;
+  var d = REPORT.plot_data ? REPORT.plot_data.local_detrend : null;
   if (!d || !d.windows || d.windows.length === 0) return;
 
   var allResidual = [];
@@ -1095,7 +1104,7 @@ def _local_detrend_js() -> str:
 def _secondary_scan_js() -> str:
     return f"""\
 (function() {{
-  var d = REPORT.secondary_scan;
+  var d = REPORT.plot_data ? REPORT.plot_data.secondary_scan : null;
   if (!d) return;
   var hints = d.render_hints || {{}};
 
@@ -1226,7 +1235,7 @@ def _secondary_scan_js() -> str:
 def _oot_context_js() -> str:
     return f"""\
 (function() {{
-  var d = REPORT.oot_context;
+  var d = REPORT.plot_data ? REPORT.plot_data.oot_context : null;
   if (!d) return;
   var hasHist = d.hist_centers && d.hist_centers.length > 0;
   var hasSample = d.flux_residual_ppm_sample && d.flux_residual_ppm_sample.length > 0;

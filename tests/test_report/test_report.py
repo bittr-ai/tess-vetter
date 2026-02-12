@@ -146,18 +146,18 @@ def test_report_data_to_json_round_trip() -> None:
     serialized = json.dumps(j)
     deserialized = json.loads(serialized)
 
-    assert deserialized["version"] == "1.0.0"
-    assert deserialized["tic_id"] == 12345678
-    assert deserialized["toi"] == "TOI-1234.01"
-    assert deserialized["checks_run"] == ["V01"]
-    assert deserialized["ephemeris"]["period_days"] == 3.5
-    assert deserialized["input_depth_ppm"] == 10000.0
-    assert deserialized["lc_summary"]["snr"] == 25.0
-    assert "V01" in deserialized["checks"]
-    assert deserialized["bundle_summary"]["n_ok"] == 1
-    assert deserialized["bundle_summary"]["n_failed"] == 0
-    assert deserialized["full_lc"]["time"] == [1.0, 2.0, 3.0]
-    assert deserialized["phase_folded"]["bin_minutes"] == 30.0
+    assert deserialized["schema_version"] == "1.0.0"
+    assert deserialized["summary"]["tic_id"] == 12345678
+    assert deserialized["summary"]["toi"] == "TOI-1234.01"
+    assert deserialized["summary"]["checks_run"] == ["V01"]
+    assert deserialized["summary"]["ephemeris"]["period_days"] == 3.5
+    assert deserialized["summary"]["input_depth_ppm"] == 10000.0
+    assert deserialized["summary"]["lc_summary"]["snr"] == 25.0
+    assert "V01" in deserialized["summary"]["checks"]
+    assert deserialized["summary"]["bundle_summary"]["n_ok"] == 1
+    assert deserialized["summary"]["bundle_summary"]["n_failed"] == 0
+    assert deserialized["plot_data"]["full_lc"]["time"] == [1.0, 2.0, 3.0]
+    assert deserialized["plot_data"]["phase_folded"]["bin_minutes"] == 30.0
 
 
 # ---------------------------------------------------------------------------
@@ -242,22 +242,27 @@ def test_json_schema_keys_and_types() -> None:
     report = build_report(lc, candidate)
     j = report.to_json()
 
-    # Top-level keys
-    assert isinstance(j["version"], str)
-    assert j["tic_id"] is None  # not provided
-    assert j["toi"] is None
-    assert isinstance(j["checks_run"], list)
-    assert isinstance(j["checks"], dict)
+    assert isinstance(j["schema_version"], str)
+    assert isinstance(j["summary"], dict)
+    assert isinstance(j["plot_data"], dict)
+    assert isinstance(j["payload_meta"], dict)
+
+    s = j["summary"]
+    p = j["plot_data"]
+    assert s["tic_id"] is None  # not provided
+    assert s["toi"] is None
+    assert isinstance(s["checks_run"], list)
+    assert isinstance(s["checks"], dict)
 
     # Ephemeris
-    assert isinstance(j["ephemeris"], dict)
-    assert isinstance(j["ephemeris"]["period_days"], float)
-    assert isinstance(j["ephemeris"]["t0_btjd"], float)
-    assert isinstance(j["ephemeris"]["duration_hours"], float)
+    assert isinstance(s["ephemeris"], dict)
+    assert isinstance(s["ephemeris"]["period_days"], float)
+    assert isinstance(s["ephemeris"]["t0_btjd"], float)
+    assert isinstance(s["ephemeris"]["duration_hours"], float)
 
     # LC Summary
-    assert isinstance(j["lc_summary"], dict)
-    lc_sum = j["lc_summary"]
+    assert isinstance(s["lc_summary"], dict)
+    lc_sum = s["lc_summary"]
     assert isinstance(lc_sum["n_points"], int)
     assert isinstance(lc_sum["n_valid"], int)
     assert isinstance(lc_sum["n_transits"], int)
@@ -273,89 +278,89 @@ def test_json_schema_keys_and_types() -> None:
     assert lc_sum["depth_err_ppm"] is None or isinstance(lc_sum["depth_err_ppm"], float)
 
     # Bundle summary
-    assert isinstance(j["bundle_summary"], dict)
-    assert isinstance(j["bundle_summary"]["n_checks"], int)
-    assert isinstance(j["bundle_summary"]["n_ok"], int)
-    assert isinstance(j["bundle_summary"]["n_failed"], int)
-    assert isinstance(j["bundle_summary"]["n_skipped"], int)
-    assert isinstance(j["bundle_summary"]["failed_ids"], list)
+    assert isinstance(s["bundle_summary"], dict)
+    assert isinstance(s["bundle_summary"]["n_checks"], int)
+    assert isinstance(s["bundle_summary"]["n_ok"], int)
+    assert isinstance(s["bundle_summary"]["n_failed"], int)
+    assert isinstance(s["bundle_summary"]["n_skipped"], int)
+    assert isinstance(s["bundle_summary"]["failed_ids"], list)
 
     # Full LC plot data
-    assert isinstance(j["full_lc"], dict)
-    assert isinstance(j["full_lc"]["time"], list)
-    assert isinstance(j["full_lc"]["flux"], list)
-    assert isinstance(j["full_lc"]["transit_mask"], list)
+    assert isinstance(p["full_lc"], dict)
+    assert isinstance(p["full_lc"]["time"], list)
+    assert isinstance(p["full_lc"]["flux"], list)
+    assert isinstance(p["full_lc"]["transit_mask"], list)
 
     # Phase-folded plot data
-    assert isinstance(j["phase_folded"], dict)
-    assert isinstance(j["phase_folded"]["phase"], list)
-    assert isinstance(j["phase_folded"]["flux"], list)
-    assert isinstance(j["phase_folded"]["bin_centers"], list)
-    assert isinstance(j["phase_folded"]["bin_flux"], list)
-    assert isinstance(j["phase_folded"]["bin_err"], list)
-    assert isinstance(j["phase_folded"]["bin_minutes"], float)
-    assert isinstance(j["phase_folded"]["transit_duration_phase"], float)
-    assert isinstance(j["phase_folded"]["phase_range"], (list, tuple))
-    assert len(j["phase_folded"]["phase_range"]) == 2
+    assert isinstance(p["phase_folded"], dict)
+    assert isinstance(p["phase_folded"]["phase"], list)
+    assert isinstance(p["phase_folded"]["flux"], list)
+    assert isinstance(p["phase_folded"]["bin_centers"], list)
+    assert isinstance(p["phase_folded"]["bin_flux"], list)
+    assert isinstance(p["phase_folded"]["bin_err"], list)
+    assert isinstance(p["phase_folded"]["bin_minutes"], float)
+    assert isinstance(p["phase_folded"]["transit_duration_phase"], float)
+    assert isinstance(p["phase_folded"]["phase_range"], (list, tuple))
+    assert len(p["phase_folded"]["phase_range"]) == 2
     assert (
-        j["phase_folded"]["y_range_suggested"] is None
-        or isinstance(j["phase_folded"]["y_range_suggested"], (list, tuple))
+        p["phase_folded"]["y_range_suggested"] is None
+        or isinstance(p["phase_folded"]["y_range_suggested"], (list, tuple))
     )
-    if j["phase_folded"]["y_range_suggested"] is not None:
-        assert len(j["phase_folded"]["y_range_suggested"]) == 2
+    if p["phase_folded"]["y_range_suggested"] is not None:
+        assert len(p["phase_folded"]["y_range_suggested"]) == 2
     assert (
-        j["phase_folded"]["depth_reference_flux"] is None
-        or isinstance(j["phase_folded"]["depth_reference_flux"], float)
+        p["phase_folded"]["depth_reference_flux"] is None
+        or isinstance(p["phase_folded"]["depth_reference_flux"], float)
     )
 
     # Additional LC-only panels
-    assert isinstance(j["per_transit_stack"], dict)
-    assert isinstance(j["per_transit_stack"]["windows"], list)
-    assert isinstance(j["per_transit_stack"]["window_half_hours"], float)
-    assert isinstance(j["local_detrend"], dict)
-    assert isinstance(j["local_detrend"]["windows"], list)
-    assert isinstance(j["local_detrend"]["window_half_hours"], float)
-    assert isinstance(j["local_detrend"]["baseline_method"], str)
-    assert isinstance(j["oot_context"], dict)
-    assert isinstance(j["oot_context"]["flux_sample"], list)
-    assert isinstance(j["oot_context"]["flux_residual_ppm_sample"], list)
-    assert isinstance(j["oot_context"]["hist_centers"], list)
-    assert isinstance(j["oot_context"]["hist_counts"], list)
-    assert isinstance(j["oot_context"]["n_oot_points"], int)
-    assert isinstance(j["timing_series"], dict)
-    assert isinstance(j["timing_series"]["epochs"], list)
-    assert isinstance(j["timing_series"]["oc_seconds"], list)
-    assert isinstance(j["timing_series"]["snr"], list)
+    assert isinstance(p["per_transit_stack"], dict)
+    assert isinstance(p["per_transit_stack"]["windows"], list)
+    assert isinstance(p["per_transit_stack"]["window_half_hours"], float)
+    assert isinstance(p["local_detrend"], dict)
+    assert isinstance(p["local_detrend"]["windows"], list)
+    assert isinstance(p["local_detrend"]["window_half_hours"], float)
+    assert isinstance(p["local_detrend"]["baseline_method"], str)
+    assert isinstance(p["oot_context"], dict)
+    assert isinstance(p["oot_context"]["flux_sample"], list)
+    assert isinstance(p["oot_context"]["flux_residual_ppm_sample"], list)
+    assert isinstance(p["oot_context"]["hist_centers"], list)
+    assert isinstance(p["oot_context"]["hist_counts"], list)
+    assert isinstance(p["oot_context"]["n_oot_points"], int)
+    assert isinstance(p["timing_series"], dict)
+    assert isinstance(p["timing_series"]["epochs"], list)
+    assert isinstance(p["timing_series"]["oc_seconds"], list)
+    assert isinstance(p["timing_series"]["snr"], list)
     assert (
-        j["timing_series"]["periodicity_score"] is None
-        or isinstance(j["timing_series"]["periodicity_score"], float)
+        p["timing_series"]["periodicity_score"] is None
+        or isinstance(p["timing_series"]["periodicity_score"], float)
     )
-    assert isinstance(j["alias_summary"], dict)
-    assert isinstance(j["alias_summary"]["harmonic_labels"], list)
-    assert isinstance(j["alias_summary"]["periods"], list)
-    assert isinstance(j["alias_summary"]["scores"], list)
-    assert isinstance(j["alias_summary"]["best_harmonic"], str)
-    assert isinstance(j["alias_summary"]["best_ratio_over_p"], float)
-    assert isinstance(j["lc_robustness"], dict)
-    assert isinstance(j["lc_robustness"]["version"], str)
-    assert isinstance(j["lc_robustness"]["per_epoch"], list)
-    assert isinstance(j["lc_robustness"]["robustness"], dict)
-    assert isinstance(j["lc_robustness"]["red_noise"], dict)
-    assert isinstance(j["lc_robustness"]["fp_signals"], dict)
-    assert isinstance(j["odd_even_phase"], dict)
-    assert isinstance(j["odd_even_phase"]["odd_phase"], list)
-    assert isinstance(j["odd_even_phase"]["even_phase"], list)
-    assert isinstance(j["secondary_scan"], dict)
-    assert isinstance(j["secondary_scan"]["phase"], list)
-    assert isinstance(j["secondary_scan"]["bin_centers"], list)
-    assert isinstance(j["secondary_scan"]["quality"], dict)
-    assert isinstance(j["secondary_scan"]["render_hints"], dict)
-    assert isinstance(j["secondary_scan"]["quality"]["phase_coverage_fraction"], float)
-    assert isinstance(j["secondary_scan"]["quality"]["largest_phase_gap"], float)
-    assert isinstance(j["secondary_scan"]["quality"]["flags"], list)
-    assert isinstance(j["secondary_scan"]["render_hints"]["style_mode"], str)
-    assert isinstance(j["secondary_scan"]["render_hints"]["connect_bins"], bool)
-    assert isinstance(j["secondary_scan"]["render_hints"]["error_bar_stride"], int)
+    assert isinstance(p["alias_summary"], dict)
+    assert isinstance(p["alias_summary"]["harmonic_labels"], list)
+    assert isinstance(p["alias_summary"]["periods"], list)
+    assert isinstance(p["alias_summary"]["scores"], list)
+    assert isinstance(p["alias_summary"]["best_harmonic"], str)
+    assert isinstance(p["alias_summary"]["best_ratio_over_p"], float)
+    assert isinstance(p["lc_robustness"], dict)
+    assert isinstance(p["lc_robustness"]["version"], str)
+    assert isinstance(p["lc_robustness"]["per_epoch"], list)
+    assert isinstance(p["lc_robustness"]["robustness"], dict)
+    assert isinstance(p["lc_robustness"]["red_noise"], dict)
+    assert isinstance(p["lc_robustness"]["fp_signals"], dict)
+    assert isinstance(p["odd_even_phase"], dict)
+    assert isinstance(p["odd_even_phase"]["odd_phase"], list)
+    assert isinstance(p["odd_even_phase"]["even_phase"], list)
+    assert isinstance(p["secondary_scan"], dict)
+    assert isinstance(p["secondary_scan"]["phase"], list)
+    assert isinstance(p["secondary_scan"]["bin_centers"], list)
+    assert isinstance(p["secondary_scan"]["quality"], dict)
+    assert isinstance(p["secondary_scan"]["render_hints"], dict)
+    assert isinstance(p["secondary_scan"]["quality"]["phase_coverage_fraction"], float)
+    assert isinstance(p["secondary_scan"]["quality"]["largest_phase_gap"], float)
+    assert isinstance(p["secondary_scan"]["quality"]["flags"], list)
+    assert isinstance(p["secondary_scan"]["render_hints"]["style_mode"], str)
+    assert isinstance(p["secondary_scan"]["render_hints"]["connect_bins"], bool)
+    assert isinstance(p["secondary_scan"]["render_hints"]["error_bar_stride"], int)
 
     # Round-trip through json.dumps should work without custom encoders
     serialized = json.dumps(j)
@@ -388,7 +393,8 @@ def test_check_plot_data_passthrough() -> None:
 
         # Serialize the report and verify plot_data survives
         j = report.to_json()
-        assert "plot_data" in j["checks"]["V01"]["raw"]
+        assert "check_overlays" in j["plot_data"]
+        assert "V01" in j["plot_data"]["check_overlays"]
 
 
 # ---------------------------------------------------------------------------
@@ -557,7 +563,7 @@ def test_nan_safety_in_json_output() -> None:
     assert isinstance(serialized, str)
 
     # depth_err_ppm should be None, not NaN
-    assert j["lc_summary"]["depth_err_ppm"] is None
+    assert j["summary"]["lc_summary"]["depth_err_ppm"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -645,10 +651,10 @@ def test_build_report_without_additional_plots() -> None:
     assert report.secondary_scan is None
     assert report.lc_robustness is not None
     j = report.to_json()
-    assert "per_transit_stack" not in j
-    assert "odd_even_phase" not in j
-    assert "secondary_scan" not in j
-    assert "lc_robustness" in j
+    assert "per_transit_stack" not in j["plot_data"]
+    assert "odd_even_phase" not in j["plot_data"]
+    assert "secondary_scan" not in j["plot_data"]
+    assert "lc_robustness" in j["plot_data"]
 
 
 def test_build_report_without_lc_robustness() -> None:
@@ -661,7 +667,7 @@ def test_build_report_without_lc_robustness() -> None:
     report = build_report(lc, candidate, include_lc_robustness=False)
     assert report.lc_robustness is None
     j = report.to_json()
-    assert "lc_robustness" not in j
+    assert "lc_robustness" not in j["plot_data"]
 
 
 def test_secondary_scan_preserves_full_orbit_phase_coverage() -> None:
@@ -1009,6 +1015,6 @@ def test_reportdata_serializes_enrichment_when_present() -> None:
         )
     )
     j = report.to_json()
-    assert "enrichment" in j
-    assert j["enrichment"]["version"] == "0.1.0"
-    assert j["enrichment"]["pixel_diagnostics"]["status"] == "skipped"
+    assert "enrichment" in j["summary"]
+    assert j["summary"]["enrichment"]["version"] == "0.1.0"
+    assert j["summary"]["enrichment"]["pixel_diagnostics"]["status"] == "skipped"

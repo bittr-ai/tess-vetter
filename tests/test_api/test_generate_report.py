@@ -224,7 +224,7 @@ def test_include_enrichment_false_omits_enrichment_block() -> None:
     client = _mock_client(sectors=[1])
     result = generate_report(123456789, **_EPH, mast_client=client)
     assert result.report.enrichment is None
-    assert "enrichment" not in result.report_json
+    assert "enrichment" not in result.report_json["summary"]
 
 
 def test_include_enrichment_true_adds_blocks() -> None:
@@ -238,7 +238,7 @@ def test_include_enrichment_true_adds_blocks() -> None:
     )
 
     assert result.report.enrichment is not None
-    e = result.report_json["enrichment"]
+    e = result.report_json["summary"]["enrichment"]
     assert e["version"] == "0.1.0"
     assert e["pixel_diagnostics"]["status"] == "skipped"
     assert e["catalog_context"]["status"] == "skipped"
@@ -262,7 +262,7 @@ def test_include_enrichment_respects_block_toggles() -> None:
         enrichment_config=cfg,
     )
 
-    e = result.report_json["enrichment"]
+    e = result.report_json["summary"]["enrichment"]
     assert e["pixel_diagnostics"] is None
     assert e["catalog_context"]["status"] == "skipped"
     assert e["followup_context"] is None
@@ -287,7 +287,7 @@ def test_enrichment_fail_open_true_recovers_block_errors(monkeypatch) -> None:
         include_enrichment=True,
         enrichment_config=cfg,
     )
-    e = result.report_json["enrichment"]
+    e = result.report_json["summary"]["enrichment"]
     assert e["catalog_context"]["status"] == "error"
 
 
@@ -369,7 +369,7 @@ def test_pixel_point_budget_enforced_before_pixel_checks(monkeypatch) -> None:
         include_enrichment=True,
         enrichment_config=cfg,
     )
-    pixel = result.report_json["enrichment"]["pixel_diagnostics"]
+    pixel = result.report_json["summary"]["enrichment"]["pixel_diagnostics"]
     assert pixel["status"] == "skipped"
     assert "PIXEL_POINT_BUDGET_EXCEEDED" in pixel["flags"]
     assert pixel["provenance"]["budget"]["budget_applied"] is True
@@ -416,7 +416,7 @@ def test_pixel_point_budget_downsamples_when_feasible(monkeypatch) -> None:
         include_enrichment=True,
         enrichment_config=cfg,
     )
-    pixel = result.report_json["enrichment"]["pixel_diagnostics"]
+    pixel = result.report_json["summary"]["enrichment"]["pixel_diagnostics"]
     assert "PIXEL_POINT_BUDGET_EXCEEDED" not in pixel["flags"]
     assert pixel["payload"]["downsample_applied"] is True
     assert pixel["payload"]["downsample_stride"] > 1
@@ -485,7 +485,7 @@ def test_enrichment_timeout_sets_timeout_flag_when_fail_open_true(monkeypatch) -
         enrichment_config=cfg,
     )
     elapsed = time.monotonic() - started
-    catalog = result.report_json["enrichment"]["catalog_context"]
+    catalog = result.report_json["summary"]["enrichment"]["catalog_context"]
     assert catalog["status"] == "error"
     assert "ENRICHMENT_TIMEOUT" in catalog["flags"]
     assert elapsed < 0.1
@@ -529,7 +529,7 @@ def test_enrichment_total_budget_exhaustion_skips_remaining_blocks(monkeypatch) 
         include_enrichment=True,
         enrichment_config=cfg,
     )
-    enrichment = result.report_json["enrichment"]
+    enrichment = result.report_json["summary"]["enrichment"]
     assert enrichment["pixel_diagnostics"]["status"] == "skipped"
     assert "NETWORK_BUDGET_EXHAUSTED" in enrichment["pixel_diagnostics"]["flags"]
     assert enrichment["followup_context"]["status"] == "skipped"
@@ -617,6 +617,6 @@ def test_catalog_context_runs_v07_only() -> None:
         include_enrichment=True,
         enrichment_config=cfg,
     )
-    catalog = result.report_json["enrichment"]["catalog_context"]
+    catalog = result.report_json["summary"]["enrichment"]["catalog_context"]
     check_ids = {c["id"] for c in catalog["payload"]["checks_summary"]}
     assert check_ids == {"V07"}

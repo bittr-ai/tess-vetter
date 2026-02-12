@@ -34,11 +34,12 @@ from bittr_tess_vetter.report._data import (
     TransitTimingPlotData,
     TransitWindowData,
 )
-from bittr_tess_vetter.report._render_html import render_html
+from bittr_tess_vetter.report._render_html import render_html, render_html_from_payload
 
 __all__ = [
     "build_report",
     "render_html",
+    "render_html_from_payload",
     "ReportData",
     "LCSummary",
     "AliasHarmonicSummaryData",
