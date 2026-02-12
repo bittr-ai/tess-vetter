@@ -28,7 +28,10 @@ from bittr_tess_vetter.compute.transit import (
 from bittr_tess_vetter.report._data import (
     FullLCPlotData,
     LCSummary,
+    LocalDetrendDiagnosticPlotData,
+    LocalDetrendWindowData,
     OddEvenPhasePlotData,
+    OOTContextPlotData,
     PerTransitStackPlotData,
     PhaseFoldedPlotData,
     ReportData,
@@ -186,6 +189,8 @@ def build_report(
     )
 
     per_transit_stack: PerTransitStackPlotData | None = None
+    local_detrend: LocalDetrendDiagnosticPlotData | None = None
+    oot_context: OOTContextPlotData | None = None
     odd_even_phase: OddEvenPhasePlotData | None = None
     secondary_scan: SecondaryScanPlotData | None = None
     if include_additional_plots:
@@ -199,6 +204,17 @@ def build_report(
             lc,
             ephemeris,
             bin_minutes=bin_minutes,
+            max_points=max_phase_points,
+        )
+        local_detrend = _build_local_detrend_diagnostic_plot_data(
+            lc,
+            ephemeris,
+            max_windows=max_transit_windows,
+            max_points_per_window=max_points_per_window,
+        )
+        oot_context = _build_oot_context_plot_data(
+            lc,
+            ephemeris,
             max_points=max_phase_points,
         )
         secondary_scan = _build_secondary_scan_plot_data(
@@ -220,6 +236,8 @@ def build_report(
         full_lc=full_lc,
         phase_folded=phase_folded,
         per_transit_stack=per_transit_stack,
+        local_detrend=local_detrend,
+        oot_context=oot_context,
         odd_even_phase=odd_even_phase,
         secondary_scan=secondary_scan,
         checks_run=[r.id for r in results],
@@ -724,6 +742,168 @@ def _build_odd_even_phase_plot_data(
         odd_bin_flux=odd_bin_flux,
         even_bin_flux=even_bin_flux,
         bin_minutes=bin_minutes,
+    )
+
+
+def _build_local_detrend_diagnostic_plot_data(
+    lc: LightCurve,
+    ephemeris: Ephemeris,
+    *,
+    max_windows: int,
+    max_points_per_window: int,
+) -> LocalDetrendDiagnosticPlotData:
+    """Build local baseline diagnostic windows around each observed transit."""
+    time, flux = _get_valid_time_flux(lc)
+    if len(time) == 0:
+        return LocalDetrendDiagnosticPlotData(
+            windows=[],
+            window_half_hours=0.0,
+            max_windows=max_windows,
+            baseline_method="linear_oot_fit",
+        )
+
+    period = ephemeris.period_days
+    t0 = ephemeris.t0_btjd
+    duration_hours = ephemeris.duration_hours
+    half_window_days = 3.0 * duration_hours / 24.0
+    half_window_hours = 3.0 * duration_hours
+    in_half_days = (duration_hours / 24.0) / 2.0
+
+    n_start = int(np.ceil((np.min(time) - t0) / period))
+    n_end = int(np.floor((np.max(time) - t0) / period))
+    epochs = np.arange(n_start, n_end + 1, dtype=int)
+    if len(epochs) == 0:
+        return LocalDetrendDiagnosticPlotData(
+            windows=[],
+            window_half_hours=float(half_window_hours),
+            max_windows=max_windows,
+            baseline_method="linear_oot_fit",
+        )
+    if len(epochs) > max_windows:
+        epochs = _thin_evenly(epochs, max_windows)
+
+    windows: list[LocalDetrendWindowData] = []
+    for n in epochs:
+        t_mid = t0 + float(n) * period
+        in_window = np.abs(time - t_mid) <= half_window_days
+        if not np.any(in_window):
+            continue
+
+        t_w = time[in_window]
+        f_w = flux[in_window]
+        if len(t_w) > max_points_per_window:
+            pick = np.round(np.linspace(0, len(t_w) - 1, max_points_per_window)).astype(int)
+            t_w = t_w[pick]
+            f_w = f_w[pick]
+
+        dt_days = t_w - t_mid
+        dt_hours = dt_days * 24.0
+        in_transit = np.abs(dt_days) <= in_half_days
+        oot = ~in_transit
+
+        baseline = np.full_like(f_w, np.nan, dtype=np.float64)
+        if int(np.sum(oot)) >= 2:
+            x = dt_days[oot]
+            y = f_w[oot]
+            try:
+                coeff = np.polyfit(x, y, deg=1)
+                baseline = np.polyval(coeff, dt_days)
+            except Exception:
+                baseline[:] = np.nanmedian(y)
+        elif len(f_w) > 0:
+            baseline[:] = np.nanmedian(f_w)
+
+        windows.append(
+            LocalDetrendWindowData(
+                epoch=int(n),
+                t_mid_btjd=float(t_mid),
+                dt_hours=dt_hours.tolist(),
+                flux=f_w.tolist(),
+                baseline_flux=baseline.tolist(),
+                in_transit_mask=in_transit.tolist(),
+            )
+        )
+
+    return LocalDetrendDiagnosticPlotData(
+        windows=windows,
+        window_half_hours=float(half_window_hours),
+        max_windows=int(max_windows),
+        baseline_method="linear_oot_fit",
+    )
+
+
+def _build_oot_context_plot_data(
+    lc: LightCurve,
+    ephemeris: Ephemeris,
+    *,
+    max_points: int,
+) -> OOTContextPlotData:
+    """Build out-of-transit flux distribution and scatter summary payload."""
+    time, flux = _get_valid_time_flux(lc)
+    if len(time) == 0:
+        return OOTContextPlotData(
+            flux_sample=[],
+            sample_indices=[],
+            hist_centers=[],
+            hist_counts=[],
+            median_flux=None,
+            std_ppm=None,
+            mad_ppm=None,
+            robust_sigma_ppm=None,
+            n_oot_points=0,
+        )
+
+    oot_mask = get_out_of_transit_mask(
+        time,
+        ephemeris.period_days,
+        ephemeris.t0_btjd,
+        ephemeris.duration_hours,
+        buffer_factor=2.0,
+    )
+    flux_oot = flux[oot_mask]
+    n_oot = int(len(flux_oot))
+    if n_oot == 0:
+        return OOTContextPlotData(
+            flux_sample=[],
+            sample_indices=[],
+            hist_centers=[],
+            hist_counts=[],
+            median_flux=None,
+            std_ppm=None,
+            mad_ppm=None,
+            robust_sigma_ppm=None,
+            n_oot_points=0,
+        )
+
+    idx = np.arange(n_oot, dtype=int)
+    if n_oot > max_points:
+        pick = np.round(np.linspace(0, n_oot - 1, max_points)).astype(int)
+        flux_sample = flux_oot[pick]
+        sample_idx = idx[pick]
+    else:
+        flux_sample = flux_oot
+        sample_idx = idx
+
+    median = float(np.nanmedian(flux_oot))
+    mad = float(np.nanmedian(np.abs(flux_oot - median)))
+    robust_sigma = float(1.4826 * mad)
+    std = float(np.nanstd(flux_oot, ddof=1)) if n_oot > 1 else 0.0
+
+    # Histogram in flux residual ppm for stable scale across targets.
+    residual_ppm = (flux_oot - median) * 1e6
+    counts, edges = np.histogram(residual_ppm, bins=40)
+    centers = (edges[:-1] + edges[1:]) / 2.0
+
+    return OOTContextPlotData(
+        flux_sample=flux_sample.tolist(),
+        sample_indices=sample_idx.tolist(),
+        hist_centers=centers.tolist(),
+        hist_counts=counts.astype(int).tolist(),
+        median_flux=median,
+        std_ppm=std * 1e6,
+        mad_ppm=mad * 1e6,
+        robust_sigma_ppm=robust_sigma * 1e6,
+        n_oot_points=n_oot,
     )
 
 

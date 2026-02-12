@@ -74,6 +74,11 @@ def render_html(report: ReportData, *, title: str | None = None) -> str:
 </div>
 
 <div class="plot-panel">
+  <h2>Local Detrend Baseline Diagnostic</h2>
+  <div id="local-detrend-plot" class="plot-container"></div>
+</div>
+
+<div class="plot-panel">
   <h2>Odd vs Even Transits</h2>
   <div id="odd-even-plot" class="plot-container"></div>
 </div>
@@ -81,6 +86,11 @@ def render_html(report: ReportData, *, title: str | None = None) -> str:
 <div class="plot-panel">
   <h2>Secondary Eclipse / Phase Scan</h2>
   <div id="secondary-scan-plot" class="plot-container"></div>
+</div>
+
+<div class="plot-panel">
+  <h2>Out-of-Transit Noise Context</h2>
+  <div id="oot-context-plot" class="plot-container"></div>
 </div>
 
 {_checks_section(data)}
@@ -97,9 +107,13 @@ var REPORT = {data_json};
 
 {_per_transit_stack_js()}
 
+{_local_detrend_js()}
+
 {_odd_even_js()}
 
 {_secondary_scan_js()}
+
+{_oot_context_js()}
 </script>
 
 <footer class="footer">
@@ -824,6 +838,102 @@ def _odd_even_js() -> str:
 }})();"""
 
 
+def _local_detrend_js() -> str:
+    return f"""\
+(function() {{
+  var d = REPORT.local_detrend;
+  if (!d || !d.windows || d.windows.length === 0) return;
+
+  var allFlux = [];
+  for (var i = 0; i < d.windows.length; i++) {{
+    var w = d.windows[i];
+    for (var j = 0; j < w.flux.length; j++) allFlux.push(w.flux[j]);
+  }}
+  var yBase = percentileRange(allFlux, 2, 98, 0.0);
+  var span = (yBase && yBase[1] > yBase[0]) ? (yBase[1] - yBase[0]) : 0.002;
+  var offset = span * 1.55;
+
+  var traces = [];
+  for (var i = 0; i < d.windows.length; i++) {{
+    var w = d.windows[i];
+    var yRaw = [];
+    var yBaseLine = [];
+    for (var j = 0; j < w.flux.length; j++) {{
+      yRaw.push(w.flux[j] + i * offset);
+      yBaseLine.push(w.baseline_flux[j] + i * offset);
+    }}
+    traces.push({{
+      x: w.dt_hours,
+      y: yRaw,
+      mode: 'markers',
+      type: 'scattergl',
+      marker: {{ color: '{_OOT_COLOR}', size: 3, opacity: 0.45 }},
+      name: 'E' + w.epoch + ' raw',
+      showlegend: false,
+      hovertemplate: 'Epoch ' + w.epoch + '<br>dt=%{{x:.2f}} h<br>flux=%{{customdata:.6f}}<extra></extra>',
+      customdata: w.flux,
+    }});
+    traces.push({{
+      x: w.dt_hours,
+      y: yBaseLine,
+      mode: 'lines',
+      type: 'scatter',
+      line: {{ color: '{_ACCENT}', width: 1.3 }},
+      name: 'E' + w.epoch + ' baseline',
+      showlegend: false,
+      hoverinfo: 'skip',
+    }});
+
+    var xIT = [], yIT = [];
+    for (var j = 0; j < w.dt_hours.length; j++) {{
+      if (w.in_transit_mask[j]) {{
+        xIT.push(w.dt_hours[j]);
+        yIT.push(w.flux[j] + i * offset);
+      }}
+    }}
+    if (xIT.length > 0) {{
+      traces.push({{
+        x: xIT,
+        y: yIT,
+        mode: 'markers',
+        type: 'scattergl',
+        marker: {{ color: '{_TRANSIT_COLOR}', size: 4, opacity: 0.85 }},
+        showlegend: false,
+        hoverinfo: 'skip',
+      }});
+    }}
+  }}
+
+  var halfTransitHours = (d.window_half_hours / 3.0) / 2.0;
+  var shapes = [
+    {{
+      type: 'rect',
+      x0: -halfTransitHours,
+      x1: halfTransitHours,
+      y0: 0, y1: 1,
+      xref: 'x', yref: 'paper',
+      fillcolor: '{_TRANSIT_COLOR}',
+      opacity: 0.05,
+      line: {{ width: 0 }},
+    }}
+  ];
+
+  var layout = Object.assign({{}}, {_plotly_layout_defaults()}, {{
+    xaxis: Object.assign({{}}, {_plotly_layout_defaults()}.xaxis, {{
+      title: {{ text: 'Hours From Transit Midpoint', standoff: 8 }},
+      range: [-d.window_half_hours, d.window_half_hours],
+    }}),
+    yaxis: Object.assign({{}}, {_plotly_layout_defaults()}.yaxis, {{
+      title: {{ text: 'Flux + Local Baseline (Stacked)', standoff: 8 }},
+      showticklabels: false,
+    }}),
+    shapes: shapes,
+  }});
+
+  Plotly.newPlot('local-detrend-plot', traces, layout, {{responsive: true}});
+}})();"""
+
+
 def _secondary_scan_js() -> str:
     return f"""\
 (function() {{
@@ -952,4 +1062,73 @@ def _secondary_scan_js() -> str:
   }});
 
   Plotly.newPlot('secondary-scan-plot', [traceRaw, traceBin], layout, {{responsive: true}});
+}})();"""
+
+
+def _oot_context_js() -> str:
+    return f"""\
+(function() {{
+  var d = REPORT.oot_context;
+  if (!d) return;
+  var hasHist = d.hist_centers && d.hist_centers.length > 0;
+  var hasSample = d.flux_sample && d.flux_sample.length > 0;
+  if (!hasHist && !hasSample) return;
+
+  var traces = [];
+  if (hasSample) {{
+    traces.push({{
+      x: d.sample_indices,
+      y: d.flux_sample,
+      mode: 'markers',
+      type: 'scattergl',
+      marker: {{ color: '{_OOT_COLOR}', size: 2, opacity: 0.35 }},
+      name: 'OOT sample',
+      xaxis: 'x2',
+      yaxis: 'y2',
+    }});
+  }}
+  if (hasHist) {{
+    traces.push({{
+      x: d.hist_centers,
+      y: d.hist_counts,
+      type: 'bar',
+      marker: {{ color: '{_BIN_COLOR}', opacity: 0.7 }},
+      name: 'Histogram',
+      xaxis: 'x',
+      yaxis: 'y',
+    }});
+  }}
+
+  var annText = '';
+  if (d.robust_sigma_ppm !== null) annText += 'robust sigma: ' + d.robust_sigma_ppm.toFixed(0) + ' ppm';
+  if (d.mad_ppm !== null) annText += (annText ? ' | ' : '') + 'MAD: ' + d.mad_ppm.toFixed(0) + ' ppm';
+  if (d.std_ppm !== null) annText += (annText ? ' | ' : '') + 'std: ' + d.std_ppm.toFixed(0) + ' ppm';
+  if (d.n_oot_points !== null) annText += (annText ? ' | ' : '') + 'N=' + d.n_oot_points;
+
+  var layout = Object.assign({{}}, {_plotly_layout_defaults()}, {{
+    grid: {{rows: 1, columns: 2, pattern: 'independent'}},
+    xaxis: Object.assign({{}}, {_plotly_layout_defaults()}.xaxis, {{
+      title: {{ text: 'OOT Residual (ppm)', standoff: 8 }},
+    }}),
+    yaxis: Object.assign({{}}, {_plotly_layout_defaults()}.yaxis, {{
+      title: {{ text: 'Count', standoff: 8 }},
+    }}),
+    xaxis2: Object.assign({{}}, {_plotly_layout_defaults()}.xaxis, {{
+      title: {{ text: 'Sample Index (OOT)', standoff: 8 }},
+    }}),
+    yaxis2: Object.assign({{}}, {_plotly_layout_defaults()}.yaxis, {{
+      title: {{ text: 'Normalized Flux', standoff: 8 }},
+    }}),
+    annotations: annText ? [{{
+      text: annText,
+      xref: 'paper',
+      yref: 'paper',
+      x: 0.5,
+      y: 1.1,
+      showarrow: false,
+      font: {{ color: '{_TEXT_DIM}', size: 11 }},
+    }}] : [],
+  }});
+
+  Plotly.newPlot('oot-context-plot', traces, layout, {{responsive: true}});
 }})();"""

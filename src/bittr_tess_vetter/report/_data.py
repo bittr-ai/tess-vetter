@@ -153,6 +153,43 @@ class SecondaryScanRenderHints:
     binned_line_width: float
 
 
+@dataclass(frozen=True)
+class LocalDetrendWindowData:
+    """One transit-centered window with local baseline fit."""
+
+    epoch: int
+    t_mid_btjd: float
+    dt_hours: list[float]
+    flux: list[float]
+    baseline_flux: list[float]
+    in_transit_mask: list[bool]
+
+
+@dataclass(frozen=True)
+class LocalDetrendDiagnosticPlotData:
+    """Plot-ready data for local baseline diagnostics around transits."""
+
+    windows: list[LocalDetrendWindowData]
+    window_half_hours: float
+    max_windows: int
+    baseline_method: str
+
+
+@dataclass(frozen=True)
+class OOTContextPlotData:
+    """Out-of-transit flux distribution + scatter context payload."""
+
+    flux_sample: list[float]
+    sample_indices: list[int]
+    hist_centers: list[float]
+    hist_counts: list[int]
+    median_flux: float | None
+    std_ppm: float | None
+    mad_ppm: float | None
+    robust_sigma_ppm: float | None
+    n_oot_points: int
+
+
 def _scrub_non_finite(obj: Any) -> Any:
     """Replace NaN/Inf float values with None for JSON safety (RFC 8259)."""
     if isinstance(obj, float):
@@ -200,6 +237,8 @@ class ReportData:
     full_lc: FullLCPlotData | None = None
     phase_folded: PhaseFoldedPlotData | None = None
     per_transit_stack: PerTransitStackPlotData | None = None
+    local_detrend: LocalDetrendDiagnosticPlotData | None = None
+    oot_context: OOTContextPlotData | None = None
     odd_even_phase: OddEvenPhasePlotData | None = None
     secondary_scan: SecondaryScanPlotData | None = None
 
@@ -262,6 +301,10 @@ class ReportData:
             result["phase_folded"] = asdict(self.phase_folded)
         if self.per_transit_stack is not None:
             result["per_transit_stack"] = asdict(self.per_transit_stack)
+        if self.local_detrend is not None:
+            result["local_detrend"] = asdict(self.local_detrend)
+        if self.oot_context is not None:
+            result["oot_context"] = asdict(self.oot_context)
         if self.odd_even_phase is not None:
             result["odd_even_phase"] = asdict(self.odd_even_phase)
         if self.secondary_scan is not None:

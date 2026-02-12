@@ -216,6 +216,8 @@ def test_build_report_integration() -> None:
     assert report.phase_folded.y_range_suggested is not None
     assert report.phase_folded.depth_reference_flux is not None
     assert report.per_transit_stack is not None
+    assert report.local_detrend is not None
+    assert report.oot_context is not None
     assert report.odd_even_phase is not None
     assert report.secondary_scan is not None
     assert report.secondary_scan.quality is not None
@@ -307,6 +309,15 @@ def test_json_schema_keys_and_types() -> None:
     assert isinstance(j["per_transit_stack"], dict)
     assert isinstance(j["per_transit_stack"]["windows"], list)
     assert isinstance(j["per_transit_stack"]["window_half_hours"], float)
+    assert isinstance(j["local_detrend"], dict)
+    assert isinstance(j["local_detrend"]["windows"], list)
+    assert isinstance(j["local_detrend"]["window_half_hours"], float)
+    assert isinstance(j["local_detrend"]["baseline_method"], str)
+    assert isinstance(j["oot_context"], dict)
+    assert isinstance(j["oot_context"]["flux_sample"], list)
+    assert isinstance(j["oot_context"]["hist_centers"], list)
+    assert isinstance(j["oot_context"]["hist_counts"], list)
+    assert isinstance(j["oot_context"]["n_oot_points"], int)
     assert isinstance(j["odd_even_phase"], dict)
     assert isinstance(j["odd_even_phase"]["odd_phase"], list)
     assert isinstance(j["odd_even_phase"]["even_phase"], list)

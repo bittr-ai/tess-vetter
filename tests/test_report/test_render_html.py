@@ -210,8 +210,10 @@ def test_render_html_contains_plot_divs() -> None:
     assert 'id="full-lc-plot"' in html
     assert 'id="phase-plot"' in html
     assert 'id="per-transit-plot"' in html
+    assert 'id="local-detrend-plot"' in html
     assert 'id="odd-even-plot"' in html
     assert 'id="secondary-scan-plot"' in html
+    assert 'id="oot-context-plot"' in html
 
 
 def test_render_html_embeds_json_data() -> None:
@@ -230,8 +232,10 @@ def test_render_html_contains_plotly_newplot_calls() -> None:
     assert "Plotly.newPlot('full-lc-plot'" in html
     assert "Plotly.newPlot('phase-plot'" in html
     assert "Plotly.newPlot('per-transit-plot'" in html
+    assert "Plotly.newPlot('local-detrend-plot'" in html
     assert "Plotly.newPlot('odd-even-plot'" in html
     assert "Plotly.newPlot('secondary-scan-plot'" in html
+    assert "Plotly.newPlot('oot-context-plot'" in html
 
 
 def test_render_html_contains_bundle_summary() -> None:
