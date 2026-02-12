@@ -12,10 +12,9 @@ Public API:
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
 from typing import Any
 
@@ -408,12 +407,27 @@ def _invoke_block_with_timeout(
     timeout = max(float(timeout_seconds), 0.0)
     if timeout <= 0:
         return func(**kwargs)
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(func, **kwargs)
+    result: EnrichmentBlockData | None = None
+    error: BaseException | None = None
+
+    def _runner() -> None:
+        nonlocal result, error
         try:
-            return future.result(timeout=timeout)
-        except FuturesTimeoutError as exc:
-            raise TimeoutError(f"Block timed out after {timeout:.2f}s") from exc
+            result = func(**kwargs)
+        except BaseException as exc:  # pragma: no cover - re-raised by caller
+            error = exc
+
+    # Daemon thread ensures timed-out work won't block caller wall time.
+    worker = threading.Thread(target=_runner, daemon=True)
+    worker.start()
+    worker.join(timeout=timeout)
+    if worker.is_alive():
+        raise TimeoutError(f"Block timed out after {timeout:.2f}s")
+    if error is not None:
+        raise error
+    if result is None:
+        raise RuntimeError("Enrichment block completed without result")
+    return result
 
 
 def _block_from_bundle(

@@ -6,6 +6,7 @@ to avoid network calls.
 
 from __future__ import annotations
 
+import time
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -414,7 +415,7 @@ def test_enrichment_timeout_sets_timeout_flag_when_fail_open_true(monkeypatch) -
     def _slow_catalog(**kwargs):  # type: ignore[no-untyped-def]
         import time as _time
 
-        _time.sleep(0.05)
+        _time.sleep(0.2)
         return generate_report_api._skipped_enrichment_block("SLOW_CATALOG")
 
     monkeypatch.setattr(
@@ -426,8 +427,9 @@ def test_enrichment_timeout_sets_timeout_flag_when_fail_open_true(monkeypatch) -
         include_pixel_diagnostics=False,
         include_followup_context=False,
         fail_open=True,
-        per_request_timeout_seconds=0.001,
+        per_request_timeout_seconds=0.01,
     )
+    started = time.monotonic()
     result = generate_report(
         123456789,
         **_EPH,
@@ -435,9 +437,11 @@ def test_enrichment_timeout_sets_timeout_flag_when_fail_open_true(monkeypatch) -
         include_enrichment=True,
         enrichment_config=cfg,
     )
+    elapsed = time.monotonic() - started
     catalog = result.report_json["enrichment"]["catalog_context"]
     assert catalog["status"] == "error"
     assert "ENRICHMENT_TIMEOUT" in catalog["flags"]
+    assert elapsed < 0.1
 
 
 def test_enrichment_total_budget_exhaustion_skips_remaining_blocks(monkeypatch) -> None:
