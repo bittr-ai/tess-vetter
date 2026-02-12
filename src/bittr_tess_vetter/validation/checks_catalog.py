@@ -123,6 +123,7 @@ def run_nearby_eb_search(
     dec_deg: float,
     candidate_period_days: float | None = None,
     search_radius_arcsec: float = 42.0,
+    request_timeout_s: float = REQUEST_TIMEOUT_S,
     http_get: Callable[..., Any] | None = None,
 ) -> VetterCheckResult:
     """V06: Query the TESS-EB catalog near a position and return raw matches."""
@@ -137,7 +138,10 @@ def run_nearby_eb_search(
     }
 
     try:
-        resp = http_get(VIZIER_TAP_URL, params=params, timeout=REQUEST_TIMEOUT_S)
+        timeout_s = float(request_timeout_s) if request_timeout_s is not None else REQUEST_TIMEOUT_S
+        if timeout_s <= 0:
+            timeout_s = REQUEST_TIMEOUT_S
+        resp = http_get(VIZIER_TAP_URL, params=params, timeout=timeout_s)
         resp.raise_for_status()
     except Exception as e:
         return _metrics_result(
@@ -149,6 +153,7 @@ def run_nearby_eb_search(
                 "error": str(e),
                 "ra": ra_deg,
                 "dec": dec_deg,
+                "request_timeout_s": timeout_s,
             },
         )
 

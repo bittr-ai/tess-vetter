@@ -376,6 +376,53 @@ def test_pixel_point_budget_enforced_before_pixel_checks(monkeypatch) -> None:
     assert "sector_scores" in pixel["provenance"]
 
 
+def test_pixel_point_budget_downsamples_when_feasible(monkeypatch) -> None:
+    """Oversized TPF should be downsampled and still execute pixel checks when feasible."""
+    client = MagicMock()
+    client.download_all_sectors.return_value = [_make_lc_data(1)]
+    client.get_target_info.return_value = Target(
+        tic_id=123456789,
+        stellar=StellarParameters(teff=5800.0, radius=1.0, mass=1.0),
+    )
+    client.download_tpf_cached.return_value = (
+        np.arange(500, dtype=np.float64),
+        np.ones((500, 3, 3), dtype=np.float64),  # 4500 points
+        None,
+        None,
+        np.ones((3, 3), dtype=np.int32),
+        np.zeros(500, dtype=np.int32),
+    )
+
+    captured: dict[str, object] = {}
+
+    def _fake_tier_bundle(**kwargs):  # type: ignore[no-untyped-def]
+        captured["tpf_shape"] = kwargs["tpf"].shape
+        return generate_report_api.VettingBundleResult.from_checks([])
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.api.generate_report._tier_bundle",
+        _fake_tier_bundle,
+    )
+    cfg = EnrichmentConfig(
+        include_pixel_diagnostics=True,
+        include_catalog_context=False,
+        include_followup_context=False,
+        max_pixel_points=2_000,
+    )
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        include_enrichment=True,
+        enrichment_config=cfg,
+    )
+    pixel = result.report_json["enrichment"]["pixel_diagnostics"]
+    assert "PIXEL_POINT_BUDGET_EXCEEDED" not in pixel["flags"]
+    assert pixel["payload"]["downsample_applied"] is True
+    assert pixel["payload"]["downsample_stride"] > 1
+    assert captured["tpf_shape"] == (167, 3, 3)
+
+
 def test_enrichment_uses_explicit_stellar_when_tic_lookup_skipped(monkeypatch) -> None:
     """Catalog context should receive explicit stellar kwarg even without target metadata."""
     client = _mock_client(sectors=[1])
@@ -552,3 +599,24 @@ def test_enrichment_honors_max_concurrent_requests(monkeypatch) -> None:
 
     assert serial_elapsed > 0.12
     assert parallel_elapsed < serial_elapsed - 0.03
+
+
+def test_catalog_context_runs_v07_only() -> None:
+    """Inline report enrichment should exclude V06 and run V07 only."""
+    client = _mock_client(sectors=[1])
+    cfg = EnrichmentConfig(
+        include_catalog_context=True,
+        include_pixel_diagnostics=False,
+        include_followup_context=False,
+        network=False,
+    )
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        include_enrichment=True,
+        enrichment_config=cfg,
+    )
+    catalog = result.report_json["enrichment"]["catalog_context"]
+    check_ids = {c["id"] for c in catalog["payload"]["checks_summary"]}
+    assert check_ids == {"V07"}

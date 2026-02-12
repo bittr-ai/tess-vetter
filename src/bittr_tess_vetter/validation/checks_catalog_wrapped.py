@@ -152,11 +152,13 @@ class NearbyEBSearchCheck:
             candidate_period = None
             if inputs.candidate is not None:
                 candidate_period = inputs.candidate.period
+            timeout_s = config.extra_params.get("request_timeout_seconds", config.timeout_seconds)
 
             result = run_nearby_eb_search(
                 ra_deg=inputs.ra_deg,
                 dec_deg=inputs.dec_deg,
                 candidate_period_days=candidate_period,
+                request_timeout_s=timeout_s if timeout_s is not None else 10.0,
             )
 
             return _convert_catalog_result(result, self.id, self.name)

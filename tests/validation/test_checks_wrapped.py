@@ -292,6 +292,29 @@ class TestNearbyEBSearchCheck:
         assert result.status == "skipped"
         assert "SKIPPED:NETWORK_DISABLED" in result.flags
 
+    def test_uses_check_timeout_for_catalog_request(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        check = NearbyEBSearchCheck()
+        inputs = _make_test_inputs(network=True, ra_deg=10.0, dec_deg=20.0)
+        config = CheckConfig(timeout_seconds=33.0, extra_params={})
+        captured: dict[str, float | None] = {"timeout": None}
+
+        def _fake_run_nearby_eb_search(**kwargs: object):  # type: ignore[no-untyped-def]
+            captured["timeout"] = kwargs.get("request_timeout_s")  # type: ignore[assignment]
+
+            class _Legacy:
+                details = {"status": "ok", "n_ebs_found": 0}
+                confidence = 0.5
+
+            return _Legacy()
+
+        monkeypatch.setattr(
+            "bittr_tess_vetter.validation.checks_catalog.run_nearby_eb_search",
+            _fake_run_nearby_eb_search,
+        )
+        result = check.run(inputs, config)
+        assert result.status == "ok"
+        assert captured["timeout"] == 33.0
+
 
 class TestExoFOPTOILookupCheck:
     """Tests for V07 ExoFOPTOILookupCheck wrapper."""

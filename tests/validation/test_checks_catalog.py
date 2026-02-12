@@ -79,6 +79,24 @@ def test_run_nearby_eb_search_zero_matches_returns_ok() -> None:
     assert result.details["n_ebs_found"] == 0
 
 
+def test_run_nearby_eb_search_forwards_request_timeout() -> None:
+    seen: dict[str, object] = {}
+
+    def http_get(*_args: object, **kwargs: object) -> FakeResponse:
+        seen["timeout"] = kwargs.get("timeout")
+        return FakeResponse(
+            """<?xml version="1.0"?><VOTABLE><RESOURCE><TABLE><DATA><TABLEDATA></TABLEDATA></DATA></TABLE></RESOURCE></VOTABLE>"""
+        )
+
+    run_nearby_eb_search(
+        ra_deg=10.0,
+        dec_deg=-20.0,
+        request_timeout_s=37.5,
+        http_get=http_get,
+    )
+    assert seen["timeout"] == 37.5
+
+
 def test_run_exofop_toi_lookup_can_filter_by_toi() -> None:
     table = ExoFOPToiTable(
         fetched_at_unix=0.0,

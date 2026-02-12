@@ -21,7 +21,7 @@ from typing import Any
 
 import numpy as np
 
-from bittr_tess_vetter.api.pipeline import VettingPipeline
+from bittr_tess_vetter.api.pipeline import PipelineConfig, VettingPipeline
 from bittr_tess_vetter.api.stitch import SectorDiagnostics, stitch_lightcurve_data
 from bittr_tess_vetter.api.types import (
     Candidate,
@@ -80,8 +80,8 @@ class EnrichmentConfig:
     include_followup_context: bool = True
     fail_open: bool = True
     network: bool = False
-    max_network_seconds: float = 30.0
-    per_request_timeout_seconds: float = 10.0
+    max_network_seconds: float = 60.0
+    per_request_timeout_seconds: float = 30.0
     max_concurrent_requests: int = 3
     fetch_tpf: bool = True
     tpf_sector_strategy: str = "best"  # best | all | requested
@@ -399,11 +399,24 @@ def _tier_bundle(
     target: Any | None,
     network: bool,
     tpf: TPFStamp | None = None,
+    check_timeout_seconds: float | None = None,
+    check_ids_override: list[str] | None = None,
 ) -> VettingBundleResult:
     registry = CheckRegistry()
     register_all_defaults(registry)
-    check_ids = [c.id for c in registry.list_by_tier(tier)]
-    pipeline = VettingPipeline(checks=check_ids, registry=registry)
+    check_ids = (
+        [str(cid) for cid in check_ids_override]
+        if check_ids_override is not None
+        else [c.id for c in registry.list_by_tier(tier)]
+    )
+    pipeline = VettingPipeline(
+        checks=check_ids,
+        registry=registry,
+        config=PipelineConfig(
+            timeout_seconds=check_timeout_seconds,
+            extra_params={"request_timeout_seconds": check_timeout_seconds},
+        ),
+    )
     lc_internal = lc_api.to_internal(tic_id=tic_id)
     candidate_internal = TransitCandidate(
         period=candidate_api.ephemeris.period_days,
@@ -525,6 +538,10 @@ def _run_catalog_context(
         stellar=stellar,
         target=target,
         network=network,
+        check_timeout_seconds=float(config.per_request_timeout_seconds),
+        # V06 (Vizier nearby-EB query) is intentionally excluded from inline
+        # report enrichment due endpoint latency flakiness. Keep V07 only.
+        check_ids_override=["V07"],
     )
     check_rows = []
     for result in bundle.results:
@@ -694,36 +711,65 @@ def _run_pixel_diagnostics(
         )
         return block
 
-    n_points = int(np.prod(tpf_obj.shape))
     max_points = int(config.max_pixel_points)
+    original_shape = tuple(int(v) for v in tpf_obj.shape)
+    n_points = int(np.prod(original_shape))
+    downsample_applied = False
+    downsample_stride = 1
     if n_points > max_points:
-        block = _skipped_enrichment_block("PIXEL_POINT_BUDGET_EXCEEDED")
-        block.quality["is_degraded"] = True
-        block.provenance.update(
-            {
-                "block": "pixel_diagnostics",
-                "tic_id": tic_id,
-                "tpf_sector_strategy": config.tpf_sector_strategy,
-                "sector_scores": {str(k): float(v) for k, v in sector_scores.items()},
-                "budget": {
-                    "max_pixel_points": max_points,
-                    "points_estimate": n_points,
-                    "budget_applied": True,
-                },
-            }
-        )
-        block.payload.update(
-            {
-                "selected_sector": selected_sector,
-                "selected_from": sectors_for_tpf,
-                "tpf_shape": [int(v) for v in tpf_obj.shape],
-                "acquisition_mode": acquisition_mode,
-                "aperture_pixels": int(np.sum(np.asarray(tpf_obj.aperture_mask) > 0))
-                if tpf_obj.aperture_mask is not None
-                else None,
-            }
-        )
-        return block
+        n_frames = int(tpf_obj.shape[0])
+        pixels_per_frame = int(np.prod(tpf_obj.shape[1:])) if len(tpf_obj.shape) >= 2 else 1
+        max_frames = max_points // max(pixels_per_frame, 1)
+        min_frames_required = 64
+        if max_frames >= min_frames_required and n_frames > 0:
+            downsample_stride = max(1, (n_frames + max_frames - 1) // max_frames)
+            if downsample_stride > 1:
+                tpf_obj = TPFStamp(
+                    time=tpf_obj.time[::downsample_stride],
+                    flux=tpf_obj.flux[::downsample_stride, :, :],
+                    flux_err=tpf_obj.flux_err[::downsample_stride, :, :]
+                    if tpf_obj.flux_err is not None
+                    else None,
+                    wcs=tpf_obj.wcs,
+                    aperture_mask=tpf_obj.aperture_mask,
+                    quality=tpf_obj.quality[::downsample_stride]
+                    if tpf_obj.quality is not None
+                    else None,
+                )
+                downsample_applied = True
+        n_points = int(np.prod(tpf_obj.shape))
+        if n_points > max_points:
+            block = _skipped_enrichment_block("PIXEL_POINT_BUDGET_EXCEEDED")
+            block.quality["is_degraded"] = True
+            block.provenance.update(
+                {
+                    "block": "pixel_diagnostics",
+                    "tic_id": tic_id,
+                    "tpf_sector_strategy": config.tpf_sector_strategy,
+                    "sector_scores": {str(k): float(v) for k, v in sector_scores.items()},
+                    "budget": {
+                        "max_pixel_points": max_points,
+                        "points_estimate": int(np.prod(original_shape)),
+                        "points_after_downsample": n_points,
+                        "downsample_applied": downsample_applied,
+                        "downsample_stride": int(downsample_stride),
+                        "budget_applied": True,
+                    },
+                }
+            )
+            block.payload.update(
+                {
+                    "selected_sector": selected_sector,
+                    "selected_from": sectors_for_tpf,
+                    "tpf_shape": [int(v) for v in original_shape],
+                    "tpf_shape_after_downsample": [int(v) for v in tpf_obj.shape],
+                    "acquisition_mode": acquisition_mode,
+                    "aperture_pixels": int(np.sum(np.asarray(tpf_obj.aperture_mask) > 0))
+                    if tpf_obj.aperture_mask is not None
+                    else None,
+                }
+            )
+            return block
 
     bundle = _tier_bundle(
         tier=CheckTier.PIXEL,
@@ -734,12 +780,16 @@ def _run_pixel_diagnostics(
         target=target,
         network=config.network,
         tpf=tpf_obj,
+        check_timeout_seconds=float(config.per_request_timeout_seconds),
     )
 
     payload = {
         "selected_sector": selected_sector,
         "selected_from": sectors_for_tpf,
-        "tpf_shape": [int(v) for v in tpf_obj.shape],
+        "tpf_shape": [int(v) for v in original_shape],
+        "tpf_shape_after_downsample": [int(v) for v in tpf_obj.shape],
+        "downsample_applied": downsample_applied,
+        "downsample_stride": int(downsample_stride),
         "acquisition_mode": acquisition_mode,
         "aperture_pixels": int(np.sum(np.asarray(tpf_obj.aperture_mask) > 0))
         if tpf_obj.aperture_mask is not None
@@ -756,7 +806,10 @@ def _run_pixel_diagnostics(
             "budget": {
                 "max_pixel_points": int(config.max_pixel_points),
                 "points_estimate": n_points,
-                "budget_applied": False,
+                "points_original": int(np.prod(original_shape)),
+                "downsample_applied": downsample_applied,
+                "downsample_stride": int(downsample_stride),
+                "budget_applied": downsample_applied or (n_points > int(config.max_pixel_points)),
             },
         },
     )
