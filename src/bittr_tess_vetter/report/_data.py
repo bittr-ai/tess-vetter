@@ -122,6 +122,35 @@ class SecondaryScanPlotData:
     secondary_phase: float
     strongest_dip_phase: float | None
     strongest_dip_flux: float | None
+    quality: SecondaryScanQuality | None = None
+    render_hints: SecondaryScanRenderHints | None = None
+
+
+@dataclass(frozen=True)
+class SecondaryScanQuality:
+    """Deterministic quality metrics for robust batch rendering decisions."""
+
+    n_raw_points: int
+    n_bins: int
+    n_bins_with_error: int
+    phase_coverage_fraction: float  # occupied-bin fraction over full [-0.5, 0.5]
+    largest_phase_gap: float
+    is_degraded: bool
+    flags: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class SecondaryScanRenderHints:
+    """Display policy hints derived from SecondaryScanQuality."""
+
+    style_mode: str  # "normal" | "degraded"
+    connect_bins: bool
+    max_connect_phase_gap: float
+    show_error_bars: bool
+    error_bar_stride: int
+    raw_marker_opacity: float
+    binned_marker_size: float
+    binned_line_width: float
 
 
 def _scrub_non_finite(obj: Any) -> Any:

@@ -32,6 +32,8 @@ from bittr_tess_vetter.report._data import (
     PerTransitStackPlotData,
     PhaseFoldedPlotData,
     ReportData,
+    SecondaryScanQuality,
+    SecondaryScanRenderHints,
     SecondaryScanPlotData,
     TransitWindowData,
 )
@@ -746,15 +748,34 @@ def _build_secondary_scan_plot_data(
             secondary_phase=0.5,
             strongest_dip_phase=None,
             strongest_dip_flux=None,
+            quality=SecondaryScanQuality(
+                n_raw_points=0,
+                n_bins=0,
+                n_bins_with_error=0,
+                phase_coverage_fraction=0.0,
+                largest_phase_gap=1.0,
+                is_degraded=True,
+                flags=["NO_POINTS"],
+            ),
+            render_hints=SecondaryScanRenderHints(
+                style_mode="degraded",
+                connect_bins=False,
+                max_connect_phase_gap=0.02,
+                show_error_bars=False,
+                error_bar_stride=1,
+                raw_marker_opacity=0.18,
+                binned_marker_size=5.0,
+                binned_line_width=0.0,
+            ),
         )
 
     period = ephemeris.period_days
     phase, flux_folded = fold_transit(time, flux, period, ephemeris.t0_btjd)
 
     if len(phase) > max_points:
-        phase, flux_folded = _downsample_phase_preserving_transit(
-            phase, flux_folded, max_points, near_transit_half_phase=0.1
-        )
+        pick = np.round(np.linspace(0, len(phase) - 1, max_points)).astype(int)
+        phase = phase[pick]
+        flux_folded = flux_folded[pick]
 
     centers, bflux, berr = _bin_phase_data(
         phase,
@@ -777,6 +798,14 @@ def _build_secondary_scan_plot_data(
             strongest_dip_flux = float(bflux_arr[idx])
             strongest_dip_phase = float(centers_arr[idx])
 
+    quality = _compute_secondary_scan_quality(
+        phase=phase,
+        bin_err=berr,
+        period_days=period,
+        bin_minutes=bin_minutes,
+    )
+    render_hints = _secondary_scan_render_hints(quality, period_days=period, bin_minutes=bin_minutes)
+
     return SecondaryScanPlotData(
         phase=phase.tolist(),
         flux=flux_folded.tolist(),
@@ -788,6 +817,113 @@ def _build_secondary_scan_plot_data(
         secondary_phase=0.5,
         strongest_dip_phase=strongest_dip_phase,
         strongest_dip_flux=strongest_dip_flux,
+        quality=quality,
+        render_hints=render_hints,
+    )
+
+
+def _compute_secondary_scan_quality(
+    *,
+    phase: np.ndarray,
+    bin_err: list[float | None],
+    period_days: float,
+    bin_minutes: float,
+) -> SecondaryScanQuality:
+    """Compute robust quality metrics for full-orbit secondary scan."""
+    n_raw_points = int(len(phase))
+    n_bins = int(len(bin_err))
+    n_bins_with_error = int(sum(e is not None for e in bin_err))
+
+    if n_raw_points == 0:
+        return SecondaryScanQuality(
+            n_raw_points=0,
+            n_bins=n_bins,
+            n_bins_with_error=n_bins_with_error,
+            phase_coverage_fraction=0.0,
+            largest_phase_gap=1.0,
+            is_degraded=True,
+            flags=["NO_POINTS"],
+        )
+
+    finite_phase = np.sort(phase[np.isfinite(phase)])
+    if len(finite_phase) == 0:
+        return SecondaryScanQuality(
+            n_raw_points=n_raw_points,
+            n_bins=n_bins,
+            n_bins_with_error=n_bins_with_error,
+            phase_coverage_fraction=0.0,
+            largest_phase_gap=1.0,
+            is_degraded=True,
+            flags=["NON_FINITE_PHASE"],
+        )
+
+    # Phase-gap metric (include domain boundaries).
+    extended = np.concatenate([np.array([-0.5]), finite_phase, np.array([0.5])])
+    largest_phase_gap = float(np.max(np.diff(extended)))
+
+    # Occupied-bin fraction over full orbit.
+    bin_phase = (bin_minutes / 60.0 / 24.0) / period_days
+    n_bins_total = max(1, int(np.ceil(1.0 / bin_phase)))
+    bin_edges = np.linspace(-0.5, 0.5, n_bins_total + 1)
+    idx = np.digitize(finite_phase, bin_edges) - 1
+    idx = np.clip(idx, 0, n_bins_total - 1)
+    occupied = int(np.sum(np.bincount(idx, minlength=n_bins_total) > 0))
+    phase_coverage_fraction = float(occupied / n_bins_total)
+
+    flags: list[str] = []
+    if n_bins < 30:
+        flags.append("LOW_BIN_COUNT")
+    if phase_coverage_fraction < 0.6:
+        flags.append("LOW_PHASE_COVERAGE")
+    if largest_phase_gap > 0.12:
+        flags.append("LARGE_PHASE_GAP")
+
+    is_degraded = len(flags) > 0
+    return SecondaryScanQuality(
+        n_raw_points=n_raw_points,
+        n_bins=n_bins,
+        n_bins_with_error=n_bins_with_error,
+        phase_coverage_fraction=phase_coverage_fraction,
+        largest_phase_gap=largest_phase_gap,
+        is_degraded=is_degraded,
+        flags=flags,
+    )
+
+
+def _secondary_scan_render_hints(
+    quality: SecondaryScanQuality,
+    *,
+    period_days: float,
+    bin_minutes: float,
+) -> SecondaryScanRenderHints:
+    """Derive deterministic rendering hints from quality metrics."""
+    bin_phase = (bin_minutes / 60.0 / 24.0) / period_days
+    max_connect_phase_gap = float(max(3.0 * bin_phase, 0.01))
+
+    show_error_bars = quality.n_bins_with_error > 0 and quality.n_bins <= 500
+    error_bar_stride = max(1, int(np.ceil(max(1, quality.n_bins) / 180)))
+
+    if quality.is_degraded:
+        return SecondaryScanRenderHints(
+            style_mode="degraded",
+            connect_bins=False,
+            max_connect_phase_gap=max_connect_phase_gap,
+            show_error_bars=False,
+            error_bar_stride=error_bar_stride,
+            raw_marker_opacity=0.18,
+            binned_marker_size=5.0,
+            binned_line_width=0.0,
+        )
+
+    return SecondaryScanRenderHints(
+        style_mode="normal",
+        connect_bins=True,
+        max_connect_phase_gap=max_connect_phase_gap,
+        show_error_bars=show_error_bars,
+        error_bar_stride=error_bar_stride,
+        raw_marker_opacity=0.24,
+        binned_marker_size=4.0,
+        binned_line_width=1.5,
     )
 
 

@@ -17,6 +17,8 @@ from bittr_tess_vetter.report._data import (
     PerTransitStackPlotData,
     PhaseFoldedPlotData,
     ReportData,
+    SecondaryScanQuality,
+    SecondaryScanRenderHints,
     SecondaryScanPlotData,
     TransitWindowData,
 )
@@ -33,4 +35,6 @@ __all__ = [
     "PerTransitStackPlotData",
     "OddEvenPhasePlotData",
     "SecondaryScanPlotData",
+    "SecondaryScanQuality",
+    "SecondaryScanRenderHints",
 ]

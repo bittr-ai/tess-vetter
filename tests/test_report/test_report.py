@@ -218,6 +218,8 @@ def test_build_report_integration() -> None:
     assert report.per_transit_stack is not None
     assert report.odd_even_phase is not None
     assert report.secondary_scan is not None
+    assert report.secondary_scan.quality is not None
+    assert report.secondary_scan.render_hints is not None
 
 
 # ---------------------------------------------------------------------------
@@ -311,6 +313,14 @@ def test_json_schema_keys_and_types() -> None:
     assert isinstance(j["secondary_scan"], dict)
     assert isinstance(j["secondary_scan"]["phase"], list)
     assert isinstance(j["secondary_scan"]["bin_centers"], list)
+    assert isinstance(j["secondary_scan"]["quality"], dict)
+    assert isinstance(j["secondary_scan"]["render_hints"], dict)
+    assert isinstance(j["secondary_scan"]["quality"]["phase_coverage_fraction"], float)
+    assert isinstance(j["secondary_scan"]["quality"]["largest_phase_gap"], float)
+    assert isinstance(j["secondary_scan"]["quality"]["flags"], list)
+    assert isinstance(j["secondary_scan"]["render_hints"]["style_mode"], str)
+    assert isinstance(j["secondary_scan"]["render_hints"]["connect_bins"], bool)
+    assert isinstance(j["secondary_scan"]["render_hints"]["error_bar_stride"], int)
 
     # Round-trip through json.dumps should work without custom encoders
     serialized = json.dumps(j)
@@ -602,6 +612,34 @@ def test_build_report_without_additional_plots() -> None:
     assert "per_transit_stack" not in j
     assert "odd_even_phase" not in j
     assert "secondary_scan" not in j
+
+
+def test_secondary_scan_preserves_full_orbit_phase_coverage() -> None:
+    """Secondary scan should remain full-orbit, not transit-window focused."""
+    time, flux, flux_err = _make_box_transit_lc(
+        baseline_days=90.0,
+        cadence_minutes=2.0,
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    # Force downsampling so we exercise the secondary-scan decimator.
+    report = build_report(lc, candidate, max_phase_points=2_000)
+    assert report.secondary_scan is not None
+    phase = np.asarray(report.secondary_scan.phase, dtype=np.float64)
+    assert len(phase) > 0
+
+    # Full-orbit scan should retain broad phase coverage.
+    assert float(np.min(phase)) < -0.4
+    assert float(np.max(phase)) > 0.4
+    q = report.secondary_scan.quality
+    assert q is not None
+    assert 0.0 <= q.phase_coverage_fraction <= 1.0
+    assert q.largest_phase_gap >= 0.0
+    hints = report.secondary_scan.render_hints
+    assert hints is not None
+    assert hints.style_mode in {"normal", "degraded"}
 
 
 # ---------------------------------------------------------------------------
