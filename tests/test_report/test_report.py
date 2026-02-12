@@ -20,6 +20,7 @@ from bittr_tess_vetter.api.types import (
     CheckResult,
     Ephemeris,
     LightCurve,
+    StellarParams,
     VettingBundleResult,
     ok_result,
 )
@@ -321,7 +322,22 @@ def test_check_plot_data_passthrough() -> None:
 
 
 def test_include_v03_adds_v03() -> None:
-    """Verify include_v03=True includes V03 in results."""
+    """Verify include_v03=True with stellar params includes V03 in results."""
+    time, flux, flux_err = _make_box_transit_lc()
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+    stellar = StellarParams(radius=1.0, mass=1.0)
+
+    report = build_report(lc, candidate, include_v03=True, stellar=stellar)
+
+    assert "V03" in report.checks
+    assert "V03" in report.checks_run
+    assert set(report.checks.keys()) == {"V01", "V02", "V03", "V04", "V05", "V13", "V15"}
+
+
+def test_include_v03_without_stellar_disables() -> None:
+    """Verify include_v03=True without stellar auto-disables V03 with warning."""
     time, flux, flux_err = _make_box_transit_lc()
     lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
     eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
@@ -329,9 +345,8 @@ def test_include_v03_adds_v03() -> None:
 
     report = build_report(lc, candidate, include_v03=True)
 
-    assert "V03" in report.checks
-    assert "V03" in report.checks_run
-    assert set(report.checks.keys()) == {"V01", "V02", "V03", "V04", "V05", "V13", "V15"}
+    assert "V03" not in report.checks
+    assert "V03" not in report.checks_run
 
 
 def test_default_excludes_v03() -> None:
@@ -535,7 +550,7 @@ def test_build_report_single_transit() -> None:
 
 
 def test_downsample_all_in_transit() -> None:
-    """Verify _downsample_preserving_transits handles all-in-transit data."""
+    """Verify _downsample_preserving_transits hard-caps all-in-transit data."""
     n = 100
     time = np.linspace(0.0, 1.0, n)
     flux = np.ones(n)
@@ -545,8 +560,8 @@ def test_downsample_all_in_transit() -> None:
         time, flux, transit_mask, max_points=50
     )
 
-    # All points are in-transit, so n_oot_budget <= 0 -> no downsampling
-    assert len(t_out) == n
+    # Hard cap: output should not exceed max_points
+    assert len(t_out) <= 50
     assert all(m_out)  # all should still be marked in-transit
 
 
@@ -674,11 +689,11 @@ def test_downsample_phase_preserving_transit_unit() -> None:
 
 
 def test_downsample_phase_all_near_transit() -> None:
-    """Verify no crash when all points are near transit center."""
+    """Verify hard cap when all points are near transit center."""
     phase = np.linspace(-0.05, 0.05, 300)
     flux = np.ones(300)
 
-    # All points are within ±0.1 -> n_far_budget <= 0 -> return all
+    # All points are within ±0.1 -> hard cap uniformly thins near-transit
     p_out, f_out = _downsample_phase_preserving_transit(phase, flux, max_points=100)
 
-    assert len(p_out) == 300  # nothing to thin
+    assert len(p_out) <= 100

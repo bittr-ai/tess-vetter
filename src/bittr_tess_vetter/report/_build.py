@@ -7,7 +7,6 @@ LC summary stats, plot-ready arrays, and assembling ReportData.
 from __future__ import annotations
 
 import logging
-import warnings
 from typing import Any
 
 import numpy as np
@@ -82,10 +81,25 @@ def build_report(
     """
     ephemeris = candidate.ephemeris
 
+    # 0. Validate inputs
+    if ephemeris.period_days <= 0:
+        raise ValueError(f"period_days must be positive, got {ephemeris.period_days}")
+    if ephemeris.duration_hours <= 0:
+        raise ValueError(
+            f"duration_hours must be positive, got {ephemeris.duration_hours}"
+        )
+    if bin_minutes <= 0:
+        raise ValueError(f"bin_minutes must be positive, got {bin_minutes}")
+
     # 1. Determine enabled checks
     enabled = set(_DEFAULT_ENABLED)
     if include_v03:
-        enabled.add("V03")
+        if stellar is None:
+            logger.warning(
+                "include_v03=True but stellar is None; disabling V03"
+            )
+        else:
+            enabled.add("V03")
 
     # 2. Run checks
     results = vet_lc_only(
@@ -132,16 +146,20 @@ def _compute_lc_summary(
     """Compute LC vital signs. ~1ms for typical TESS LC."""
     time = np.asarray(lc.time, dtype=np.float64)
     flux = np.asarray(lc.flux, dtype=np.float64)
+    has_flux_err = lc.flux_err is not None
     flux_err = (
         np.asarray(lc.flux_err, dtype=np.float64)
-        if lc.flux_err is not None
-        else np.zeros_like(flux)
+        if has_flux_err
+        else np.full_like(flux, np.nan)
     )
 
     n_points = len(time)
 
-    # Valid mask: finite time + flux + flux_err, intersected with user valid_mask
-    valid = np.isfinite(time) & np.isfinite(flux) & np.isfinite(flux_err)
+    # Valid mask: finite time + flux (+ flux_err when provided),
+    # intersected with user valid_mask
+    valid = np.isfinite(time) & np.isfinite(flux)
+    if has_flux_err:
+        valid = valid & np.isfinite(flux_err)
     if lc.valid_mask is not None:
         valid = valid & np.asarray(lc.valid_mask, dtype=np.bool_)
 
@@ -150,7 +168,6 @@ def _compute_lc_summary(
 
     time_valid = time[valid]
     flux_valid = flux[valid]
-    flux_err_valid = flux_err[valid]
 
     # Time baseline
     duration_days = float(np.ptp(time_valid)) if n_valid > 1 else 0.0
@@ -185,6 +202,16 @@ def _compute_lc_summary(
         flux_std_ppm = 0.0
         flux_mad_ppm = 0.0
 
+    # Build flux_err for detect_transit: use provided errors, or estimate
+    # a constant per-point uncertainty from OOT robust MAD scatter.
+    if has_flux_err:
+        flux_err_valid = flux_err[valid]
+    elif flux_mad_ppm > 0.0:
+        flux_err_valid = np.full(n_valid, flux_mad_ppm / 1e6)
+    else:
+        # Fallback: use std-based scatter (less robust but non-zero)
+        flux_err_valid = np.full(n_valid, max(flux_std_ppm / 1e6, 1e-10))
+
     # SNR + depth via detect_transit
     snr = 0.0
     depth_ppm = 0.0
@@ -196,14 +223,10 @@ def _compute_lc_summary(
         depth_ppm = float(tc.depth * 1e6)
 
         # Compute depth_err separately since TransitCandidate doesn't expose it
-        in_mask_depth = get_in_transit_mask(time_valid, period, t0, dur_h)
-        _, d_err = measure_depth(flux_valid, in_mask_depth)
+        _, d_err = measure_depth(flux_valid, in_mask)
         depth_err_ppm = float(d_err * 1e6)
     except Exception as exc:
-        warnings.warn(
-            f"detect_transit failed, using snr=0.0: {exc}",
-            stacklevel=2,
-        )
+        logger.warning("detect_transit failed, using snr=0.0: %s", exc, exc_info=True)
 
     return LCSummary(
         n_points=n_points,
@@ -227,16 +250,25 @@ def _downsample_preserving_transits(
     transit_mask: np.ndarray,
     max_points: int,
 ) -> tuple[list[float], list[float], list[bool]]:
-    """Downsample LC while keeping all in-transit points."""
+    """Downsample LC to at most *max_points*, prioritizing in-transit points.
+
+    Hard cap: output never exceeds *max_points*.  If in-transit points
+    alone exceed the budget, they are uniformly thinned to fit.
+    """
     in_transit_idx = np.where(transit_mask)[0]
     oot_idx = np.where(~transit_mask)[0]
 
-    n_oot_budget = max_points - len(in_transit_idx)
-    if n_oot_budget <= 0 or len(oot_idx) <= n_oot_budget:
-        # No downsampling needed or all points are in-transit
+    if len(time) <= max_points:
         return time.tolist(), flux.tolist(), transit_mask.tolist()
 
-    # Evenly sample OOT points
+    if len(in_transit_idx) >= max_points:
+        # In-transit alone exceeds budget — uniformly thin them
+        step = max(1, len(in_transit_idx) // max_points)
+        keep = np.sort(in_transit_idx[::step][:max_points])
+        return time[keep].tolist(), flux[keep].tolist(), transit_mask[keep].tolist()
+
+    # Keep all in-transit; evenly sample OOT to fill remaining budget
+    n_oot_budget = max_points - len(in_transit_idx)
     step = max(1, len(oot_idx) // n_oot_budget)
     sampled_oot = oot_idx[::step][:n_oot_budget]
 
@@ -285,11 +317,11 @@ def _downsample_phase_preserving_transit(
     max_points: int,
     near_transit_half_phase: float = 0.1,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Downsample phase-folded data while keeping near-transit points.
+    """Downsample phase-folded data to at most *max_points*.
 
-    Points within ±near_transit_half_phase of transit center (phase=0)
-    are always kept.  Remaining baseline points are evenly thinned to
-    fit within *max_points*.
+    Near-transit points (within ±near_transit_half_phase) are prioritized.
+    Hard cap: output never exceeds *max_points*.  If near-transit points
+    alone exceed the budget, they are uniformly thinned to fit.
 
     Args:
         phase: Phase values (centered on 0).
@@ -300,18 +332,22 @@ def _downsample_phase_preserving_transit(
             backward compatibility, but callers should pass a
             duration-based value (e.g. 3 * transit_duration_phase).
     """
+    if len(phase) <= max_points:
+        return phase, flux
+
     near_transit = np.abs(phase) < near_transit_half_phase
     near_idx = np.where(near_transit)[0]
     far_idx = np.where(~near_transit)[0]
 
-    n_far_budget = max_points - len(near_idx)
-    if n_far_budget <= 0:
-        # Near-transit points alone exceed the budget; keep only those
-        # (dropping all far-from-transit baseline points).
-        return phase[near_idx], flux[near_idx]
+    if len(near_idx) >= max_points:
+        # Near-transit alone exceeds budget — uniformly thin them
+        step = max(1, len(near_idx) // max_points)
+        keep = np.sort(near_idx[::step][:max_points])
+        return phase[keep], flux[keep]
 
+    # Keep all near-transit; evenly sample far points to fill budget
+    n_far_budget = max_points - len(near_idx)
     if len(far_idx) <= n_far_budget:
-        # No downsampling needed — everything fits.
         return phase, flux
 
     step = max(1, len(far_idx) // n_far_budget)
@@ -408,6 +444,9 @@ def _bin_phase_data(
 ) -> tuple[list[float], list[float], list[float | None]]:
     """Bin phase-folded data by phase.
 
+    Uses vectorized np.digitize + np.bincount for O(n_points + n_bins)
+    performance instead of per-bin masking.
+
     Args:
         phase: Phase values (centered on 0).
         flux: Flux values.
@@ -443,26 +482,36 @@ def _bin_phase_data(
     n_bins = max(1, int(np.ceil((phase_max - phase_min) / bin_phase)))
     bin_edges = np.linspace(phase_min, phase_max, n_bins + 1)
 
-    # Bin the data
-    centers: list[float] = []
-    fluxes: list[float] = []
+    # Vectorized binning via digitize (returns 1-based bin indices)
+    idx = np.digitize(phase, bin_edges) - 1
+    # Clamp right-edge points into last bin (digitize puts them at n_bins)
+    idx = np.clip(idx, 0, n_bins - 1)
+
+    counts = np.bincount(idx, minlength=n_bins)[:n_bins]
+    sums = np.bincount(idx, weights=flux, minlength=n_bins)[:n_bins]
+    sumsq = np.bincount(idx, weights=flux * flux, minlength=n_bins)[:n_bins]
+
+    # Only emit bins that have data
+    occupied = counts > 0
+    occ_idx = np.where(occupied)[0]
+
+    bin_centers_arr = (bin_edges[:-1] + bin_edges[1:]) / 2.0
+
+    centers: list[float] = bin_centers_arr[occ_idx].tolist()
+    mean = sums[occupied] / counts[occupied]
+    fluxes: list[float] = mean.tolist()
+
+    # SEM: sqrt(sample_variance / n) where sample_variance uses ddof=1
     errors: list[float | None] = []
-
-    for i in range(n_bins):
-        if i == n_bins - 1:
-            # Include right edge in last bin
-            mask = (phase >= bin_edges[i]) & (phase <= bin_edges[i + 1])
+    occ_counts = counts[occupied]
+    occ_sumsq = sumsq[occupied]
+    occ_sums = sums[occupied]
+    for i in range(len(occ_counts)):
+        n = int(occ_counts[i])
+        if n > 1:
+            var = (occ_sumsq[i] - occ_sums[i] ** 2 / n) / (n - 1)
+            errors.append(float(np.sqrt(max(var, 0.0) / n)))
         else:
-            mask = (phase >= bin_edges[i]) & (phase < bin_edges[i + 1])
-
-        n_in_bin = int(np.sum(mask))
-        if n_in_bin > 0:
-            centers.append(float((bin_edges[i] + bin_edges[i + 1]) / 2))
-            fluxes.append(float(np.mean(flux[mask])))
-            # Standard error of the mean
-            if n_in_bin > 1:
-                errors.append(float(np.std(flux[mask], ddof=1) / np.sqrt(n_in_bin)))
-            else:
-                errors.append(None)
+            errors.append(None)
 
     return centers, fluxes, errors
