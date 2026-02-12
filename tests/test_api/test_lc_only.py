@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.api.lc_only import odd_even_depth, secondary_eclipse, v_shape, vet_lc_only
+from bittr_tess_vetter.api.lc_only import (
+    data_gaps,
+    odd_even_depth,
+    secondary_eclipse,
+    transit_asymmetry,
+    v_shape,
+    vet_lc_only,
+)
 from bittr_tess_vetter.api.transit_primitives import odd_even_result
-from bittr_tess_vetter.api.types import Ephemeris, LightCurve
+from bittr_tess_vetter.api.types import CheckResult, Ephemeris, LightCurve, VettingBundleResult
 
 
 def _make_box_transit_lc(
@@ -107,6 +114,36 @@ def test_v_shape_check_metrics_only() -> None:
     assert "tflat_ttotal_ratio" in r.metrics
 
 
+def test_data_gaps_check_result_metrics_only() -> None:
+    time, flux, flux_err = _make_box_transit_lc(
+        period_days=3.5, t0_btjd=0.5, duration_hours=2.5, depth_frac=0.001, noise_ppm=80.0
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+    r = data_gaps(lc, eph)
+    assert r.status == "ok"
+    assert r.passed is True
+    assert r.id == "V13"
+    assert r.name == "data_gaps"
+    assert "missing_frac_max" in r.metrics
+    assert "n_epochs_evaluated" in r.metrics
+
+
+def test_transit_asymmetry_check_result_metrics_only() -> None:
+    time, flux, flux_err = _make_box_transit_lc(
+        period_days=3.5, t0_btjd=0.5, duration_hours=2.5, depth_frac=0.001, noise_ppm=80.0
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+    r = transit_asymmetry(lc, eph)
+    assert r.status == "ok"
+    assert r.passed is True
+    assert r.id == "V15"
+    assert r.name == "transit_asymmetry"
+
+
 def test_vet_lc_only_order_and_ids() -> None:
     time, flux, flux_err = _make_box_transit_lc(
         period_days=3.5, t0_btjd=0.5, duration_hours=2.5, depth_frac=0.001, noise_ppm=80.0
@@ -115,8 +152,90 @@ def test_vet_lc_only_order_and_ids() -> None:
     eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
 
     results = vet_lc_only(lc, eph)
-    assert [r.id for r in results] == ["V01", "V02", "V03", "V04", "V05"]
+    assert [r.id for r in results] == ["V01", "V02", "V03", "V04", "V05", "V13", "V15"]
     # New schema: all results use status-based semantics
     # status="ok" maps to passed=True
     assert all(r.status == "ok" for r in results)
     assert all(r.passed is True for r in results)
+
+
+def test_vet_lc_only_enabled_filter_respects_subset() -> None:
+    time, flux, flux_err = _make_box_transit_lc(
+        period_days=3.5, t0_btjd=0.5, duration_hours=2.5, depth_frac=0.001, noise_ppm=80.0
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+    results = vet_lc_only(lc, eph, enabled={"V01", "V02"})
+    assert [r.id for r in results] == ["V01", "V02"]
+
+
+def test_vet_lc_only_enabled_filter_includes_v13_v15() -> None:
+    time, flux, flux_err = _make_box_transit_lc(
+        period_days=3.5, t0_btjd=0.5, duration_hours=2.5, depth_frac=0.001, noise_ppm=80.0
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+    results = vet_lc_only(lc, eph, enabled={"V13", "V15"})
+    assert [r.id for r in results] == ["V13", "V15"]
+
+
+def test_vetting_bundle_result_from_checks() -> None:
+    time, flux, flux_err = _make_box_transit_lc(
+        period_days=3.5, t0_btjd=0.5, duration_hours=2.5, depth_frac=0.001, noise_ppm=80.0
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+    results = vet_lc_only(lc, eph)
+    bundle = VettingBundleResult.from_checks(results)
+
+    assert isinstance(bundle, VettingBundleResult)
+    assert len(bundle.results) == 7
+    assert [r.id for r in bundle.results] == ["V01", "V02", "V03", "V04", "V05", "V13", "V15"]
+    assert bundle.provenance["source"] == "from_checks"
+    assert bundle.provenance["checks_run"] == 7
+    assert bundle.warnings == []
+
+
+def test_vetting_bundle_result_from_checks_with_warnings() -> None:
+    time, flux, flux_err = _make_box_transit_lc(
+        period_days=3.5, t0_btjd=0.5, duration_hours=2.5, depth_frac=0.001, noise_ppm=80.0
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+    results = vet_lc_only(lc, eph, enabled={"V01"})
+    bundle = VettingBundleResult.from_checks(results, warnings=["test_warning"])
+
+    assert len(bundle.results) == 1
+    assert bundle.warnings == ["test_warning"]
+
+
+def test_vetting_bundle_result_from_checks_empty() -> None:
+    bundle = VettingBundleResult.from_checks([])
+    assert len(bundle.results) == 0
+    assert bundle.provenance["checks_run"] == 0
+    assert bundle.n_passed == 0
+    assert bundle.all_passed is True  # vacuously true
+
+
+def test_vetting_bundle_result_from_checks_properties() -> None:
+    time, flux, flux_err = _make_box_transit_lc(
+        period_days=3.5, t0_btjd=0.5, duration_hours=2.5, depth_frac=0.001, noise_ppm=80.0
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+
+    results = vet_lc_only(lc, eph)
+    bundle = VettingBundleResult.from_checks(results)
+
+    assert bundle.n_passed == 7
+    assert bundle.n_failed == 0
+    assert bundle.n_unknown == 0
+    assert bundle.all_passed is True
+    assert bundle.failed_check_ids == []
+    assert bundle.get_result("V13") is not None
+    assert bundle.get_result("V15") is not None
+    assert bundle.get_result("V99") is None

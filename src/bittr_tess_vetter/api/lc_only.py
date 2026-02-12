@@ -1,6 +1,6 @@
 """Light-curve-only vetting checks for the public API.
 
-This module provides thin wrappers around the LC-only vetting checks (V01-V05),
+This module provides thin wrappers around the LC-only vetting checks (V01-V05, V13, V15),
 converting between facade types and internal types.
 
 Check Summary:
@@ -9,6 +9,8 @@ Check Summary:
 - V03 duration_consistency: Check transit duration vs stellar density expectation
 - V04 depth_stability: Check depth consistency across individual transits
 - V05 v_shape: Distinguish U-shaped (planet) vs V-shaped (grazing EB) transits
+- V13 data_gaps: Data gap / missing cadence near transit windows
+- V15 transit_asymmetry: Transit-window asymmetry (ramp/step proxy)
 
 Novelty: standard (all checks implement well-established techniques from literature)
 
@@ -65,6 +67,16 @@ from bittr_tess_vetter.validation.lc_checks import (
 )
 from bittr_tess_vetter.validation.lc_checks import (
     check_v_shape as _check_v_shape,
+)
+from bittr_tess_vetter.validation.lc_false_alarm_checks import (
+    AsymmetryConfig,
+    DataGapConfig,
+)
+from bittr_tess_vetter.validation.lc_false_alarm_checks import (
+    check_data_gaps as _check_data_gaps,
+)
+from bittr_tess_vetter.validation.lc_false_alarm_checks import (
+    check_transit_asymmetry as _check_transit_asymmetry,
 )
 
 # Module-level references for programmatic access (generated from central registry)
@@ -361,8 +373,96 @@ def v_shape(
     return _apply_policy_mode(_convert_result(result), policy_mode=policy_mode)
 
 
+@cites(
+    cite(GUERRERO_2021, "§3.2 TESS TOI data quality and gap-edge artifacts"),
+    cite(TWICKEN_2018, "§4 data validation diagnostic tests"),
+)
+def data_gaps(
+    lc: LightCurve,
+    ephemeris: Ephemeris,
+    *,
+    config: dict[str, Any] | None = None,
+    policy_mode: str = "metrics_only",
+) -> CheckResult:
+    """V13: Data gap / missing cadence near transit windows.
+
+    Computes a per-epoch missing-cadence fraction in a fixed window around each
+    transit center. High missingness is associated with gap-edge artifacts and
+    scattered-light ramps that can trigger transit searches.
+
+    Args:
+        lc: Light curve data
+        ephemeris: Transit ephemeris (period, t0, duration)
+
+    Returns:
+        CheckResult with data gap metrics (metrics-only; no pass/fail)
+
+    Novelty: standard
+
+    References:
+        [1] Guerrero et al. 2021, ApJS 254, 39 (2021ApJS..254...39G)
+            Section 3.2: TESS TOI data quality and gap-edge artifacts
+        [2] Twicken et al. 2018, PASP 130, 064502 (2018PASP..130f4502T)
+            Section 4: Data validation diagnostic tests
+    """
+    internal_lc = lc.to_internal()
+    internal_config = DataGapConfig(**config) if config else None
+    result = _check_data_gaps(
+        lightcurve=internal_lc,
+        period=ephemeris.period_days,
+        t0=ephemeris.t0_btjd,
+        duration_hours=ephemeris.duration_hours,
+        config=internal_config,
+    )
+    return _apply_policy_mode(_convert_result(result), policy_mode=policy_mode)
+
+
+@cites(
+    cite(GUERRERO_2021, "§3.2 TESS TOI vetting including systematic artifact checks"),
+    cite(THOMPSON_2018, "§3 Robovetter false alarm diagnostics"),
+)
+def transit_asymmetry(
+    lc: LightCurve,
+    ephemeris: Ephemeris,
+    *,
+    config: dict[str, Any] | None = None,
+    policy_mode: str = "metrics_only",
+) -> CheckResult:
+    """V15: Transit-window asymmetry (ramp/step proxy).
+
+    Checks for asymmetry between ingress and egress sides of the transit
+    window. Significant asymmetry suggests systematic artifacts (ramps,
+    steps) rather than astrophysical transits.
+
+    Args:
+        lc: Light curve data
+        ephemeris: Transit ephemeris (period, t0, duration)
+
+    Returns:
+        CheckResult with asymmetry metrics (metrics-only; no pass/fail)
+
+    Novelty: standard
+
+    References:
+        [1] Guerrero et al. 2021, ApJS 254, 39 (2021ApJS..254...39G)
+            Section 3.2: TESS TOI vetting including systematic artifact checks
+        [2] Thompson et al. 2018, ApJS 235, 38 (2018ApJS..235...38T)
+            Section 3: Robovetter false alarm diagnostics
+    """
+    internal_lc = lc.to_internal()
+    internal_config = AsymmetryConfig(**config) if config else None
+    result = _check_transit_asymmetry(
+        lightcurve=internal_lc,
+        period=ephemeris.period_days,
+        t0=ephemeris.t0_btjd,
+        duration_hours=ephemeris.duration_hours,
+        config=internal_config,
+    )
+    return _apply_policy_mode(_convert_result(result), policy_mode=policy_mode)
+
+
 # Define the default enabled checks and their order
-_DEFAULT_CHECKS = ["V01", "V02", "V03", "V04", "V05"]
+_DEFAULT_CHECKS = ["V01", "V02", "V03", "V04", "V05", "V13", "V15"]
 
 
 @cites(
@@ -379,10 +479,10 @@ def vet_lc_only(
     config: dict[str, dict[str, Any]] | None = None,
     policy_mode: str = "metrics_only",
 ) -> list[CheckResult]:
-    """Run all LC-only vetting checks (V01-V05).
+    """Run all LC-only vetting checks (V01-V05, V13, V15).
 
     This is the main orchestrator function for light-curve-only vetting.
-    Runs checks in order V01-V05, optionally filtered by the enabled set.
+    Runs checks in order V01-V05, V13, V15, optionally filtered by the enabled set.
 
     Args:
         lc: Light curve data
@@ -436,6 +536,14 @@ def vet_lc_only(
         elif check_id == "V05":
             results.append(
                 v_shape(lc, ephemeris, config=config.get("V05"), policy_mode=policy_mode)
+            )
+        elif check_id == "V13":
+            results.append(
+                data_gaps(lc, ephemeris, config=config.get("V13"), policy_mode=policy_mode)
+            )
+        elif check_id == "V15":
+            results.append(
+                transit_asymmetry(lc, ephemeris, config=config.get("V15"), policy_mode=policy_mode)
             )
 
     return results

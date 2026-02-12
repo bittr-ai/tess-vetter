@@ -127,6 +127,36 @@ class VettingBundleResult(BaseModel):
                 return r
         return None
 
+    @classmethod
+    def from_checks(
+        cls,
+        results: list[CheckResult],
+        *,
+        warnings: list[str] | None = None,
+    ) -> VettingBundleResult:
+        """Construct a VettingBundleResult from a list of CheckResult objects.
+
+        Lightweight factory for building bundles without the full pipeline
+        context. Useful for assembling LC-only results into a bundle for
+        downstream consumers (plotting summary figures, metrics tables, etc.).
+
+        Args:
+            results: List of CheckResult objects to bundle.
+            warnings: Optional list of warning messages.
+
+        Returns:
+            VettingBundleResult with the given results and minimal provenance.
+        """
+        return cls(
+            results=list(results),
+            warnings=warnings or [],
+            provenance={
+                "source": "from_checks",
+                "checks_run": len(results),
+            },
+            inputs_summary={},
+        )
+
 
 def ok_result(
     id: str,

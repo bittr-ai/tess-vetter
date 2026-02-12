@@ -447,12 +447,14 @@ if TYPE_CHECKING:
         compute_spatial_uniformity,
     )
 
-    # LC-only checks (V01-V05)
+    # LC-only checks (V01-V05, V13, V15)
     from bittr_tess_vetter.api.lc_only import (
+        data_gaps,
         depth_stability,
         duration_consistency,
         odd_even_depth,
         secondary_eclipse,
+        transit_asymmetry,
         v_shape,
         vet_lc_only,
     )
