@@ -1,6 +1,6 @@
 import numpy as np
 
-from bittr_tess_vetter.api.timing import analyze_ttvs, measure_transit_times
+from bittr_tess_vetter.api.timing import analyze_ttvs, measure_transit_times, timing_series
 from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 
 
@@ -124,3 +124,36 @@ def test_measure_transit_times_ignores_nans_via_valid_mask() -> None:
     times = measure_transit_times(lc, cand, min_snr=2.0)
 
     assert all(np.isfinite(t.tc) for t in times)
+
+
+def test_timing_series_contains_epoch_oc_and_snr() -> None:
+    cadence_seconds = 120.0
+    cadence_days = cadence_seconds / 86400.0
+    time = (1500.0 + np.arange(20000) * cadence_days).astype(np.float64)
+    period_days = 3.5
+    t0_btjd = 1500.5
+    duration_hours = 2.4
+    depth = 0.01
+
+    rng = np.random.default_rng(7)
+    flux = np.ones_like(time) + rng.normal(0, 2e-4, len(time))
+    flux_err = np.full_like(time, 2e-4)
+    flux = _inject_box_transits(
+        time,
+        flux,
+        period_days=period_days,
+        t0_btjd=t0_btjd,
+        duration_hours=duration_hours,
+        depth=depth,
+    )
+
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    cand = Candidate(
+        ephemeris=Ephemeris(period_days=period_days, t0_btjd=t0_btjd, duration_hours=duration_hours)
+    )
+
+    series = timing_series(lc, cand, min_snr=2.0)
+    assert series.n_points >= 3
+    assert len(series.points) == series.n_points
+    assert all(np.isfinite(p.oc_seconds) for p in series.points)
+    assert all(p.snr >= 2.0 for p in series.points)

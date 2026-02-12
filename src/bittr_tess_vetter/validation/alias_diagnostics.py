@@ -46,6 +46,38 @@ class PhaseShiftEvent:
     n_points: int
 
 
+@dataclass
+class HarmonicPowerSummary:
+    """Compact harmonic summary around the candidate period."""
+
+    base_period: float
+    base_t0: float
+    duration_hours: float
+    harmonics: list[HarmonicScore]
+    best_harmonic: str
+    best_ratio_over_p: float
+
+    def to_dict(self) -> dict[str, object]:
+        """Convert to a JSON-serializable dictionary."""
+        return {
+            "base_period": self.base_period,
+            "base_t0": self.base_t0,
+            "duration_hours": self.duration_hours,
+            "best_harmonic": self.best_harmonic,
+            "best_ratio_over_p": self.best_ratio_over_p,
+            "harmonics": [
+                {
+                    "harmonic": h.harmonic,
+                    "period": h.period,
+                    "score": h.score,
+                    "depth_ppm": h.depth_ppm,
+                    "duration_hours": h.duration_hours,
+                }
+                for h in self.harmonics
+            ],
+        }
+
+
 def _compute_box_depth(
     time: NDArray[np.floating[Any]],
     flux: NDArray[np.floating[Any]],
@@ -278,13 +310,50 @@ def classify_alias(
     return "NONE", "P", ratio
 
 
+def summarize_harmonic_power(
+    time: NDArray[np.floating[Any]],
+    flux: NDArray[np.floating[Any]],
+    flux_err: NDArray[np.floating[Any]],
+    base_period: float,
+    base_t0: float,
+    *,
+    duration_hours: float,
+) -> HarmonicPowerSummary:
+    """Summarize alias power at P, P/2, and 2P only."""
+    harmonics = ["P", "P/2", "2P"]
+    scores = compute_harmonic_scores(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        base_period=base_period,
+        base_t0=base_t0,
+        harmonics=harmonics,
+        duration_hours=duration_hours,
+    )
+    base_score = next((s.score for s in scores if s.harmonic == "P"), 0.0)
+    _alias_class, best_harmonic, ratio = classify_alias(
+        scores,
+        base_score=base_score,
+    )
+    return HarmonicPowerSummary(
+        base_period=float(base_period),
+        base_t0=float(base_t0),
+        duration_hours=float(duration_hours),
+        harmonics=scores,
+        best_harmonic=best_harmonic,
+        best_ratio_over_p=float(ratio),
+    )
+
+
 __all__ = [
     "AliasClass",
     "HarmonicScore",
+    "HarmonicPowerSummary",
     "PhaseShiftEvent",
     "HARMONIC_LABELS",
     "classify_alias",
     "compute_harmonic_scores",
     "compute_secondary_significance",
     "detect_phase_shift_events",
+    "summarize_harmonic_power",
 ]

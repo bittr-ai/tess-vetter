@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 
 import numpy as np
+import pytest
 
 from bittr_tess_vetter.api.types import (
     Candidate,
@@ -31,8 +32,6 @@ from bittr_tess_vetter.report import (
     ReportData,
     build_report,
 )
-import pytest
-
 from bittr_tess_vetter.report._build import (
     _bin_phase_data,
     _downsample_phase_preserving_transit,
@@ -40,7 +39,6 @@ from bittr_tess_vetter.report._build import (
     _validate_build_inputs,
 )
 from bittr_tess_vetter.report._data import _scrub_non_finite
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -218,6 +216,8 @@ def test_build_report_integration() -> None:
     assert report.per_transit_stack is not None
     assert report.local_detrend is not None
     assert report.oot_context is not None
+    assert report.timing_series is not None
+    assert report.alias_summary is not None
     assert report.odd_even_phase is not None
     assert report.secondary_scan is not None
     assert report.secondary_scan.quality is not None
@@ -319,6 +319,16 @@ def test_json_schema_keys_and_types() -> None:
     assert isinstance(j["oot_context"]["hist_centers"], list)
     assert isinstance(j["oot_context"]["hist_counts"], list)
     assert isinstance(j["oot_context"]["n_oot_points"], int)
+    assert isinstance(j["timing_series"], dict)
+    assert isinstance(j["timing_series"]["epochs"], list)
+    assert isinstance(j["timing_series"]["oc_seconds"], list)
+    assert isinstance(j["timing_series"]["snr"], list)
+    assert isinstance(j["alias_summary"], dict)
+    assert isinstance(j["alias_summary"]["harmonic_labels"], list)
+    assert isinstance(j["alias_summary"]["periods"], list)
+    assert isinstance(j["alias_summary"]["scores"], list)
+    assert isinstance(j["alias_summary"]["best_harmonic"], str)
+    assert isinstance(j["alias_summary"]["best_ratio_over_p"], float)
     assert isinstance(j["odd_even_phase"], dict)
     assert isinstance(j["odd_even_phase"]["odd_phase"], list)
     assert isinstance(j["odd_even_phase"]["even_phase"], list)
@@ -444,10 +454,10 @@ def test_downsampling_respects_max_points_and_preserves_transits() -> None:
 
     # Verify the transit mask marks actual transits (flux dips)
     transit_flux = [
-        f for f, m in zip(report.full_lc.flux, report.full_lc.transit_mask) if m
+        f for f, m in zip(report.full_lc.flux, report.full_lc.transit_mask, strict=True) if m
     ]
     oot_flux = [
-        f for f, m in zip(report.full_lc.flux, report.full_lc.transit_mask) if not m
+        f for f, m in zip(report.full_lc.flux, report.full_lc.transit_mask, strict=True) if not m
     ]
     assert np.mean(transit_flux) < np.mean(oot_flux)
 

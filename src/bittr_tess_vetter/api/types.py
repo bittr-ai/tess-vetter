@@ -33,7 +33,14 @@ from bittr_tess_vetter.activity.result import ActivityResult, Flare
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.domain.target import StellarParameters
 from bittr_tess_vetter.recovery.result import StackedTransit, TrapezoidFit
-from bittr_tess_vetter.transit.result import OddEvenResult, TransitTime, TTVResult
+from bittr_tess_vetter.transit.result import (
+    OddEvenResult,
+    TransitTime,
+    TransitTimingPoint,
+    TransitTimingSeries,
+    TTVResult,
+)
+from bittr_tess_vetter.validation.alias_diagnostics import HarmonicPowerSummary
 
 # Canonical result types from validation module (single source of truth)
 from bittr_tess_vetter.validation.result_schema import (
@@ -59,8 +66,11 @@ __all__ = [
     "StellarParams",
     "TPFStamp",
     "TransitTime",
+    "TransitTimingPoint",
+    "TransitTimingSeries",
     "TrapezoidFit",
     "TTVResult",
+    "HarmonicPowerSummary",
     "VettingBundleResult",
     # Helper functions for creating results
     "error_result",
@@ -315,5 +325,4 @@ class TPFStamp:
     def stamp_shape(self) -> tuple[int, int]:
         """Return (n_rows, n_cols)."""
         return (self.flux.shape[1], self.flux.shape[2])
-
 

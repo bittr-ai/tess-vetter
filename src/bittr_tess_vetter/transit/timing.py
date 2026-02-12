@@ -16,7 +16,12 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy.optimize import minimize
 
-from bittr_tess_vetter.transit.result import TransitTime, TTVResult
+from bittr_tess_vetter.transit.result import (
+    TransitTime,
+    TransitTimingPoint,
+    TransitTimingSeries,
+    TTVResult,
+)
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -444,6 +449,56 @@ def compute_ttv_statistics(
         periodicity_sigma=periodicity_sigma,
         n_transits=len(flagged_times),
         linear_trend=linear_trend,
+    )
+
+
+def build_timing_series(
+    transit_times: list[TransitTime],
+    period: float,
+    t0: float,
+) -> TransitTimingSeries:
+    """Build per-epoch timing diagnostics from measured transit times."""
+    if len(transit_times) == 0:
+        return TransitTimingSeries(
+            points=[],
+            n_points=0,
+            rms_seconds=None,
+            periodicity_sigma=None,
+            linear_trend_sec_per_epoch=None,
+        )
+
+    expected_duration = float(np.median([t.duration_hours for t in transit_times]))
+    ttv = compute_ttv_statistics(
+        transit_times=transit_times,
+        period=period,
+        t0=t0,
+        expected_duration_hours=expected_duration,
+    )
+
+    points: list[TransitTimingPoint] = []
+    for tt, oc in zip(ttv.transit_times, ttv.o_minus_c, strict=False):
+        points.append(
+            TransitTimingPoint(
+                epoch=int(tt.epoch),
+                tc_btjd=float(tt.tc),
+                tc_err_days=float(tt.tc_err),
+                oc_seconds=float(oc),
+                snr=float(tt.snr),
+                depth_ppm=float(tt.depth_ppm),
+                duration_hours=float(tt.duration_hours),
+                is_outlier=bool(tt.is_outlier),
+                outlier_reason=tt.outlier_reason,
+            )
+        )
+
+    return TransitTimingSeries(
+        points=points,
+        n_points=len(points),
+        rms_seconds=float(ttv.rms_seconds),
+        periodicity_sigma=float(ttv.periodicity_sigma),
+        linear_trend_sec_per_epoch=(
+            float(ttv.linear_trend) if ttv.linear_trend is not None else None
+        ),
     )
 
 

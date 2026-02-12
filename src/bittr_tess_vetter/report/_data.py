@@ -191,6 +191,29 @@ class OOTContextPlotData:
     n_oot_points: int
 
 
+@dataclass(frozen=True)
+class TransitTimingPlotData:
+    """Per-epoch timing diagnostics for LC-only triage."""
+
+    epochs: list[int]
+    oc_seconds: list[float]
+    snr: list[float]
+    rms_seconds: float | None
+    periodicity_sigma: float | None
+    linear_trend_sec_per_epoch: float | None
+
+
+@dataclass(frozen=True)
+class AliasHarmonicSummaryData:
+    """Compact harmonic score summary for P, P/2, and 2P."""
+
+    harmonic_labels: list[str]
+    periods: list[float]
+    scores: list[float]
+    best_harmonic: str
+    best_ratio_over_p: float
+
+
 def _scrub_non_finite(obj: Any) -> Any:
     """Replace NaN/Inf float values with None for JSON safety (RFC 8259)."""
     if isinstance(obj, float):
@@ -240,6 +263,8 @@ class ReportData:
     per_transit_stack: PerTransitStackPlotData | None = None
     local_detrend: LocalDetrendDiagnosticPlotData | None = None
     oot_context: OOTContextPlotData | None = None
+    timing_series: TransitTimingPlotData | None = None
+    alias_summary: AliasHarmonicSummaryData | None = None
     odd_even_phase: OddEvenPhasePlotData | None = None
     secondary_scan: SecondaryScanPlotData | None = None
 
@@ -306,6 +331,10 @@ class ReportData:
             result["local_detrend"] = asdict(self.local_detrend)
         if self.oot_context is not None:
             result["oot_context"] = asdict(self.oot_context)
+        if self.timing_series is not None:
+            result["timing_series"] = asdict(self.timing_series)
+        if self.alias_summary is not None:
+            result["alias_summary"] = asdict(self.alias_summary)
         if self.odd_even_phase is not None:
             result["odd_even_phase"] = asdict(self.odd_even_phase)
         if self.secondary_scan is not None:

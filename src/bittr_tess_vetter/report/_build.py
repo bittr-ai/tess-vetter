@@ -12,7 +12,9 @@ from typing import Any
 
 import numpy as np
 
+from bittr_tess_vetter.api.alias_diagnostics import harmonic_power_summary
 from bittr_tess_vetter.api.lc_only import vet_lc_only
+from bittr_tess_vetter.api.timing import timing_series
 from bittr_tess_vetter.api.types import (
     Candidate,
     Ephemeris,
@@ -26,6 +28,7 @@ from bittr_tess_vetter.compute.transit import (
     measure_depth,
 )
 from bittr_tess_vetter.report._data import (
+    AliasHarmonicSummaryData,
     FullLCPlotData,
     LCSummary,
     LocalDetrendDiagnosticPlotData,
@@ -35,9 +38,10 @@ from bittr_tess_vetter.report._data import (
     PerTransitStackPlotData,
     PhaseFoldedPlotData,
     ReportData,
+    SecondaryScanPlotData,
     SecondaryScanQuality,
     SecondaryScanRenderHints,
-    SecondaryScanPlotData,
+    TransitTimingPlotData,
     TransitWindowData,
 )
 from bittr_tess_vetter.validation.base import (
@@ -59,6 +63,7 @@ def _validate_build_inputs(
     max_phase_points: int,
     max_transit_windows: int,
     max_points_per_window: int,
+    max_timing_points: int = 200,
 ) -> None:
     """Validate numeric inputs for build_report().
 
@@ -96,6 +101,7 @@ def _validate_build_inputs(
     _validate_point_budget("max_phase_points", max_phase_points)
     _validate_point_budget("max_transit_windows", max_transit_windows)
     _validate_point_budget("max_points_per_window", max_points_per_window)
+    _validate_point_budget("max_timing_points", max_timing_points)
 
 
 def build_report(
@@ -113,6 +119,7 @@ def build_report(
     include_additional_plots: bool = True,
     max_transit_windows: int = 24,
     max_points_per_window: int = 300,
+    max_timing_points: int = 200,
 ) -> ReportData:
     """Assemble LC-only report data packet.
 
@@ -139,6 +146,7 @@ def build_report(
         max_transit_windows: Max number of transit windows to include
             in the per-transit stack panel.
         max_points_per_window: Max points per per-transit window.
+        max_timing_points: Max per-epoch points for timing series.
 
     Returns:
         ReportData with all Phase 1 contents populated.
@@ -153,6 +161,7 @@ def build_report(
         max_phase_points,
         max_transit_windows,
         max_points_per_window,
+        max_timing_points,
     )
 
     # 1. Determine enabled checks
@@ -191,6 +200,8 @@ def build_report(
     per_transit_stack: PerTransitStackPlotData | None = None
     local_detrend: LocalDetrendDiagnosticPlotData | None = None
     oot_context: OOTContextPlotData | None = None
+    timing_diag: TransitTimingPlotData | None = None
+    alias_diag: AliasHarmonicSummaryData | None = None
     odd_even_phase: OddEvenPhasePlotData | None = None
     secondary_scan: SecondaryScanPlotData | None = None
     if include_additional_plots:
@@ -217,6 +228,15 @@ def build_report(
             ephemeris,
             max_points=max_phase_points,
         )
+        timing_diag = _build_timing_series_plot_data(
+            lc,
+            candidate,
+            max_points=max_timing_points,
+        )
+        alias_diag = _build_alias_harmonic_summary_data(
+            lc,
+            candidate,
+        )
         secondary_scan = _build_secondary_scan_plot_data(
             lc,
             ephemeris,
@@ -238,6 +258,8 @@ def build_report(
         per_transit_stack=per_transit_stack,
         local_detrend=local_detrend,
         oot_context=oot_context,
+        timing_series=timing_diag,
+        alias_summary=alias_diag,
         odd_even_phase=odd_even_phase,
         secondary_scan=secondary_scan,
         checks_run=[r.id for r in results],
@@ -908,6 +930,45 @@ def _build_oot_context_plot_data(
         mad_ppm=mad * 1e6,
         robust_sigma_ppm=robust_sigma * 1e6,
         n_oot_points=n_oot,
+    )
+
+
+def _build_timing_series_plot_data(
+    lc: LightCurve,
+    candidate: Candidate,
+    *,
+    max_points: int,
+) -> TransitTimingPlotData:
+    """Build timing diagnostics payload from API-level timing series."""
+    series = timing_series(lc, candidate, min_snr=2.0)
+    points = series.points
+    if len(points) > max_points:
+        pick = np.round(np.linspace(0, len(points) - 1, max_points)).astype(int)
+        points = [points[int(i)] for i in pick]
+
+    return TransitTimingPlotData(
+        epochs=[int(p.epoch) for p in points],
+        oc_seconds=[float(p.oc_seconds) for p in points],
+        snr=[float(p.snr) for p in points],
+        rms_seconds=series.rms_seconds,
+        periodicity_sigma=series.periodicity_sigma,
+        linear_trend_sec_per_epoch=series.linear_trend_sec_per_epoch,
+    )
+
+
+def _build_alias_harmonic_summary_data(
+    lc: LightCurve,
+    candidate: Candidate,
+) -> AliasHarmonicSummaryData:
+    """Build compact harmonic summary payload from API diagnostics."""
+    summary = harmonic_power_summary(lc, candidate)
+    harmonics = summary.harmonics
+    return AliasHarmonicSummaryData(
+        harmonic_labels=[str(h.harmonic) for h in harmonics],
+        periods=[float(h.period) for h in harmonics],
+        scores=[float(h.score) for h in harmonics],
+        best_harmonic=str(summary.best_harmonic),
+        best_ratio_over_p=float(summary.best_ratio_over_p),
     )
 
 

@@ -40,6 +40,59 @@ class TransitTime:
 
 
 @dataclass(frozen=True)
+class TransitTimingPoint:
+    """Per-epoch transit timing point for diagnostics.
+
+    Bundles timing residual, per-transit significance, and quality flags
+    in one row-oriented structure.
+    """
+
+    epoch: int
+    tc_btjd: float
+    tc_err_days: float
+    oc_seconds: float
+    snr: float
+    depth_ppm: float
+    duration_hours: float
+    is_outlier: bool
+    outlier_reason: str | None
+
+
+@dataclass(frozen=True)
+class TransitTimingSeries:
+    """Transit timing diagnostics series for API/report consumption."""
+
+    points: list[TransitTimingPoint]
+    n_points: int
+    rms_seconds: float | None
+    periodicity_sigma: float | None
+    linear_trend_sec_per_epoch: float | None
+
+    def to_dict(self) -> dict[str, object]:
+        """Convert to a JSON-serializable dictionary."""
+        return {
+            "n_points": self.n_points,
+            "rms_seconds": self.rms_seconds,
+            "periodicity_sigma": self.periodicity_sigma,
+            "linear_trend_sec_per_epoch": self.linear_trend_sec_per_epoch,
+            "points": [
+                {
+                    "epoch": p.epoch,
+                    "tc_btjd": p.tc_btjd,
+                    "tc_err_days": p.tc_err_days,
+                    "oc_seconds": p.oc_seconds,
+                    "snr": p.snr,
+                    "depth_ppm": p.depth_ppm,
+                    "duration_hours": p.duration_hours,
+                    "is_outlier": p.is_outlier,
+                    "outlier_reason": p.outlier_reason,
+                }
+                for p in self.points
+            ],
+        }
+
+
+@dataclass(frozen=True)
 class TTVResult:
     """Transit timing variation analysis summary.
 

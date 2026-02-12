@@ -29,9 +29,12 @@ from bittr_tess_vetter.transit.batman_model import (
 from bittr_tess_vetter.transit.result import (
     OddEvenResult,
     TransitTime,
+    TransitTimingPoint,
+    TransitTimingSeries,
     TTVResult,
 )
 from bittr_tess_vetter.transit.timing import (
+    build_timing_series,
     compute_ttv_statistics,
     measure_all_transit_times,
     measure_single_transit,
@@ -59,6 +62,7 @@ __all__ = [
     "measure_single_transit",
     "measure_all_transit_times",
     "compute_ttv_statistics",
+    "build_timing_series",
     # Vetting primitives
     "split_odd_even",
     "compare_odd_even_depths",
@@ -71,6 +75,8 @@ __all__ = [
     "compute_derived_parameters",
     # Result types
     "TransitTime",
+    "TransitTimingPoint",
+    "TransitTimingSeries",
     "TTVResult",
     "OddEvenResult",
     "TransitFitResult",

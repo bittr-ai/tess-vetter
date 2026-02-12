@@ -7,7 +7,9 @@ from bittr_tess_vetter.api.alias_diagnostics import (
     compute_harmonic_scores,
     compute_secondary_significance,
     detect_phase_shift_events,
+    harmonic_power_summary,
 )
+from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 
 
 def _box_events(time: np.ndarray, *, period: float, t0: float, duration_days: float) -> np.ndarray:
@@ -133,3 +135,32 @@ def test_detect_phase_shift_events_finds_non_primary_bin() -> None:
     )
 
     assert any(0.15 < e.phase < 0.35 for e in events)
+
+
+def test_harmonic_power_summary_returns_compact_triplet() -> None:
+    rng = np.random.default_rng(5)
+    time = np.linspace(0.0, 30.0, 5000, dtype=np.float64)
+    flux_err = np.full_like(time, 1e-3)
+    period_days = 5.0
+    t0_btjd = 0.0
+    duration_hours = 2.0
+    duration_days = duration_hours / 24.0
+
+    in_transit = _box_events(time, period=period_days, t0=t0_btjd, duration_days=duration_days)
+    flux = np.ones_like(time)
+    flux[in_transit] -= 0.01
+    flux += rng.normal(0.0, 2e-4, size=flux.shape)
+
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    cand = Candidate(
+        ephemeris=Ephemeris(
+            period_days=period_days,
+            t0_btjd=t0_btjd,
+            duration_hours=duration_hours,
+        )
+    )
+
+    summary = harmonic_power_summary(lc, cand)
+    labels = [h.harmonic for h in summary.harmonics]
+    assert labels == ["P", "P/2", "2P"]
+    assert summary.best_harmonic in {"P", "P/2", "2P"}

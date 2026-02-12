@@ -33,8 +33,13 @@ from bittr_tess_vetter.api.references import (
     cites,
 )
 from bittr_tess_vetter.api.types import Candidate, LightCurve
-from bittr_tess_vetter.transit.result import TransitTime, TTVResult
+from bittr_tess_vetter.transit.result import (
+    TransitTime,
+    TransitTimingSeries,
+    TTVResult,
+)
 from bittr_tess_vetter.transit.timing import (
+    build_timing_series,
     compute_ttv_statistics,
     measure_all_transit_times,
 )
@@ -43,9 +48,11 @@ from bittr_tess_vetter.transit.timing import (
 __all__ = [
     "REFERENCES",
     "TransitTime",
+    "TransitTimingSeries",
     "TTVResult",
     "analyze_ttvs",
     "measure_transit_times",
+    "timing_series",
 ]
 
 # Module-level references for programmatic access (generated from central registry)
@@ -191,4 +198,24 @@ def analyze_ttvs(
         period=period_days,
         t0=t0_btjd,
         expected_duration_hours=expected_duration,
+    )
+
+
+@cites(
+    cite(IVSHINA_WINN_2022, "§3 transit time template fitting"),
+    cite(FORD_2012, "Kepler TTV detection methodology"),
+)
+def timing_series(
+    lc: LightCurve,
+    candidate: Candidate,
+    *,
+    min_snr: float = 2.0,
+) -> TransitTimingSeries:
+    """Measure and summarize per-transit O-C + significance series."""
+    transit_times = measure_transit_times(lc, candidate, min_snr=min_snr)
+    eph = candidate.ephemeris
+    return build_timing_series(
+        transit_times=transit_times,
+        period=eph.period_days,
+        t0=eph.t0_btjd,
     )

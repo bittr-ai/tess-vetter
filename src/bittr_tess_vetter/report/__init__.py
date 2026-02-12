@@ -11,6 +11,7 @@ Public API:
 
 from bittr_tess_vetter.report._build import build_report
 from bittr_tess_vetter.report._data import (
+    AliasHarmonicSummaryData,
     FullLCPlotData,
     LCSummary,
     LocalDetrendDiagnosticPlotData,
@@ -20,9 +21,10 @@ from bittr_tess_vetter.report._data import (
     PerTransitStackPlotData,
     PhaseFoldedPlotData,
     ReportData,
+    SecondaryScanPlotData,
     SecondaryScanQuality,
     SecondaryScanRenderHints,
-    SecondaryScanPlotData,
+    TransitTimingPlotData,
     TransitWindowData,
 )
 from bittr_tess_vetter.report._render_html import render_html
@@ -32,6 +34,7 @@ __all__ = [
     "render_html",
     "ReportData",
     "LCSummary",
+    "AliasHarmonicSummaryData",
     "FullLCPlotData",
     "PhaseFoldedPlotData",
     "TransitWindowData",
@@ -39,6 +42,7 @@ __all__ = [
     "LocalDetrendWindowData",
     "LocalDetrendDiagnosticPlotData",
     "OOTContextPlotData",
+    "TransitTimingPlotData",
     "OddEvenPhasePlotData",
     "SecondaryScanPlotData",
     "SecondaryScanQuality",
