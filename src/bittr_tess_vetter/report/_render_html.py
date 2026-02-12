@@ -476,7 +476,7 @@ def _enrichment_section(data: dict[str, Any]) -> str:
     return f"""\
 <div class="checks-panel">
   <h2>Enrichment Summary</h2>
-  <p class="section-note">Optional non-LC context blocks with deterministic status and provenance.</p>
+  <p class="section-note">Operational block status only (not scientific pass/fail).</p>
   <div class="checks-grid">
 {"".join(cards)}
   </div>
@@ -498,6 +498,7 @@ def _enrichment_block_card(label: str, block: dict[str, Any] | None) -> str:
         payload = dict(block.get("payload", {}))
 
     status_cls = status if status in {"ok", "error", "skipped"} else "skipped"
+    status_label = {"ok": "READY", "error": "ERROR", "skipped": "SKIPPED"}[status_cls]
     flags_html = (
         f'<div class="check-flags">{_esc(", ".join(str(f) for f in flags))}</div>' if flags else ""
     )
@@ -539,7 +540,7 @@ def _enrichment_block_card(label: str, block: dict[str, Any] | None) -> str:
     <div class="check-card {status_cls}">
       <div class="check-header">
         <span class="check-id">{_esc(label)}</span>
-        <span class="check-status {status_cls}">{_esc(status)}</span>
+        <span class="check-status {status_cls}">{_esc(status_label)}</span>
       </div>
       {quality_html}
       {prov_html}

@@ -19,6 +19,7 @@ from bittr_tess_vetter.api.types import (
     StellarParams,
     VettingBundleResult,
 )
+from bittr_tess_vetter.report.schema import ReportPayloadModel
 
 
 @dataclass(frozen=True)
@@ -503,4 +504,6 @@ class ReportData:
                 "plot_data_hash": _canonical_sha256(plot_data),
             },
         }
-        return _scrub_non_finite(result)
+        result = _scrub_non_finite(result)
+        # Enforce typed payload contract at the producer boundary.
+        return ReportPayloadModel.model_validate(result).model_dump(exclude_none=True)

@@ -249,8 +249,8 @@ def test_json_schema_keys_and_types() -> None:
 
     s = j["summary"]
     p = j["plot_data"]
-    assert s["tic_id"] is None  # not provided
-    assert s["toi"] is None
+    assert s.get("tic_id") is None  # not provided
+    assert s.get("toi") is None
     assert isinstance(s["checks_run"], list)
     assert isinstance(s["checks"], dict)
 

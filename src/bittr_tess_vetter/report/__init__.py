@@ -35,11 +35,31 @@ from bittr_tess_vetter.report._data import (
     TransitWindowData,
 )
 from bittr_tess_vetter.report._render_html import render_html, render_html_from_payload
+from bittr_tess_vetter.report.field_catalog import FIELD_CATALOG, FieldKey, FieldSpec
+from bittr_tess_vetter.report.schema import (
+    BundleSummaryModel,
+    CheckSummaryModel,
+    ReportPayloadMetaModel,
+    ReportPayloadModel,
+    ReportPlotDataModel,
+    ReportSummaryModel,
+    report_payload_json_schema,
+)
 
 __all__ = [
     "build_report",
     "render_html",
     "render_html_from_payload",
+    "report_payload_json_schema",
+    "ReportPayloadModel",
+    "ReportSummaryModel",
+    "ReportPlotDataModel",
+    "ReportPayloadMetaModel",
+    "CheckSummaryModel",
+    "BundleSummaryModel",
+    "FieldKey",
+    "FieldSpec",
+    "FIELD_CATALOG",
     "ReportData",
     "LCSummary",
     "AliasHarmonicSummaryData",
