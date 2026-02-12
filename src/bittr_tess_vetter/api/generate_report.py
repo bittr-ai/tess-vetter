@@ -14,6 +14,8 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
 from typing import Any
 
@@ -276,7 +278,9 @@ def _build_enrichment_data(
             catalog_block = _skipped_enrichment_block("NETWORK_BUDGET_EXHAUSTED")
         else:
             try:
-                catalog_block = _run_catalog_context(
+                catalog_block = _invoke_block_with_timeout(
+                    timeout_seconds=config.per_request_timeout_seconds,
+                    func=_run_catalog_context,
                     lc_api=lc_api,
                     candidate_api=candidate_api,
                     tic_id=tic_id,
@@ -289,12 +293,17 @@ def _build_enrichment_data(
             except Exception as exc:
                 if not config.fail_open:
                     raise
+                is_timeout = isinstance(exc, TimeoutError)
                 catalog_block = EnrichmentBlockData(
                     status="error",
-                    flags=["ENRICHMENT_BLOCK_ERROR"],
+                    flags=["ENRICHMENT_TIMEOUT" if is_timeout else "ENRICHMENT_BLOCK_ERROR"],
                     quality={"is_degraded": True},
                     checks={},
-                    provenance={"error": type(exc).__name__, "message": str(exc)},
+                    provenance={
+                        "error": type(exc).__name__,
+                        "message": str(exc),
+                        "timeout_seconds": float(config.per_request_timeout_seconds),
+                    },
                     payload={},
                 )
 
@@ -303,7 +312,9 @@ def _build_enrichment_data(
             pixel_block = _skipped_enrichment_block("NETWORK_BUDGET_EXHAUSTED")
         else:
             try:
-                pixel_block = _run_pixel_diagnostics(
+                pixel_block = _invoke_block_with_timeout(
+                    timeout_seconds=config.per_request_timeout_seconds,
+                    func=_run_pixel_diagnostics,
                     lc_api=lc_api,
                     candidate_api=candidate_api,
                     tic_id=tic_id,
@@ -317,12 +328,17 @@ def _build_enrichment_data(
             except Exception as exc:
                 if not config.fail_open:
                     raise
+                is_timeout = isinstance(exc, TimeoutError)
                 pixel_block = EnrichmentBlockData(
                     status="error",
-                    flags=["ENRICHMENT_BLOCK_ERROR"],
+                    flags=["ENRICHMENT_TIMEOUT" if is_timeout else "ENRICHMENT_BLOCK_ERROR"],
                     quality={"is_degraded": True},
                     checks={},
-                    provenance={"error": type(exc).__name__, "message": str(exc)},
+                    provenance={
+                        "error": type(exc).__name__,
+                        "message": str(exc),
+                        "timeout_seconds": float(config.per_request_timeout_seconds),
+                    },
                     payload={},
                 )
 
@@ -380,6 +396,24 @@ def _tier_bundle(
         dec_deg=dec,
         tic_id=tic_id,
     )
+
+
+def _invoke_block_with_timeout(
+    *,
+    timeout_seconds: float,
+    func: Any,
+    **kwargs: Any,
+) -> EnrichmentBlockData:
+    """Run one enrichment block with timeout semantics."""
+    timeout = max(float(timeout_seconds), 0.0)
+    if timeout <= 0:
+        return func(**kwargs)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(func, **kwargs)
+        try:
+            return future.result(timeout=timeout)
+        except FuturesTimeoutError as exc:
+            raise TimeoutError(f"Block timed out after {timeout:.2f}s") from exc
 
 
 def _block_from_bundle(
@@ -498,19 +532,23 @@ def _select_tpf_sectors(
     lc_api: LightCurve,
     candidate_api: Candidate,
     sector_times: dict[int, np.ndarray] | None = None,
-) -> list[int]:
+    return_scores: bool = False,
+) -> list[int] | tuple[list[int], dict[int, float]]:
     if strategy == "requested":
         if requested:
             req = sorted({int(s) for s in requested})
-            return [s for s in req if s in set(sectors_used)]
-        return []
+            selected = [s for s in req if s in set(sectors_used)]
+            return (selected, {}) if return_scores else selected
+        return ([], {}) if return_scores else []
     if strategy == "all":
-        return sorted(set(sectors_used))
+        selected = sorted(set(sectors_used))
+        return (selected, {}) if return_scores else selected
     # best
     if len(sectors_used) == 0:
-        return []
+        return ([], {}) if return_scores else []
     best_sector = int(min(sectors_used))
     best_score = -1.0
+    scores: dict[int, float] = {}
     for sector in sorted(set(sectors_used)):
         if sector <= 0:
             continue
@@ -531,10 +569,14 @@ def _select_tpf_sectors(
             score = float(np.mean(in_mask)) if len(in_mask) > 0 else 0.0
         else:
             score = 0.0
+        scores[int(sector)] = score
         if score > best_score:
             best_score = score
             best_sector = sector
-    return [best_sector]
+    selected = [best_sector]
+    if return_scores:
+        return selected, scores
+    return selected
 
 
 def _run_pixel_diagnostics(
@@ -551,14 +593,16 @@ def _run_pixel_diagnostics(
 ) -> EnrichmentBlockData:
     if not config.fetch_tpf:
         return _skipped_enrichment_block("TPF_FETCH_DISABLED")
-    sectors_for_tpf = _select_tpf_sectors(
+    select_result = _select_tpf_sectors(
         strategy=config.tpf_sector_strategy,
         sectors_used=sectors_used,
         requested=config.sectors_for_tpf,
         lc_api=lc_api,
         candidate_api=candidate_api,
         sector_times=sector_times,
+        return_scores=True,
     )
+    sectors_for_tpf, sector_scores = select_result
     if len(sectors_for_tpf) == 0:
         return _skipped_enrichment_block("NO_TPF_SECTOR_SELECTED")
 
@@ -617,6 +661,7 @@ def _run_pixel_diagnostics(
                 "block": "pixel_diagnostics",
                 "tic_id": tic_id,
                 "tpf_sector_strategy": config.tpf_sector_strategy,
+                "sector_scores": {str(k): float(v) for k, v in sector_scores.items()},
                 "budget": {
                     "max_pixel_points": max_points,
                     "points_estimate": n_points,
@@ -664,6 +709,7 @@ def _run_pixel_diagnostics(
         provenance_extra={
             "tic_id": tic_id,
             "tpf_sector_strategy": config.tpf_sector_strategy,
+            "sector_scores": {str(k): float(v) for k, v in sector_scores.items()},
             "budget": {
                 "max_pixel_points": int(config.max_pixel_points),
                 "points_estimate": n_points,

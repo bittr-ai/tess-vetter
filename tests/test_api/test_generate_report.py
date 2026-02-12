@@ -372,6 +372,7 @@ def test_pixel_point_budget_enforced_before_pixel_checks(monkeypatch) -> None:
     assert pixel["status"] == "skipped"
     assert "PIXEL_POINT_BUDGET_EXCEEDED" in pixel["flags"]
     assert pixel["provenance"]["budget"]["budget_applied"] is True
+    assert "sector_scores" in pixel["provenance"]
 
 
 def test_enrichment_uses_explicit_stellar_when_tic_lookup_skipped(monkeypatch) -> None:
@@ -404,3 +405,71 @@ def test_enrichment_uses_explicit_stellar_when_tic_lookup_skipped(monkeypatch) -
 
     assert captured["stellar"] is explicit_stellar
     client.get_target_info.assert_not_called()
+
+
+def test_enrichment_timeout_sets_timeout_flag_when_fail_open_true(monkeypatch) -> None:
+    """Timed-out enrichment blocks should return error with ENRICHMENT_TIMEOUT."""
+    client = _mock_client(sectors=[1])
+
+    def _slow_catalog(**kwargs):  # type: ignore[no-untyped-def]
+        import time as _time
+
+        _time.sleep(0.05)
+        return generate_report_api._skipped_enrichment_block("SLOW_CATALOG")
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.api.generate_report._run_catalog_context",
+        _slow_catalog,
+    )
+    cfg = EnrichmentConfig(
+        include_catalog_context=True,
+        include_pixel_diagnostics=False,
+        include_followup_context=False,
+        fail_open=True,
+        per_request_timeout_seconds=0.001,
+    )
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        include_enrichment=True,
+        enrichment_config=cfg,
+    )
+    catalog = result.report_json["enrichment"]["catalog_context"]
+    assert catalog["status"] == "error"
+    assert "ENRICHMENT_TIMEOUT" in catalog["flags"]
+
+
+def test_enrichment_total_budget_exhaustion_skips_remaining_blocks(monkeypatch) -> None:
+    """When total enrichment budget is exhausted, later blocks are skipped deterministically."""
+    client = _mock_client(sectors=[1])
+
+    def _slow_catalog(**kwargs):  # type: ignore[no-untyped-def]
+        import time as _time
+
+        _time.sleep(0.02)
+        return generate_report_api._skipped_enrichment_block("CATALOG_DONE")
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.api.generate_report._run_catalog_context",
+        _slow_catalog,
+    )
+    cfg = EnrichmentConfig(
+        include_catalog_context=True,
+        include_pixel_diagnostics=True,
+        include_followup_context=True,
+        fail_open=True,
+        max_network_seconds=0.001,
+    )
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        include_enrichment=True,
+        enrichment_config=cfg,
+    )
+    enrichment = result.report_json["enrichment"]
+    assert enrichment["pixel_diagnostics"]["status"] == "skipped"
+    assert "NETWORK_BUDGET_EXHAUSTED" in enrichment["pixel_diagnostics"]["flags"]
+    assert enrichment["followup_context"]["status"] == "skipped"
+    assert "NETWORK_BUDGET_EXHAUSTED" in enrichment["followup_context"]["flags"]
