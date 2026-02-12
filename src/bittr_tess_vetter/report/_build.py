@@ -12,21 +12,18 @@ from typing import Any
 
 import numpy as np
 
-from bittr_tess_vetter.api.alias_diagnostics import harmonic_power_summary
-from bittr_tess_vetter.api.lc_only import vet_lc_only
-from bittr_tess_vetter.api.timing import timing_series
-from bittr_tess_vetter.api.types import (
-    Candidate,
-    Ephemeris,
-    LightCurve,
-    StellarParams,
-    VettingBundleResult,
-)
 from bittr_tess_vetter.compute.transit import (
     detect_transit,
     fold_transit,
     measure_depth,
 )
+from bittr_tess_vetter.domain.lightcurve import LightCurveData
+from bittr_tess_vetter.validation.report_bridge import (
+    compute_alias_summary,
+    compute_timing_series,
+    run_lc_checks,
+)
+from bittr_tess_vetter.validation.result_schema import VettingBundleResult
 from bittr_tess_vetter.report._data import (
     AliasHarmonicSummaryData,
     FullLCPlotData,
@@ -63,7 +60,7 @@ _DEFAULT_ENABLED = {"V01", "V02", "V04", "V05", "V13", "V15"}
 
 
 def _validate_build_inputs(
-    ephemeris: Ephemeris,
+    ephemeris: Any,
     bin_minutes: float,
     max_lc_points: int,
     max_phase_points: int,
@@ -113,10 +110,10 @@ def _validate_build_inputs(
 
 
 def build_report(
-    lc: LightCurve,
-    candidate: Candidate,
+    lc: Any,
+    candidate: Any,
     *,
-    stellar: StellarParams | None = None,
+    stellar: Any | None = None,
     tic_id: int | None = None,
     toi: str | None = None,
     include_v03: bool = False,
@@ -133,7 +130,7 @@ def build_report(
 ) -> ReportData:
     """Assemble LC-only report data packet.
 
-    Runs vetting checks via vet_lc_only(), computes LC summary stats
+    Runs LC checks via validation.report_bridge.run_lc_checks(), computes LC summary stats
     and SNR, assembles plot-ready arrays, and returns a ReportData.
 
     Args:
@@ -188,9 +185,12 @@ def build_report(
             enabled.add("V03")
 
     # 2. Run checks
-    results = vet_lc_only(
-        lc,
-        ephemeris,
+    internal_lc = _to_internal_lightcurve(lc)
+    results = run_lc_checks(
+        internal_lc,
+        period_days=ephemeris.period_days,
+        t0_btjd=ephemeris.t0_btjd,
+        duration_hours=ephemeris.duration_hours,
         stellar=stellar,
         enabled=enabled,
         config=check_config,
@@ -289,8 +289,8 @@ def build_report(
 
 
 def _compute_lc_summary(
-    lc: LightCurve,
-    ephemeris: Ephemeris,
+    lc: Any,
+    ephemeris: Any,
 ) -> LCSummary:
     """Compute LC vital signs. ~1ms for typical TESS LC."""
     time = np.asarray(lc.time, dtype=np.float64)
@@ -428,8 +428,8 @@ def _downsample_preserving_transits(
 
 
 def _build_full_lc_plot_data(
-    lc: LightCurve,
-    ephemeris: Ephemeris,
+    lc: Any,
+    ephemeris: Any,
     max_points: int,
 ) -> FullLCPlotData:
     """Build plot-ready arrays for full light curve panel."""
@@ -514,8 +514,8 @@ def _downsample_phase_preserving_transit(
 
 
 def _build_phase_folded_plot_data(
-    lc: LightCurve,
-    ephemeris: Ephemeris,
+    lc: Any,
+    ephemeris: Any,
     bin_minutes: float,
     depth_ppm: float | None = None,
     max_phase_points: int = 10_000,
@@ -636,7 +636,71 @@ def _depth_ppm_to_flux(depth_ppm: float | None) -> float | None:
     return float(1.0 - (depth_ppm / 1e6))
 
 
-def _get_valid_time_flux(lc: LightCurve) -> tuple[np.ndarray, np.ndarray]:
+def _to_internal_lightcurve(lc: Any) -> LightCurveData:
+    """Convert a report input light curve to internal immutable LightCurveData."""
+    to_internal = getattr(lc, "to_internal", None)
+    if callable(to_internal):
+        internal = to_internal()
+        if isinstance(internal, LightCurveData):
+            return internal
+
+    time = np.asarray(lc.time, dtype=np.float64)
+    flux = np.asarray(lc.flux, dtype=np.float64)
+    if time.shape != flux.shape:
+        raise ValueError(
+            f"time and flux must have the same length, got {len(time)} and {len(flux)}"
+        )
+    n_points = len(time)
+
+    flux_err_in = getattr(lc, "flux_err", None)
+    if flux_err_in is not None:
+        flux_err = np.asarray(flux_err_in, dtype=np.float64)
+        if flux_err.shape != time.shape:
+            raise ValueError(
+                "flux_err must have the same length as time/flux, "
+                f"got {len(flux_err)} vs {len(time)}"
+            )
+    else:
+        flux_err = np.zeros(n_points, dtype=np.float64)
+
+    quality_in = getattr(lc, "quality", None)
+    if quality_in is not None:
+        quality = np.asarray(quality_in, dtype=np.int32)
+        if quality.shape != time.shape:
+            raise ValueError(
+                "quality must have the same length as time/flux, "
+                f"got {len(quality)} vs {len(time)}"
+            )
+    else:
+        quality = np.zeros(n_points, dtype=np.int32)
+
+    valid_mask_in = getattr(lc, "valid_mask", None)
+    if valid_mask_in is not None:
+        valid_mask = np.asarray(valid_mask_in, dtype=np.bool_)
+        if valid_mask.shape != time.shape:
+            raise ValueError(
+                "valid_mask must have the same length as time/flux, "
+                f"got {len(valid_mask)} vs {len(time)}"
+            )
+    else:
+        valid_mask = np.ones(n_points, dtype=np.bool_)
+
+    finite_mask = np.isfinite(time) & np.isfinite(flux) & np.isfinite(flux_err)
+    valid_mask = valid_mask & finite_mask
+
+    return LightCurveData(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        quality=quality,
+        valid_mask=valid_mask,
+        tic_id=0,
+        sector=0,
+        cadence_seconds=120.0,
+    )
+
+
+def _get_valid_time_flux(lc: Any) -> tuple[np.ndarray, np.ndarray]:
     """Return finite, mask-filtered time/flux arrays."""
     time = np.asarray(lc.time, dtype=np.float64)
     flux = np.asarray(lc.flux, dtype=np.float64)
@@ -655,8 +719,8 @@ def _thin_evenly(arr: np.ndarray, max_points: int) -> np.ndarray:
 
 
 def _build_per_transit_stack_plot_data(
-    lc: LightCurve,
-    ephemeris: Ephemeris,
+    lc: Any,
+    ephemeris: Any,
     *,
     max_windows: int,
     max_points_per_window: int,
@@ -717,8 +781,8 @@ def _build_per_transit_stack_plot_data(
 
 
 def _build_odd_even_phase_plot_data(
-    lc: LightCurve,
-    ephemeris: Ephemeris,
+    lc: Any,
+    ephemeris: Any,
     *,
     bin_minutes: float,
     max_points: int,
@@ -790,8 +854,8 @@ def _build_odd_even_phase_plot_data(
 
 
 def _build_local_detrend_diagnostic_plot_data(
-    lc: LightCurve,
-    ephemeris: Ephemeris,
+    lc: Any,
+    ephemeris: Any,
     *,
     max_windows: int,
     max_points_per_window: int,
@@ -877,8 +941,8 @@ def _build_local_detrend_diagnostic_plot_data(
 
 
 def _build_oot_context_plot_data(
-    lc: LightCurve,
-    ephemeris: Ephemeris,
+    lc: Any,
+    ephemeris: Any,
     *,
     max_points: int,
 ) -> OOTContextPlotData:
@@ -956,13 +1020,20 @@ def _build_oot_context_plot_data(
 
 
 def _build_timing_series_plot_data(
-    lc: LightCurve,
-    candidate: Candidate,
+    lc: Any,
+    candidate: Any,
     *,
     max_points: int,
 ) -> TransitTimingPlotData:
-    """Build timing diagnostics payload from API-level timing series."""
-    series = timing_series(lc, candidate, min_snr=2.0)
+    """Build timing diagnostics payload from bridge timing series."""
+    eph = candidate.ephemeris
+    series = compute_timing_series(
+        _to_internal_lightcurve(lc),
+        period_days=eph.period_days,
+        t0_btjd=eph.t0_btjd,
+        duration_hours=eph.duration_hours,
+        min_snr=2.0,
+    )
     points = list(series.points)
     if len(points) > max_points:
         outliers = [p for p in points if p.is_outlier]
@@ -992,11 +1063,17 @@ def _build_timing_series_plot_data(
 
 
 def _build_alias_harmonic_summary_data(
-    lc: LightCurve,
-    candidate: Candidate,
+    lc: Any,
+    candidate: Any,
 ) -> AliasHarmonicSummaryData:
-    """Build compact harmonic summary payload from API diagnostics."""
-    summary = harmonic_power_summary(lc, candidate)
+    """Build compact harmonic summary payload from bridge diagnostics."""
+    eph = candidate.ephemeris
+    summary = compute_alias_summary(
+        _to_internal_lightcurve(lc),
+        period_days=eph.period_days,
+        t0_btjd=eph.t0_btjd,
+        duration_hours=eph.duration_hours,
+    )
     harmonics = summary.harmonics
     return AliasHarmonicSummaryData(
         harmonic_labels=[str(h.harmonic) for h in harmonics],
@@ -1008,8 +1085,8 @@ def _build_alias_harmonic_summary_data(
 
 
 def _build_lc_robustness_data(
-    lc: LightCurve,
-    candidate: Candidate,
+    lc: Any,
+    candidate: Any,
     *,
     checks: dict[str, Any],
     max_epochs: int,
@@ -1300,7 +1377,7 @@ def _red_noise_beta(
 def _build_lc_robustness_red_noise(
     time: np.ndarray,
     flux: np.ndarray,
-    ephemeris: Ephemeris,
+    ephemeris: Any,
     *,
     cadence_days: float | None,
 ) -> LCRobustnessRedNoiseMetrics:
@@ -1322,7 +1399,7 @@ def _build_lc_robustness_fp_signals(
     checks: dict[str, Any],
     time: np.ndarray,
     flux: np.ndarray,
-    ephemeris: Ephemeris,
+    ephemeris: Any,
 ) -> LCFPSignals:
     def _metric(check_id: str, key: str) -> float | None:
         check = checks.get(check_id)
@@ -1360,7 +1437,7 @@ def _build_lc_robustness_fp_signals(
 
 
 def _get_valid_time_flux_quality(
-    lc: LightCurve,
+    lc: Any,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     """Return finite, mask-filtered time/flux/(optional)quality arrays."""
     time = np.asarray(lc.time, dtype=np.float64)
@@ -1377,8 +1454,8 @@ def _get_valid_time_flux_quality(
 
 
 def _build_secondary_scan_plot_data(
-    lc: LightCurve,
-    ephemeris: Ephemeris,
+    lc: Any,
+    ephemeris: Any,
     *,
     bin_minutes: float,
     max_points: int,

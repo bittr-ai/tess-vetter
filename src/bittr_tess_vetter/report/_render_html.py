@@ -105,6 +105,8 @@ def render_html_from_payload(payload: dict[str, Any], *, title: str | None = Non
 
 {_checks_section(summary)}
 
+{_bibliography_section(summary)}
+
 <script>
 // Embed report data
 var REPORT = {data_json};
@@ -293,6 +295,29 @@ def _css_block() -> str:
   }}
   .check-notes {{
     font-size: 0.73em; color: {_TEXT_DIM}; margin-top: 2px; font-style: italic;
+  }}
+  .check-methods {{
+    font-size: 0.73em; color: {_TEXT_DIM}; margin-top: 4px;
+  }}
+  .check-methods a {{
+    color: {_ACCENT}; text-decoration: none;
+  }}
+  .check-methods a:hover {{
+    text-decoration: underline;
+  }}
+
+  .bibliography-list {{
+    margin: 0; padding-left: 18px;
+  }}
+  .bibliography-list li {{
+    margin: 0 0 8px 0;
+  }}
+  .bibliography-key {{
+    color: {_ACCENT};
+    font-weight: 700;
+  }}
+  .bibliography-notes {{
+    font-size: 0.73em; color: {_TEXT_DIM};
   }}
 
   .bundle-bar {{
@@ -587,12 +612,85 @@ def _checks_section(data: dict[str, Any]) -> str:
 </div>"""
 
 
+def _slugify(text: str) -> str:
+    parts = [c.lower() if c.isalnum() else "-" for c in text]
+    slug = "".join(parts).strip("-")
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    return slug or "ref"
+
+
+def _bibliography_section(data: dict[str, Any]) -> str:
+    references = data.get("references")
+    if not isinstance(references, list) or not references:
+        return ""
+
+    entries: list[str] = []
+    for ref in references:
+        if not isinstance(ref, dict):
+            continue
+        key = str(ref.get("key", "")).strip()
+        if not key:
+            continue
+
+        anchor_id = f"ref-{_slugify(key)}"
+        citation = ref.get("citation")
+        title = ref.get("title")
+        authors = ref.get("authors")
+        year = ref.get("year")
+        venue = ref.get("venue")
+        doi = ref.get("doi")
+        url = ref.get("url")
+        notes = ref.get("notes")
+
+        if isinstance(citation, str) and citation.strip():
+            body = _esc(citation.strip())
+        else:
+            pieces: list[str] = []
+            if isinstance(authors, list) and authors:
+                pieces.append(", ".join(_esc(str(a)) for a in authors if str(a).strip()))
+            if year is not None:
+                pieces.append(_esc(str(year)))
+            if isinstance(title, str) and title.strip():
+                pieces.append(_esc(title.strip()))
+            if isinstance(venue, str) and venue.strip():
+                pieces.append(_esc(venue.strip()))
+            if isinstance(doi, str) and doi.strip():
+                pieces.append(f"DOI: {_esc(doi.strip())}")
+            if isinstance(url, str) and url.strip():
+                safe_url = _esc(url.strip())
+                pieces.append(f'<a href="{safe_url}" target="_blank" rel="noopener noreferrer">{safe_url}</a>')
+            body = " · ".join(pieces) if pieces else "&mdash;"
+
+        notes_html = ""
+        if isinstance(notes, list) and notes:
+            joined_notes = "; ".join(_esc(str(n)) for n in notes if str(n).strip())
+            if joined_notes:
+                notes_html = f'<div class="bibliography-notes">{joined_notes}</div>'
+
+        entries.append(
+            f'<li id="{_esc(anchor_id)}"><span class="bibliography-key">[{_esc(key)}]</span> {body}{notes_html}</li>'
+        )
+
+    if not entries:
+        return ""
+
+    return f"""\
+<div class="summary-panel">
+  <h2>Bibliography</h2>
+  <ol class="bibliography-list">
+    {"".join(entries)}
+  </ol>
+</div>"""
+
+
 def _check_card(check_id: str, cr: dict[str, Any]) -> str:
     status = cr.get("status", "skipped")
     name = cr.get("name", "")
     metrics = cr.get("metrics", {})
     flags = cr.get("flags", [])
     notes = cr.get("notes", [])
+    method_refs = cr.get("method_refs", [])
 
     # Metrics display
     metrics_html = ""
@@ -612,6 +710,22 @@ def _check_card(check_id: str, cr: dict[str, Any]) -> str:
     if notes:
         notes_html = f'<div class="check-notes">{_esc("; ".join(str(n) for n in notes))}</div>'
 
+    method_refs_html = ""
+    if isinstance(method_refs, list) and method_refs:
+        links = []
+        for ref in method_refs:
+            ref_text = str(ref).strip()
+            if not ref_text:
+                continue
+            links.append(
+                (
+                    f'<a href="#ref-{_esc(_slugify(ref_text))}" '
+                    f'data-method-ref="{_esc(ref_text)}">{_esc(ref_text)}</a>'
+                )
+            )
+        if links:
+            method_refs_html = f'<div class="check-methods"><strong>Methods:</strong> {", ".join(links)}</div>'
+
     return f"""\
     <div class="check-card {_esc(status)}" data-check-id="{_esc(check_id)}">
       <div class="check-header">
@@ -620,6 +734,7 @@ def _check_card(check_id: str, cr: dict[str, Any]) -> str:
         <span class="check-status {_esc(status)}">{_esc(status)}</span>
       </div>
       {metrics_html}
+      {method_refs_html}
       {flags_html}
       {notes_html}
     </div>"""

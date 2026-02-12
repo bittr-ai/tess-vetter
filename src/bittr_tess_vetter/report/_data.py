@@ -13,13 +13,15 @@ import math
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from bittr_tess_vetter.api.types import (
-    Candidate,
-    CheckResult,
-    StellarParams,
-    VettingBundleResult,
+import numpy as np
+
+from bittr_tess_vetter.report._references import (
+    reference_entries,
+    refs_for_check,
+    refs_for_summary_block,
 )
 from bittr_tess_vetter.report.schema import ReportPayloadModel
+from bittr_tess_vetter.validation.result_schema import CheckResult, VettingBundleResult
 
 
 @dataclass(frozen=True)
@@ -350,6 +352,137 @@ def _canonical_sha256(payload: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _coerce_finite_float(value: Any, *, scale: float = 1.0) -> float | None:
+    """Best-effort float coercion with finite guard."""
+    try:
+        out = float(value) * scale
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(out):
+        return None
+    return out
+
+
+def _model_dump_like(value: Any) -> Any:
+    """Serialize model-like objects without requiring pydantic at call sites."""
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    if hasattr(value, "dict"):
+        return value.dict()
+    return value
+
+
+def _build_odd_even_summary(checks: dict[str, CheckResult]) -> dict[str, Any]:
+    """Build deterministic odd/even summary from V01 metrics."""
+    metrics = checks.get("V01").metrics if checks.get("V01") is not None else {}
+    odd_depth_ppm = _coerce_finite_float(metrics.get("depth_odd_ppm"))
+    if odd_depth_ppm is None:
+        odd_depth_ppm = _coerce_finite_float(metrics.get("odd_depth"), scale=1e6)
+    even_depth_ppm = _coerce_finite_float(metrics.get("depth_even_ppm"))
+    if even_depth_ppm is None:
+        even_depth_ppm = _coerce_finite_float(metrics.get("even_depth"), scale=1e6)
+    depth_diff_ppm = _coerce_finite_float(metrics.get("delta_ppm"))
+    if depth_diff_ppm is None and odd_depth_ppm is not None and even_depth_ppm is not None:
+        depth_diff_ppm = odd_depth_ppm - even_depth_ppm
+    depth_diff_sigma = _coerce_finite_float(metrics.get("depth_diff_sigma"))
+    if depth_diff_sigma is None:
+        depth_diff_sigma = _coerce_finite_float(metrics.get("delta_sigma"))
+    is_significant = abs(depth_diff_sigma) >= 3.0 if depth_diff_sigma is not None else None
+    flags: list[str] = []
+    if is_significant is True:
+        flags.append("ODD_EVEN_MISMATCH")
+    return {
+        "odd_depth_ppm": odd_depth_ppm,
+        "even_depth_ppm": even_depth_ppm,
+        "depth_diff_ppm": depth_diff_ppm,
+        "depth_diff_sigma": depth_diff_sigma,
+        "is_significant": is_significant,
+        "flags": flags,
+    }
+
+
+def _build_noise_summary(
+    lc_summary: LCSummary | None,
+    lc_robustness: LCRobustnessData | None,
+) -> dict[str, Any]:
+    """Build deterministic noise summary from existing report metrics."""
+    beta_30m = lc_robustness.red_noise.beta_30m if lc_robustness is not None else None
+    beta_60m = lc_robustness.red_noise.beta_60m if lc_robustness is not None else None
+    beta_duration = lc_robustness.red_noise.beta_duration if lc_robustness is not None else None
+    slopes_per_day: list[float] = []
+    if lc_robustness is not None:
+        for epoch in lc_robustness.per_epoch:
+            if epoch.baseline_slope_per_day is None:
+                continue
+            slope = _coerce_finite_float(epoch.baseline_slope_per_day)
+            if slope is not None:
+                slopes_per_day.append(abs(slope))
+    trend_value = float(np.median(slopes_per_day)) if slopes_per_day else None
+    flags: list[str] = []
+    if beta_duration is not None and beta_duration > 1.2:
+        flags.append("RED_NOISE_ELEVATED")
+    if trend_value is not None and trend_value > 1e-3:
+        flags.append("BASELINE_TREND_ELEVATED")
+    return {
+        "white_noise_ppm": lc_summary.flux_mad_ppm if lc_summary is not None else None,
+        "red_noise_beta_30m": beta_30m,
+        "red_noise_beta_60m": beta_60m,
+        "red_noise_beta_duration": beta_duration,
+        "trend_stat": trend_value,
+        "trend_stat_unit": "relative_flux_per_day",
+        "flags": flags,
+        "semantics": {
+            "white_noise_source": "lc_summary.flux_mad_ppm",
+            "trend_source": "median(abs(lc_robustness.per_epoch.baseline_slope_per_day))",
+        },
+    }
+
+
+def _build_variability_summary(
+    lc_summary: LCSummary | None,
+    timing_series: TransitTimingPlotData | None,
+) -> dict[str, Any]:
+    """Build deterministic variability summary block."""
+    variability_index: float | None = None
+    if (
+        lc_summary is not None
+        and lc_summary.flux_mad_ppm > 0
+        and math.isfinite(lc_summary.flux_std_ppm)
+        and math.isfinite(lc_summary.flux_mad_ppm)
+    ):
+        variability_index = float(lc_summary.flux_std_ppm / lc_summary.flux_mad_ppm)
+    periodicity_score = timing_series.periodicity_score if timing_series is not None else None
+
+    classification = "unknown"
+    if variability_index is not None or periodicity_score is not None:
+        var_level = variability_index if variability_index is not None else 1.0
+        per_level = periodicity_score if periodicity_score is not None else 0.0
+        if var_level >= 1.5 or per_level >= 3.0:
+            classification = "high_variability"
+        elif var_level >= 1.2 or per_level >= 1.5:
+            classification = "moderate_variability"
+        else:
+            classification = "low_variability"
+
+    flags: list[str] = []
+    if variability_index is not None and variability_index >= 1.5:
+        flags.append("ELEVATED_SCATTER")
+    if periodicity_score is not None and periodicity_score >= 3.0:
+        flags.append("PERIODIC_SIGNAL")
+
+    return {
+        "variability_index": variability_index,
+        "periodicity_score": periodicity_score,
+        "flare_rate_per_day": None,
+        "classification": classification,
+        "flags": flags,
+        "semantics": {
+            "variability_index_source": "lc_summary.flux_std_ppm/flux_mad_ppm",
+            "periodicity_source": "timing_series.periodicity_score",
+        },
+    }
+
+
 @dataclass
 class ReportData:
     """LC-only report data packet.
@@ -364,8 +497,8 @@ class ReportData:
     toi: str | None = None
 
     # --- Inputs (for provenance / re-rendering) ---
-    candidate: Candidate | None = None
-    stellar: StellarParams | None = None
+    candidate: Any | None = None
+    stellar: Any | None = None
 
     # --- LC Summary (vital signs) ---
     lc_summary: LCSummary | None = None
@@ -411,17 +544,20 @@ class ReportData:
                 "t0_btjd": eph.t0_btjd,
                 "duration_hours": eph.duration_hours,
             }
-            summary["input_depth_ppm"] = self.candidate.depth_ppm
+            summary["input_depth_ppm"] = getattr(self.candidate, "depth_ppm", None)
 
         if self.stellar is not None:
-            summary["stellar"] = self.stellar.model_dump()
+            summary["stellar"] = _model_dump_like(self.stellar)
 
         if self.lc_summary is not None:
             summary["lc_summary"] = asdict(self.lc_summary)
 
         checks_summary: dict[str, Any] = {}
         check_overlays: dict[str, Any] = {}
+        reference_ids: set[str] = set()
         for check_id, cr in self.checks.items():
+            method_refs = refs_for_check(check_id)
+            reference_ids.update(method_refs)
             checks_summary[check_id] = {
                 "id": cr.id,
                 "name": cr.name,
@@ -431,12 +567,25 @@ class ReportData:
                 "flags": cr.flags,
                 "notes": cr.notes,
                 "provenance": cr.provenance,
+                "method_refs": method_refs,
             }
             if isinstance(cr.raw, dict) and "plot_data" in cr.raw:
                 check_overlays[check_id] = cr.raw["plot_data"]
         summary["checks"] = checks_summary
         if check_overlays:
             plot_data["check_overlays"] = check_overlays
+
+        summary["odd_even_summary"] = _build_odd_even_summary(self.checks)
+        summary["noise_summary"] = _build_noise_summary(
+            self.lc_summary, self.lc_robustness
+        )
+        summary["variability_summary"] = _build_variability_summary(
+            self.lc_summary, self.timing_series
+        )
+        reference_ids.update(refs_for_summary_block("odd_even_summary"))
+        reference_ids.update(refs_for_summary_block("noise_summary"))
+        reference_ids.update(refs_for_summary_block("variability_summary"))
+        summary["references"] = reference_entries(reference_ids)
 
         if self.bundle is not None:
             summary["bundle_summary"] = {

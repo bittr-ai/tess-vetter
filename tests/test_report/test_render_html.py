@@ -27,6 +27,7 @@ from bittr_tess_vetter.report import (
     ReportEnrichmentData,
     build_report,
     render_html,
+    render_html_from_payload,
 )
 
 # ---------------------------------------------------------------------------
@@ -399,3 +400,51 @@ def test_render_html_version_in_footer() -> None:
     report = _build_mock_report()
     html = render_html(report)
     assert "1.0.0" in html
+
+
+def test_render_html_shows_methods_links_when_method_refs_present() -> None:
+    """Check cards show a methods affordance when method_refs metadata exists."""
+    payload = _build_mock_report().to_json()
+    payload["summary"]["checks"]["V01"]["method_refs"] = [
+        "THOMPSON_2018",
+        "api.lc_only.odd_even_depth",
+    ]
+
+    html = render_html_from_payload(payload)
+    assert "Methods:" in html
+    assert 'data-method-ref="THOMPSON_2018"' in html
+    assert 'href="#ref-thompson-2018"' in html
+    assert 'data-method-ref="api.lc_only.odd_even_depth"' in html
+
+
+def test_render_html_shows_bibliography_when_references_present() -> None:
+    """Bibliography section renders when summary.references exists."""
+    payload = _build_mock_report().to_json()
+    payload["summary"]["references"] = [
+        {
+            "key": "THOMPSON_2018",
+            "title": "Planetary Candidates from K2",
+            "authors": ["Thompson, S. E."],
+            "year": 2018,
+            "url": "https://example.org/ref",
+            "notes": ["Primary vetting reference"],
+        }
+    ]
+
+    html = render_html_from_payload(payload)
+    assert "Bibliography" in html
+    assert "[THOMPSON_2018]" in html
+    assert "Planetary Candidates from K2" in html
+    assert 'id="ref-thompson-2018"' in html
+
+
+def test_render_html_omits_methods_and_bibliography_when_citation_meta_missing() -> None:
+    """Methods links and bibliography are omitted if citation metadata is absent."""
+    payload = _build_mock_report().to_json()
+    payload["summary"]["references"] = []
+    for check in payload["summary"]["checks"].values():
+        check.pop("method_refs", None)
+
+    html = render_html_from_payload(payload)
+    assert "Methods:" not in html
+    assert "Bibliography" not in html

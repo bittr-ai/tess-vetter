@@ -1,0 +1,75 @@
+{
+  "summary": {
+    "checks_run": [
+      "V15",
+      "V01"
+    ],
+    "toi": "TOI-42.01",
+    "tic_id": 42,
+    "checks": {
+      "V01": {
+        "status": "ok",
+        "metrics": {
+          "depth_ppm": 123.4,
+          "snr": 12.0
+        },
+        "flags": [],
+        "notes": [
+          "stable"
+        ],
+        "id": "V01",
+        "name": "odd_even_depth",
+        "confidence": 0.98,
+        "provenance": {
+          "version": "test"
+        }
+      }
+    },
+    "bundle_summary": {
+      "n_checks": 1,
+      "n_ok": 1,
+      "n_failed": 0,
+      "n_skipped": 0,
+      "failed_ids": []
+    },
+    "ephemeris": {
+      "period_days": 3.14159,
+      "t0_btjd": 245.0,
+      "duration_hours": 2.5
+    }
+  },
+  "plot_data": {
+    "phase_folded": {
+      "phase": [
+        0.0,
+        -0.1,
+        0.1
+      ],
+      "flux": [
+        1.0,
+        0.9999,
+        1.0001
+      ],
+      "phase_range": [
+        -0.2,
+        0.2
+      ]
+    },
+    "check_overlays": {
+      "V01": {
+        "depth_series": [
+          120.0,
+          121.0
+        ],
+        "window_labels": [
+          "odd",
+          "even"
+        ]
+      }
+    }
+  },
+  "expected": {
+    "summary_hash": "cc9ae7dd6c40967c8c4f37cdaae826f570f60a34e8740f389667ab71c804ada9",
+    "plot_data_hash": "723c757f0cd30572d1d8fc6e412ed1c6b22f67762a1b1dd3af30476bcc3fccb1"
+  }
+}

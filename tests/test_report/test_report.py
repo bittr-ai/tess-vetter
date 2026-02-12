@@ -253,6 +253,10 @@ def test_json_schema_keys_and_types() -> None:
     assert s.get("toi") is None
     assert isinstance(s["checks_run"], list)
     assert isinstance(s["checks"], dict)
+    assert isinstance(s["references"], list)
+    assert isinstance(s["odd_even_summary"], dict)
+    assert isinstance(s["noise_summary"], dict)
+    assert isinstance(s["variability_summary"], dict)
 
     # Ephemeris
     assert isinstance(s["ephemeris"], dict)
@@ -284,6 +288,25 @@ def test_json_schema_keys_and_types() -> None:
     assert isinstance(s["bundle_summary"]["n_failed"], int)
     assert isinstance(s["bundle_summary"]["n_skipped"], int)
     assert isinstance(s["bundle_summary"]["failed_ids"], list)
+    for check_summary in s["checks"].values():
+        assert isinstance(check_summary["method_refs"], list)
+
+    # References should be deduped and sorted by key.
+    ref_keys = [ref["key"] for ref in s["references"]]
+    assert ref_keys == sorted(set(ref_keys))
+
+    # Deterministic summary blocks.
+    assert isinstance(s["odd_even_summary"]["flags"], list)
+    assert isinstance(s["noise_summary"]["flags"], list)
+    assert isinstance(s["noise_summary"]["semantics"], dict)
+    assert s["noise_summary"]["trend_stat"] is None or isinstance(
+        s["noise_summary"]["trend_stat"], float
+    )
+    assert isinstance(s["noise_summary"]["trend_stat_unit"], str)
+    assert s["noise_summary"]["trend_stat_unit"] == "relative_flux_per_day"
+    assert isinstance(s["variability_summary"]["flags"], list)
+    assert isinstance(s["variability_summary"]["semantics"], dict)
+    assert isinstance(s["variability_summary"]["classification"], str)
 
     # Full LC plot data
     assert isinstance(p["full_lc"], dict)
@@ -395,6 +418,23 @@ def test_check_plot_data_passthrough() -> None:
         j = report.to_json()
         assert "check_overlays" in j["plot_data"]
         assert "V01" in j["plot_data"]["check_overlays"]
+
+
+def test_summary_references_cover_method_refs() -> None:
+    """All method refs attached to checks should resolve in summary.references."""
+    time, flux, flux_err = _make_box_transit_lc()
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    j = build_report(lc, candidate).to_json()
+    ref_keys = {ref["key"] for ref in j["summary"]["references"]}
+    method_refs = {
+        ref
+        for check in j["summary"]["checks"].values()
+        for ref in check.get("method_refs", [])
+    }
+    assert method_refs.issubset(ref_keys)
 
 
 # ---------------------------------------------------------------------------

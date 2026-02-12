@@ -27,6 +27,65 @@ class CheckSummaryModel(BaseModel):
     flags: list[str] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
     provenance: dict[str, Any] = Field(default_factory=dict)
+    method_refs: list[str] = Field(default_factory=list)
+
+
+class ReferenceEntryModel(BaseModel):
+    """Typed bibliographic reference entry for summary payloads."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    title: str | None = None
+    authors: list[str] = Field(default_factory=list)
+    year: int | None = None
+    venue: str | None = None
+    doi: str | None = None
+    url: str | None = None
+    citation: str | None = None
+    notes: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+
+
+class OddEvenSummaryModel(BaseModel):
+    """Deterministic odd/even depth comparison summary."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    odd_depth_ppm: float | None = None
+    even_depth_ppm: float | None = None
+    depth_diff_ppm: float | None = None
+    depth_diff_sigma: float | None = None
+    is_significant: bool | None = None
+    flags: list[str] = Field(default_factory=list)
+
+
+class NoiseSummaryModel(BaseModel):
+    """Deterministic noise diagnostics with semantics-ready extensions."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    white_noise_ppm: float | None = None
+    red_noise_beta_30m: float | None = None
+    red_noise_beta_60m: float | None = None
+    red_noise_beta_duration: float | None = None
+    trend_stat: float | None = None
+    trend_stat_unit: str | None = None
+    flags: list[str] = Field(default_factory=list)
+    semantics: dict[str, float | int | str | bool | None] = Field(default_factory=dict)
+
+
+class VariabilitySummaryModel(BaseModel):
+    """Deterministic stellar/activity variability summary."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    variability_index: float | None = None
+    periodicity_score: float | None = None
+    flare_rate_per_day: float | None = None
+    classification: str | None = None
+    flags: list[str] = Field(default_factory=list)
+    semantics: dict[str, float | int | str | bool | None] = Field(default_factory=dict)
 
 
 class BundleSummaryModel(BaseModel):
@@ -55,6 +114,10 @@ class ReportSummaryModel(BaseModel):
     lc_summary: dict[str, Any] | None = None
     checks: dict[str, CheckSummaryModel] = Field(default_factory=dict)
     bundle_summary: BundleSummaryModel | None = None
+    odd_even_summary: OddEvenSummaryModel | None = None
+    noise_summary: NoiseSummaryModel | None = None
+    variability_summary: VariabilitySummaryModel | None = None
+    references: list[ReferenceEntryModel] = Field(default_factory=list)
     enrichment: dict[str, Any] | None = None
     lc_robustness_summary: dict[str, Any] | None = None
 
@@ -102,4 +165,3 @@ class ReportPayloadModel(BaseModel):
 def report_payload_json_schema() -> dict[str, Any]:
     """Return machine-readable JSON schema for external clients."""
     return ReportPayloadModel.model_json_schema()
-

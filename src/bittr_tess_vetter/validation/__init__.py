@@ -46,6 +46,11 @@ from bittr_tess_vetter.validation.register_defaults import (
     register_all_defaults,
     register_extended_defaults,
 )
+from bittr_tess_vetter.validation.report_bridge import (
+    compute_alias_summary,
+    compute_timing_series,
+    run_lc_checks,
+)
 from bittr_tess_vetter.validation.registry import (
     DEFAULT_REGISTRY,
     CheckConfig,
@@ -113,6 +118,10 @@ __all__ = [
     "register_modshift_uniqueness_check",
     "register_all_defaults",
     "register_extended_defaults",
+    # Report/API bridge helpers
+    "run_lc_checks",
+    "compute_timing_series",
+    "compute_alias_summary",
     # VettingCheck wrapper classes (V11b ModShift uniqueness)
     "ModShiftUniquenessCheck",
     # ModShift uniqueness core function
