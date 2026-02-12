@@ -213,6 +213,8 @@ def test_build_report_integration() -> None:
     assert len(report.phase_folded.phase) > 0
     assert len(report.phase_folded.bin_centers) > 0
     assert report.phase_folded.bin_minutes == 30.0
+    assert report.phase_folded.y_range_suggested is not None
+    assert report.phase_folded.depth_reference_flux is not None
 
 
 # ---------------------------------------------------------------------------
@@ -285,6 +287,16 @@ def test_json_schema_keys_and_types() -> None:
     assert isinstance(j["phase_folded"]["transit_duration_phase"], float)
     assert isinstance(j["phase_folded"]["phase_range"], (list, tuple))
     assert len(j["phase_folded"]["phase_range"]) == 2
+    assert (
+        j["phase_folded"]["y_range_suggested"] is None
+        or isinstance(j["phase_folded"]["y_range_suggested"], (list, tuple))
+    )
+    if j["phase_folded"]["y_range_suggested"] is not None:
+        assert len(j["phase_folded"]["y_range_suggested"]) == 2
+    assert (
+        j["phase_folded"]["depth_reference_flux"] is None
+        or isinstance(j["phase_folded"]["depth_reference_flux"], float)
+    )
 
     # Round-trip through json.dumps should work without custom encoders
     serialized = json.dumps(j)
@@ -546,6 +558,19 @@ def test_build_report_single_transit() -> None:
     j = report.to_json()
     serialized = json.dumps(j, allow_nan=False)
     assert isinstance(serialized, str)
+
+
+def test_phase_depth_reference_absent_without_depth_ppm() -> None:
+    """Depth reference should be omitted when candidate depth_ppm is unavailable."""
+    time, flux, flux_err = _make_box_transit_lc()
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph)  # no depth_ppm
+
+    report = build_report(lc, candidate)
+
+    assert report.phase_folded is not None
+    assert report.phase_folded.depth_reference_flux is None
 
 
 # ---------------------------------------------------------------------------

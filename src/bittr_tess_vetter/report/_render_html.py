@@ -74,6 +74,8 @@ def render_html(report: ReportData, *, title: str | None = None) -> str:
 // Embed report data
 var REPORT = {data_json};
 
+{_percentile_helper_js()}
+
 {_full_lc_js()}
 
 {_phase_folded_js()}
@@ -464,6 +466,25 @@ def _plotly_layout_defaults() -> str:
   }}"""
 
 
+def _percentile_helper_js() -> str:
+    """Return a JS function for computing percentile-based y-axis range."""
+    return """\
+function percentileRange(values, lo, hi, pad) {
+  // Compute percentile-based y-axis range with padding.
+  // lo/hi are percentiles (0-100), pad is fractional padding (e.g. 0.1).
+  var sorted = values.slice().filter(function(v) { return isFinite(v); });
+  if (sorted.length === 0) return null;
+  sorted.sort(function(a, b) { return a - b; });
+  var loIdx = Math.floor(lo / 100.0 * (sorted.length - 1));
+  var hiIdx = Math.ceil(hi / 100.0 * (sorted.length - 1));
+  var yLo = sorted[loIdx];
+  var yHi = sorted[hiIdx];
+  var span = yHi - yLo;
+  if (span <= 0) span = Math.abs(yHi) * 0.01 || 1e-6;
+  return [yLo - pad * span, yHi + pad * span];
+}"""
+
+
 def _full_lc_js() -> str:
     return f"""\
 (function() {{
@@ -481,6 +502,9 @@ def _full_lc_js() -> str:
     }}
   }}
 
+  // Percentile-based y-axis range (2nd-98th with 10% padding)
+  var yRange = percentileRange(d.flux, 2, 98, 0.1);
+
   var traceOOT = {{
     x: ootTime, y: ootFlux,
     mode: 'markers',
@@ -497,13 +521,16 @@ def _full_lc_js() -> str:
     name: 'In-transit',
   }};
 
+  var yaxisCfg = Object.assign({{}}, {_plotly_layout_defaults()}.yaxis, {{
+    title: {{ text: 'Normalized Flux', standoff: 8 }},
+  }});
+  if (yRange) yaxisCfg.range = yRange;
+
   var layout = Object.assign({{}}, {_plotly_layout_defaults()}, {{
     xaxis: Object.assign({{}}, {_plotly_layout_defaults()}.xaxis, {{
       title: {{ text: 'Time (BTJD)', standoff: 8 }},
     }}),
-    yaxis: Object.assign({{}}, {_plotly_layout_defaults()}.yaxis, {{
-      title: {{ text: 'Normalized Flux', standoff: 8 }},
-    }}),
+    yaxis: yaxisCfg,
   }});
 
   Plotly.newPlot('full-lc-plot', [traceOOT, traceIT], layout, {{responsive: true}});
@@ -525,6 +552,9 @@ def _phase_folded_js() -> str:
     rawPhase.push(d.phase[i]);
     rawFlux.push(d.flux[i]);
   }}
+
+  // Percentile-based y-axis range (2nd-98th with 10% padding)
+  var yRange = percentileRange(d.flux, 2, 98, 0.1);
 
   var traceRaw = {{
     x: rawPhase, y: rawFlux,
@@ -553,14 +583,14 @@ def _phase_folded_js() -> str:
     x: d.bin_centers, y: d.bin_flux,
     mode: 'markers',
     type: 'scatter',
-    marker: {{ color: '{_BIN_COLOR}', size: 6, symbol: 'circle' }},
+    marker: {{ color: '{_BIN_COLOR}', size: 8, symbol: 'circle' }},
     error_y: {{
       type: 'data',
       array: binErr,
       visible: true,
       color: '{_BIN_COLOR}',
-      thickness: 1.5,
-      width: 3,
+      thickness: 2,
+      width: 4,
     }},
     name: 'Binned (' + d.bin_minutes + ' min)',
   }};
@@ -592,14 +622,30 @@ def _phase_folded_js() -> str:
     }},
   ];
 
+  // Transit depth reference line (if input_depth_ppm is available)
+  var depthPpm = (REPORT.input_depth_ppm != null) ? REPORT.input_depth_ppm : null;
+  if (depthPpm !== null) {{
+    var depthFlux = 1.0 - depthPpm / 1e6;
+    shapes.push({{
+      type: 'line',
+      x0: phaseRange[0], x1: phaseRange[1],
+      y0: depthFlux, y1: depthFlux,
+      xref: 'x', yref: 'y',
+      line: {{ color: '{_ACCENT}', width: 1.5, dash: 'dash' }},
+    }});
+  }}
+
+  var yaxisCfg = Object.assign({{}}, {_plotly_layout_defaults()}.yaxis, {{
+    title: {{ text: 'Normalized Flux', standoff: 8 }},
+  }});
+  if (yRange) yaxisCfg.range = yRange;
+
   var layout = Object.assign({{}}, {_plotly_layout_defaults()}, {{
     xaxis: Object.assign({{}}, {_plotly_layout_defaults()}.xaxis, {{
       title: {{ text: 'Orbital Phase', standoff: 8 }},
       range: [phaseRange[0], phaseRange[1]],
     }}),
-    yaxis: Object.assign({{}}, {_plotly_layout_defaults()}.yaxis, {{
-      title: {{ text: 'Normalized Flux', standoff: 8 }},
-    }}),
+    yaxis: yaxisCfg,
     shapes: shapes,
   }});
 

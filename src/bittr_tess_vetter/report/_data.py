@@ -68,6 +68,8 @@ class PhaseFoldedPlotData:
     bin_minutes: float  # bin width used
     transit_duration_phase: float  # transit duration expressed in phase units (duration_hours / period_days / 24)
     phase_range: tuple[float, float]  # display window in phase units, e.g. (-0.03, 0.03)
+    y_range_suggested: tuple[float, float] | None = None  # display-only y-axis suggestion (robust percentile clip)
+    depth_reference_flux: float | None = None  # display-only horizontal reference line in normalized flux
 
 
 def _scrub_non_finite(obj: Any) -> Any:

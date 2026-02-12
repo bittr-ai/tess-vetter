@@ -157,7 +157,7 @@ def build_report(
 
     # 6. Compute phase-folded plot arrays
     phase_folded = _build_phase_folded_plot_data(
-        lc, ephemeris, bin_minutes, max_phase_points
+        lc, ephemeris, bin_minutes, candidate.depth_ppm, max_phase_points
     )
 
     # 7. Assemble ReportData
@@ -404,6 +404,7 @@ def _build_phase_folded_plot_data(
     lc: LightCurve,
     ephemeris: Ephemeris,
     bin_minutes: float,
+    depth_ppm: float | None = None,
     max_phase_points: int = 10_000,
 ) -> PhaseFoldedPlotData:
     """Build plot-ready arrays for phase-folded transit panel.
@@ -466,6 +467,9 @@ def _build_phase_folded_plot_data(
             near_transit_half_phase=half_window,
         )
 
+    y_range_suggested = _suggest_flux_y_range(flux_folded)
+    depth_reference_flux = _depth_ppm_to_flux(depth_ppm)
+
     return PhaseFoldedPlotData(
         phase=phase.tolist(),
         flux=flux_folded.tolist(),
@@ -475,7 +479,48 @@ def _build_phase_folded_plot_data(
         bin_minutes=bin_minutes,
         transit_duration_phase=transit_duration_phase,
         phase_range=phase_range,
+        y_range_suggested=y_range_suggested,
+        depth_reference_flux=depth_reference_flux,
     )
+
+
+def _suggest_flux_y_range(
+    flux: np.ndarray,
+    *,
+    lower_percentile: float = 2.0,
+    upper_percentile: float = 98.0,
+    padding_fraction: float = 0.1,
+) -> tuple[float, float] | None:
+    """Suggest a robust y-axis range for phase-folded display.
+
+    Uses percentile clipping plus symmetric padding to keep shallow transits
+    visible in the presence of outliers. This is display metadata only.
+    """
+    finite = flux[np.isfinite(flux)]
+    if len(finite) < 3:
+        return None
+
+    lo, hi = np.percentile(finite, [lower_percentile, upper_percentile])
+    lo_f = float(lo)
+    hi_f = float(hi)
+    if not np.isfinite(lo_f) or not np.isfinite(hi_f):
+        return None
+
+    span = hi_f - lo_f
+    if span <= 0.0:
+        # Degenerate case: nearly constant flux; add tiny guard band.
+        pad = max(abs(lo_f), 1.0) * 1e-6
+        return (lo_f - pad, hi_f + pad)
+
+    pad = span * max(padding_fraction, 0.0)
+    return (lo_f - pad, hi_f + pad)
+
+
+def _depth_ppm_to_flux(depth_ppm: float | None) -> float | None:
+    """Convert positive depth in ppm to normalized flux reference level."""
+    if depth_ppm is None or not np.isfinite(depth_ppm) or depth_ppm <= 0.0:
+        return None
+    return float(1.0 - (depth_ppm / 1e6))
 
 
 def _bin_phase_data(
