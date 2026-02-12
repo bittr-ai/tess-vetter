@@ -1,0 +1,541 @@
+"""Tests for the report module (Phase 1).
+
+Covers:
+- Unit test: ReportData construction + to_json() round-trip
+- Integration test: synthetic LC with injected transit -> build_report()
+- Schema test: JSON serialization key/type verification
+- Plot data passthrough test: checks["V01"].raw["plot_data"] intact
+- Enabled filter test: include_v03=True adds V03
+- Downsampling test: max_lc_points respected, in-transit preserved
+"""
+
+from __future__ import annotations
+
+import json
+
+import numpy as np
+
+from bittr_tess_vetter.api.types import (
+    Candidate,
+    CheckResult,
+    Ephemeris,
+    LightCurve,
+    VettingBundleResult,
+    ok_result,
+)
+from bittr_tess_vetter.report import (
+    FullLCPlotData,
+    LCSummary,
+    PhaseFoldedPlotData,
+    ReportData,
+    build_report,
+)
+from bittr_tess_vetter.report._build import _downsample_preserving_transits
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_box_transit_lc(
+    *,
+    period_days: float = 3.5,
+    t0_btjd: float = 0.5,
+    duration_hours: float = 2.5,
+    baseline_days: float = 27.0,
+    cadence_minutes: float = 10.0,
+    depth_frac: float = 0.01,
+    noise_ppm: float = 50.0,
+    seed: int = 42,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Create a synthetic light curve with box-shaped transits."""
+    rng = np.random.default_rng(seed)
+    dt_days = cadence_minutes / (24.0 * 60.0)
+    time = np.arange(0.0, baseline_days, dt_days, dtype=np.float64)
+    flux = np.ones_like(time)
+    flux += rng.normal(0.0, noise_ppm * 1e-6, size=time.size)
+    flux_err = np.full_like(time, noise_ppm * 1e-6)
+
+    duration_days = duration_hours / 24.0
+    half_phase = (duration_days / period_days) / 2.0
+    phase = ((time - t0_btjd) / period_days) % 1.0
+    phase_dist = np.minimum(phase, 1.0 - phase)
+    in_transit = phase_dist < half_phase
+
+    flux[in_transit] *= 1.0 - depth_frac
+
+    return time, flux, flux_err
+
+
+# ---------------------------------------------------------------------------
+# Unit test: ReportData construction + to_json() round-trip
+# ---------------------------------------------------------------------------
+
+
+def test_report_data_to_json_round_trip() -> None:
+    """Construct ReportData with mock data and round-trip through to_json()."""
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    lc_summary = LCSummary(
+        n_points=1000,
+        n_valid=990,
+        n_transits=7,
+        n_in_transit_total=70,
+        duration_days=27.0,
+        cadence_seconds=120.0,
+        flux_std_ppm=100.0,
+        flux_mad_ppm=90.0,
+        gap_fraction=0.01,
+        snr=25.0,
+        depth_ppm=10000.0,
+        depth_err_ppm=400.0,
+    )
+
+    full_lc = FullLCPlotData(
+        time=[1.0, 2.0, 3.0],
+        flux=[1.0, 0.99, 1.0],
+        transit_mask=[False, True, False],
+    )
+
+    phase_folded = PhaseFoldedPlotData(
+        phase=[-0.1, 0.0, 0.1],
+        flux=[1.0, 0.99, 1.0],
+        bin_centers=[-0.05, 0.05],
+        bin_flux=[0.995, 0.995],
+        bin_err=[0.001, 0.001],
+        bin_minutes=30.0,
+    )
+
+    mock_check = ok_result(
+        id="V01",
+        name="odd_even_depth",
+        metrics={"rel_diff": 0.05},
+        confidence=0.9,
+    )
+
+    bundle = VettingBundleResult.from_checks([mock_check])
+
+    report = ReportData(
+        tic_id=12345678,
+        toi="TOI-1234.01",
+        candidate=candidate,
+        lc_summary=lc_summary,
+        checks={"V01": mock_check},
+        bundle=bundle,
+        full_lc=full_lc,
+        phase_folded=phase_folded,
+        checks_run=["V01"],
+    )
+
+    j = report.to_json()
+
+    # Round-trip through JSON serialization
+    serialized = json.dumps(j)
+    deserialized = json.loads(serialized)
+
+    assert deserialized["version"] == "1.0.0"
+    assert deserialized["tic_id"] == 12345678
+    assert deserialized["toi"] == "TOI-1234.01"
+    assert deserialized["checks_run"] == ["V01"]
+    assert deserialized["ephemeris"]["period_days"] == 3.5
+    assert deserialized["input_depth_ppm"] == 10000.0
+    assert deserialized["lc_summary"]["snr"] == 25.0
+    assert "V01" in deserialized["checks"]
+    assert deserialized["bundle_summary"]["n_ok"] == 1
+    assert deserialized["bundle_summary"]["n_failed"] == 0
+    assert deserialized["full_lc"]["time"] == [1.0, 2.0, 3.0]
+    assert deserialized["phase_folded"]["bin_minutes"] == 30.0
+
+
+# ---------------------------------------------------------------------------
+# Integration test: synthetic LC -> build_report() -> verify fields
+# ---------------------------------------------------------------------------
+
+
+def test_build_report_integration() -> None:
+    """Build report from synthetic LC with injected transit."""
+    time, flux, flux_err = _make_box_transit_lc(
+        depth_frac=0.01, noise_ppm=50.0,
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    report = build_report(lc, candidate, tic_id=99999, toi="TOI-9999.01")
+
+    # Identity
+    assert report.tic_id == 99999
+    assert report.toi == "TOI-9999.01"
+    assert report.version == "1.0.0"
+
+    # Candidate stored for provenance
+    assert report.candidate is candidate
+
+    # LC Summary populated
+    assert report.lc_summary is not None
+    assert report.lc_summary.n_points > 0
+    assert report.lc_summary.n_valid > 0
+    assert report.lc_summary.n_transits > 0
+    assert report.lc_summary.snr > 0.0
+    assert report.lc_summary.depth_ppm > 0.0
+    assert report.lc_summary.flux_std_ppm > 0.0
+    assert report.lc_summary.cadence_seconds > 0.0
+
+    # Checks populated (default: V01, V02, V04, V05, V13, V15)
+    assert set(report.checks.keys()) == {"V01", "V02", "V04", "V05", "V13", "V15"}
+    assert report.checks_run == ["V01", "V02", "V04", "V05", "V13", "V15"]
+
+    # Bundle populated
+    assert report.bundle is not None
+    assert len(report.bundle.results) == 6
+
+    # Plot data populated
+    assert report.full_lc is not None
+    assert len(report.full_lc.time) > 0
+    assert len(report.full_lc.flux) == len(report.full_lc.time)
+    assert len(report.full_lc.transit_mask) == len(report.full_lc.time)
+    assert any(report.full_lc.transit_mask)  # some in-transit points
+
+    assert report.phase_folded is not None
+    assert len(report.phase_folded.phase) > 0
+    assert len(report.phase_folded.bin_centers) > 0
+    assert report.phase_folded.bin_minutes == 30.0
+
+
+# ---------------------------------------------------------------------------
+# Schema test: JSON serialization key/type verification
+# ---------------------------------------------------------------------------
+
+
+def test_json_schema_keys_and_types() -> None:
+    """Verify all expected keys present and types correct in JSON output."""
+    time, flux, flux_err = _make_box_transit_lc()
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    report = build_report(lc, candidate)
+    j = report.to_json()
+
+    # Top-level keys
+    assert isinstance(j["version"], str)
+    assert j["tic_id"] is None  # not provided
+    assert j["toi"] is None
+    assert isinstance(j["checks_run"], list)
+    assert isinstance(j["checks"], dict)
+
+    # Ephemeris
+    assert isinstance(j["ephemeris"], dict)
+    assert isinstance(j["ephemeris"]["period_days"], float)
+    assert isinstance(j["ephemeris"]["t0_btjd"], float)
+    assert isinstance(j["ephemeris"]["duration_hours"], float)
+
+    # LC Summary
+    assert isinstance(j["lc_summary"], dict)
+    lc_sum = j["lc_summary"]
+    assert isinstance(lc_sum["n_points"], int)
+    assert isinstance(lc_sum["n_valid"], int)
+    assert isinstance(lc_sum["n_transits"], int)
+    assert isinstance(lc_sum["n_in_transit_total"], int)
+    assert isinstance(lc_sum["duration_days"], float)
+    assert isinstance(lc_sum["cadence_seconds"], float)
+    assert isinstance(lc_sum["flux_std_ppm"], float)
+    assert isinstance(lc_sum["flux_mad_ppm"], float)
+    assert isinstance(lc_sum["gap_fraction"], float)
+    assert isinstance(lc_sum["snr"], float)
+    assert isinstance(lc_sum["depth_ppm"], float)
+    # depth_err_ppm can be float or None (None if unmeasurable)
+    assert lc_sum["depth_err_ppm"] is None or isinstance(lc_sum["depth_err_ppm"], float)
+
+    # Bundle summary
+    assert isinstance(j["bundle_summary"], dict)
+    assert isinstance(j["bundle_summary"]["n_checks"], int)
+    assert isinstance(j["bundle_summary"]["n_ok"], int)
+    assert isinstance(j["bundle_summary"]["n_failed"], int)
+    assert isinstance(j["bundle_summary"]["n_skipped"], int)
+    assert isinstance(j["bundle_summary"]["failed_ids"], list)
+
+    # Full LC plot data
+    assert isinstance(j["full_lc"], dict)
+    assert isinstance(j["full_lc"]["time"], list)
+    assert isinstance(j["full_lc"]["flux"], list)
+    assert isinstance(j["full_lc"]["transit_mask"], list)
+
+    # Phase-folded plot data
+    assert isinstance(j["phase_folded"], dict)
+    assert isinstance(j["phase_folded"]["phase"], list)
+    assert isinstance(j["phase_folded"]["flux"], list)
+    assert isinstance(j["phase_folded"]["bin_centers"], list)
+    assert isinstance(j["phase_folded"]["bin_flux"], list)
+    assert isinstance(j["phase_folded"]["bin_err"], list)
+    assert isinstance(j["phase_folded"]["bin_minutes"], float)
+
+    # Round-trip through json.dumps should work without custom encoders
+    serialized = json.dumps(j)
+    assert isinstance(serialized, str)
+
+
+# ---------------------------------------------------------------------------
+# Plot data passthrough test
+# ---------------------------------------------------------------------------
+
+
+def test_check_plot_data_passthrough() -> None:
+    """Verify checks["V01"].raw["plot_data"] is intact when present."""
+    time, flux, flux_err = _make_box_transit_lc()
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    report = build_report(lc, candidate)
+
+    # V01 should be present
+    assert "V01" in report.checks
+    v01 = report.checks["V01"]
+    assert isinstance(v01, CheckResult)
+
+    # The raw field should contain plot_data if the check produces it
+    if v01.raw is not None and "plot_data" in v01.raw:
+        plot_data = v01.raw["plot_data"]
+        assert isinstance(plot_data, dict)
+
+        # Serialize the report and verify plot_data survives
+        j = report.to_json()
+        assert "plot_data" in j["checks"]["V01"]["raw"]
+
+
+# ---------------------------------------------------------------------------
+# Enabled filter test: include_v03=True adds V03
+# ---------------------------------------------------------------------------
+
+
+def test_include_v03_adds_v03() -> None:
+    """Verify include_v03=True includes V03 in results."""
+    time, flux, flux_err = _make_box_transit_lc()
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    report = build_report(lc, candidate, include_v03=True)
+
+    assert "V03" in report.checks
+    assert "V03" in report.checks_run
+    assert set(report.checks.keys()) == {"V01", "V02", "V03", "V04", "V05", "V13", "V15"}
+
+
+def test_default_excludes_v03() -> None:
+    """Verify default behavior excludes V03."""
+    time, flux, flux_err = _make_box_transit_lc()
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    report = build_report(lc, candidate)
+
+    assert "V03" not in report.checks
+    assert "V03" not in report.checks_run
+
+
+# ---------------------------------------------------------------------------
+# Downsampling test
+# ---------------------------------------------------------------------------
+
+
+def test_downsampling_respects_max_points_and_preserves_transits() -> None:
+    """Verify max_lc_points is respected and in-transit points preserved."""
+    time, flux, flux_err = _make_box_transit_lc(
+        baseline_days=90.0,
+        cadence_minutes=2.0,
+        depth_frac=0.01,
+        noise_ppm=50.0,
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    # Use a small max to force downsampling
+    max_pts = 5000
+    report = build_report(lc, candidate, max_lc_points=max_pts)
+
+    assert report.full_lc is not None
+    assert len(report.full_lc.time) <= max_pts
+
+    # All in-transit points should be preserved
+    n_in_transit = sum(report.full_lc.transit_mask)
+    assert n_in_transit > 0
+
+    # Verify the transit mask marks actual transits (flux dips)
+    transit_flux = [
+        f for f, m in zip(report.full_lc.flux, report.full_lc.transit_mask) if m
+    ]
+    oot_flux = [
+        f for f, m in zip(report.full_lc.flux, report.full_lc.transit_mask) if not m
+    ]
+    assert np.mean(transit_flux) < np.mean(oot_flux)
+
+
+def test_no_downsampling_when_under_limit() -> None:
+    """Verify no downsampling when data is under max_lc_points."""
+    time, flux, flux_err = _make_box_transit_lc(
+        baseline_days=27.0,
+        cadence_minutes=10.0,
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    report = build_report(lc, candidate, max_lc_points=50_000)
+
+    assert report.full_lc is not None
+    # All valid points should be present (no downsampling)
+    valid = np.isfinite(time) & np.isfinite(flux)
+    assert len(report.full_lc.time) == int(np.sum(valid))
+
+
+# ---------------------------------------------------------------------------
+# SNR sanity check
+# ---------------------------------------------------------------------------
+
+
+def test_snr_reasonable_for_deep_transit() -> None:
+    """Verify SNR is significant for a deep, low-noise transit."""
+    time, flux, flux_err = _make_box_transit_lc(
+        depth_frac=0.01,
+        noise_ppm=50.0,
+        baseline_days=27.0,
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    report = build_report(lc, candidate)
+
+    assert report.lc_summary is not None
+    # 10000 ppm depth with 50 ppm noise over 27 days -> SNR should be high
+    assert report.lc_summary.snr > 10.0
+    # Depth should be close to 10000 ppm
+    assert abs(report.lc_summary.depth_ppm - 10000.0) < 2000.0
+
+
+# ---------------------------------------------------------------------------
+# Edge case: NaN safety in JSON output
+# ---------------------------------------------------------------------------
+
+
+def test_nan_safety_in_json_output() -> None:
+    """Verify to_json() produces valid JSON with no NaN/Inf values."""
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    # Manually construct LCSummary with depth_err_ppm=None (as if detect_transit failed)
+    lc_summary = LCSummary(
+        n_points=1000,
+        n_valid=990,
+        n_transits=7,
+        n_in_transit_total=70,
+        duration_days=27.0,
+        cadence_seconds=120.0,
+        flux_std_ppm=100.0,
+        flux_mad_ppm=90.0,
+        gap_fraction=0.01,
+        snr=0.0,
+        depth_ppm=0.0,
+        depth_err_ppm=None,
+    )
+
+    report = ReportData(
+        candidate=candidate,
+        lc_summary=lc_summary,
+        checks_run=[],
+    )
+
+    j = report.to_json()
+
+    # Must round-trip through json.dumps with allow_nan=False (strict RFC 8259)
+    serialized = json.dumps(j, allow_nan=False)
+    assert isinstance(serialized, str)
+
+    # depth_err_ppm should be None, not NaN
+    assert j["lc_summary"]["depth_err_ppm"] is None
+
+
+# ---------------------------------------------------------------------------
+# Edge case: flux_err=None
+# ---------------------------------------------------------------------------
+
+
+def test_build_report_with_flux_err_none() -> None:
+    """Verify build_report works when flux_err is None."""
+    time, flux, _ = _make_box_transit_lc(
+        depth_frac=0.01, noise_ppm=50.0,
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=None)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    report = build_report(lc, candidate)
+
+    assert report.lc_summary is not None
+    assert report.lc_summary.n_points > 0
+    assert report.lc_summary.n_valid > 0
+
+    # JSON round-trip should work
+    j = report.to_json()
+    serialized = json.dumps(j, allow_nan=False)
+    assert isinstance(serialized, str)
+
+
+# ---------------------------------------------------------------------------
+# Edge case: single transit visible
+# ---------------------------------------------------------------------------
+
+
+def test_build_report_single_transit() -> None:
+    """Verify build_report succeeds with only ~1 transit in the data."""
+    time, flux, flux_err = _make_box_transit_lc(
+        period_days=25.0,  # long period -> only ~1 transit in 27-day baseline
+        t0_btjd=13.0,
+        duration_hours=3.0,
+        baseline_days=27.0,
+        cadence_minutes=10.0,
+        depth_frac=0.01,
+        noise_ppm=50.0,
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=25.0, t0_btjd=13.0, duration_hours=3.0)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    report = build_report(lc, candidate)
+
+    assert report.lc_summary is not None
+    assert report.lc_summary.n_points > 0
+    assert report.full_lc is not None
+    assert report.phase_folded is not None
+
+    # JSON round-trip should work
+    j = report.to_json()
+    serialized = json.dumps(j, allow_nan=False)
+    assert isinstance(serialized, str)
+
+
+# ---------------------------------------------------------------------------
+# Edge case: all points in transit for downsampling
+# ---------------------------------------------------------------------------
+
+
+def test_downsample_all_in_transit() -> None:
+    """Verify _downsample_preserving_transits handles all-in-transit data."""
+    n = 100
+    time = np.linspace(0.0, 1.0, n)
+    flux = np.ones(n)
+    transit_mask = np.ones(n, dtype=bool)  # all in transit
+
+    t_out, f_out, m_out = _downsample_preserving_transits(
+        time, flux, transit_mask, max_points=50
+    )
+
+    # All points are in-transit, so n_oot_budget <= 0 -> no downsampling
+    assert len(t_out) == n
+    assert all(m_out)  # all should still be marked in-transit
