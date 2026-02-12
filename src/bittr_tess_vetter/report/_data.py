@@ -515,9 +515,7 @@ def _build_alias_scalar_summary(
             depths = [d for d in (_coerce_finite_float(v) for v in maybe_depths) if d is not None]
             if depths:
                 depth_ppm_peak = float(max(depths))
-    if depth_ppm_peak is None and score_by_label:
-        # Fallback to the strongest harmonic scalar when only scores are available.
-        depth_ppm_peak = float(max(score_by_label.values()))
+    # Do not backfill this with harmonic scores; keep ppm semantics strict.
 
     return {
         "best_harmonic": str(alias_summary.best_harmonic) if alias_summary.best_harmonic else None,

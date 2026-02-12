@@ -471,13 +471,23 @@ def test_alias_scalar_summary_regression_deterministic_and_scalar_only() -> None
     block_b = payload_b["summary"]["alias_scalar_summary"]
     assert block_a == block_b, "alias_scalar_summary must be deterministic"
 
-    assert set(block_a.keys()) == {
+    assert set(block_a.keys()).issubset(
+        {
+            "best_harmonic",
+            "best_ratio_over_p",
+            "score_p",
+            "score_p_over_2",
+            "score_2p",
+            "depth_ppm_peak",
+        }
+    )
+    # `depth_ppm_peak` may be absent when no harmonic depth values are available.
+    assert set(block_a.keys()) >= {
         "best_harmonic",
         "best_ratio_over_p",
         "score_p",
         "score_p_over_2",
         "score_2p",
-        "depth_ppm_peak",
     }
     assert block_a["best_harmonic"] == "P"
     assert block_a["best_ratio_over_p"] == pytest.approx(1.0)
@@ -485,8 +495,8 @@ def test_alias_scalar_summary_regression_deterministic_and_scalar_only() -> None
     assert block_a["score_p_over_2"] == pytest.approx(0.2)
     assert block_a["score_2p"] == pytest.approx(0.1)
     assert (
-        block_a["depth_ppm_peak"] is None
-        or isinstance(block_a["depth_ppm_peak"], float)
+        block_a.get("depth_ppm_peak") is None
+        or isinstance(block_a.get("depth_ppm_peak"), float)
     )
 
     _assert_scalar_only_summary_block(block_a, block_name="alias_scalar_summary")
