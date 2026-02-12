@@ -218,6 +218,7 @@ def test_build_report_integration() -> None:
     assert report.oot_context is not None
     assert report.timing_series is not None
     assert report.alias_summary is not None
+    assert report.phase15 is not None
     assert report.odd_even_phase is not None
     assert report.secondary_scan is not None
     assert report.secondary_scan.quality is not None
@@ -333,6 +334,12 @@ def test_json_schema_keys_and_types() -> None:
     assert isinstance(j["alias_summary"]["scores"], list)
     assert isinstance(j["alias_summary"]["best_harmonic"], str)
     assert isinstance(j["alias_summary"]["best_ratio_over_p"], float)
+    assert isinstance(j["phase15"], dict)
+    assert isinstance(j["phase15"]["version"], str)
+    assert isinstance(j["phase15"]["per_epoch"], list)
+    assert isinstance(j["phase15"]["robustness"], dict)
+    assert isinstance(j["phase15"]["red_noise"], dict)
+    assert isinstance(j["phase15"]["fp_signals"], dict)
     assert isinstance(j["odd_even_phase"], dict)
     assert isinstance(j["odd_even_phase"]["odd_phase"], list)
     assert isinstance(j["odd_even_phase"]["even_phase"], list)
@@ -634,10 +641,25 @@ def test_build_report_without_additional_plots() -> None:
     assert report.per_transit_stack is None
     assert report.odd_even_phase is None
     assert report.secondary_scan is None
+    assert report.phase15 is not None
     j = report.to_json()
     assert "per_transit_stack" not in j
     assert "odd_even_phase" not in j
     assert "secondary_scan" not in j
+    assert "phase15" in j
+
+
+def test_build_report_without_phase15() -> None:
+    """Payload control: phase1.5 block can be disabled."""
+    time, flux, flux_err = _make_box_transit_lc()
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    report = build_report(lc, candidate, include_phase15=False)
+    assert report.phase15 is None
+    j = report.to_json()
+    assert "phase15" not in j
 
 
 def test_secondary_scan_preserves_full_orbit_phase_coverage() -> None:

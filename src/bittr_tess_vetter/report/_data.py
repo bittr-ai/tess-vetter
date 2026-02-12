@@ -214,6 +214,75 @@ class AliasHarmonicSummaryData:
     best_ratio_over_p: float
 
 
+@dataclass(frozen=True)
+class Phase15EpochMetrics:
+    """Per-epoch LC diagnostics for Phase 1.5 robustness analysis."""
+
+    epoch_index: int
+    t_mid_expected_btjd: float
+    t_mid_measured_btjd: float | None
+    time_coverage_fraction: float
+    n_points_total: int
+    n_in_transit: int
+    n_oot: int
+    depth_ppm: float | None
+    depth_err_ppm: float | None
+    baseline_level: float | None
+    baseline_slope_per_day: float | None
+    oot_scatter_ppm: float | None
+    oot_mad_ppm: float | None
+    in_transit_outlier_count: int
+    oot_outlier_count: int
+    quality_in_transit_nonzero: int | None
+    quality_oot_nonzero: int | None
+
+
+@dataclass(frozen=True)
+class Phase15RobustnessMetrics:
+    """LOTO robustness summary derived from per-epoch depth measurements."""
+
+    n_epochs_measured: int
+    loto_snr_min: float | None
+    loto_snr_max: float | None
+    loto_snr_mean: float | None
+    loto_depth_ppm_min: float | None
+    loto_depth_ppm_max: float | None
+    loto_depth_shift_ppm_max: float | None
+    dominance_index: float | None
+
+
+@dataclass(frozen=True)
+class Phase15RedNoiseMetrics:
+    """Red-noise proxy at standard timescales."""
+
+    beta_30m: float | None
+    beta_60m: float | None
+    beta_duration: float | None
+
+
+@dataclass(frozen=True)
+class Phase15FPSignals:
+    """Compact LC-only false-positive signal summary."""
+
+    odd_even_depth_diff_sigma: float | None
+    secondary_depth_sigma: float | None
+    phase_0p5_bin_depth_ppm: float | None
+    v_shape_metric: float | None
+    asymmetry_sigma: float | None
+
+
+@dataclass(frozen=True)
+class Phase15Data:
+    """Phase 1.5 additive LC robustness data block."""
+
+    version: str
+    baseline_window_mult: float
+    per_epoch: list[Phase15EpochMetrics]
+    robustness: Phase15RobustnessMetrics
+    red_noise: Phase15RedNoiseMetrics
+    fp_signals: Phase15FPSignals
+
+
 def _scrub_non_finite(obj: Any) -> Any:
     """Replace NaN/Inf float values with None for JSON safety (RFC 8259)."""
     if isinstance(obj, float):
@@ -265,6 +334,7 @@ class ReportData:
     oot_context: OOTContextPlotData | None = None
     timing_series: TransitTimingPlotData | None = None
     alias_summary: AliasHarmonicSummaryData | None = None
+    phase15: Phase15Data | None = None
     odd_even_phase: OddEvenPhasePlotData | None = None
     secondary_scan: SecondaryScanPlotData | None = None
 
@@ -335,6 +405,8 @@ class ReportData:
             result["timing_series"] = asdict(self.timing_series)
         if self.alias_summary is not None:
             result["alias_summary"] = asdict(self.alias_summary)
+        if self.phase15 is not None:
+            result["phase15"] = asdict(self.phase15)
         if self.odd_even_phase is not None:
             result["odd_even_phase"] = asdict(self.odd_even_phase)
         if self.secondary_scan is not None:

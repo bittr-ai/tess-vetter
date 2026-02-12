@@ -36,6 +36,11 @@ from bittr_tess_vetter.report._data import (
     OddEvenPhasePlotData,
     OOTContextPlotData,
     PerTransitStackPlotData,
+    Phase15Data,
+    Phase15EpochMetrics,
+    Phase15FPSignals,
+    Phase15RedNoiseMetrics,
+    Phase15RobustnessMetrics,
     PhaseFoldedPlotData,
     ReportData,
     SecondaryScanPlotData,
@@ -48,6 +53,7 @@ from bittr_tess_vetter.validation.base import (
     count_transits,
     get_in_transit_mask,
     get_out_of_transit_mask,
+    measure_transit_depth,
 )
 
 logger = logging.getLogger(__name__)
@@ -64,6 +70,7 @@ def _validate_build_inputs(
     max_transit_windows: int,
     max_points_per_window: int,
     max_timing_points: int = 200,
+    max_phase15_epochs: int = 128,
 ) -> None:
     """Validate numeric inputs for build_report().
 
@@ -102,6 +109,7 @@ def _validate_build_inputs(
     _validate_point_budget("max_transit_windows", max_transit_windows)
     _validate_point_budget("max_points_per_window", max_points_per_window)
     _validate_point_budget("max_timing_points", max_timing_points)
+    _validate_point_budget("max_phase15_epochs", max_phase15_epochs)
 
 
 def build_report(
@@ -120,6 +128,8 @@ def build_report(
     max_transit_windows: int = 24,
     max_points_per_window: int = 300,
     max_timing_points: int = 200,
+    include_phase15: bool = True,
+    max_phase15_epochs: int = 128,
 ) -> ReportData:
     """Assemble LC-only report data packet.
 
@@ -147,6 +157,8 @@ def build_report(
             in the per-transit stack panel.
         max_points_per_window: Max points per per-transit window.
         max_timing_points: Max per-epoch points for timing series.
+        include_phase15: If True, compute Phase 1.5 robustness data.
+        max_phase15_epochs: Max per-epoch windows in phase15 payload.
 
     Returns:
         ReportData with all Phase 1 contents populated.
@@ -162,6 +174,7 @@ def build_report(
         max_transit_windows,
         max_points_per_window,
         max_timing_points,
+        max_phase15_epochs,
     )
 
     # 1. Determine enabled checks
@@ -202,6 +215,7 @@ def build_report(
     oot_context: OOTContextPlotData | None = None
     timing_diag: TransitTimingPlotData | None = None
     alias_diag: AliasHarmonicSummaryData | None = None
+    phase15_data: Phase15Data | None = None
     odd_even_phase: OddEvenPhasePlotData | None = None
     secondary_scan: SecondaryScanPlotData | None = None
     if include_additional_plots:
@@ -243,6 +257,13 @@ def build_report(
             bin_minutes=bin_minutes,
             max_points=max_phase_points,
         )
+    if include_phase15:
+        phase15_data = _build_phase15_data(
+            lc,
+            candidate,
+            checks={r.id: r for r in results},
+            max_epochs=max_phase15_epochs,
+        )
 
     # 7. Assemble ReportData
     return ReportData(
@@ -260,6 +281,7 @@ def build_report(
         oot_context=oot_context,
         timing_series=timing_diag,
         alias_summary=alias_diag,
+        phase15=phase15_data,
         odd_even_phase=odd_even_phase,
         secondary_scan=secondary_scan,
         checks_run=[r.id for r in results],
@@ -983,6 +1005,375 @@ def _build_alias_harmonic_summary_data(
         best_harmonic=str(summary.best_harmonic),
         best_ratio_over_p=float(summary.best_ratio_over_p),
     )
+
+
+def _build_phase15_data(
+    lc: LightCurve,
+    candidate: Candidate,
+    *,
+    checks: dict[str, Any],
+    max_epochs: int,
+    baseline_window_mult: float = 6.0,
+) -> Phase15Data:
+    """Build Phase 1.5 robustness payload (LC-only, deterministic)."""
+    time, flux, quality = _get_valid_time_flux_quality(lc)
+    eph = candidate.ephemeris
+    if len(time) == 0:
+        return Phase15Data(
+            version="1.0",
+            baseline_window_mult=float(baseline_window_mult),
+            per_epoch=[],
+            robustness=Phase15RobustnessMetrics(
+                n_epochs_measured=0,
+                loto_snr_min=None,
+                loto_snr_max=None,
+                loto_snr_mean=None,
+                loto_depth_ppm_min=None,
+                loto_depth_ppm_max=None,
+                loto_depth_shift_ppm_max=None,
+                dominance_index=None,
+            ),
+            red_noise=Phase15RedNoiseMetrics(beta_30m=None, beta_60m=None, beta_duration=None),
+            fp_signals=Phase15FPSignals(
+                odd_even_depth_diff_sigma=None,
+                secondary_depth_sigma=None,
+                phase_0p5_bin_depth_ppm=None,
+                v_shape_metric=None,
+                asymmetry_sigma=None,
+            ),
+        )
+
+    period = eph.period_days
+    t0 = eph.t0_btjd
+    duration_days = eph.duration_hours / 24.0
+    half_window_days = baseline_window_mult * duration_days
+    in_half_days = duration_days / 2.0
+
+    if len(time) > 1:
+        cadence_days = float(np.median(np.diff(np.sort(time))))
+        if cadence_days <= 0 or not np.isfinite(cadence_days):
+            cadence_days = None
+    else:
+        cadence_days = None
+
+    epoch_idx = np.floor((time - t0 + period / 2.0) / period).astype(int)
+    unique_epochs = np.unique(epoch_idx)
+
+    per_epoch: list[Phase15EpochMetrics] = []
+    for ep in unique_epochs:
+        t_mid = t0 + float(ep) * period
+        local_window = np.abs(time - t_mid) <= half_window_days
+        if not np.any(local_window):
+            continue
+
+        t_local = time[local_window]
+        f_local = flux[local_window]
+        q_local = quality[local_window] if quality is not None else None
+        dt_local = t_local - t_mid
+        in_transit = np.abs(dt_local) <= in_half_days
+        n_in = int(np.sum(in_transit))
+        n_total = int(len(t_local))
+
+        local_oot = ~in_transit
+        n_oot_local = int(np.sum(local_oot))
+
+        # Baseline arrays default to local window; optionally fall back to global OOT.
+        t_base = t_local
+        f_base = f_local
+        dt_base = dt_local
+        in_base = in_transit
+        oot_base = local_oot
+        n_oot_base = n_oot_local
+        q_base = q_local
+        if n_oot_base < 5:
+            global_oot = ~get_in_transit_mask(time, period, t0, eph.duration_hours)
+            t_base = time[global_oot]
+            f_base = flux[global_oot]
+            q_base = quality[global_oot] if quality is not None else None
+            dt_base = t_base - t_mid
+            in_base = np.abs(dt_base) <= in_half_days
+            oot_base = ~in_base
+            n_oot_base = int(np.sum(oot_base))
+
+        t_mid_measured = float(np.median(t_local[in_transit])) if n_in >= 3 else None
+
+        depth_ppm: float | None = None
+        depth_err_ppm: float | None = None
+        if n_in >= 3 and n_oot_base >= 5:
+            d, d_err = measure_transit_depth(f_base, in_base, oot_base)
+            if np.isfinite(d) and np.isfinite(d_err):
+                depth_ppm = float(d * 1e6)
+                depth_err_ppm = float(d_err * 1e6)
+
+        baseline_level: float | None = None
+        baseline_slope: float | None = None
+        oot_scatter_ppm: float | None = None
+        oot_mad_ppm: float | None = None
+        in_outliers = 0
+        oot_outliers = 0
+        if n_oot_base >= 3:
+            x = dt_base[oot_base]
+            y = f_base[oot_base]
+            try:
+                coeff = np.polyfit(x, y, deg=1)
+                baseline_slope = float(coeff[0])
+                baseline_level = float(coeff[1])
+                model_base = np.polyval(coeff, dt_base)
+                model_local = np.polyval(coeff, dt_local)
+            except Exception:
+                baseline_level = float(np.median(y))
+                baseline_slope = 0.0
+                model_base = np.full_like(dt_base, baseline_level, dtype=np.float64)
+                model_local = np.full_like(dt_local, baseline_level, dtype=np.float64)
+
+            oot_resid = f_base[oot_base] - model_base[oot_base]
+            oot_scatter_ppm = float(np.std(oot_resid, ddof=1) * 1e6) if len(oot_resid) > 1 else 0.0
+            mad = float(np.median(np.abs(oot_resid - np.median(oot_resid)))) if len(oot_resid) > 0 else 0.0
+            robust_sigma = max(1.4826 * mad, 1e-10)
+            oot_mad_ppm = float(1.4826 * mad * 1e6)
+            threshold = 4.0 * robust_sigma
+            in_outliers = int(np.sum(np.abs(f_local[in_transit] - model_local[in_transit]) > threshold)) if n_in > 0 else 0
+            oot_outliers = int(np.sum(np.abs(oot_resid) > threshold))
+
+        quality_in_nonzero: int | None = None
+        quality_oot_nonzero: int | None = None
+        if q_base is not None:
+            quality_in_nonzero = int(np.sum(q_local[in_transit] != 0)) if (q_local is not None and n_in > 0) else 0
+            quality_oot_nonzero = int(np.sum(q_base[oot_base] != 0)) if n_oot_base > 0 else 0
+
+        if cadence_days is not None and cadence_days > 0:
+            expected_points = max((2.0 * half_window_days) / cadence_days, 1.0)
+            coverage = float(min(n_total / expected_points, 1.0))
+        else:
+            coverage = 1.0
+
+        per_epoch.append(
+            Phase15EpochMetrics(
+                epoch_index=int(ep),
+                t_mid_expected_btjd=float(t_mid),
+                t_mid_measured_btjd=t_mid_measured,
+                time_coverage_fraction=coverage,
+                n_points_total=n_total,
+                n_in_transit=n_in,
+                n_oot=n_oot_base,
+                depth_ppm=depth_ppm,
+                depth_err_ppm=depth_err_ppm,
+                baseline_level=baseline_level,
+                baseline_slope_per_day=baseline_slope,
+                oot_scatter_ppm=oot_scatter_ppm,
+                oot_mad_ppm=oot_mad_ppm,
+                in_transit_outlier_count=in_outliers,
+                oot_outlier_count=oot_outliers,
+                quality_in_transit_nonzero=quality_in_nonzero,
+                quality_oot_nonzero=quality_oot_nonzero,
+            )
+        )
+
+    per_epoch = sorted(per_epoch, key=lambda x: x.epoch_index)
+    if len(per_epoch) > max_epochs:
+        pick = np.round(np.linspace(0, len(per_epoch) - 1, max_epochs)).astype(int)
+        per_epoch = [per_epoch[int(i)] for i in pick]
+
+    robustness = _build_phase15_robustness(per_epoch)
+    red_noise = _build_phase15_red_noise(time, flux, eph, cadence_days=cadence_days)
+    fp_signals = _build_phase15_fp_signals(checks, time, flux, eph)
+
+    return Phase15Data(
+        version="1.0",
+        baseline_window_mult=float(baseline_window_mult),
+        per_epoch=per_epoch,
+        robustness=robustness,
+        red_noise=red_noise,
+        fp_signals=fp_signals,
+    )
+
+
+def _build_phase15_robustness(
+    per_epoch: list[Phase15EpochMetrics],
+) -> Phase15RobustnessMetrics:
+    """Build leave-one-transit-out robustness summary."""
+    depths = np.array(
+        [m.depth_ppm for m in per_epoch if m.depth_ppm is not None and m.depth_err_ppm and m.depth_err_ppm > 0],
+        dtype=np.float64,
+    )
+    errs = np.array(
+        [m.depth_err_ppm for m in per_epoch if m.depth_ppm is not None and m.depth_err_ppm and m.depth_err_ppm > 0],
+        dtype=np.float64,
+    )
+    n = int(len(depths))
+    if n < 3:
+        return Phase15RobustnessMetrics(
+            n_epochs_measured=n,
+            loto_snr_min=None,
+            loto_snr_max=None,
+            loto_snr_mean=None,
+            loto_depth_ppm_min=None,
+            loto_depth_ppm_max=None,
+            loto_depth_shift_ppm_max=None,
+            dominance_index=None,
+        )
+
+    w = 1.0 / np.maximum(errs**2, 1e-12)
+    full_depth = float(np.sum(depths * w) / np.sum(w))
+    full_err = float(np.sqrt(1.0 / np.sum(w)))
+    full_snr = abs(full_depth) / max(full_err, 1e-12)
+
+    loto_depths: list[float] = []
+    loto_snrs: list[float] = []
+    for i in range(n):
+        keep = np.ones(n, dtype=bool)
+        keep[i] = False
+        if int(np.sum(keep)) < 2:
+            continue
+        w_k = w[keep]
+        d_k = depths[keep]
+        d = float(np.sum(d_k * w_k) / np.sum(w_k))
+        e = float(np.sqrt(1.0 / np.sum(w_k)))
+        loto_depths.append(d)
+        loto_snrs.append(abs(d) / max(e, 1e-12))
+
+    if len(loto_depths) == 0:
+        return Phase15RobustnessMetrics(
+            n_epochs_measured=n,
+            loto_snr_min=None,
+            loto_snr_max=None,
+            loto_snr_mean=None,
+            loto_depth_ppm_min=None,
+            loto_depth_ppm_max=None,
+            loto_depth_shift_ppm_max=None,
+            dominance_index=None,
+        )
+
+    loto_d_arr = np.asarray(loto_depths, dtype=np.float64)
+    loto_s_arr = np.asarray(loto_snrs, dtype=np.float64)
+    shift_max = float(np.max(np.abs(loto_d_arr - full_depth)))
+    dominance = float(max((full_snr - float(np.min(loto_s_arr))) / max(full_snr, 1e-12), 0.0))
+    return Phase15RobustnessMetrics(
+        n_epochs_measured=n,
+        loto_snr_min=float(np.min(loto_s_arr)),
+        loto_snr_max=float(np.max(loto_s_arr)),
+        loto_snr_mean=float(np.mean(loto_s_arr)),
+        loto_depth_ppm_min=float(np.min(loto_d_arr)),
+        loto_depth_ppm_max=float(np.max(loto_d_arr)),
+        loto_depth_shift_ppm_max=shift_max,
+        dominance_index=dominance,
+    )
+
+
+def _red_noise_beta(
+    residuals: np.ndarray,
+    times: np.ndarray,
+    *,
+    bin_size_days: float,
+) -> float | None:
+    if len(residuals) < 10 or bin_size_days <= 0:
+        return None
+    sort_idx = np.argsort(times)
+    r = residuals[sort_idx]
+    t = times[sort_idx]
+    t_min = float(t[0])
+    t_max = float(t[-1])
+    if t_max - t_min < 2.0 * bin_size_days:
+        return None
+    n_bins = max(3, int((t_max - t_min) / bin_size_days))
+    edges = np.linspace(t_min, t_max, n_bins + 1)
+    means = []
+    counts = []
+    for i in range(n_bins):
+        m = (t >= edges[i]) & (t < edges[i + 1])
+        if int(np.sum(m)) >= 3:
+            means.append(float(np.mean(r[m])))
+            counts.append(int(np.sum(m)))
+    if len(means) < 3:
+        return None
+    observed = float(np.std(np.asarray(means, dtype=np.float64), ddof=1))
+    point = float(np.std(r, ddof=1)) if len(r) > 1 else 0.0
+    avg_per_bin = float(np.mean(counts)) if len(counts) > 0 else 0.0
+    if point <= 0 or avg_per_bin <= 0:
+        return None
+    expected = point / np.sqrt(avg_per_bin)
+    if expected <= 0:
+        return None
+    return float(max(observed / expected, 1.0))
+
+
+def _build_phase15_red_noise(
+    time: np.ndarray,
+    flux: np.ndarray,
+    ephemeris: Ephemeris,
+    *,
+    cadence_days: float | None,
+) -> Phase15RedNoiseMetrics:
+    oot_mask = get_out_of_transit_mask(
+        time, ephemeris.period_days, ephemeris.t0_btjd, ephemeris.duration_hours, buffer_factor=2.0
+    )
+    if not np.any(oot_mask):
+        return Phase15RedNoiseMetrics(beta_30m=None, beta_60m=None, beta_duration=None)
+    t_oot = time[oot_mask]
+    f_oot = flux[oot_mask]
+    resid = f_oot - np.median(f_oot)
+    beta_30m = _red_noise_beta(resid, t_oot, bin_size_days=30.0 / 1440.0)
+    beta_60m = _red_noise_beta(resid, t_oot, bin_size_days=60.0 / 1440.0)
+    beta_dur = _red_noise_beta(resid, t_oot, bin_size_days=max(ephemeris.duration_hours, 0.5) / 24.0)
+    return Phase15RedNoiseMetrics(beta_30m=beta_30m, beta_60m=beta_60m, beta_duration=beta_dur)
+
+
+def _build_phase15_fp_signals(
+    checks: dict[str, Any],
+    time: np.ndarray,
+    flux: np.ndarray,
+    ephemeris: Ephemeris,
+) -> Phase15FPSignals:
+    def _metric(check_id: str, key: str) -> float | None:
+        check = checks.get(check_id)
+        if check is None:
+            return None
+        metrics = getattr(check, "metrics", None) or {}
+        val = metrics.get(key)
+        if val is None:
+            return None
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
+
+    phase = ((time - ephemeris.t0_btjd) % ephemeris.period_days) / ephemeris.period_days
+    half_dur_phase = ((ephemeris.duration_hours / 24.0) / ephemeris.period_days) / 2.0
+    in_secondary = np.abs(phase - 0.5) <= half_dur_phase
+    oot = ((phase > 0.15) & (phase < 0.35)) | ((phase > 0.65) & (phase < 0.85))
+    phase_0p5_ppm: float | None = None
+    if int(np.sum(in_secondary)) >= 3 and int(np.sum(oot)) >= 10:
+        sec = float(np.mean(flux[in_secondary]))
+        base = float(np.mean(flux[oot]))
+        phase_0p5_ppm = float((base - sec) * 1e6)
+
+    odd_even_sigma = _metric("V01", "delta_sigma")
+    if odd_even_sigma is None:
+        odd_even_sigma = _metric("V01", "depth_diff_sigma")
+    return Phase15FPSignals(
+        odd_even_depth_diff_sigma=odd_even_sigma,
+        secondary_depth_sigma=_metric("V02", "secondary_depth_sigma"),
+        phase_0p5_bin_depth_ppm=phase_0p5_ppm,
+        v_shape_metric=_metric("V05", "tflat_ttotal_ratio"),
+        asymmetry_sigma=_metric("V15", "asymmetry_sigma"),
+    )
+
+
+def _get_valid_time_flux_quality(
+    lc: LightCurve,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+    """Return finite, mask-filtered time/flux/(optional)quality arrays."""
+    time = np.asarray(lc.time, dtype=np.float64)
+    flux = np.asarray(lc.flux, dtype=np.float64)
+    valid = np.isfinite(time) & np.isfinite(flux)
+    if lc.valid_mask is not None:
+        valid = valid & np.asarray(lc.valid_mask, dtype=np.bool_)
+    quality = None
+    if lc.quality is not None:
+        q = np.asarray(lc.quality)
+        if q.shape == time.shape:
+            quality = q[valid]
+    return time[valid], flux[valid], quality
 
 
 def _build_secondary_scan_plot_data(
