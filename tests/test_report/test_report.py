@@ -31,11 +31,15 @@ from bittr_tess_vetter.report import (
     ReportData,
     build_report,
 )
+import pytest
+
 from bittr_tess_vetter.report._build import (
     _bin_phase_data,
     _downsample_phase_preserving_transit,
     _downsample_preserving_transits,
+    _validate_build_inputs,
 )
+from bittr_tess_vetter.report._data import _scrub_non_finite
 
 
 # ---------------------------------------------------------------------------
@@ -697,3 +701,69 @@ def test_downsample_phase_all_near_transit() -> None:
     p_out, f_out = _downsample_phase_preserving_transit(phase, flux, max_points=100)
 
     assert len(p_out) <= 100
+
+
+# ---------------------------------------------------------------------------
+# _validate_build_inputs tests
+# ---------------------------------------------------------------------------
+
+_VALID_EPH = Ephemeris(period_days=3.5, t0_btjd=1000.0, duration_hours=2.5)
+
+
+def test_validate_rejects_zero_max_lc_points() -> None:
+    with pytest.raises(ValueError, match="max_lc_points"):
+        _validate_build_inputs(_VALID_EPH, 30.0, max_lc_points=0, max_phase_points=100)
+
+
+def test_validate_rejects_negative_max_lc_points() -> None:
+    with pytest.raises(ValueError, match="max_lc_points"):
+        _validate_build_inputs(_VALID_EPH, 30.0, max_lc_points=-1, max_phase_points=100)
+
+
+def test_validate_rejects_zero_max_phase_points() -> None:
+    with pytest.raises(ValueError, match="max_phase_points"):
+        _validate_build_inputs(_VALID_EPH, 30.0, max_lc_points=100, max_phase_points=0)
+
+
+def test_validate_rejects_negative_max_phase_points() -> None:
+    with pytest.raises(ValueError, match="max_phase_points"):
+        _validate_build_inputs(_VALID_EPH, 30.0, max_lc_points=100, max_phase_points=-5)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("period_days", float("nan")),
+    ("period_days", float("inf")),
+    ("duration_hours", float("nan")),
+    ("duration_hours", float("inf")),
+    ("t0_btjd", float("nan")),
+    ("t0_btjd", float("inf")),
+])
+def test_validate_rejects_non_finite_ephemeris(field: str, value: float) -> None:
+    kwargs = {"period_days": 3.5, "t0_btjd": 1000.0, "duration_hours": 2.5}
+    kwargs[field] = value
+    eph = Ephemeris(**kwargs)
+    with pytest.raises(ValueError, match=field):
+        _validate_build_inputs(eph, 30.0, max_lc_points=100, max_phase_points=100)
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), 0.0, -1.0])
+def test_validate_rejects_bad_bin_minutes(value: float) -> None:
+    with pytest.raises(ValueError, match="bin_minutes"):
+        _validate_build_inputs(_VALID_EPH, value, max_lc_points=100, max_phase_points=100)
+
+
+def test_validate_accepts_valid_inputs() -> None:
+    """Smoke test: valid inputs should not raise."""
+    _validate_build_inputs(_VALID_EPH, 30.0, max_lc_points=50_000, max_phase_points=10_000)
+
+
+# ---------------------------------------------------------------------------
+# _scrub_non_finite tuple handling
+# ---------------------------------------------------------------------------
+
+
+def test_scrub_non_finite_handles_tuples() -> None:
+    data = {"phase_range": (float("nan"), float("inf"), 0.5, -0.5)}
+    result = _scrub_non_finite(data)
+    assert result["phase_range"] == (None, None, 0.5, -0.5)
+    assert isinstance(result["phase_range"], tuple)

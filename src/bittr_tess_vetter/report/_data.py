@@ -80,6 +80,8 @@ def _scrub_non_finite(obj: Any) -> Any:
         return {k: _scrub_non_finite(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_scrub_non_finite(v) for v in obj]
+    if isinstance(obj, tuple):
+        return tuple(_scrub_non_finite(v) for v in obj)
     return obj
 
 

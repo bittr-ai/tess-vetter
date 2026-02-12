@@ -7,6 +7,7 @@ LC summary stats, plot-ready arrays, and assembling ReportData.
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 import numpy as np
@@ -40,6 +41,47 @@ logger = logging.getLogger(__name__)
 
 # Default Phase 1 checks (V03 excluded by default)
 _DEFAULT_ENABLED = {"V01", "V02", "V04", "V05", "V13", "V15"}
+
+
+def _validate_build_inputs(
+    ephemeris: Ephemeris,
+    bin_minutes: float,
+    max_lc_points: int,
+    max_phase_points: int,
+) -> None:
+    """Validate numeric inputs for build_report().
+
+    Raises ValueError for non-finite, non-positive, or otherwise
+    invalid parameter values.  Centralised here so that any future
+    entry point can reuse the same guards.
+    """
+    # Ephemeris — must be finite; period + duration must also be positive
+    if not math.isfinite(ephemeris.period_days) or ephemeris.period_days <= 0:
+        raise ValueError(
+            f"period_days must be finite and positive, got {ephemeris.period_days}"
+        )
+    if not math.isfinite(ephemeris.duration_hours) or ephemeris.duration_hours <= 0:
+        raise ValueError(
+            f"duration_hours must be finite and positive, got {ephemeris.duration_hours}"
+        )
+    if not math.isfinite(ephemeris.t0_btjd):
+        raise ValueError(f"t0_btjd must be finite, got {ephemeris.t0_btjd}")
+
+    # Bin width
+    if not math.isfinite(bin_minutes) or bin_minutes <= 0:
+        raise ValueError(
+            f"bin_minutes must be finite and positive, got {bin_minutes}"
+        )
+
+    # Point budgets
+    if max_lc_points <= 0:
+        raise ValueError(
+            f"max_lc_points must be positive, got {max_lc_points}"
+        )
+    if max_phase_points <= 0:
+        raise ValueError(
+            f"max_phase_points must be positive, got {max_phase_points}"
+        )
 
 
 def build_report(
@@ -82,14 +124,7 @@ def build_report(
     ephemeris = candidate.ephemeris
 
     # 0. Validate inputs
-    if ephemeris.period_days <= 0:
-        raise ValueError(f"period_days must be positive, got {ephemeris.period_days}")
-    if ephemeris.duration_hours <= 0:
-        raise ValueError(
-            f"duration_hours must be positive, got {ephemeris.duration_hours}"
-        )
-    if bin_minutes <= 0:
-        raise ValueError(f"bin_minutes must be positive, got {bin_minutes}")
+    _validate_build_inputs(ephemeris, bin_minutes, max_lc_points, max_phase_points)
 
     # 1. Determine enabled checks
     enabled = set(_DEFAULT_ENABLED)
