@@ -106,18 +106,40 @@ def _compute_box_depth(
     err_in = flux_err[in_transit]
     err_out = flux_err[out_transit]
 
-    w_in = 1.0 / (err_in**2 + 1e-10)
-    w_out = 1.0 / (err_out**2 + 1e-10)
+    # Prefer weighted estimates when uncertainties are usable; fall back
+    # to robust OOT-scatter noise when flux_err is missing/zero.
+    has_usable_err = (
+        np.all(np.isfinite(err_in))
+        and np.all(np.isfinite(err_out))
+        and np.all(err_in > 0)
+        and np.all(err_out > 0)
+    )
 
-    mean_in = float(np.sum(flux_in * w_in) / np.sum(w_in))
-    mean_out = float(np.sum(flux_out * w_out) / np.sum(w_out))
+    if has_usable_err:
+        w_in = 1.0 / (err_in**2 + 1e-10)
+        w_out = 1.0 / (err_out**2 + 1e-10)
+        sum_w_in = float(np.sum(w_in))
+        sum_w_out = float(np.sum(w_out))
+        if sum_w_in > 0.0 and sum_w_out > 0.0:
+            mean_in = float(np.sum(flux_in * w_in) / sum_w_in)
+            mean_out = float(np.sum(flux_out * w_out) / sum_w_out)
+            var_in = 1.0 / sum_w_in
+            var_out = 1.0 / sum_w_out
+            depth_err = float(np.sqrt(max(var_in + var_out, 0.0)))
+        else:
+            has_usable_err = False
+
+    if not has_usable_err:
+        mean_in = float(np.mean(flux_in))
+        mean_out = float(np.mean(flux_out))
+        median_out = float(np.median(flux_out))
+        mad_out = float(np.median(np.abs(flux_out - median_out)))
+        sigma_out = 1.4826 * mad_out if mad_out > 0 else float(np.std(flux_out, ddof=1))
+        sigma_out = max(float(sigma_out), 1e-10)
+        depth_err = sigma_out * float(np.sqrt((1.0 / n_in) + (1.0 / n_out)))
 
     depth = mean_out - mean_in
     depth_ppm = depth * 1e6
-
-    var_in = 1.0 / float(np.sum(w_in))
-    var_out = 1.0 / float(np.sum(w_out))
-    depth_err = float(np.sqrt(var_in + var_out))
     depth_err_ppm = depth_err * 1e6
 
     significance = depth / depth_err if depth_err > 0 else 0.0

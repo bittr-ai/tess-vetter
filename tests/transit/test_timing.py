@@ -313,6 +313,7 @@ class TestComputeTTVStatistics:
 
         assert "n_transits" in result_dict
         assert "rms_seconds" in result_dict
+        assert "periodicity_score" in result_dict
         assert "periodicity_sigma" in result_dict
         assert "o_minus_c" in result_dict
         assert "transit_times" in result_dict

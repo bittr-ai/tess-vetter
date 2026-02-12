@@ -106,7 +106,8 @@ class TTVResult:
         transit_times: List of individual transit measurements
         o_minus_c: O-C residuals in seconds (observed - calculated)
         rms_seconds: RMS of O-C residuals in seconds
-        periodicity_sigma: Significance of any periodic TTV signal (sigma)
+        periodicity_sigma: Heuristic periodicity score from O-C periodogram
+            contrast (not a calibrated sigma significance)
         n_transits: Number of transits successfully measured
         linear_trend: Linear trend in O-C (seconds per epoch), if detected
     """
@@ -127,6 +128,9 @@ class TTVResult:
         return {
             "n_transits": self.n_transits,
             "rms_seconds": round(self.rms_seconds, 2),
+            # Preferred key: heuristic score (not calibrated sigma).
+            "periodicity_score": round(self.periodicity_sigma, 2),
+            # Backward-compat alias retained for existing consumers.
             "periodicity_sigma": round(self.periodicity_sigma, 2),
             "linear_trend": (
                 round(self.linear_trend, 4) if self.linear_trend is not None else None

@@ -507,7 +507,7 @@ def _compute_periodicity_significance(
     epochs: NDArray[np.float64],
     o_minus_c: NDArray[np.float64],
 ) -> float:
-    """Compute significance of periodic signal in O-C residuals.
+    """Compute heuristic periodicity score in O-C residuals.
 
     Uses Lomb-Scargle periodogram to search for periodic TTVs.
 
@@ -516,7 +516,8 @@ def _compute_periodicity_significance(
         o_minus_c: O-C residuals in seconds
 
     Returns:
-        Significance of best periodic signal in sigma units
+        Heuristic score of best periodic signal from LS power contrast.
+        This is not a calibrated false-alarm probability or sigma.
     """
     if len(epochs) < 8:
         return 0.0

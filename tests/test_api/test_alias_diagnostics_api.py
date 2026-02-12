@@ -164,3 +164,34 @@ def test_harmonic_power_summary_returns_compact_triplet() -> None:
     labels = [h.harmonic for h in summary.harmonics]
     assert labels == ["P", "P/2", "2P"]
     assert summary.best_harmonic in {"P", "P/2", "2P"}
+
+
+def test_harmonic_scores_with_zero_flux_err_remain_finite() -> None:
+    """Missing/zero flux_err should not inflate harmonic scores to invalid values."""
+    rng = np.random.default_rng(11)
+    time = np.linspace(0.0, 30.0, 5000, dtype=np.float64)
+    flux_err = np.zeros_like(time)
+    period_days = 5.0
+    t0_btjd = 0.0
+    duration_hours = 2.0
+    duration_days = duration_hours / 24.0
+
+    in_transit = _box_events(time, period=period_days, t0=t0_btjd, duration_days=duration_days)
+    flux = np.ones_like(time)
+    flux[in_transit] -= 0.01
+    flux += rng.normal(0.0, 2e-4, size=flux.shape)
+
+    scores = compute_harmonic_scores(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        base_period=period_days,
+        base_t0=t0_btjd,
+        duration_hours=duration_hours,
+        harmonics=["P", "P/2", "2P"],
+    )
+
+    assert len(scores) == 3
+    for s in scores:
+        assert np.isfinite(s.score)
+        assert s.score < 500.0
