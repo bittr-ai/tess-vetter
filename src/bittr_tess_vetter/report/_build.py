@@ -30,17 +30,17 @@ from bittr_tess_vetter.compute.transit import (
 from bittr_tess_vetter.report._data import (
     AliasHarmonicSummaryData,
     FullLCPlotData,
+    LCFPSignals,
+    LCRobustnessData,
+    LCRobustnessEpochMetrics,
+    LCRobustnessMetrics,
+    LCRobustnessRedNoiseMetrics,
     LCSummary,
     LocalDetrendDiagnosticPlotData,
     LocalDetrendWindowData,
     OddEvenPhasePlotData,
     OOTContextPlotData,
     PerTransitStackPlotData,
-    Phase15Data,
-    Phase15EpochMetrics,
-    Phase15FPSignals,
-    Phase15RedNoiseMetrics,
-    Phase15RobustnessMetrics,
     PhaseFoldedPlotData,
     ReportData,
     SecondaryScanPlotData,
@@ -58,7 +58,7 @@ from bittr_tess_vetter.validation.base import (
 
 logger = logging.getLogger(__name__)
 
-# Default Phase 1 checks (V03 excluded by default)
+# Default LC checks (V03 excluded by default)
 _DEFAULT_ENABLED = {"V01", "V02", "V04", "V05", "V13", "V15"}
 
 
@@ -70,7 +70,7 @@ def _validate_build_inputs(
     max_transit_windows: int,
     max_points_per_window: int,
     max_timing_points: int = 200,
-    max_phase15_epochs: int = 128,
+    max_lc_robustness_epochs: int = 128,
 ) -> None:
     """Validate numeric inputs for build_report().
 
@@ -109,7 +109,7 @@ def _validate_build_inputs(
     _validate_point_budget("max_transit_windows", max_transit_windows)
     _validate_point_budget("max_points_per_window", max_points_per_window)
     _validate_point_budget("max_timing_points", max_timing_points)
-    _validate_point_budget("max_phase15_epochs", max_phase15_epochs)
+    _validate_point_budget("max_lc_robustness_epochs", max_lc_robustness_epochs)
 
 
 def build_report(
@@ -128,8 +128,8 @@ def build_report(
     max_transit_windows: int = 24,
     max_points_per_window: int = 300,
     max_timing_points: int = 200,
-    include_phase15: bool = True,
-    max_phase15_epochs: int = 128,
+    include_lc_robustness: bool = True,
+    max_lc_robustness_epochs: int = 128,
 ) -> ReportData:
     """Assemble LC-only report data packet.
 
@@ -157,11 +157,11 @@ def build_report(
             in the per-transit stack panel.
         max_points_per_window: Max points per per-transit window.
         max_timing_points: Max per-epoch points for timing series.
-        include_phase15: If True, compute Phase 1.5 robustness data.
-        max_phase15_epochs: Max per-epoch windows in phase15 payload.
+        include_lc_robustness: If True, compute LC robustness data.
+        max_lc_robustness_epochs: Max per-epoch windows in lc_robustness payload.
 
     Returns:
-        ReportData with all Phase 1 contents populated.
+        ReportData with all LC report contents populated.
     """
     ephemeris = candidate.ephemeris
 
@@ -174,7 +174,7 @@ def build_report(
         max_transit_windows,
         max_points_per_window,
         max_timing_points,
-        max_phase15_epochs,
+        max_lc_robustness_epochs,
     )
 
     # 1. Determine enabled checks
@@ -215,7 +215,7 @@ def build_report(
     oot_context: OOTContextPlotData | None = None
     timing_diag: TransitTimingPlotData | None = None
     alias_diag: AliasHarmonicSummaryData | None = None
-    phase15_data: Phase15Data | None = None
+    lc_robustness_data: LCRobustnessData | None = None
     odd_even_phase: OddEvenPhasePlotData | None = None
     secondary_scan: SecondaryScanPlotData | None = None
     if include_additional_plots:
@@ -257,12 +257,12 @@ def build_report(
             bin_minutes=bin_minutes,
             max_points=max_phase_points,
         )
-    if include_phase15:
-        phase15_data = _build_phase15_data(
+    if include_lc_robustness:
+        lc_robustness_data = _build_lc_robustness_data(
             lc,
             candidate,
             checks={r.id: r for r in results},
-            max_epochs=max_phase15_epochs,
+            max_epochs=max_lc_robustness_epochs,
         )
 
     # 7. Assemble ReportData
@@ -281,7 +281,7 @@ def build_report(
         oot_context=oot_context,
         timing_series=timing_diag,
         alias_summary=alias_diag,
-        phase15=phase15_data,
+        lc_robustness=lc_robustness_data,
         odd_even_phase=odd_even_phase,
         secondary_scan=secondary_scan,
         checks_run=[r.id for r in results],
@@ -1007,23 +1007,23 @@ def _build_alias_harmonic_summary_data(
     )
 
 
-def _build_phase15_data(
+def _build_lc_robustness_data(
     lc: LightCurve,
     candidate: Candidate,
     *,
     checks: dict[str, Any],
     max_epochs: int,
     baseline_window_mult: float = 6.0,
-) -> Phase15Data:
-    """Build Phase 1.5 robustness payload (LC-only, deterministic)."""
+) -> LCRobustnessData:
+    """Build LC robustness payload (LC-only, deterministic)."""
     time, flux, quality = _get_valid_time_flux_quality(lc)
     eph = candidate.ephemeris
     if len(time) == 0:
-        return Phase15Data(
+        return LCRobustnessData(
             version="1.0",
             baseline_window_mult=float(baseline_window_mult),
             per_epoch=[],
-            robustness=Phase15RobustnessMetrics(
+            robustness=LCRobustnessMetrics(
                 n_epochs_measured=0,
                 loto_snr_min=None,
                 loto_snr_max=None,
@@ -1033,8 +1033,8 @@ def _build_phase15_data(
                 loto_depth_shift_ppm_max=None,
                 dominance_index=None,
             ),
-            red_noise=Phase15RedNoiseMetrics(beta_30m=None, beta_60m=None, beta_duration=None),
-            fp_signals=Phase15FPSignals(
+            red_noise=LCRobustnessRedNoiseMetrics(beta_30m=None, beta_60m=None, beta_duration=None),
+            fp_signals=LCFPSignals(
                 odd_even_depth_diff_sigma=None,
                 secondary_depth_sigma=None,
                 phase_0p5_bin_depth_ppm=None,
@@ -1059,7 +1059,7 @@ def _build_phase15_data(
     epoch_idx = np.floor((time - t0 + period / 2.0) / period).astype(int)
     unique_epochs = np.unique(epoch_idx)
 
-    per_epoch: list[Phase15EpochMetrics] = []
+    per_epoch: list[LCRobustnessEpochMetrics] = []
     for ep in unique_epochs:
         t_mid = t0 + float(ep) * period
         local_window = np.abs(time - t_mid) <= half_window_days
@@ -1148,7 +1148,7 @@ def _build_phase15_data(
             coverage = 1.0
 
         per_epoch.append(
-            Phase15EpochMetrics(
+            LCRobustnessEpochMetrics(
                 epoch_index=int(ep),
                 t_mid_expected_btjd=float(t_mid),
                 t_mid_measured_btjd=t_mid_measured,
@@ -1174,11 +1174,11 @@ def _build_phase15_data(
         pick = np.round(np.linspace(0, len(per_epoch) - 1, max_epochs)).astype(int)
         per_epoch = [per_epoch[int(i)] for i in pick]
 
-    robustness = _build_phase15_robustness(per_epoch)
-    red_noise = _build_phase15_red_noise(time, flux, eph, cadence_days=cadence_days)
-    fp_signals = _build_phase15_fp_signals(checks, time, flux, eph)
+    robustness = _build_lc_robustness_metrics(per_epoch)
+    red_noise = _build_lc_robustness_red_noise(time, flux, eph, cadence_days=cadence_days)
+    fp_signals = _build_lc_robustness_fp_signals(checks, time, flux, eph)
 
-    return Phase15Data(
+    return LCRobustnessData(
         version="1.0",
         baseline_window_mult=float(baseline_window_mult),
         per_epoch=per_epoch,
@@ -1188,9 +1188,9 @@ def _build_phase15_data(
     )
 
 
-def _build_phase15_robustness(
-    per_epoch: list[Phase15EpochMetrics],
-) -> Phase15RobustnessMetrics:
+def _build_lc_robustness_metrics(
+    per_epoch: list[LCRobustnessEpochMetrics],
+) -> LCRobustnessMetrics:
     """Build leave-one-transit-out robustness summary."""
     depths = np.array(
         [m.depth_ppm for m in per_epoch if m.depth_ppm is not None and m.depth_err_ppm and m.depth_err_ppm > 0],
@@ -1202,7 +1202,7 @@ def _build_phase15_robustness(
     )
     n = int(len(depths))
     if n < 3:
-        return Phase15RobustnessMetrics(
+        return LCRobustnessMetrics(
             n_epochs_measured=n,
             loto_snr_min=None,
             loto_snr_max=None,
@@ -1233,7 +1233,7 @@ def _build_phase15_robustness(
         loto_snrs.append(abs(d) / max(e, 1e-12))
 
     if len(loto_depths) == 0:
-        return Phase15RobustnessMetrics(
+        return LCRobustnessMetrics(
             n_epochs_measured=n,
             loto_snr_min=None,
             loto_snr_max=None,
@@ -1248,7 +1248,7 @@ def _build_phase15_robustness(
     loto_s_arr = np.asarray(loto_snrs, dtype=np.float64)
     shift_max = float(np.max(np.abs(loto_d_arr - full_depth)))
     dominance = float(max((full_snr - float(np.min(loto_s_arr))) / max(full_snr, 1e-12), 0.0))
-    return Phase15RobustnessMetrics(
+    return LCRobustnessMetrics(
         n_epochs_measured=n,
         loto_snr_min=float(np.min(loto_s_arr)),
         loto_snr_max=float(np.max(loto_s_arr)),
@@ -1297,33 +1297,33 @@ def _red_noise_beta(
     return float(max(observed / expected, 1.0))
 
 
-def _build_phase15_red_noise(
+def _build_lc_robustness_red_noise(
     time: np.ndarray,
     flux: np.ndarray,
     ephemeris: Ephemeris,
     *,
     cadence_days: float | None,
-) -> Phase15RedNoiseMetrics:
+) -> LCRobustnessRedNoiseMetrics:
     oot_mask = get_out_of_transit_mask(
         time, ephemeris.period_days, ephemeris.t0_btjd, ephemeris.duration_hours, buffer_factor=2.0
     )
     if not np.any(oot_mask):
-        return Phase15RedNoiseMetrics(beta_30m=None, beta_60m=None, beta_duration=None)
+        return LCRobustnessRedNoiseMetrics(beta_30m=None, beta_60m=None, beta_duration=None)
     t_oot = time[oot_mask]
     f_oot = flux[oot_mask]
     resid = f_oot - np.median(f_oot)
     beta_30m = _red_noise_beta(resid, t_oot, bin_size_days=30.0 / 1440.0)
     beta_60m = _red_noise_beta(resid, t_oot, bin_size_days=60.0 / 1440.0)
     beta_dur = _red_noise_beta(resid, t_oot, bin_size_days=max(ephemeris.duration_hours, 0.5) / 24.0)
-    return Phase15RedNoiseMetrics(beta_30m=beta_30m, beta_60m=beta_60m, beta_duration=beta_dur)
+    return LCRobustnessRedNoiseMetrics(beta_30m=beta_30m, beta_60m=beta_60m, beta_duration=beta_dur)
 
 
-def _build_phase15_fp_signals(
+def _build_lc_robustness_fp_signals(
     checks: dict[str, Any],
     time: np.ndarray,
     flux: np.ndarray,
     ephemeris: Ephemeris,
-) -> Phase15FPSignals:
+) -> LCFPSignals:
     def _metric(check_id: str, key: str) -> float | None:
         check = checks.get(check_id)
         if check is None:
@@ -1350,7 +1350,7 @@ def _build_phase15_fp_signals(
     odd_even_sigma = _metric("V01", "delta_sigma")
     if odd_even_sigma is None:
         odd_even_sigma = _metric("V01", "depth_diff_sigma")
-    return Phase15FPSignals(
+    return LCFPSignals(
         odd_even_depth_diff_sigma=odd_even_sigma,
         secondary_depth_sigma=_metric("V02", "secondary_depth_sigma"),
         phase_0p5_bin_depth_ppm=phase_0p5_ppm,

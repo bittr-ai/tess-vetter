@@ -93,6 +93,8 @@ def render_html(report: ReportData, *, title: str | None = None) -> str:
   <div id="oot-context-plot" class="plot-container"></div>
 </div>
 
+{_lc_robustness_section(data)}
+
 {_checks_section(data)}
 
 <script>
@@ -210,6 +212,7 @@ def _css_block() -> str:
   }}
   .vital-label {{ color: {_TEXT_DIM}; font-size: 0.7em; text-transform: uppercase; }}
   .vital-value {{ color: {_TEXT}; font-size: 1.05em; font-weight: 600; }}
+  .section-note {{ color: {_TEXT_DIM}; font-size: 0.8em; margin: 0 0 10px 0; }}
 
   .plot-panel {{
     background: {_BG_CARD};
@@ -392,6 +395,56 @@ def _lc_summary_section(data: dict[str, Any]) -> str:
     return f"""\
 <div class="summary-panel">
   <h2>Light Curve Summary</h2>
+  <div class="vitals-grid">
+{"".join(vitals)}
+  </div>
+</div>"""
+
+
+def _lc_robustness_section(data: dict[str, Any]) -> str:
+    lc_robustness = data.get("lc_robustness")
+    if not lc_robustness:
+        return ""
+
+    rb = lc_robustness.get("robustness", {})
+    rn = lc_robustness.get("red_noise", {})
+    fp = lc_robustness.get("fp_signals", {})
+    per_epoch = lc_robustness.get("per_epoch", [])
+
+    def _vital(label: str, value: str) -> str:
+        return f"""\
+      <div class="vital">
+        <div class="vital-label">{label}</div>
+        <div class="vital-value">{value}</div>
+      </div>"""
+
+    loto_triplet = (
+        f"{_fmt(rb.get('loto_snr_min'), 2)} / "
+        f"{_fmt(rb.get('loto_snr_mean'), 2)} / "
+        f"{_fmt(rb.get('loto_snr_max'), 2)}"
+    )
+    beta_triplet = (
+        f"{_fmt(rn.get('beta_30m'), 2)} / "
+        f"{_fmt(rn.get('beta_60m'), 2)} / "
+        f"{_fmt(rn.get('beta_duration'), 2)}"
+    )
+
+    vitals = [
+        _vital("LC Robustness Version", _fmt(lc_robustness.get("version"))),
+        _vital("Epochs (stored/measured)", f"{len(per_epoch)} / {_fmt(rb.get('n_epochs_measured'))}"),
+        _vital("Dominance Index", _fmt(rb.get("dominance_index"), 3)),
+        _vital("LOTO SNR (min/mean/max)", loto_triplet),
+        _vital("LOTO Depth Shift", _fmt(rb.get("loto_depth_shift_ppm_max"), 1, " ppm")),
+        _vital("Red Noise β (30m/60m/dur)", beta_triplet),
+        _vital("Odd-Even Δ Depth", _fmt(fp.get("odd_even_depth_diff_sigma"), 2, " sigma")),
+        _vital("Secondary Depth", _fmt(fp.get("secondary_depth_sigma"), 2, " sigma")),
+        _vital("Phase 0.5 Depth", _fmt(fp.get("phase_0p5_bin_depth_ppm"), 1, " ppm")),
+    ]
+
+    return f"""\
+<div class="summary-panel">
+  <h2>LC Robustness Summary</h2>
+  <p class="section-note">Computed LC-only fragility and false-positive summary metrics.</p>
   <div class="vitals-grid">
 {"".join(vitals)}
   </div>

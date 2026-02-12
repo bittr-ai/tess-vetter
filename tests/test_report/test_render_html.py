@@ -27,7 +27,6 @@ from bittr_tess_vetter.report import (
     render_html,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -214,6 +213,27 @@ def test_render_html_contains_plot_divs() -> None:
     assert 'id="odd-even-plot"' in html
     assert 'id="secondary-scan-plot"' in html
     assert 'id="oot-context-plot"' in html
+
+
+def test_render_html_shows_lc_robustness_summary_when_present() -> None:
+    """LC robustness summary panel is rendered when lc_robustness data exists."""
+    time, flux, flux_err = _make_box_transit_lc(depth_frac=0.01, noise_ppm=50.0)
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+    report = build_report(lc, candidate, tic_id=99999, toi="TOI-9999.01")
+
+    html = render_html(report)
+    assert "LC Robustness Summary" in html
+    assert "LOTO SNR (min/mean/max)" in html
+    assert "Red Noise β (30m/60m/dur)" in html
+
+
+def test_render_html_hides_lc_robustness_summary_when_absent() -> None:
+    """LC robustness summary panel is omitted when lc_robustness data is absent."""
+    report = _build_mock_report()
+    html = render_html(report)
+    assert "LC Robustness Summary" not in html
 
 
 def test_render_html_embeds_json_data() -> None:

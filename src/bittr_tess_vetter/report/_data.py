@@ -215,8 +215,8 @@ class AliasHarmonicSummaryData:
 
 
 @dataclass(frozen=True)
-class Phase15EpochMetrics:
-    """Per-epoch LC diagnostics for Phase 1.5 robustness analysis."""
+class LCRobustnessEpochMetrics:
+    """Per-epoch LC diagnostics for robustness analysis."""
 
     epoch_index: int
     t_mid_expected_btjd: float
@@ -238,7 +238,7 @@ class Phase15EpochMetrics:
 
 
 @dataclass(frozen=True)
-class Phase15RobustnessMetrics:
+class LCRobustnessMetrics:
     """LOTO robustness summary derived from per-epoch depth measurements."""
 
     n_epochs_measured: int
@@ -252,7 +252,7 @@ class Phase15RobustnessMetrics:
 
 
 @dataclass(frozen=True)
-class Phase15RedNoiseMetrics:
+class LCRobustnessRedNoiseMetrics:
     """Red-noise proxy at standard timescales."""
 
     beta_30m: float | None
@@ -261,7 +261,7 @@ class Phase15RedNoiseMetrics:
 
 
 @dataclass(frozen=True)
-class Phase15FPSignals:
+class LCFPSignals:
     """Compact LC-only false-positive signal summary."""
 
     odd_even_depth_diff_sigma: float | None
@@ -272,15 +272,37 @@ class Phase15FPSignals:
 
 
 @dataclass(frozen=True)
-class Phase15Data:
-    """Phase 1.5 additive LC robustness data block."""
+class LCRobustnessData:
+    """Additive LC robustness data block."""
 
     version: str
     baseline_window_mult: float
-    per_epoch: list[Phase15EpochMetrics]
-    robustness: Phase15RobustnessMetrics
-    red_noise: Phase15RedNoiseMetrics
-    fp_signals: Phase15FPSignals
+    per_epoch: list[LCRobustnessEpochMetrics]
+    robustness: LCRobustnessMetrics
+    red_noise: LCRobustnessRedNoiseMetrics
+    fp_signals: LCFPSignals
+
+
+@dataclass(frozen=True)
+class EnrichmentBlockData:
+    """Normalized non-LC enrichment block payload."""
+
+    status: str  # ok|skipped|error
+    flags: list[str]
+    quality: dict[str, float | int | str | bool | None]
+    checks: dict[str, dict[str, Any]]
+    provenance: dict[str, Any]
+    payload: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ReportEnrichmentData:
+    """Optional non-LC enrichment payload attached to report output."""
+
+    version: str
+    pixel_diagnostics: EnrichmentBlockData | None
+    catalog_context: EnrichmentBlockData | None
+    followup_context: EnrichmentBlockData | None
 
 
 def _scrub_non_finite(obj: Any) -> Any:
@@ -300,7 +322,7 @@ def _scrub_non_finite(obj: Any) -> Any:
 
 @dataclass
 class ReportData:
-    """Phase 1 LC-only report data packet.
+    """LC-only report data packet.
 
     This is the structured output of build_report(). Consumers
     (plotting module, frontend, AI agent) read from this object.
@@ -334,7 +356,8 @@ class ReportData:
     oot_context: OOTContextPlotData | None = None
     timing_series: TransitTimingPlotData | None = None
     alias_summary: AliasHarmonicSummaryData | None = None
-    phase15: Phase15Data | None = None
+    lc_robustness: LCRobustnessData | None = None
+    enrichment: ReportEnrichmentData | None = None
     odd_even_phase: OddEvenPhasePlotData | None = None
     secondary_scan: SecondaryScanPlotData | None = None
 
@@ -405,8 +428,10 @@ class ReportData:
             result["timing_series"] = asdict(self.timing_series)
         if self.alias_summary is not None:
             result["alias_summary"] = asdict(self.alias_summary)
-        if self.phase15 is not None:
-            result["phase15"] = asdict(self.phase15)
+        if self.lc_robustness is not None:
+            result["lc_robustness"] = asdict(self.lc_robustness)
+        if self.enrichment is not None:
+            result["enrichment"] = asdict(self.enrichment)
         if self.odd_even_phase is not None:
             result["odd_even_phase"] = asdict(self.odd_even_phase)
         if self.secondary_scan is not None:
