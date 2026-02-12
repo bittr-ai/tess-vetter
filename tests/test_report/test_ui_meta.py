@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.report._ui_meta import UI_META_VERSION, build_ui_meta_artifact
+import json
+
+from bittr_tess_vetter.report._ui_meta import (
+    UI_META_VERSION,
+    build_ui_meta_artifact,
+    write_ui_meta_artifact,
+)
 
 
 def test_ui_meta_builder_returns_deterministic_artifact() -> None:
@@ -27,3 +33,12 @@ def test_ui_meta_artifact_includes_check_and_reference_metadata() -> None:
     assert "summary.noise_summary.trend_stat_unit" in fields_by_path
     assert "summary.variability_summary" in fields_by_path
     assert "summary.references[*].key" in fields_by_path
+
+
+def test_ui_meta_writer_writes_expected_json(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    out = tmp_path / "report_ui_meta.json"
+    wrote = write_ui_meta_artifact(out)
+
+    assert wrote == out
+    parsed = json.loads(out.read_text(encoding="utf-8"))
+    assert parsed == build_ui_meta_artifact()

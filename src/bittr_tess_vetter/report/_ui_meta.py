@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import argparse
+import json
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
 from bittr_tess_vetter.report.field_catalog import FIELD_CATALOG, FieldKey
@@ -60,4 +63,36 @@ def build_ui_meta_artifact() -> dict[str, Any]:
     }
 
 
-__all__ = ["UI_META_VERSION", "build_ui_meta_artifact"]
+def write_ui_meta_artifact(path: str | Path) -> Path:
+    """Write deterministic UI metadata JSON artifact to disk."""
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    payload = build_ui_meta_artifact()
+    out.write_text(
+        json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return out
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Write report UI metadata JSON artifact.")
+    parser.add_argument(
+        "--out",
+        default="docs/_build/html/report_ui_meta.json",
+        help="Output path for report UI metadata JSON.",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
+    out = write_ui_meta_artifact(args.out)
+    print(f"Wrote {out}")
+
+
+if __name__ == "__main__":
+    main()
+
+
+__all__ = ["UI_META_VERSION", "build_ui_meta_artifact", "write_ui_meta_artifact"]

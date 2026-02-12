@@ -13,6 +13,7 @@ uv run pytest -q
 
 echo "==> Build docs"
 uv run sphinx-build -b html docs docs/_build/html >/dev/null
+uv run python -m bittr_tess_vetter.report._ui_meta --out docs/_build/html/report_ui_meta.json
 
 echo "==> Build artifacts"
 uv run hatch build -t sdist -t wheel
@@ -57,4 +58,3 @@ print("wheel ok:", wheel)
 PY
 
 echo "==> Done"
-
