@@ -12,17 +12,23 @@ Public API:
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
+
+from bittr_tess_vetter.api.pipeline import VettingPipeline
 from bittr_tess_vetter.api.stitch import SectorDiagnostics, stitch_lightcurve_data
 from bittr_tess_vetter.api.types import (
     Candidate,
     Ephemeris,
     LightCurve,
     StellarParams,
+    TPFStamp,
 )
+from bittr_tess_vetter.domain.detection import TransitCandidate
 from bittr_tess_vetter.platform.io.mast_client import (
     DownloadProgress,
     LightCurveNotFoundError,
@@ -35,6 +41,10 @@ from bittr_tess_vetter.report import (
     build_report,
     render_html,
 )
+from bittr_tess_vetter.validation.base import get_in_transit_mask
+from bittr_tess_vetter.validation.register_defaults import register_all_defaults
+from bittr_tess_vetter.validation.registry import CheckRegistry, CheckTier
+from bittr_tess_vetter.validation.result_schema import VettingBundleResult
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +77,7 @@ class EnrichmentConfig:
     include_catalog_context: bool = True
     include_followup_context: bool = True
     fail_open: bool = True
-    network: bool = True
+    network: bool = False
     max_network_seconds: float = 30.0
     per_request_timeout_seconds: float = 10.0
     max_concurrent_requests: int = 3
@@ -197,8 +207,15 @@ def generate_report(
     )
 
     if include_enrichment:
-        report.enrichment = _build_enrichment_scaffold(
-            enrichment_config or EnrichmentConfig()
+        cfg = enrichment_config or EnrichmentConfig()
+        report.enrichment = _build_enrichment_data(
+            lc_api=lc,
+            candidate_api=candidate,
+            tic_id=tic_id,
+            sectors_used=sectors_used,
+            mast_client=client,
+            target=target if "target" in locals() else None,
+            config=cfg,
         )
 
     # 7. Optional HTML
@@ -225,23 +242,421 @@ def _skipped_enrichment_block(reason_flag: str) -> EnrichmentBlockData:
     )
 
 
-def _build_enrichment_scaffold(config: EnrichmentConfig) -> ReportEnrichmentData:
-    """Return deterministic non-LC enrichment scaffold blocks.
+def _build_enrichment_data(
+    *,
+    lc_api: LightCurve,
+    candidate_api: Candidate,
+    tic_id: int,
+    sectors_used: list[int],
+    mast_client: MASTClient,
+    target: Any | None,
+    config: EnrichmentConfig,
+) -> ReportEnrichmentData:
+    """Build enrichment blocks using existing pipeline tiers."""
+    started = time.monotonic()
+    budget_s = max(float(config.max_network_seconds), 0.0)
 
-    This is intentionally a no-op placeholder until domain blocks are wired.
-    """
-    reason = "NOT_IMPLEMENTED"
+    def budget_exhausted() -> bool:
+        return budget_s > 0 and (time.monotonic() - started) >= budget_s
+
+    pixel_block: EnrichmentBlockData | None = None
+    catalog_block: EnrichmentBlockData | None = None
+    followup_block: EnrichmentBlockData | None = None
+
+    if config.include_catalog_context:
+        if budget_exhausted():
+            catalog_block = _skipped_enrichment_block("NETWORK_BUDGET_EXHAUSTED")
+        else:
+            try:
+                catalog_block = _run_catalog_context(
+                    lc_api=lc_api,
+                    candidate_api=candidate_api,
+                    tic_id=tic_id,
+                    target=target,
+                    network=config.network,
+                    max_catalog_rows=int(config.max_catalog_rows),
+                    config=config,
+                )
+            except Exception as exc:
+                if not config.fail_open:
+                    raise
+                catalog_block = EnrichmentBlockData(
+                    status="error",
+                    flags=["ENRICHMENT_BLOCK_ERROR"],
+                    quality={"is_degraded": True},
+                    checks={},
+                    provenance={"error": type(exc).__name__, "message": str(exc)},
+                    payload={},
+                )
+
+    if config.include_pixel_diagnostics:
+        if budget_exhausted():
+            pixel_block = _skipped_enrichment_block("NETWORK_BUDGET_EXHAUSTED")
+        else:
+            try:
+                pixel_block = _run_pixel_diagnostics(
+                    lc_api=lc_api,
+                    candidate_api=candidate_api,
+                    tic_id=tic_id,
+                    sectors_used=sectors_used,
+                    target=target,
+                    mast_client=mast_client,
+                    config=config,
+                )
+            except Exception as exc:
+                if not config.fail_open:
+                    raise
+                pixel_block = EnrichmentBlockData(
+                    status="error",
+                    flags=["ENRICHMENT_BLOCK_ERROR"],
+                    quality={"is_degraded": True},
+                    checks={},
+                    provenance={"error": type(exc).__name__, "message": str(exc)},
+                    payload={},
+                )
+
+    if config.include_followup_context:
+        if budget_exhausted():
+            followup_block = _skipped_enrichment_block("NETWORK_BUDGET_EXHAUSTED")
+        else:
+            followup_block = _build_followup_context(
+                tic_id=tic_id,
+                sectors_used=sectors_used,
+                target=target,
+                config=config,
+            )
+
     return ReportEnrichmentData(
         version="0.1.0",
-        pixel_diagnostics=_skipped_enrichment_block(reason)
-        if config.include_pixel_diagnostics
+        pixel_diagnostics=pixel_block,
+        catalog_context=catalog_block,
+        followup_context=followup_block,
+    )
+
+
+def _tier_bundle(
+    *,
+    tier: CheckTier,
+    lc_api: LightCurve,
+    candidate_api: Candidate,
+    tic_id: int,
+    target: Any | None,
+    network: bool,
+    tpf: TPFStamp | None = None,
+) -> VettingBundleResult:
+    registry = CheckRegistry()
+    register_all_defaults(registry)
+    check_ids = [c.id for c in registry.list_by_tier(tier)]
+    pipeline = VettingPipeline(checks=check_ids, registry=registry)
+    lc_internal = lc_api.to_internal(tic_id=tic_id)
+    candidate_internal = TransitCandidate(
+        period=candidate_api.ephemeris.period_days,
+        t0=candidate_api.ephemeris.t0_btjd,
+        duration_hours=candidate_api.ephemeris.duration_hours,
+        depth=candidate_api.depth or 0.001,
+        snr=0.0,
+    )
+    ra = getattr(target, "ra", None) if target is not None else None
+    dec = getattr(target, "dec", None) if target is not None else None
+    return pipeline.run(
+        lc_internal,
+        candidate_internal,
+        stellar=getattr(target, "stellar", None),
+        tpf=tpf,
+        network=network,
+        ra_deg=ra,
+        dec_deg=dec,
+        tic_id=tic_id,
+    )
+
+
+def _block_from_bundle(
+    *,
+    bundle: VettingBundleResult,
+    block_name: str,
+    flags: list[str] | None = None,
+    quality_extra: dict[str, float | int | str | bool | None] | None = None,
+    payload: dict[str, Any] | None = None,
+    provenance_extra: dict[str, Any] | None = None,
+) -> EnrichmentBlockData:
+    results = list(bundle.results)
+    n_ok = sum(1 for r in results if r.status == "ok")
+    n_err = sum(1 for r in results if r.status == "error")
+    n_skip = sum(1 for r in results if r.status == "skipped")
+    if n_err > 0:
+        status = "error"
+    elif n_ok > 0:
+        status = "ok"
+    else:
+        status = "skipped"
+    is_degraded = status == "ok" and (n_skip > 0 or len(bundle.warnings) > 0)
+    quality: dict[str, float | int | str | bool | None] = {
+        "is_degraded": is_degraded,
+        "n_checks": len(results),
+        "n_ok": n_ok,
+        "n_error": n_err,
+        "n_skipped": n_skip,
+    }
+    if quality_extra:
+        quality.update(quality_extra)
+    checks = {r.id: r.model_dump() for r in results}
+    provenance: dict[str, Any] = {
+        "block": block_name,
+        "pipeline": dict(bundle.provenance),
+        "warnings": list(bundle.warnings),
+    }
+    if provenance_extra:
+        provenance.update(provenance_extra)
+    return EnrichmentBlockData(
+        status=status,
+        flags=list(flags or []),
+        quality=quality,
+        checks=checks,
+        provenance=provenance,
+        payload=payload or {},
+    )
+
+
+def _run_catalog_context(
+    *,
+    lc_api: LightCurve,
+    candidate_api: Candidate,
+    tic_id: int,
+    target: Any | None,
+    network: bool,
+    max_catalog_rows: int,
+    config: EnrichmentConfig,
+) -> EnrichmentBlockData:
+    bundle = _tier_bundle(
+        tier=CheckTier.CATALOG,
+        lc_api=lc_api,
+        candidate_api=candidate_api,
+        tic_id=tic_id,
+        target=target,
+        network=network,
+    )
+    check_rows = []
+    for result in bundle.results:
+        check_rows.append(
+            {
+                "id": result.id,
+                "status": result.status,
+                "flags": list(result.flags),
+                "metrics": dict(result.metrics),
+            }
+        )
+    budget_applied = len(check_rows) > max_catalog_rows
+    if budget_applied:
+        check_rows = check_rows[:max_catalog_rows]
+    payload = {
+        "checks_summary": check_rows,
+        "network_enabled": network,
+    }
+    return _block_from_bundle(
+        bundle=bundle,
+        block_name="catalog_context",
+        quality_extra={"is_degraded": any(r.status == "skipped" for r in bundle.results)},
+        payload=payload,
+        provenance_extra={
+            "tic_id": tic_id,
+            "budget": {
+                "max_catalog_rows": max_catalog_rows,
+                "budget_applied": budget_applied,
+                "rows_before": len(bundle.results),
+                "rows_after": len(check_rows),
+            },
+            "network_config": {
+                "network": config.network,
+                "per_request_timeout_seconds": config.per_request_timeout_seconds,
+                "max_network_seconds": config.max_network_seconds,
+                "max_concurrent_requests": config.max_concurrent_requests,
+            },
+            "coordinates_available": bool(target is not None and getattr(target, "ra", None) is not None and getattr(target, "dec", None) is not None),
+        },
+    )
+
+
+def _select_tpf_sectors(
+    *,
+    strategy: str,
+    sectors_used: list[int],
+    requested: list[int] | None,
+    lc_api: LightCurve,
+    candidate_api: Candidate,
+) -> list[int]:
+    if strategy == "requested":
+        if requested:
+            req = sorted({int(s) for s in requested})
+            return [s for s in req if s in set(sectors_used)]
+        return []
+    if strategy == "all":
+        return sorted(set(sectors_used))
+    # best
+    if len(sectors_used) == 0:
+        return []
+    best_sector = int(min(sectors_used))
+    best_score = -1.0
+    for sector in sorted(set(sectors_used)):
+        if sector <= 0:
+            continue
+        # Score sector by in-transit coverage fraction from the downloaded LC.
+        # In this stitched API path we only have combined LC; use a stable heuristic
+        # based on candidate in-transit point count as a constant score fallback.
+        time_arr = np.asarray(lc_api.time, dtype=np.float64)
+        valid = np.isfinite(time_arr)
+        if np.any(valid):
+            in_mask = get_in_transit_mask(
+                time_arr[valid],
+                candidate_api.ephemeris.period_days,
+                candidate_api.ephemeris.t0_btjd,
+                candidate_api.ephemeris.duration_hours,
+            )
+            score = float(np.mean(in_mask)) if len(in_mask) > 0 else 0.0
+        else:
+            score = 0.0
+        if score > best_score:
+            best_score = score
+            best_sector = sector
+    return [best_sector]
+
+
+def _run_pixel_diagnostics(
+    *,
+    lc_api: LightCurve,
+    candidate_api: Candidate,
+    tic_id: int,
+    sectors_used: list[int],
+    target: Any | None,
+    mast_client: MASTClient,
+    config: EnrichmentConfig,
+) -> EnrichmentBlockData:
+    if not config.fetch_tpf:
+        return _skipped_enrichment_block("TPF_FETCH_DISABLED")
+    sectors_for_tpf = _select_tpf_sectors(
+        strategy=config.tpf_sector_strategy,
+        sectors_used=sectors_used,
+        requested=config.sectors_for_tpf,
+        lc_api=lc_api,
+        candidate_api=candidate_api,
+    )
+    if len(sectors_for_tpf) == 0:
+        return _skipped_enrichment_block("NO_TPF_SECTOR_SELECTED")
+
+    tpf_obj: TPFStamp | None = None
+    selected_sector: int | None = None
+    acquisition_mode = "none"
+    last_exc: Exception | None = None
+    for sector in sectors_for_tpf:
+        try:
+            time_arr, flux_cube, flux_err, wcs, aperture_mask, quality = mast_client.download_tpf_cached(
+                tic_id=tic_id, sector=sector
+            )
+            acquisition_mode = "cache"
+        except Exception as exc_cached:
+            last_exc = exc_cached
+            if not config.network:
+                continue
+            try:
+                time_arr, flux_cube, flux_err, wcs, aperture_mask, quality = mast_client.download_tpf(
+                    tic_id=tic_id, sector=sector
+                )
+                acquisition_mode = "network"
+            except Exception as exc:
+                last_exc = exc
+                continue
+
+        tpf_obj = TPFStamp(
+            time=np.asarray(time_arr, dtype=np.float64),
+            flux=np.asarray(flux_cube, dtype=np.float64),
+            flux_err=np.asarray(flux_err, dtype=np.float64) if flux_err is not None else None,
+            wcs=wcs,
+            aperture_mask=np.asarray(aperture_mask) if aperture_mask is not None else None,
+            quality=np.asarray(quality, dtype=np.int32) if quality is not None else None,
+        )
+        selected_sector = int(sector)
+        break
+
+    if tpf_obj is None:
+        reason = "TPF_UNAVAILABLE_OFFLINE" if not config.network else "TPF_DOWNLOAD_FAILED"
+        block = _skipped_enrichment_block(reason)
+        block.provenance.update(
+            {
+                "requested_sectors": sectors_for_tpf,
+                "last_error": str(last_exc) if last_exc is not None else None,
+            }
+        )
+        return block
+
+    bundle = _tier_bundle(
+        tier=CheckTier.PIXEL,
+        lc_api=lc_api,
+        candidate_api=candidate_api,
+        tic_id=tic_id,
+        target=target,
+        network=config.network,
+        tpf=tpf_obj,
+    )
+
+    n_points = int(np.prod(tpf_obj.shape))
+    payload = {
+        "selected_sector": selected_sector,
+        "selected_from": sectors_for_tpf,
+        "tpf_shape": [int(v) for v in tpf_obj.shape],
+        "acquisition_mode": acquisition_mode,
+        "aperture_pixels": int(np.sum(np.asarray(tpf_obj.aperture_mask) > 0))
+        if tpf_obj.aperture_mask is not None
         else None,
-        catalog_context=_skipped_enrichment_block(reason)
-        if config.include_catalog_context
-        else None,
-        followup_context=_skipped_enrichment_block(reason)
-        if config.include_followup_context
-        else None,
+    }
+    return _block_from_bundle(
+        bundle=bundle,
+        block_name="pixel_diagnostics",
+        payload=payload,
+        provenance_extra={
+            "tic_id": tic_id,
+            "tpf_sector_strategy": config.tpf_sector_strategy,
+            "budget": {
+                "max_pixel_points": int(config.max_pixel_points),
+                "points_estimate": n_points,
+                "budget_applied": n_points > int(config.max_pixel_points),
+            },
+        },
+    )
+
+
+def _build_followup_context(
+    *,
+    tic_id: int,
+    sectors_used: list[int],
+    target: Any | None,
+    config: EnrichmentConfig,
+) -> EnrichmentBlockData:
+    has_target_meta = target is not None
+    payload = {
+        "tic_id": tic_id,
+        "sectors_used": list(sectors_used),
+        "target_metadata_available": has_target_meta,
+        "references": [],
+    }
+    if has_target_meta:
+        payload["target"] = {
+            "ra": getattr(target, "ra", None),
+            "dec": getattr(target, "dec", None),
+            "gaia_dr3_id": getattr(target, "gaia_dr3_id", None),
+            "toi_id": getattr(target, "toi_id", None),
+        }
+    status = "ok" if has_target_meta else "skipped"
+    flags = [] if has_target_meta else ["NO_TARGET_METADATA"]
+    return EnrichmentBlockData(
+        status=status,
+        flags=flags,
+        quality={"is_degraded": not has_target_meta},
+        checks={},
+        provenance={
+            "block": "followup_context",
+            "scaffold": False,
+            "network_enabled": config.network,
+        },
+        payload=payload,
     )
 
 

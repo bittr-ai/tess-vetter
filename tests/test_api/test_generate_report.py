@@ -224,8 +224,8 @@ def test_include_enrichment_false_omits_enrichment_block() -> None:
     assert "enrichment" not in result.report_json
 
 
-def test_include_enrichment_true_adds_scaffold_blocks() -> None:
-    """Enrichment-enabled path returns deterministic skipped scaffold blocks."""
+def test_include_enrichment_true_adds_blocks() -> None:
+    """Enrichment-enabled path returns domain blocks with deterministic statuses."""
     client = _mock_client(sectors=[1])
     result = generate_report(
         123456789,
@@ -239,8 +239,8 @@ def test_include_enrichment_true_adds_scaffold_blocks() -> None:
     assert e["version"] == "0.1.0"
     assert e["pixel_diagnostics"]["status"] == "skipped"
     assert e["catalog_context"]["status"] == "skipped"
-    assert e["followup_context"]["status"] == "skipped"
-    assert e["pixel_diagnostics"]["flags"] == ["NOT_IMPLEMENTED"]
+    assert e["followup_context"]["status"] in {"ok", "skipped"}
+    assert isinstance(e["pixel_diagnostics"]["flags"], list)
 
 
 def test_include_enrichment_respects_block_toggles() -> None:
@@ -263,3 +263,48 @@ def test_include_enrichment_respects_block_toggles() -> None:
     assert e["pixel_diagnostics"] is None
     assert e["catalog_context"]["status"] == "skipped"
     assert e["followup_context"] is None
+
+
+def test_enrichment_fail_open_true_recovers_block_errors(monkeypatch) -> None:
+    """With fail_open=True, block errors should not abort report generation."""
+    client = _mock_client(sectors=[1])
+
+    def _boom(**kwargs):  # type: ignore[no-untyped-def]
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.api.generate_report._run_catalog_context",
+        _boom,
+    )
+    cfg = EnrichmentConfig(fail_open=True, include_catalog_context=True)
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        include_enrichment=True,
+        enrichment_config=cfg,
+    )
+    e = result.report_json["enrichment"]
+    assert e["catalog_context"]["status"] == "error"
+
+
+def test_enrichment_fail_open_false_raises(monkeypatch) -> None:
+    """With fail_open=False, block errors should abort generation."""
+    client = _mock_client(sectors=[1])
+
+    def _boom(**kwargs):  # type: ignore[no-untyped-def]
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.api.generate_report._run_catalog_context",
+        _boom,
+    )
+    cfg = EnrichmentConfig(fail_open=False, include_catalog_context=True)
+    with pytest.raises(RuntimeError, match="boom"):
+        generate_report(
+            123456789,
+            **_EPH,
+            mast_client=client,
+            include_enrichment=True,
+            enrichment_config=cfg,
+        )
