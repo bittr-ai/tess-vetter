@@ -951,7 +951,7 @@ def _build_timing_series_plot_data(
         oc_seconds=[float(p.oc_seconds) for p in points],
         snr=[float(p.snr) for p in points],
         rms_seconds=series.rms_seconds,
-        periodicity_sigma=series.periodicity_sigma,
+        periodicity_score=series.periodicity_score,
         linear_trend_sec_per_epoch=series.linear_trend_sec_per_epoch,
     )
 
@@ -1015,16 +1015,11 @@ def _build_secondary_scan_plot_data(
         )
 
     period = ephemeris.period_days
-    phase, flux_folded = fold_transit(time, flux, period, ephemeris.t0_btjd)
-
-    if len(phase) > max_points:
-        pick = np.round(np.linspace(0, len(phase) - 1, max_points)).astype(int)
-        phase = phase[pick]
-        flux_folded = flux_folded[pick]
+    phase_full, flux_full = fold_transit(time, flux, period, ephemeris.t0_btjd)
 
     centers, bflux, berr = _bin_phase_data(
-        phase,
-        flux_folded,
+        phase_full,
+        flux_full,
         period,
         bin_minutes,
         phase_range=(-0.5, 0.5),
@@ -1043,8 +1038,16 @@ def _build_secondary_scan_plot_data(
             strongest_dip_flux = float(bflux_arr[idx])
             strongest_dip_phase = float(centers_arr[idx])
 
+    # Downsample only the raw scatter display series.
+    phase_plot = phase_full
+    flux_plot = flux_full
+    if len(phase_plot) > max_points:
+        pick = np.round(np.linspace(0, len(phase_plot) - 1, max_points)).astype(int)
+        phase_plot = phase_plot[pick]
+        flux_plot = flux_plot[pick]
+
     quality = _compute_secondary_scan_quality(
-        phase=phase,
+        phase=phase_full,
         bin_err=berr,
         period_days=period,
         bin_minutes=bin_minutes,
@@ -1052,8 +1055,8 @@ def _build_secondary_scan_plot_data(
     render_hints = _secondary_scan_render_hints(quality, period_days=period, bin_minutes=bin_minutes)
 
     return SecondaryScanPlotData(
-        phase=phase.tolist(),
-        flux=flux_folded.tolist(),
+        phase=phase_plot.tolist(),
+        flux=flux_plot.tolist(),
         bin_centers=centers,
         bin_flux=bflux,
         bin_err=berr,

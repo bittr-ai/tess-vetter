@@ -323,6 +323,10 @@ def test_json_schema_keys_and_types() -> None:
     assert isinstance(j["timing_series"]["epochs"], list)
     assert isinstance(j["timing_series"]["oc_seconds"], list)
     assert isinstance(j["timing_series"]["snr"], list)
+    assert (
+        j["timing_series"]["periodicity_score"] is None
+        or isinstance(j["timing_series"]["periodicity_score"], float)
+    )
     assert isinstance(j["alias_summary"], dict)
     assert isinstance(j["alias_summary"]["harmonic_labels"], list)
     assert isinstance(j["alias_summary"]["periods"], list)
@@ -662,6 +666,28 @@ def test_secondary_scan_preserves_full_orbit_phase_coverage() -> None:
     hints = report.secondary_scan.render_hints
     assert hints is not None
     assert hints.style_mode in {"normal", "degraded"}
+
+
+def test_secondary_scan_bins_independent_of_display_downsampling() -> None:
+    """Binned secondary-scan diagnostics should be stable vs raw-point caps."""
+    time, flux, flux_err = _make_box_transit_lc(
+        baseline_days=90.0,
+        cadence_minutes=2.0,
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    report_low = build_report(lc, candidate, max_phase_points=800)
+    report_high = build_report(lc, candidate, max_phase_points=8_000)
+    assert report_low.secondary_scan is not None
+    assert report_high.secondary_scan is not None
+
+    low = report_low.secondary_scan
+    high = report_high.secondary_scan
+    assert low.bin_centers == high.bin_centers
+    assert low.bin_flux == high.bin_flux
+    assert low.strongest_dip_phase == high.strongest_dip_phase
 
 
 # ---------------------------------------------------------------------------

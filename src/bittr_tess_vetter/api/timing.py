@@ -157,7 +157,7 @@ def analyze_ttvs(
 
     Calculates observed minus calculated (O-C) residuals from measured
     transit times and computes summary statistics including RMS,
-    periodicity significance, and linear trends. Also flags outliers
+    a heuristic periodicity score, and linear trends. Also flags outliers
     based on O-C and duration criteria.
 
     Args:
@@ -173,7 +173,7 @@ def analyze_ttvs(
         >>> # After obtaining transit_times from measure_transit_times()
         >>> ttv_result = analyze_ttvs(transit_times, period_days=3.5, t0_btjd=1850.0)
         >>> print(f"RMS: {ttv_result.rms_seconds:.1f} seconds")
-        >>> print(f"Periodicity: {ttv_result.periodicity_sigma:.1f} sigma")
+        >>> print(f"Periodicity score: {ttv_result.periodicity_sigma:.1f}")
         >>> if ttv_result.linear_trend is not None:
         ...     print(f"Linear trend: {ttv_result.linear_trend:.2f} sec/epoch")
 

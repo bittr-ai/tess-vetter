@@ -199,7 +199,7 @@ class TransitTimingPlotData:
     oc_seconds: list[float]
     snr: list[float]
     rms_seconds: float | None
-    periodicity_sigma: float | None
+    periodicity_score: float | None
     linear_trend_sec_per_epoch: float | None
 
 

@@ -463,7 +463,7 @@ def build_timing_series(
             points=[],
             n_points=0,
             rms_seconds=None,
-            periodicity_sigma=None,
+            periodicity_score=None,
             linear_trend_sec_per_epoch=None,
         )
 
@@ -495,7 +495,8 @@ def build_timing_series(
         points=points,
         n_points=len(points),
         rms_seconds=float(ttv.rms_seconds),
-        periodicity_sigma=float(ttv.periodicity_sigma),
+        # This is a heuristic score from LS power contrast, not a calibrated sigma.
+        periodicity_score=float(ttv.periodicity_sigma),
         linear_trend_sec_per_epoch=(
             float(ttv.linear_trend) if ttv.linear_trend is not None else None
         ),

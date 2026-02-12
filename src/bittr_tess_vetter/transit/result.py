@@ -65,7 +65,7 @@ class TransitTimingSeries:
     points: list[TransitTimingPoint]
     n_points: int
     rms_seconds: float | None
-    periodicity_sigma: float | None
+    periodicity_score: float | None
     linear_trend_sec_per_epoch: float | None
 
     def to_dict(self) -> dict[str, object]:
@@ -73,7 +73,10 @@ class TransitTimingSeries:
         return {
             "n_points": self.n_points,
             "rms_seconds": self.rms_seconds,
-            "periodicity_sigma": self.periodicity_sigma,
+            # Heuristic periodicity score from LS power contrast (not a calibrated sigma).
+            "periodicity_score": self.periodicity_score,
+            # Backward-compat alias for older callers expecting this key.
+            "periodicity_sigma": self.periodicity_score,
             "linear_trend_sec_per_epoch": self.linear_trend_sec_per_epoch,
             "points": [
                 {
