@@ -11,11 +11,13 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
+import bittr_tess_vetter.api.generate_report as generate_report_api
 from bittr_tess_vetter.api.generate_report import (
     EnrichmentConfig,
     GenerateReportResult,
     generate_report,
 )
+from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.domain.target import StellarParameters, Target
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
@@ -308,3 +310,97 @@ def test_enrichment_fail_open_false_raises(monkeypatch) -> None:
             include_enrichment=True,
             enrichment_config=cfg,
         )
+
+
+def test_select_tpf_best_prefers_sector_with_higher_transit_coverage() -> None:
+    """Best strategy should score sectors from per-sector time arrays when provided."""
+    lc_api = LightCurve(time=np.array([0.0, 1.0]), flux=np.array([1.0, 1.0]))
+    candidate_api = Candidate(
+        ephemeris=Ephemeris(period_days=2.0, t0_btjd=10.0, duration_hours=12.0)
+    )
+    sector_times = {
+        1: np.array([11.0, 13.0], dtype=np.float64),  # out-of-transit
+        2: np.array([10.0, 12.0], dtype=np.float64),  # in-transit centers
+    }
+
+    selected = generate_report_api._select_tpf_sectors(
+        strategy="best",
+        sectors_used=[1, 2],
+        requested=None,
+        lc_api=lc_api,
+        candidate_api=candidate_api,
+        sector_times=sector_times,
+    )
+    assert selected == [2]
+
+
+def test_pixel_point_budget_enforced_before_pixel_checks(monkeypatch) -> None:
+    """Pixel checks should be skipped when TPF exceeds max_pixel_points budget."""
+    client = MagicMock()
+    client.download_all_sectors.return_value = [_make_lc_data(1)]
+    client.get_target_info.return_value = Target(
+        tic_id=123456789,
+        stellar=StellarParameters(teff=5800.0, radius=1.0, mass=1.0),
+    )
+    client.download_tpf_cached.return_value = (
+        np.array([1.0, 2.0], dtype=np.float64),
+        np.ones((2, 3, 3), dtype=np.float64),  # 18 points
+        None,
+        None,
+        np.ones((3, 3), dtype=np.int32),
+        np.zeros(2, dtype=np.int32),
+    )
+
+    def _boom(**kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("pixel check tier should not run when budget exceeded")
+
+    monkeypatch.setattr("bittr_tess_vetter.api.generate_report._tier_bundle", _boom)
+    cfg = EnrichmentConfig(
+        include_pixel_diagnostics=True,
+        include_catalog_context=False,
+        include_followup_context=False,
+        max_pixel_points=4,
+    )
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        include_enrichment=True,
+        enrichment_config=cfg,
+    )
+    pixel = result.report_json["enrichment"]["pixel_diagnostics"]
+    assert pixel["status"] == "skipped"
+    assert "PIXEL_POINT_BUDGET_EXCEEDED" in pixel["flags"]
+    assert pixel["provenance"]["budget"]["budget_applied"] is True
+
+
+def test_enrichment_uses_explicit_stellar_when_tic_lookup_skipped(monkeypatch) -> None:
+    """Catalog context should receive explicit stellar kwarg even without target metadata."""
+    client = _mock_client(sectors=[1])
+    explicit_stellar = StellarParameters(teff=4100.0, radius=0.6, mass=0.6)
+    captured: dict[str, object] = {}
+
+    def _fake_catalog_context(**kwargs):  # type: ignore[no-untyped-def]
+        captured["stellar"] = kwargs["stellar"]
+        return generate_report_api._skipped_enrichment_block("CATALOG_TEST")
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.api.generate_report._run_catalog_context",
+        _fake_catalog_context,
+    )
+    cfg = EnrichmentConfig(
+        include_catalog_context=True,
+        include_pixel_diagnostics=False,
+        include_followup_context=False,
+    )
+    generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        stellar=explicit_stellar,
+        include_enrichment=True,
+        enrichment_config=cfg,
+    )
+
+    assert captured["stellar"] is explicit_stellar
+    client.get_target_info.assert_not_called()

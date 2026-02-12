@@ -208,12 +208,18 @@ def generate_report(
 
     if include_enrichment:
         cfg = enrichment_config or EnrichmentConfig()
+        sector_times = {
+            int(lc_data.sector): np.asarray(lc_data.time, dtype=np.float64)
+            for lc_data in lightcurves
+        }
         report.enrichment = _build_enrichment_data(
             lc_api=lc,
             candidate_api=candidate,
             tic_id=tic_id,
             sectors_used=sectors_used,
             mast_client=client,
+            stellar=stellar,
+            sector_times=sector_times,
             target=target if "target" in locals() else None,
             config=cfg,
         )
@@ -249,6 +255,8 @@ def _build_enrichment_data(
     tic_id: int,
     sectors_used: list[int],
     mast_client: MASTClient,
+    stellar: StellarParams | None,
+    sector_times: dict[int, np.ndarray],
     target: Any | None,
     config: EnrichmentConfig,
 ) -> ReportEnrichmentData:
@@ -272,6 +280,7 @@ def _build_enrichment_data(
                     lc_api=lc_api,
                     candidate_api=candidate_api,
                     tic_id=tic_id,
+                    stellar=stellar,
                     target=target,
                     network=config.network,
                     max_catalog_rows=int(config.max_catalog_rows),
@@ -299,6 +308,8 @@ def _build_enrichment_data(
                     candidate_api=candidate_api,
                     tic_id=tic_id,
                     sectors_used=sectors_used,
+                    sector_times=sector_times,
+                    stellar=stellar,
                     target=target,
                     mast_client=mast_client,
                     config=config,
@@ -340,6 +351,7 @@ def _tier_bundle(
     lc_api: LightCurve,
     candidate_api: Candidate,
     tic_id: int,
+    stellar: StellarParams | None,
     target: Any | None,
     network: bool,
     tpf: TPFStamp | None = None,
@@ -361,7 +373,7 @@ def _tier_bundle(
     return pipeline.run(
         lc_internal,
         candidate_internal,
-        stellar=getattr(target, "stellar", None),
+        stellar=stellar if stellar is not None else getattr(target, "stellar", None),
         tpf=tpf,
         network=network,
         ra_deg=ra,
@@ -422,6 +434,7 @@ def _run_catalog_context(
     lc_api: LightCurve,
     candidate_api: Candidate,
     tic_id: int,
+    stellar: StellarParams | None,
     target: Any | None,
     network: bool,
     max_catalog_rows: int,
@@ -432,6 +445,7 @@ def _run_catalog_context(
         lc_api=lc_api,
         candidate_api=candidate_api,
         tic_id=tic_id,
+        stellar=stellar,
         target=target,
         network=network,
     )
@@ -483,6 +497,7 @@ def _select_tpf_sectors(
     requested: list[int] | None,
     lc_api: LightCurve,
     candidate_api: Candidate,
+    sector_times: dict[int, np.ndarray] | None = None,
 ) -> list[int]:
     if strategy == "requested":
         if requested:
@@ -499,10 +514,12 @@ def _select_tpf_sectors(
     for sector in sorted(set(sectors_used)):
         if sector <= 0:
             continue
-        # Score sector by in-transit coverage fraction from the downloaded LC.
-        # In this stitched API path we only have combined LC; use a stable heuristic
-        # based on candidate in-transit point count as a constant score fallback.
-        time_arr = np.asarray(lc_api.time, dtype=np.float64)
+        # Score sector by in-transit coverage fraction from that sector's samples.
+        # Fall back to stitched LC samples if per-sector arrays are unavailable.
+        if sector_times is not None and sector in sector_times:
+            time_arr = np.asarray(sector_times[sector], dtype=np.float64)
+        else:
+            time_arr = np.asarray(lc_api.time, dtype=np.float64)
         valid = np.isfinite(time_arr)
         if np.any(valid):
             in_mask = get_in_transit_mask(
@@ -526,6 +543,8 @@ def _run_pixel_diagnostics(
     candidate_api: Candidate,
     tic_id: int,
     sectors_used: list[int],
+    sector_times: dict[int, np.ndarray],
+    stellar: StellarParams | None,
     target: Any | None,
     mast_client: MASTClient,
     config: EnrichmentConfig,
@@ -538,6 +557,7 @@ def _run_pixel_diagnostics(
         requested=config.sectors_for_tpf,
         lc_api=lc_api,
         candidate_api=candidate_api,
+        sector_times=sector_times,
     )
     if len(sectors_for_tpf) == 0:
         return _skipped_enrichment_block("NO_TPF_SECTOR_SELECTED")
@@ -587,17 +607,47 @@ def _run_pixel_diagnostics(
         )
         return block
 
+    n_points = int(np.prod(tpf_obj.shape))
+    max_points = int(config.max_pixel_points)
+    if n_points > max_points:
+        block = _skipped_enrichment_block("PIXEL_POINT_BUDGET_EXCEEDED")
+        block.quality["is_degraded"] = True
+        block.provenance.update(
+            {
+                "block": "pixel_diagnostics",
+                "tic_id": tic_id,
+                "tpf_sector_strategy": config.tpf_sector_strategy,
+                "budget": {
+                    "max_pixel_points": max_points,
+                    "points_estimate": n_points,
+                    "budget_applied": True,
+                },
+            }
+        )
+        block.payload.update(
+            {
+                "selected_sector": selected_sector,
+                "selected_from": sectors_for_tpf,
+                "tpf_shape": [int(v) for v in tpf_obj.shape],
+                "acquisition_mode": acquisition_mode,
+                "aperture_pixels": int(np.sum(np.asarray(tpf_obj.aperture_mask) > 0))
+                if tpf_obj.aperture_mask is not None
+                else None,
+            }
+        )
+        return block
+
     bundle = _tier_bundle(
         tier=CheckTier.PIXEL,
         lc_api=lc_api,
         candidate_api=candidate_api,
         tic_id=tic_id,
+        stellar=stellar,
         target=target,
         network=config.network,
         tpf=tpf_obj,
     )
 
-    n_points = int(np.prod(tpf_obj.shape))
     payload = {
         "selected_sector": selected_sector,
         "selected_from": sectors_for_tpf,
@@ -617,7 +667,7 @@ def _run_pixel_diagnostics(
             "budget": {
                 "max_pixel_points": int(config.max_pixel_points),
                 "points_estimate": n_points,
-                "budget_applied": n_points > int(config.max_pixel_points),
+                "budget_applied": False,
             },
         },
     )
