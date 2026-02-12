@@ -922,8 +922,8 @@ def _secondary_scan_render_hints(
         show_error_bars=show_error_bars,
         error_bar_stride=error_bar_stride,
         raw_marker_opacity=0.24,
-        binned_marker_size=4.0,
-        binned_line_width=1.5,
+        binned_marker_size=3.0,
+        binned_line_width=1.1,
     )
 
 

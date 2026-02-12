@@ -829,26 +829,76 @@ def _secondary_scan_js() -> str:
 (function() {{
   var d = REPORT.secondary_scan;
   if (!d) return;
+  var hints = d.render_hints || {{}};
 
   var traceRaw = {{
     x: d.phase, y: d.flux,
     mode: 'markers',
     type: 'scattergl',
-    marker: {{ color: '{_OOT_COLOR}', size: 2, opacity: 0.25 }},
+    marker: {{
+      color: '{_OOT_COLOR}',
+      size: 2,
+      opacity: (hints.raw_marker_opacity != null) ? hints.raw_marker_opacity : 0.25
+    }},
     name: 'Raw',
   }};
 
+  var connectBins = (hints.connect_bins !== false);
+  var maxGap = (hints.max_connect_phase_gap != null) ? hints.max_connect_phase_gap : 0.02;
+  var showErrorBars = (hints.show_error_bars === true);
+  var errStride = Math.max(1, (hints.error_bar_stride != null) ? hints.error_bar_stride : 1);
+  var styleMode = (hints.style_mode != null) ? hints.style_mode : 'normal';
+
+  var binnedMode;
+  if (styleMode === 'normal') {{
+    binnedMode = 'lines';
+  }} else {{
+    binnedMode = connectBins ? 'lines+markers' : 'markers';
+  }}
+  var lineWidth = (hints.binned_line_width != null) ? hints.binned_line_width : 1.5;
+  var markerSize = (hints.binned_marker_size != null) ? hints.binned_marker_size : 5;
+  var lineOpacity = (styleMode === 'normal') ? 0.8 : 1.0;
+
+  var binX = [];
+  var binY = [];
+  if (connectBins) {{
+    for (var i = 0; i < d.bin_centers.length; i++) {{
+      if (i > 0 && (d.bin_centers[i] - d.bin_centers[i - 1]) > maxGap) {{
+        // Break line across sparse/gap regions to avoid misleading zig-zags.
+        binX.push(null);
+        binY.push(null);
+      }}
+      binX.push(d.bin_centers[i]);
+      binY.push(d.bin_flux[i]);
+    }}
+  }} else {{
+    binX = d.bin_centers.slice();
+    binY = d.bin_flux.slice();
+  }}
+
   var binErr = [];
   for (var i = 0; i < d.bin_err.length; i++) {{
-    binErr.push(d.bin_err[i] === null ? 0 : d.bin_err[i]);
+    var e = d.bin_err[i];
+    if (!showErrorBars || e === null || (i % errStride) !== 0) {{
+      binErr.push(0);
+    }} else {{
+      binErr.push(e);
+    }}
   }}
+
   var traceBin = {{
-    x: d.bin_centers, y: d.bin_flux,
-    mode: 'lines+markers',
+    x: binX, y: binY,
+    mode: binnedMode,
     type: 'scatter',
-    line: {{ color: '{_BIN_COLOR}', width: 2 }},
-    marker: {{ color: '{_BIN_COLOR}', size: 5 }},
-    error_y: {{ type: 'data', array: binErr, visible: true }},
+    connectgaps: false,
+    opacity: lineOpacity,
+    line: {{ color: '{_BIN_COLOR}', width: lineWidth }},
+    marker: {{ color: '{_BIN_COLOR}', size: markerSize }},
+    error_y: {{
+      type: 'data',
+      array: binErr,
+      visible: showErrorBars
+    }},
     name: 'Binned (' + d.bin_minutes + ' min)',
   }};
 
