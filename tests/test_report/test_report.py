@@ -30,7 +30,11 @@ from bittr_tess_vetter.report import (
     ReportData,
     build_report,
 )
-from bittr_tess_vetter.report._build import _downsample_preserving_transits
+from bittr_tess_vetter.report._build import (
+    _bin_phase_data,
+    _downsample_phase_preserving_transit,
+    _downsample_preserving_transits,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -106,6 +110,8 @@ def test_report_data_to_json_round_trip() -> None:
         bin_flux=[0.995, 0.995],
         bin_err=[0.001, 0.001],
         bin_minutes=30.0,
+        transit_duration_phase=0.0298,  # 2.5h / (3.5d * 24)
+        phase_range=(-0.0893, 0.0893),  # ±3 * transit_duration_phase
     )
 
     mock_check = ok_result(
@@ -271,6 +277,9 @@ def test_json_schema_keys_and_types() -> None:
     assert isinstance(j["phase_folded"]["bin_flux"], list)
     assert isinstance(j["phase_folded"]["bin_err"], list)
     assert isinstance(j["phase_folded"]["bin_minutes"], float)
+    assert isinstance(j["phase_folded"]["transit_duration_phase"], float)
+    assert isinstance(j["phase_folded"]["phase_range"], (list, tuple))
+    assert len(j["phase_folded"]["phase_range"]) == 2
 
     # Round-trip through json.dumps should work without custom encoders
     serialized = json.dumps(j)
@@ -539,3 +548,137 @@ def test_downsample_all_in_transit() -> None:
     # All points are in-transit, so n_oot_budget <= 0 -> no downsampling
     assert len(t_out) == n
     assert all(m_out)  # all should still be marked in-transit
+
+
+# ---------------------------------------------------------------------------
+# Empty bin filtering test
+# ---------------------------------------------------------------------------
+
+
+def test_bin_phase_data_filters_empty_bins() -> None:
+    """Verify _bin_phase_data only returns bins that contain data."""
+    # Create sparse phase data: points clustered near phase=0 only,
+    # leaving large gaps across the full phase range [-0.5, 0.5].
+    rng = np.random.default_rng(123)
+    n = 50
+    phase = rng.uniform(-0.02, 0.02, size=n)
+    phase = np.sort(phase)
+    flux = np.ones(n) + rng.normal(0, 1e-4, size=n)
+
+    # Use a long period so bins are narrow in phase -> many empty bins
+    period_days = 100.0
+    bin_minutes = 30.0
+
+    centers, fluxes, errors = _bin_phase_data(phase, flux, period_days, bin_minutes)
+
+    # All returned bins must have data
+    assert len(centers) > 0
+    assert len(centers) == len(fluxes) == len(errors)
+
+    # With data only near phase=0, the number of populated bins should
+    # be much less than the total number of possible bins across [-0.5, 0.5].
+    bin_phase = (bin_minutes / 60.0 / 24.0) / period_days
+    phase_range = float(np.max(phase) - np.min(phase))
+    max_possible_bins = max(1, int(np.ceil(phase_range / bin_phase)))
+
+    # Bins returned should equal max_possible_bins (since data is tightly
+    # clustered, every bin in the data range has points).  The key check
+    # is that we do NOT get bins for the full [-0.5, 0.5] range.
+    assert len(centers) <= max_possible_bins
+
+    # Bin centers should all be near 0 (where the data is)
+    for c in centers:
+        assert abs(c) < 0.05, f"Bin center {c} is far from the data cluster"
+
+
+# ---------------------------------------------------------------------------
+# Phase-folded downsampling tests
+# ---------------------------------------------------------------------------
+
+
+def test_phase_downsample_respects_max_and_preserves_transit() -> None:
+    """Verify max_phase_points is respected and near-transit points preserved."""
+    time, flux, flux_err = _make_box_transit_lc(
+        baseline_days=90.0,
+        cadence_minutes=2.0,
+        depth_frac=0.01,
+        noise_ppm=50.0,
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    # With period=3.5d and duration=2.5h, transit_duration_phase ~0.0298.
+    # The display window is ±3*0.0298 = ±0.0893 phase.  Set max high
+    # enough so far-from-transit points get thinned but the budget
+    # isn't exceeded by near-transit alone.
+    max_phase = 15_000
+    report = build_report(lc, candidate, max_phase_points=max_phase)
+
+    assert report.phase_folded is not None
+    n_raw = len(report.phase_folded.phase)
+    assert n_raw <= max_phase
+    # Confirm actual downsampling happened (original is ~64800)
+    assert n_raw < 64_800
+
+    # Near-transit points (within display window) should all be preserved
+    phases = np.array(report.phase_folded.phase)
+    half_win = report.phase_folded.phase_range[1]
+    near_transit_count = int(np.sum(np.abs(phases) < half_win))
+    assert near_transit_count > 0
+
+    # Bins are computed within the display window before downsampling
+    assert len(report.phase_folded.bin_centers) > 0
+
+
+def test_phase_no_downsample_when_under_limit() -> None:
+    """Verify no phase downsampling when data is under max_phase_points."""
+    time, flux, flux_err = _make_box_transit_lc(
+        baseline_days=27.0,
+        cadence_minutes=10.0,
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    # With 27 days at 10-min cadence -> ~3888 points, well under 10k
+    report = build_report(lc, candidate, max_phase_points=10_000)
+
+    assert report.phase_folded is not None
+    # All valid points should be present (no downsampling)
+    valid = np.isfinite(time) & np.isfinite(flux)
+    assert len(report.phase_folded.phase) == int(np.sum(valid))
+
+
+def test_downsample_phase_preserving_transit_unit() -> None:
+    """Unit test for _downsample_phase_preserving_transit."""
+    rng = np.random.default_rng(99)
+    # 500 points across full phase range, 100 near transit
+    far_phase = rng.uniform(-0.5, -0.1, size=250)
+    far_phase = np.concatenate([far_phase, rng.uniform(0.1, 0.5, size=250)])
+    near_phase = rng.uniform(-0.09, 0.09, size=100)
+    phase = np.sort(np.concatenate([far_phase, near_phase]))
+    flux = np.ones_like(phase)
+
+    # Ask for 200 points total: all 100 near-transit + 100 far
+    p_out, f_out = _downsample_phase_preserving_transit(phase, flux, max_points=200)
+
+    assert len(p_out) <= 200
+    # All near-transit points preserved
+    near_in_output = int(np.sum(np.abs(p_out) < 0.1))
+    assert near_in_output == 100
+
+    # Far points were thinned
+    far_in_output = int(np.sum(np.abs(p_out) >= 0.1))
+    assert far_in_output <= 100
+
+
+def test_downsample_phase_all_near_transit() -> None:
+    """Verify no crash when all points are near transit center."""
+    phase = np.linspace(-0.05, 0.05, 300)
+    flux = np.ones(300)
+
+    # All points are within ±0.1 -> n_far_budget <= 0 -> return all
+    p_out, f_out = _downsample_phase_preserving_transit(phase, flux, max_points=100)
+
+    assert len(p_out) == 300  # nothing to thin

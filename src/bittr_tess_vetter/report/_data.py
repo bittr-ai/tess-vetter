@@ -48,14 +48,26 @@ class FullLCPlotData:
 
 @dataclass(frozen=True)
 class PhaseFoldedPlotData:
-    """Plot-ready arrays for the phase-folded transit panel."""
+    """Plot-ready arrays for the phase-folded transit panel.
+
+    Raw points use a two-zone strategy: full-resolution near the transit
+    (within ``phase_range``) and heavily downsampled out-of-transit baseline.
+    Bins cover only the ``phase_range`` window — the transit-centric region
+    that matters for triage.
+
+    The ``phase_range`` window is determined by the transit duration:
+    ±3 transit durations in phase units, giving enough baseline context
+    around ingress/egress while avoiding the vast irrelevant orbital baseline.
+    """
 
     phase: list[float]  # phase values (-0.5 to 0.5)
     flux: list[float]  # normalized flux at each phase
-    bin_centers: list[float]  # binned phase centers
+    bin_centers: list[float]  # binned phase centers (within phase_range)
     bin_flux: list[float]  # binned flux means
     bin_err: list[float | None]  # binned flux standard error of mean (None if single-point bin)
     bin_minutes: float  # bin width used
+    transit_duration_phase: float  # transit duration expressed in phase units (duration_hours / period_days / 24)
+    phase_range: tuple[float, float]  # display window in phase units, e.g. (-0.03, 0.03)
 
 
 def _scrub_non_finite(obj: Any) -> Any:

@@ -54,6 +54,7 @@ def build_report(
     bin_minutes: float = 30.0,
     check_config: dict[str, dict[str, Any]] | None = None,
     max_lc_points: int = 50_000,
+    max_phase_points: int = 10_000,
 ) -> ReportData:
     """Assemble LC-only report data packet.
 
@@ -72,6 +73,9 @@ def build_report(
         check_config: Per-check config dicts (e.g., {"V01": {...}}).
         max_lc_points: Downsample full LC arrays if longer than this.
             Prevents bloated JSON for multi-sector LCs.
+        max_phase_points: Downsample phase-folded raw arrays if longer
+            than this.  Near-transit points (within the duration-based
+            display window) are preserved at full resolution.
 
     Returns:
         ReportData with all Phase 1 contents populated.
@@ -102,7 +106,9 @@ def build_report(
     full_lc = _build_full_lc_plot_data(lc, ephemeris, max_lc_points)
 
     # 6. Compute phase-folded plot arrays
-    phase_folded = _build_phase_folded_plot_data(lc, ephemeris, bin_minutes)
+    phase_folded = _build_phase_folded_plot_data(
+        lc, ephemeris, bin_minutes, max_phase_points
+    )
 
     # 7. Assemble ReportData
     return ReportData(
@@ -273,12 +279,73 @@ def _build_full_lc_plot_data(
     return FullLCPlotData(time=t_list, flux=f_list, transit_mask=m_list)
 
 
+def _downsample_phase_preserving_transit(
+    phase: np.ndarray,
+    flux: np.ndarray,
+    max_points: int,
+    near_transit_half_phase: float = 0.1,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Downsample phase-folded data while keeping near-transit points.
+
+    Points within ±near_transit_half_phase of transit center (phase=0)
+    are always kept.  Remaining baseline points are evenly thinned to
+    fit within *max_points*.
+
+    Args:
+        phase: Phase values (centered on 0).
+        flux: Flux values.
+        max_points: Maximum number of output points.
+        near_transit_half_phase: Half-width of the near-transit
+            preservation window in phase units.  Defaults to 0.1 for
+            backward compatibility, but callers should pass a
+            duration-based value (e.g. 3 * transit_duration_phase).
+    """
+    near_transit = np.abs(phase) < near_transit_half_phase
+    near_idx = np.where(near_transit)[0]
+    far_idx = np.where(~near_transit)[0]
+
+    n_far_budget = max_points - len(near_idx)
+    if n_far_budget <= 0:
+        # Near-transit points alone exceed the budget; keep only those
+        # (dropping all far-from-transit baseline points).
+        return phase[near_idx], flux[near_idx]
+
+    if len(far_idx) <= n_far_budget:
+        # No downsampling needed — everything fits.
+        return phase, flux
+
+    step = max(1, len(far_idx) // n_far_budget)
+    sampled_far = far_idx[::step][:n_far_budget]
+
+    keep = np.sort(np.concatenate([near_idx, sampled_far]))
+    return phase[keep], flux[keep]
+
+
 def _build_phase_folded_plot_data(
     lc: LightCurve,
     ephemeris: Ephemeris,
     bin_minutes: float,
+    max_phase_points: int = 10_000,
 ) -> PhaseFoldedPlotData:
-    """Build plot-ready arrays for phase-folded transit panel."""
+    """Build plot-ready arrays for phase-folded transit panel.
+
+    Uses a duration-based display window of ±3 transit durations
+    (in phase units) centered on the transit midpoint.  This follows
+    standard practice in TESS/Kepler transit papers (e.g., Guerrero+2021,
+    Ricker+2015) where phase-folded plots zoom to the transit region
+    with enough pre/post-transit baseline for visual context around
+    ingress and egress.
+
+    The factor of 3 provides ~1 full transit duration of baseline on
+    each side of the transit (since the transit itself occupies ±0.5
+    duration), which is sufficient for triage without wasting data on
+    the vast orbital baseline.  A floor of ±0.015 phase prevents
+    degenerate windows for very short-duration transits.
+
+    Bins are computed only within this display window, not across the
+    full orbit.  Raw points use a two-zone strategy: full-resolution
+    inside the display window, heavily downsampled outside.
+    """
     time = np.asarray(lc.time, dtype=np.float64)
     flux = np.asarray(lc.flux, dtype=np.float64)
 
@@ -290,15 +357,35 @@ def _build_phase_folded_plot_data(
     time_v = time[valid]
     flux_v = flux[valid]
 
+    # Transit duration in phase units
+    transit_duration_phase = (ephemeris.duration_hours / 24.0) / ephemeris.period_days
+
+    # Display window: ±3 transit durations, floored at ±0.015 phase.
+    # 3x gives ~1 full duration of baseline on each side of the transit.
+    half_window = max(3.0 * transit_duration_phase, 0.015)
+    # Cap at ±0.5 (full orbit) — can't exceed physical range.
+    half_window = min(half_window, 0.5)
+    phase_range = (-half_window, half_window)
+
     # Phase-fold using existing function (returns sorted arrays)
     phase, flux_folded = fold_transit(
         time_v, flux_v, ephemeris.period_days, ephemeris.t0_btjd
     )
 
-    # Bin the phase-folded data
+    # Bin only within the display window (transit-centric region).
+    # Binning the full orbit wastes compute and produces irrelevant bins.
     bin_centers, bin_flux, bin_err = _bin_phase_data(
-        phase, flux_folded, ephemeris.period_days, bin_minutes
+        phase, flux_folded, ephemeris.period_days, bin_minutes,
+        phase_range=phase_range,
     )
+
+    # Downsample raw phase-folded points if needed.
+    # Near-transit window for preservation matches the display window.
+    if len(phase) > max_phase_points:
+        phase, flux_folded = _downsample_phase_preserving_transit(
+            phase, flux_folded, max_phase_points,
+            near_transit_half_phase=half_window,
+        )
 
     return PhaseFoldedPlotData(
         phase=phase.tolist(),
@@ -307,6 +394,8 @@ def _build_phase_folded_plot_data(
         bin_flux=bin_flux,
         bin_err=bin_err,
         bin_minutes=bin_minutes,
+        transit_duration_phase=transit_duration_phase,
+        phase_range=phase_range,
     )
 
 
@@ -315,6 +404,7 @@ def _bin_phase_data(
     flux: np.ndarray,
     period_days: float,
     bin_minutes: float,
+    phase_range: tuple[float, float] | None = None,
 ) -> tuple[list[float], list[float], list[float | None]]:
     """Bin phase-folded data by phase.
 
@@ -323,6 +413,9 @@ def _bin_phase_data(
         flux: Flux values.
         period_days: Orbital period in days.
         bin_minutes: Bin size in minutes.
+        phase_range: If provided, only bin data within this phase window.
+            Bins are placed to cover the window; data outside is ignored.
+            If None, bins span the full range of the input data.
 
     Returns:
         Tuple of (bin_centers, bin_flux, bin_err) lists.
@@ -334,9 +427,19 @@ def _bin_phase_data(
     # Convert bin size from minutes to phase units
     bin_phase = (bin_minutes / 60.0 / 24.0) / period_days
 
-    # Determine bin edges
-    phase_min = float(np.min(phase))
-    phase_max = float(np.max(phase))
+    # Determine bin edges — either from phase_range or data extent
+    if phase_range is not None:
+        phase_min, phase_max = phase_range
+        # Filter data to the window for binning
+        in_window = (phase >= phase_min) & (phase <= phase_max)
+        phase = phase[in_window]
+        flux = flux[in_window]
+        if len(phase) == 0:
+            return [], [], []
+    else:
+        phase_min = float(np.min(phase))
+        phase_max = float(np.max(phase))
+
     n_bins = max(1, int(np.ceil((phase_max - phase_min) / bin_phase)))
     bin_edges = np.linspace(phase_min, phase_max, n_bins + 1)
 
