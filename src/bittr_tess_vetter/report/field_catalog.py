@@ -58,6 +58,18 @@ class FieldKey(StrEnum):
     SUMMARY_ALIAS_SCALAR_SCORE_P_OVER_2 = "summary.alias_scalar_summary.score_p_over_2"
     SUMMARY_ALIAS_SCALAR_SCORE_2P = "summary.alias_scalar_summary.score_2p"
     SUMMARY_ALIAS_SCALAR_DEPTH_PPM_PEAK = "summary.alias_scalar_summary.depth_ppm_peak"
+    SUMMARY_ALIAS_SCALAR_CLASSIFICATION = "summary.alias_scalar_summary.classification"
+    SUMMARY_ALIAS_SCALAR_PHASE_SHIFT_EVENT_COUNT = (
+        "summary.alias_scalar_summary.phase_shift_event_count"
+    )
+    SUMMARY_ALIAS_SCALAR_PHASE_SHIFT_PEAK_SIGMA = (
+        "summary.alias_scalar_summary.phase_shift_peak_sigma"
+    )
+    SUMMARY_ALIAS_SCALAR_SECONDARY_SIGNIFICANCE = (
+        "summary.alias_scalar_summary.secondary_significance"
+    )
+    SUMMARY_LC_ROBUSTNESS_V_SHAPE_METRIC = "summary.lc_robustness_summary.v_shape_metric"
+    SUMMARY_LC_ROBUSTNESS_ASYMMETRY_SIGMA = "summary.lc_robustness_summary.asymmetry_sigma"
     SUMMARY_TIMING = "summary.timing_summary"
     SUMMARY_TIMING_N_EPOCHS_MEASURED = "summary.timing_summary.n_epochs_measured"
     SUMMARY_TIMING_RMS_SECONDS = "summary.timing_summary.rms_seconds"
@@ -373,6 +385,43 @@ FIELD_CATALOG: dict[FieldKey, FieldSpec] = {
         display_name="Peak Alias Depth",
         description="Peak alias depth among tested harmonics.",
         units="ppm",
+    ),
+    FieldKey.SUMMARY_ALIAS_SCALAR_CLASSIFICATION: FieldSpec(
+        path=FieldKey.SUMMARY_ALIAS_SCALAR_CLASSIFICATION.value,
+        display_name="Alias Classification",
+        description=(
+            "Alias class from strongest non-P harmonic score ratio "
+            "(ALIAS_STRONG >= 1.5, ALIAS_WEAK >= 1.1, else NONE)."
+        ),
+    ),
+    FieldKey.SUMMARY_ALIAS_SCALAR_PHASE_SHIFT_EVENT_COUNT: FieldSpec(
+        path=FieldKey.SUMMARY_ALIAS_SCALAR_PHASE_SHIFT_EVENT_COUNT.value,
+        display_name="Phase-Shift Event Count",
+        description="Count of non-primary phase bins with event significance >= 3.0 sigma.",
+    ),
+    FieldKey.SUMMARY_ALIAS_SCALAR_PHASE_SHIFT_PEAK_SIGMA: FieldSpec(
+        path=FieldKey.SUMMARY_ALIAS_SCALAR_PHASE_SHIFT_PEAK_SIGMA.value,
+        display_name="Peak Phase-Shift Significance",
+        description="Maximum sigma among detected non-primary phase-shift events.",
+        units="sigma",
+    ),
+    FieldKey.SUMMARY_ALIAS_SCALAR_SECONDARY_SIGNIFICANCE: FieldSpec(
+        path=FieldKey.SUMMARY_ALIAS_SCALAR_SECONDARY_SIGNIFICANCE.value,
+        display_name="Secondary Significance",
+        description="Secondary eclipse depth significance at phase 0.5.",
+        units="sigma",
+    ),
+    FieldKey.SUMMARY_LC_ROBUSTNESS_V_SHAPE_METRIC: FieldSpec(
+        path=FieldKey.SUMMARY_LC_ROBUSTNESS_V_SHAPE_METRIC.value,
+        display_name="V-Shape Metric",
+        description="Transit shape ratio t_flat/t_total from LC robustness FP signals.",
+        units="ratio",
+    ),
+    FieldKey.SUMMARY_LC_ROBUSTNESS_ASYMMETRY_SIGMA: FieldSpec(
+        path=FieldKey.SUMMARY_LC_ROBUSTNESS_ASYMMETRY_SIGMA.value,
+        display_name="Asymmetry Significance",
+        description="Ingress/egress asymmetry significance from LC robustness FP signals.",
+        units="sigma",
     ),
     FieldKey.SUMMARY_TIMING: FieldSpec(
         path=FieldKey.SUMMARY_TIMING.value,

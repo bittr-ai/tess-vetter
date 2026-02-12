@@ -215,8 +215,13 @@ class AliasHarmonicSummaryData:
     harmonic_labels: list[str]
     periods: list[float]
     scores: list[float]
+    harmonic_depth_ppm: list[float]
     best_harmonic: str
     best_ratio_over_p: float
+    classification: str | None = None
+    phase_shift_event_count: int | None = None
+    phase_shift_peak_sigma: float | None = None
+    secondary_significance: float | None = None
 
 
 @dataclass(frozen=True)
@@ -495,6 +500,10 @@ def _build_alias_scalar_summary(
             "score_p_over_2": None,
             "score_2p": None,
             "depth_ppm_peak": None,
+            "classification": None,
+            "phase_shift_event_count": None,
+            "phase_shift_peak_sigma": None,
+            "secondary_significance": None,
         }
 
     score_by_label: dict[str, float] = {}
@@ -507,15 +516,13 @@ def _build_alias_scalar_summary(
         if value is not None:
             score_by_label[str(label)] = value
 
-    # Prefer explicit harmonic depths when available.
-    depth_ppm_peak: float | None = None
-    if hasattr(alias_summary, "harmonic_depth_ppm"):
-        maybe_depths = getattr(alias_summary, "harmonic_depth_ppm")
-        if isinstance(maybe_depths, list):
-            depths = [d for d in (_coerce_finite_float(v) for v in maybe_depths) if d is not None]
-            if depths:
-                depth_ppm_peak = float(max(depths))
+    depths = [
+        d
+        for d in (_coerce_finite_float(v) for v in alias_summary.harmonic_depth_ppm)
+        if d is not None
+    ]
     # Do not backfill this with harmonic scores; keep ppm semantics strict.
+    depth_ppm_peak: float | None = float(max(depths)) if depths else None
 
     return {
         "best_harmonic": str(alias_summary.best_harmonic) if alias_summary.best_harmonic else None,
@@ -524,6 +531,14 @@ def _build_alias_scalar_summary(
         "score_p_over_2": score_by_label.get("P/2"),
         "score_2p": score_by_label.get("2P"),
         "depth_ppm_peak": depth_ppm_peak,
+        "classification": alias_summary.classification,
+        "phase_shift_event_count": (
+            int(alias_summary.phase_shift_event_count)
+            if alias_summary.phase_shift_event_count is not None
+            else None
+        ),
+        "phase_shift_peak_sigma": _coerce_finite_float(alias_summary.phase_shift_peak_sigma),
+        "secondary_significance": _coerce_finite_float(alias_summary.secondary_significance),
     }
 
 
@@ -779,6 +794,8 @@ class ReportData:
                 "odd_even_depth_diff_sigma": fp.odd_even_depth_diff_sigma,
                 "secondary_depth_sigma": fp.secondary_depth_sigma,
                 "phase_0p5_bin_depth_ppm": fp.phase_0p5_bin_depth_ppm,
+                "v_shape_metric": fp.v_shape_metric,
+                "asymmetry_sigma": fp.asymmetry_sigma,
             }
             plot_data["lc_robustness"] = asdict(self.lc_robustness)
 

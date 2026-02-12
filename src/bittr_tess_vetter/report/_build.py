@@ -19,6 +19,7 @@ from bittr_tess_vetter.compute.transit import (
 )
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.validation.report_bridge import (
+    compute_alias_scalar_signals,
     compute_alias_summary,
     compute_timing_series,
     run_lc_checks,
@@ -1068,19 +1069,46 @@ def _build_alias_harmonic_summary_data(
 ) -> AliasHarmonicSummaryData:
     """Build compact harmonic summary payload from bridge diagnostics."""
     eph = candidate.ephemeris
+    internal_lc = _to_internal_lightcurve(lc)
     summary = compute_alias_summary(
-        _to_internal_lightcurve(lc),
+        internal_lc,
         period_days=eph.period_days,
         t0_btjd=eph.t0_btjd,
         duration_hours=eph.duration_hours,
+    )
+    scalar_signals = compute_alias_scalar_signals(
+        internal_lc,
+        period_days=eph.period_days,
+        t0_btjd=eph.t0_btjd,
+        duration_hours=eph.duration_hours,
+        harmonic_summary=summary,
     )
     harmonics = summary.harmonics
     return AliasHarmonicSummaryData(
         harmonic_labels=[str(h.harmonic) for h in harmonics],
         periods=[float(h.period) for h in harmonics],
         scores=[float(h.score) for h in harmonics],
+        harmonic_depth_ppm=[float(h.depth_ppm) for h in harmonics],
         best_harmonic=str(summary.best_harmonic),
         best_ratio_over_p=float(summary.best_ratio_over_p),
+        classification=str(scalar_signals.get("classification"))
+        if scalar_signals.get("classification") is not None
+        else None,
+        phase_shift_event_count=(
+            int(scalar_signals["phase_shift_event_count"])
+            if scalar_signals.get("phase_shift_event_count") is not None
+            else None
+        ),
+        phase_shift_peak_sigma=(
+            float(scalar_signals["phase_shift_peak_sigma"])
+            if scalar_signals.get("phase_shift_peak_sigma") is not None
+            else None
+        ),
+        secondary_significance=(
+            float(scalar_signals["secondary_significance"])
+            if scalar_signals.get("secondary_significance") is not None
+            else None
+        ),
     )
 
 

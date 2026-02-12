@@ -92,6 +92,18 @@ def test_report_payload_accepts_typed_reference_and_summary_blocks() -> None:
         "flags": [],
         "semantics": {"is_periodic": False},
     }
+    payload["summary"]["alias_scalar_summary"] = {
+        "best_harmonic": "P",
+        "best_ratio_over_p": 1.0,
+        "score_p": 0.5,
+        "score_p_over_2": 0.3,
+        "score_2p": 0.2,
+        "depth_ppm_peak": 1200.0,
+        "classification": "NONE",
+        "phase_shift_event_count": 0,
+        "phase_shift_peak_sigma": None,
+        "secondary_significance": 0.0,
+    }
 
     parsed = ReportPayloadModel.model_validate(payload)
 
@@ -101,6 +113,7 @@ def test_report_payload_accepts_typed_reference_and_summary_blocks() -> None:
     assert parsed.summary.noise_summary.trend_stat_unit == "relative_flux_per_day"
     assert parsed.summary.variability_summary is not None
     assert parsed.summary.odd_even_summary is not None
+    assert parsed.summary.alias_scalar_summary is not None
 
 
 def test_report_payload_rejects_invalid_typed_reference_shape() -> None:

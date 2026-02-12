@@ -18,6 +18,9 @@ from bittr_tess_vetter.transit.result import TransitTimingSeries
 from bittr_tess_vetter.transit.timing import build_timing_series, measure_all_transit_times
 from bittr_tess_vetter.validation.alias_diagnostics import (
     HarmonicPowerSummary,
+    classify_alias,
+    compute_secondary_significance,
+    detect_phase_shift_events,
     summarize_harmonic_power,
 )
 from bittr_tess_vetter.validation.lc_checks import (
@@ -193,7 +196,67 @@ def compute_alias_summary(
     )
 
 
+def compute_alias_scalar_signals(
+    lightcurve: LightCurveData,
+    *,
+    period_days: float,
+    t0_btjd: float,
+    duration_hours: float,
+    harmonic_summary: HarmonicPowerSummary | None = None,
+    n_phase_bins: int = 10,
+    significance_threshold: float = 3.0,
+) -> dict[str, float | int | str | None]:
+    """Compute scalar alias diagnostics from deterministic base assumptions."""
+    mask = np.asarray(lightcurve.valid_mask, dtype=np.bool_)
+    time = np.asarray(lightcurve.time, dtype=np.float64)[mask]
+    flux = np.asarray(lightcurve.flux, dtype=np.float64)[mask]
+    flux_err = np.asarray(lightcurve.flux_err, dtype=np.float64)[mask]
+
+    summary = harmonic_summary or summarize_harmonic_power(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        base_period=period_days,
+        base_t0=t0_btjd,
+        duration_hours=duration_hours,
+    )
+    harmonics = list(summary.harmonics)
+    base_score = next((h.score for h in harmonics if h.harmonic == "P"), 0.0)
+    classification, _best_harmonic, _ratio = classify_alias(
+        harmonics,
+        base_score=base_score,
+    )
+
+    events = detect_phase_shift_events(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        period=period_days,
+        t0=t0_btjd,
+        n_phase_bins=n_phase_bins,
+        significance_threshold=significance_threshold,
+    )
+    peak_sigma = max((float(e.significance) for e in events), default=None)
+
+    secondary_significance = compute_secondary_significance(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        period=period_days,
+        t0=t0_btjd,
+        duration_hours=duration_hours,
+    )
+
+    return {
+        "classification": str(classification),
+        "phase_shift_event_count": int(len(events)),
+        "phase_shift_peak_sigma": peak_sigma,
+        "secondary_significance": float(secondary_significance),
+    }
+
+
 __all__ = [
+    "compute_alias_scalar_signals",
     "compute_alias_summary",
     "compute_timing_series",
     "run_lc_checks",

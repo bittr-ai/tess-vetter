@@ -458,8 +458,13 @@ def test_alias_scalar_summary_regression_deterministic_and_scalar_only() -> None
             harmonic_labels=["P", "P/2", "2P"],
             periods=[10.0, 5.0, 20.0],
             scores=[0.6, 0.2, 0.1],
+            harmonic_depth_ppm=[1200.0, 600.0, 450.0],
             best_harmonic="P",
             best_ratio_over_p=1.0,
+            classification="NONE",
+            phase_shift_event_count=0,
+            phase_shift_peak_sigma=None,
+            secondary_significance=0.0,
         ),
         checks_run=[],
     )
@@ -479,6 +484,10 @@ def test_alias_scalar_summary_regression_deterministic_and_scalar_only() -> None
             "score_p_over_2",
             "score_2p",
             "depth_ppm_peak",
+            "classification",
+            "phase_shift_event_count",
+            "phase_shift_peak_sigma",
+            "secondary_significance",
         }
     )
     # `depth_ppm_peak` may be absent when no harmonic depth values are available.
@@ -488,16 +497,23 @@ def test_alias_scalar_summary_regression_deterministic_and_scalar_only() -> None
         "score_p",
         "score_p_over_2",
         "score_2p",
+        "classification",
+        "phase_shift_event_count",
+        "secondary_significance",
     }
     assert block_a["best_harmonic"] == "P"
     assert block_a["best_ratio_over_p"] == pytest.approx(1.0)
     assert block_a["score_p"] == pytest.approx(0.6)
     assert block_a["score_p_over_2"] == pytest.approx(0.2)
     assert block_a["score_2p"] == pytest.approx(0.1)
+    assert block_a["depth_ppm_peak"] == pytest.approx(1200.0)
+    assert block_a["classification"] == "NONE"
+    assert block_a["phase_shift_event_count"] == 0
     assert (
-        block_a.get("depth_ppm_peak") is None
-        or isinstance(block_a.get("depth_ppm_peak"), float)
+        "phase_shift_peak_sigma" not in block_a
+        or block_a["phase_shift_peak_sigma"] is None
     )
+    assert block_a["secondary_significance"] == pytest.approx(0.0)
 
     _assert_scalar_only_summary_block(block_a, block_name="alias_scalar_summary")
 
@@ -593,6 +609,21 @@ def test_secondary_scan_summary_regression_naming_unit_and_scalar_only() -> None
     assert block_a["quality_flag_count"] == 1
 
     _assert_scalar_only_summary_block(block_a, block_name="secondary_scan_summary")
+
+
+def test_lc_robustness_summary_includes_vshape_and_asymmetry_scalars() -> None:
+    """LC robustness summary should export v-shape and asymmetry scalars."""
+    time, flux, flux_err = _make_box_transit_lc()
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+    payload = build_report(lc, candidate).to_json()
+
+    block = payload["summary"]["lc_robustness_summary"]
+    assert "v_shape_metric" in block
+    assert "asymmetry_sigma" in block
+    assert block["v_shape_metric"] is None or isinstance(block["v_shape_metric"], float)
+    assert block["asymmetry_sigma"] is None or isinstance(block["asymmetry_sigma"], float)
 
 
 # ---------------------------------------------------------------------------

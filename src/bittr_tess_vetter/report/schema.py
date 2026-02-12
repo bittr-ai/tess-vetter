@@ -99,6 +99,10 @@ class AliasScalarSummaryModel(BaseModel):
     score_p_over_2: float | None = None
     score_2p: float | None = None
     depth_ppm_peak: float | None = None
+    classification: str | None = None
+    phase_shift_event_count: int | None = None
+    phase_shift_peak_sigma: float | None = None
+    secondary_significance: float | None = None
 
 
 class TimingSummaryModel(BaseModel):
