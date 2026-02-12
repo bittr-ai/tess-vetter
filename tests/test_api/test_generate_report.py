@@ -11,7 +11,11 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.generate_report import GenerateReportResult, generate_report
+from bittr_tess_vetter.api.generate_report import (
+    EnrichmentConfig,
+    GenerateReportResult,
+    generate_report,
+)
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.domain.target import StellarParameters, Target
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
@@ -20,7 +24,7 @@ from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
 # Helpers
 # ---------------------------------------------------------------------------
 
-_EPH = dict(period_days=3.5, t0_btjd=1850.0, duration_hours=2.5)
+_EPH = {"period_days": 3.5, "t0_btjd": 1850.0, "duration_hours": 2.5}
 
 
 def _make_lc_data(sector: int, n: int = 500, tic_id: int = 123456789) -> LightCurveData:
@@ -210,3 +214,52 @@ def test_invalid_flux_type_propagates() -> None:
     )
     with pytest.raises(ValueError, match="flux_type"):
         generate_report(123456789, **_EPH, mast_client=client, flux_type="invalid")
+
+
+def test_include_enrichment_false_omits_enrichment_block() -> None:
+    """Default behavior should not attach enrichment payload."""
+    client = _mock_client(sectors=[1])
+    result = generate_report(123456789, **_EPH, mast_client=client)
+    assert result.report.enrichment is None
+    assert "enrichment" not in result.report_json
+
+
+def test_include_enrichment_true_adds_scaffold_blocks() -> None:
+    """Enrichment-enabled path returns deterministic skipped scaffold blocks."""
+    client = _mock_client(sectors=[1])
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        include_enrichment=True,
+    )
+
+    assert result.report.enrichment is not None
+    e = result.report_json["enrichment"]
+    assert e["version"] == "0.1.0"
+    assert e["pixel_diagnostics"]["status"] == "skipped"
+    assert e["catalog_context"]["status"] == "skipped"
+    assert e["followup_context"]["status"] == "skipped"
+    assert e["pixel_diagnostics"]["flags"] == ["NOT_IMPLEMENTED"]
+
+
+def test_include_enrichment_respects_block_toggles() -> None:
+    """Config toggles should omit disabled enrichment blocks."""
+    client = _mock_client(sectors=[1])
+    cfg = EnrichmentConfig(
+        include_pixel_diagnostics=False,
+        include_catalog_context=True,
+        include_followup_context=False,
+    )
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        include_enrichment=True,
+        enrichment_config=cfg,
+    )
+
+    e = result.report_json["enrichment"]
+    assert e["pixel_diagnostics"] is None
+    assert e["catalog_context"]["status"] == "skipped"
+    assert e["followup_context"] is None

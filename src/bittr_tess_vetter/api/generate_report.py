@@ -28,7 +28,13 @@ from bittr_tess_vetter.platform.io.mast_client import (
     LightCurveNotFoundError,
     MASTClient,
 )
-from bittr_tess_vetter.report import ReportData, build_report, render_html
+from bittr_tess_vetter.report import (
+    EnrichmentBlockData,
+    ReportData,
+    ReportEnrichmentData,
+    build_report,
+    render_html,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +59,25 @@ class GenerateReportResult:
     stitch_diagnostics: list[SectorDiagnostics] | None
 
 
+@dataclass(frozen=True)
+class EnrichmentConfig:
+    """Configuration for optional non-LC enrichment scaffolding."""
+
+    include_pixel_diagnostics: bool = True
+    include_catalog_context: bool = True
+    include_followup_context: bool = True
+    fail_open: bool = True
+    network: bool = True
+    max_network_seconds: float = 30.0
+    per_request_timeout_seconds: float = 10.0
+    max_concurrent_requests: int = 3
+    fetch_tpf: bool = True
+    tpf_sector_strategy: str = "best"  # best | all | requested
+    sectors_for_tpf: list[int] | None = None
+    max_pixel_points: int = 20_000
+    max_catalog_rows: int = 200
+
+
 def generate_report(
     tic_id: int,
     period_days: float,
@@ -71,6 +96,8 @@ def generate_report(
     max_lc_points: int = 50_000,
     max_phase_points: int = 10_000,
     check_config: dict[str, dict[str, Any]] | None = None,
+    include_enrichment: bool = False,
+    enrichment_config: EnrichmentConfig | None = None,
     progress_callback: Callable[[DownloadProgress], None] | None = None,
 ) -> GenerateReportResult:
     """Generate a complete LC-only vetting report for a TESS candidate.
@@ -96,6 +123,8 @@ def generate_report(
         max_lc_points: Downsample full LC if longer than this.
         max_phase_points: Downsample phase-folded if longer than this.
         check_config: Per-check config overrides.
+        include_enrichment: If True, attach non-LC enrichment scaffold blocks.
+        enrichment_config: Optional config for enrichment scaffolding.
         progress_callback: Callback for download progress updates.
 
     Returns:
@@ -167,6 +196,11 @@ def generate_report(
         check_config=check_config,
     )
 
+    if include_enrichment:
+        report.enrichment = _build_enrichment_scaffold(
+            enrichment_config or EnrichmentConfig()
+        )
+
     # 7. Optional HTML
     html = render_html(report) if include_html else None
 
@@ -179,4 +213,36 @@ def generate_report(
     )
 
 
-__all__ = ["GenerateReportResult", "generate_report"]
+def _skipped_enrichment_block(reason_flag: str) -> EnrichmentBlockData:
+    """Build a deterministic skipped enrichment block scaffold."""
+    return EnrichmentBlockData(
+        status="skipped",
+        flags=[reason_flag],
+        quality={"is_degraded": False},
+        checks={},
+        provenance={"scaffold": True, "reason": reason_flag},
+        payload={},
+    )
+
+
+def _build_enrichment_scaffold(config: EnrichmentConfig) -> ReportEnrichmentData:
+    """Return deterministic non-LC enrichment scaffold blocks.
+
+    This is intentionally a no-op placeholder until domain blocks are wired.
+    """
+    reason = "NOT_IMPLEMENTED"
+    return ReportEnrichmentData(
+        version="0.1.0",
+        pixel_diagnostics=_skipped_enrichment_block(reason)
+        if config.include_pixel_diagnostics
+        else None,
+        catalog_context=_skipped_enrichment_block(reason)
+        if config.include_catalog_context
+        else None,
+        followup_context=_skipped_enrichment_block(reason)
+        if config.include_followup_context
+        else None,
+    )
+
+
+__all__ = ["EnrichmentConfig", "GenerateReportResult", "generate_report"]
