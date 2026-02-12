@@ -299,14 +299,16 @@ def _downsample_preserving_transits(
 
     if len(in_transit_idx) >= max_points:
         # In-transit alone exceeds budget — uniformly thin them
-        step = max(1, len(in_transit_idx) // max_points)
-        keep = np.sort(in_transit_idx[::step][:max_points])
+        pick = np.round(np.linspace(0, len(in_transit_idx) - 1, max_points)).astype(int)
+        keep = np.sort(in_transit_idx[pick])
         return time[keep].tolist(), flux[keep].tolist(), transit_mask[keep].tolist()
 
-    # Keep all in-transit; evenly sample OOT to fill remaining budget
+    # Keep all in-transit; evenly sample OOT to fill remaining budget.
+    # Use linspace to pick evenly-spaced indices across the full OOT
+    # array, avoiding the start-biased truncation of [::step][:budget].
     n_oot_budget = max_points - len(in_transit_idx)
-    step = max(1, len(oot_idx) // n_oot_budget)
-    sampled_oot = oot_idx[::step][:n_oot_budget]
+    pick = np.round(np.linspace(0, len(oot_idx) - 1, n_oot_budget)).astype(int)
+    sampled_oot = oot_idx[pick]
 
     keep = np.sort(np.concatenate([in_transit_idx, sampled_oot]))
     return time[keep].tolist(), flux[keep].tolist(), transit_mask[keep].tolist()
@@ -377,17 +379,22 @@ def _downsample_phase_preserving_transit(
 
     if len(near_idx) >= max_points:
         # Near-transit alone exceeds budget — uniformly thin them
-        step = max(1, len(near_idx) // max_points)
-        keep = np.sort(near_idx[::step][:max_points])
+        pick = np.round(np.linspace(0, len(near_idx) - 1, max_points)).astype(int)
+        keep = np.sort(near_idx[pick])
         return phase[keep], flux[keep]
 
-    # Keep all near-transit; evenly sample far points to fill budget
+    # Keep all near-transit; evenly sample far points to fill budget.
+    # Use linspace to pick evenly-spaced indices across the full far
+    # array.  The old [::step][:budget] approach was biased toward the
+    # start of the sorted-by-phase array, which systematically clipped
+    # positive-phase (right-side) points and caused visible asymmetry
+    # in the phase-folded plot.
     n_far_budget = max_points - len(near_idx)
     if len(far_idx) <= n_far_budget:
         return phase, flux
 
-    step = max(1, len(far_idx) // n_far_budget)
-    sampled_far = far_idx[::step][:n_far_budget]
+    pick = np.round(np.linspace(0, len(far_idx) - 1, n_far_budget)).astype(int)
+    sampled_far = far_idx[pick]
 
     keep = np.sort(np.concatenate([near_idx, sampled_far]))
     return phase[keep], flux[keep]

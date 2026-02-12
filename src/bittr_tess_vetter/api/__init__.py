@@ -159,6 +159,8 @@ __all__ = [
     "localize_transit_source",
     "fit_transit",
     "calculate_fpp",
+    "generate_report",
+    "GenerateReportResult",
     # -------------------------------------------------------------------------
     # Introspection
     # -------------------------------------------------------------------------
@@ -605,6 +607,10 @@ if TYPE_CHECKING:
         compute_conditional_rates,
         compute_reliability_curves,
         recommend_thresholds,
+    )
+    from bittr_tess_vetter.api.generate_report import (  # noqa: F401
+        GenerateReportResult,
+        generate_report,
     )
     from bittr_tess_vetter.api.report import PixelVetReport, generate_pixel_vet_report
 
