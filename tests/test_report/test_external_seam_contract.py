@@ -53,6 +53,8 @@ def test_external_seam_summary_plot_hashes_ignore_payload_meta_edits() -> None:
 
     summary_hash_before = _canonical_sha256(payload["summary"])
     plot_hash_before = _canonical_sha256(payload["plot_data"])
+    stored_summary_hash_before = payload["payload_meta"]["summary_hash"]
+    stored_plot_hash_before = payload["payload_meta"]["plot_data_hash"]
 
     mutated = copy.deepcopy(payload)
     mutated["payload_meta"]["summary_version"] = "99"
@@ -62,3 +64,5 @@ def test_external_seam_summary_plot_hashes_ignore_payload_meta_edits() -> None:
 
     assert _canonical_sha256(mutated["summary"]) == summary_hash_before
     assert _canonical_sha256(mutated["plot_data"]) == plot_hash_before
+    assert mutated["payload_meta"]["summary_hash"] == stored_summary_hash_before
+    assert mutated["payload_meta"]["plot_data_hash"] == stored_plot_hash_before
