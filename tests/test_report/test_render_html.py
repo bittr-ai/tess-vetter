@@ -399,7 +399,8 @@ def test_render_html_version_in_footer() -> None:
     """Output includes version info in footer."""
     report = _build_mock_report()
     html = render_html(report)
-    assert "1.0.0" in html
+    assert "bittr-tess-vetter" in html
+    assert "report v" in html
 
 
 def test_render_html_shows_methods_links_when_method_refs_present() -> None:
@@ -448,3 +449,136 @@ def test_render_html_omits_methods_and_bibliography_when_citation_meta_missing()
     html = render_html_from_payload(payload)
     assert "Methods:" not in html
     assert "Bibliography" not in html
+
+
+def test_render_html_custom_views_section_renders_after_default_diagnostics() -> None:
+    payload = _build_mock_report().to_json()
+    payload["custom_views"] = {
+        "version": "1",
+        "views": [
+            {
+                "id": "cv_scatter",
+                "title": "Custom Scatter",
+                "producer": {"source": "agent"},
+                "mode": "deterministic",
+                "chart": {
+                    "type": "scatter",
+                    "series": [
+                        {
+                            "x": {"path": "/plot_data/full_lc/time"},
+                            "y": {"path": "/plot_data/full_lc/flux"},
+                        }
+                    ],
+                    "options": {},
+                },
+                "quality": {"min_points_required": 3, "status": "ok", "flags": []},
+            }
+        ],
+    }
+
+    html = render_html_from_payload(payload)
+    assert "Custom Views" in html
+    assert "Custom Scatter" in html
+    assert 'id="custom-view-plot-0"' in html
+    assert html.index('id="oot-context-plot"') < html.index('id="custom-view-plot-0"')
+
+
+def test_render_html_custom_views_marks_unavailable_degraded_and_unsupported() -> None:
+    payload = _build_mock_report().to_json()
+    payload["custom_views"] = {
+        "version": "1",
+        "views": [
+            {
+                "id": "cv_unavailable",
+                "title": "Unavailable View",
+                "producer": {"source": "agent"},
+                "mode": "deterministic",
+                "chart": {
+                    "type": "scatter",
+                    "series": [
+                        {
+                            "x": {"path": "/plot_data/full_lc/time"},
+                            "y": {"path": "/plot_data/full_lc/flux"},
+                        }
+                    ],
+                    "options": {},
+                },
+                "quality": {
+                    "min_points_required": 3,
+                    "status": "unavailable",
+                    "flags": ["NO_POINTS"],
+                },
+            },
+            {
+                "id": "cv_degraded",
+                "title": "Degraded View",
+                "producer": {"source": "user"},
+                "mode": "ad_hoc",
+                "chart": {
+                    "type": "line",
+                    "series": [
+                        {
+                            "x": {"path": "/plot_data/full_lc/time"},
+                            "y": {"path": "/plot_data/full_lc/flux"},
+                        }
+                    ],
+                    "options": {},
+                },
+                "quality": {"min_points_required": 3, "status": "degraded", "flags": ["PARTIAL"]},
+            },
+            {
+                "id": "cv_unsupported",
+                "title": "Unsupported View",
+                "producer": {"source": "system"},
+                "mode": "deterministic",
+                "chart": {
+                    "type": "histogram",
+                    "series": [
+                        {
+                            "x": {"path": "/plot_data/full_lc/time"},
+                            "y": {"path": "/plot_data/full_lc/flux"},
+                        }
+                    ],
+                    "options": {},
+                },
+                "quality": {"min_points_required": 3, "status": "ok", "flags": []},
+            },
+        ],
+    }
+
+    html = render_html_from_payload(payload)
+    assert "UNAVAILABLE" in html
+    assert "DEGRADED" in html
+    assert "UNSUPPORTED" in html
+    assert "Unsupported chart_type 'histogram'." in html
+
+
+def test_render_html_custom_views_uses_safe_summary_plot_data_paths_only() -> None:
+    payload = _build_mock_report().to_json()
+    payload["custom_views"] = {
+        "version": "1",
+        "views": [
+            {
+                "id": "cv_path_guard",
+                "title": "Path Guard",
+                "producer": {"source": "agent"},
+                "mode": "deterministic",
+                "chart": {
+                    "type": "bar",
+                    "series": [
+                        {
+                            "x": {"path": "/plot_data/phase_folded/bin_centers"},
+                            "y": {"path": "/plot_data/phase_folded/bin_flux"},
+                        }
+                    ],
+                    "options": {},
+                },
+                "quality": {"min_points_required": 3, "status": "ok", "flags": []},
+            }
+        ],
+    }
+
+    html = render_html_from_payload(payload)
+    assert "rootToken !== 'summary' && rootToken !== 'plot_data'" in html
+    assert "path.startsWith('/')" in html
+    assert "decodePointerToken" in html

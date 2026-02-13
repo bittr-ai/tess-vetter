@@ -116,6 +116,7 @@ def generate_report(
     check_config: dict[str, dict[str, Any]] | None = None,
     include_enrichment: bool = False,
     enrichment_config: EnrichmentConfig | None = None,
+    custom_views: dict[str, Any] | None = None,
     progress_callback: Callable[[DownloadProgress], None] | None = None,
 ) -> GenerateReportResult:
     """Generate a complete LC-only vetting report for a TESS candidate.
@@ -150,6 +151,7 @@ def generate_report(
         check_config: Per-check config overrides.
         include_enrichment: If True, attach non-LC enrichment scaffold blocks.
         enrichment_config: Optional config for enrichment scaffolding.
+        custom_views: Optional authored custom-view contract payload.
         progress_callback: Callback for download progress updates.
 
     Returns:
@@ -225,6 +227,7 @@ def generate_report(
         include_lc_robustness=include_lc_robustness,
         max_lc_robustness_epochs=max_lc_robustness_epochs,
         check_config=check_config,
+        custom_views=custom_views,
     )
 
     if include_enrichment:
@@ -245,12 +248,14 @@ def generate_report(
             config=cfg,
         )
 
+    report_json = report.to_json()
+
     # 7. Optional HTML
     html = render_html(report) if include_html else None
 
     return GenerateReportResult(
         report=report,
-        report_json=report.to_json(),
+        report_json=report_json,
         html=html,
         sectors_used=sectors_used,
         stitch_diagnostics=stitch_diag,

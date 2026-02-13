@@ -274,6 +274,100 @@ def test_invalid_deterministic_budget_propagates() -> None:
         )
 
 
+def test_custom_views_forwarded_to_build_report_when_supported(monkeypatch) -> None:
+    client = _mock_client(sectors=[1])
+    real_build_report = generate_report_api.build_report
+    captured: dict[str, object] = {}
+
+    def _spy_build_report(*args, custom_views=None, **kwargs):  # type: ignore[no-untyped-def]
+        captured["custom_views"] = custom_views
+        return real_build_report(*args, custom_views=custom_views, **kwargs)
+
+    monkeypatch.setattr(generate_report_api, "build_report", _spy_build_report)
+    custom_views = {
+        "version": "1",
+        "views": [
+            {
+                "id": "cv1",
+                "title": "Custom 1",
+                "producer": {"source": "agent"},
+                "mode": "deterministic",
+                "chart": {
+                    "type": "scatter",
+                    "series": [
+                        {
+                            "x": {"path": "/plot_data/full_lc/time"},
+                            "y": {"path": "/plot_data/full_lc/flux"},
+                        }
+                    ],
+                    "options": {},
+                },
+                "quality": {"min_points_required": 3, "status": "ok", "flags": []},
+            }
+        ],
+    }
+    generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        custom_views=custom_views,
+    )
+
+    assert captured["custom_views"] == custom_views
+
+
+def test_custom_views_added_to_report_json_and_html() -> None:
+    client = _mock_client(sectors=[1])
+    custom_views = {
+        "version": "1",
+        "views": [
+            {
+                "id": "cv_scatter",
+                "title": "Custom Scatter",
+                "producer": {"source": "agent"},
+                "mode": "deterministic",
+                "chart": {
+                    "type": "scatter",
+                    "series": [
+                        {
+                            "label": "LC",
+                            "x": {"path": "/plot_data/full_lc/time"},
+                            "y": {"path": "/plot_data/full_lc/flux"},
+                        }
+                    ],
+                    "options": {"x_label": "Time", "y_label": "Flux"},
+                },
+                "quality": {"min_points_required": 3, "status": "ok", "flags": []},
+            }
+        ],
+    }
+
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        include_html=True,
+        custom_views=custom_views,
+    )
+
+    assert result.report_json["custom_views"]["version"] == "1"
+    assert len(result.report_json["custom_views"]["views"]) == 1
+    assert result.report_json["custom_views"]["views"][0]["id"] == "cv_scatter"
+    assert result.html is not None
+    assert "Custom Views" in result.html
+    assert "Custom Scatter" in result.html
+
+
+def test_custom_views_default_unchanged_when_not_passed() -> None:
+    client = _mock_client(sectors=[1])
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+    )
+    assert result.report_json["custom_views"] == {"version": "1", "views": []}
+
+
 # ---------------------------------------------------------------------------
 # 8. mast_client injection
 # ---------------------------------------------------------------------------

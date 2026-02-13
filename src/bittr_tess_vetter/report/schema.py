@@ -13,6 +13,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from bittr_tess_vetter.report.custom_views_schema import CustomViewsModel
+
 
 class CheckSummaryModel(BaseModel):
     """Projected check summary (array-safe, client-friendly)."""
@@ -225,8 +227,12 @@ class ReportPayloadMetaModel(BaseModel):
 
     summary_version: str
     plot_data_version: str
+    custom_views_version: str
     summary_hash: str
     plot_data_hash: str
+    custom_views_hash: str
+    custom_view_hashes_by_id: dict[str, str]
+    custom_views_includes_ad_hoc: bool
     contract_version: str | None = None
     required_metrics_by_check: dict[str, list[str]] = Field(default_factory=dict)
     missing_required_metrics_by_check: dict[str, list[str]] = Field(default_factory=dict)
@@ -242,6 +248,7 @@ class ReportPayloadModel(BaseModel):
     schema_version: str
     summary: ReportSummaryModel
     plot_data: ReportPlotDataModel
+    custom_views: CustomViewsModel
     payload_meta: ReportPayloadMetaModel
 
 

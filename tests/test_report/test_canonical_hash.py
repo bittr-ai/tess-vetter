@@ -150,14 +150,19 @@ def test_canonical_hash_timing_and_secondary_summary_new_fields_are_order_invari
 def test_payload_meta_changes_do_not_change_summary_or_plot_hash_inputs() -> None:
     fixture = _load_fixture()
     payload = {
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "summary": copy.deepcopy(fixture["summary"]),
         "plot_data": copy.deepcopy(fixture["plot_data"]),
+        "custom_views": {"version": "1", "views": []},
         "payload_meta": {
             "summary_version": "1",
             "plot_data_version": "1",
+            "custom_views_version": "1",
             "summary_hash": fixture["expected"]["summary_hash"],
             "plot_data_hash": fixture["expected"]["plot_data_hash"],
+            "custom_views_hash": _canonical_sha256({"version": "1", "views": []}),
+            "custom_view_hashes_by_id": {},
+            "custom_views_includes_ad_hoc": False,
         },
     }
 
@@ -168,6 +173,7 @@ def test_payload_meta_changes_do_not_change_summary_or_plot_hash_inputs() -> Non
 
     payload["payload_meta"]["summary_version"] = "2"
     payload["payload_meta"]["plot_data_version"] = "3"
+    payload["payload_meta"]["custom_views_version"] = "7"
     payload["payload_meta"]["new_contract_field"] = "ignored-by-hash-inputs"
 
     assert _canonical_sha256(payload["summary"]) == summary_hash_before

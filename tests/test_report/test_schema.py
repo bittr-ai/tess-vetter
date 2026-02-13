@@ -29,6 +29,7 @@ def test_report_payload_schema_exports_core_properties() -> None:
     assert "schema_version" in props
     assert "summary" in props
     assert "plot_data" in props
+    assert "custom_views" in props
     assert "payload_meta" in props
 
 
@@ -43,6 +44,22 @@ def test_report_to_json_conforms_to_payload_model() -> None:
     parsed = ReportPayloadModel.model_validate(payload)
     assert parsed.summary.ephemeris is not None
     assert parsed.plot_data.phase_folded is not None
+    assert parsed.custom_views.version == "1"
+    assert parsed.custom_views.views == []
+
+
+def test_report_payload_rejects_missing_custom_views_top_level() -> None:
+    lc = _make_minimal_lc()
+    candidate = Candidate(
+        ephemeris=Ephemeris(period_days=1.0, t0_btjd=0.0, duration_hours=1.0),
+        depth_ppm=500.0,
+    )
+    payload = build_report(lc, candidate, include_additional_plots=False).to_json()
+    payload = copy.deepcopy(payload)
+    payload.pop("custom_views")
+
+    with pytest.raises(Exception):
+        ReportPayloadModel.model_validate(payload)
 
 
 def test_report_to_json_has_no_unknown_summary_or_plot_data_keys() -> None:
@@ -373,6 +390,8 @@ def test_report_payload_accepts_metric_contract_payload_meta_shape() -> None:
     assert parsed.payload_meta.contract_version == "1"
     assert parsed.payload_meta.required_metrics_by_check["V01"] == ["delta_sigma"]
     assert parsed.payload_meta.has_missing_required_metrics is True
+    assert parsed.payload_meta.custom_views_version == "1"
+    assert isinstance(parsed.payload_meta.custom_views_hash, str)
 
 
 def test_report_payload_rejects_invalid_metric_contract_payload_meta_types() -> None:

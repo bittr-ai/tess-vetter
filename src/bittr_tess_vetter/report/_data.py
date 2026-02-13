@@ -16,6 +16,8 @@ from bittr_tess_vetter.report._assembly import (
     assemble_plot_data,
     assemble_summary,
 )
+from bittr_tess_vetter.report._custom_view_hash import custom_view_hashes_by_id, custom_views_hash
+from bittr_tess_vetter.report._custom_view_validate import validate_custom_views_payload
 from bittr_tess_vetter.report._serialization_utils import _canonical_sha256, _scrub_non_finite
 from bittr_tess_vetter.report._summary_builders import _build_check_metric_contract_meta
 from bittr_tess_vetter.report.schema import ReportPayloadModel
@@ -367,9 +369,10 @@ class ReportData:
     odd_even_phase: OddEvenPhasePlotData | None = None
     secondary_scan: SecondaryScanPlotData | None = None
     check_execution: CheckExecutionState | None = None
+    custom_views: dict[str, Any] | None = None
 
     # --- Metadata ---
-    version: str = "1.0.0"
+    version: str = "2.0.0"
     checks_run: list[str] = field(default_factory=list)  # ordered IDs
 
     def to_json(self) -> dict[str, Any]:
@@ -402,6 +405,16 @@ class ReportData:
 
         summary = _scrub_non_finite(summary)
         plot_data = _scrub_non_finite(plot_data)
+        custom_views_model = validate_custom_views_payload(
+            self.custom_views if self.custom_views is not None else {"version": "1", "views": []},
+            summary=summary,
+            plot_data=plot_data,
+        )
+        custom_views_payload = custom_views_model.model_dump(
+            mode="json",
+            exclude_none=True,
+        )
+        custom_view_hash_map = custom_view_hashes_by_id(custom_views_payload)
         metric_contract_meta = _build_check_metric_contract_meta(self.checks)
         for check_id in sorted(metric_contract_meta["missing_required_metrics_by_check"]):
             missing_keys = metric_contract_meta["missing_required_metrics_by_check"][check_id]
@@ -414,11 +427,18 @@ class ReportData:
             "schema_version": self.version,
             "summary": summary,
             "plot_data": plot_data,
+            "custom_views": custom_views_payload,
             "payload_meta": {
                 "summary_version": "1",
                 "plot_data_version": "1",
+                "custom_views_version": custom_views_payload["version"],
                 "summary_hash": _canonical_sha256(summary),
                 "plot_data_hash": _canonical_sha256(plot_data),
+                "custom_views_hash": custom_views_hash(custom_views_payload),
+                "custom_view_hashes_by_id": custom_view_hash_map,
+                "custom_views_includes_ad_hoc": any(
+                    view.get("mode") == "ad_hoc" for view in custom_views_payload["views"]
+                ),
                 **metric_contract_meta,
             },
         }

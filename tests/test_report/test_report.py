@@ -181,7 +181,7 @@ def test_report_data_to_json_round_trip() -> None:
     serialized = json.dumps(j)
     deserialized = json.loads(serialized)
 
-    assert deserialized["schema_version"] == "1.0.0"
+    assert deserialized["schema_version"] == "2.0.0"
     assert deserialized["summary"]["tic_id"] == 12345678
     assert deserialized["summary"]["toi"] == "TOI-1234.01"
     assert deserialized["summary"]["checks_run"] == ["V01"]
@@ -214,7 +214,7 @@ def test_build_report_integration() -> None:
     # Identity
     assert report.tic_id == 99999
     assert report.toi == "TOI-9999.01"
-    assert report.version == "1.0.0"
+    assert report.version == "2.0.0"
 
     # Candidate stored for provenance
     assert report.candidate is candidate
@@ -280,6 +280,7 @@ def test_json_schema_keys_and_types() -> None:
     assert isinstance(j["schema_version"], str)
     assert isinstance(j["summary"], dict)
     assert isinstance(j["plot_data"], dict)
+    assert isinstance(j["custom_views"], dict)
     assert isinstance(j["payload_meta"], dict)
 
     s = j["summary"]
@@ -420,6 +421,8 @@ def test_json_schema_keys_and_types() -> None:
     assert isinstance(p["secondary_scan"]["render_hints"]["style_mode"], str)
     assert isinstance(p["secondary_scan"]["render_hints"]["connect_bins"], bool)
     assert isinstance(p["secondary_scan"]["render_hints"]["error_bar_stride"], int)
+    assert j["custom_views"]["version"] == "1"
+    assert j["custom_views"]["views"] == []
 
     # Round-trip through json.dumps should work without custom encoders
     serialized = json.dumps(j)
@@ -439,8 +442,12 @@ def test_payload_meta_contract_shape_and_deterministic_ordering() -> None:
     assert list(payload_a["payload_meta"].keys()) == [
         "summary_version",
         "plot_data_version",
+        "custom_views_version",
         "summary_hash",
         "plot_data_hash",
+        "custom_views_hash",
+        "custom_view_hashes_by_id",
+        "custom_views_includes_ad_hoc",
         "contract_version",
         "required_metrics_by_check",
         "missing_required_metrics_by_check",
@@ -450,8 +457,10 @@ def test_payload_meta_contract_shape_and_deterministic_ordering() -> None:
     assert payload_a["payload_meta"] == payload_b["payload_meta"]
     assert isinstance(payload_a["payload_meta"]["summary_hash"], str)
     assert isinstance(payload_a["payload_meta"]["plot_data_hash"], str)
+    assert isinstance(payload_a["payload_meta"]["custom_views_hash"], str)
     assert len(payload_a["payload_meta"]["summary_hash"]) == 64
     assert len(payload_a["payload_meta"]["plot_data_hash"]) == 64
+    assert len(payload_a["payload_meta"]["custom_views_hash"]) == 64
 
 
 # ---------------------------------------------------------------------------

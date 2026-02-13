@@ -99,6 +99,8 @@ def render_html_from_payload(payload: dict[str, Any], *, title: str | None = Non
   <div id="oot-context-plot" class="plot-container"></div>
 </div>
 
+{_custom_views_section(data)}
+
 {_lc_robustness_section(summary)}
 
 {_enrichment_section(summary)}
@@ -126,6 +128,8 @@ var REPORT = {data_json};
 {_secondary_scan_js()}
 
 {_oot_context_js()}
+
+{_custom_views_js()}
 </script>
 
 <footer class="footer">
@@ -241,6 +245,35 @@ def _css_block() -> str:
   }}
   .plot-container {{
     width: 100%; min-height: 340px;
+  }}
+  .plot-status-note {{
+    color: {_TEXT_DIM};
+    font-size: 0.8em;
+    margin: 0 0 10px 0;
+  }}
+  .custom-view-status {{
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 0.72em;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    background: {_SKIP}22;
+    color: {_SKIP};
+  }}
+  .custom-view-status.ready {{
+    background: {_OK}22;
+    color: {_OK};
+  }}
+  .custom-view-status.unavailable,
+  .custom-view-status.unsupported {{
+    background: {_FAIL}22;
+    color: {_FAIL};
+  }}
+  .custom-view-status.degraded {{
+    background: {_ACCENT}22;
+    color: {_ACCENT};
   }}
 
   .checks-panel {{
@@ -508,6 +541,55 @@ def _enrichment_section(data: dict[str, Any]) -> str:
 </div>"""
 
 
+def _custom_views_section(data: dict[str, Any]) -> str:
+    custom_views = data.get("custom_views")
+    views = custom_views.get("views") if isinstance(custom_views, dict) else None
+    if not isinstance(views, list) or not views:
+        return ""
+
+    cards: list[str] = []
+    for i, raw_view in enumerate(views):
+        view = raw_view if isinstance(raw_view, dict) else {}
+        title = str(view.get("title") or view.get("id") or f"Custom View {i + 1}")
+        chart = view.get("chart", {})
+        chart_type = str(chart.get("type") if isinstance(chart, dict) else "").strip().lower()
+        quality = view.get("quality", {})
+        declared_status = (
+            str(quality.get("status") if isinstance(quality, dict) else "").strip().lower()
+        )
+        flags = quality.get("flags") if isinstance(quality, dict) else []
+        reason = ", ".join(str(flag) for flag in flags if str(flag).strip())
+
+        status = "ready"
+        if declared_status in {"unavailable", "degraded"}:
+            status = declared_status
+        elif chart_type and chart_type not in {"scatter", "line", "bar"}:
+            status = "unsupported"
+            if not reason:
+                reason = f"Unsupported chart_type '{chart_type}'."
+
+        status_label = status.upper()
+        note_html = (
+            f'<p id="custom-view-note-{i}" class="plot-status-note">{_esc(reason)}</p>'
+            if reason
+            else f'<p id="custom-view-note-{i}" class="plot-status-note"></p>'
+        )
+        cards.append(
+            f"""\
+<div class="plot-panel">
+  <h2>{_esc(title)}<span id="custom-view-status-{i}" class="custom-view-status {_esc(status)}">{_esc(status_label)}</span></h2>
+  {note_html}
+  <div id="custom-view-plot-{i}" class="plot-container"></div>
+</div>"""
+        )
+
+    return (
+        '<div class="summary-panel"><h2>Custom Views</h2>'
+        '<p class="section-note">User-defined chart views rendered from report payload data only.</p></div>'
+        + "".join(cards)
+    )
+
+
 def _enrichment_block_card(label: str, block: dict[str, Any] | None) -> str:
     if block is None:
         status = "skipped"
@@ -718,10 +800,8 @@ def _check_card(check_id: str, cr: dict[str, Any]) -> str:
             if not ref_text:
                 continue
             links.append(
-                (
-                    f'<a href="#ref-{_esc(_slugify(ref_text))}" '
-                    f'data-method-ref="{_esc(ref_text)}">{_esc(ref_text)}</a>'
-                )
+                f'<a href="#ref-{_esc(_slugify(ref_text))}" '
+                f'data-method-ref="{_esc(ref_text)}">{_esc(ref_text)}</a>'
             )
         if links:
             method_refs_html = f'<div class="check-methods"><strong>Methods:</strong> {", ".join(links)}</div>'
@@ -1414,4 +1494,160 @@ def _oot_context_js() -> str:
   }});
 
   Plotly.newPlot('oot-context-plot', traces, layout, {{responsive: true}});
+}})();"""
+
+
+def _custom_views_js() -> str:
+    return f"""\
+(function() {{
+  function customViewsFromReport() {{
+    if (REPORT && REPORT.custom_views && Array.isArray(REPORT.custom_views.views)) {{
+      return REPORT.custom_views.views;
+    }}
+    return [];
+  }}
+
+  function setViewState(index, state, note) {{
+    var statusEl = document.getElementById('custom-view-status-' + index);
+    var noteEl = document.getElementById('custom-view-note-' + index);
+    if (statusEl) {{
+      statusEl.textContent = String(state || 'UNAVAILABLE').toUpperCase();
+      statusEl.className = 'custom-view-status ' + String(state || 'unavailable').toLowerCase();
+    }}
+    if (noteEl && note) {{
+      noteEl.textContent = String(note);
+    }}
+  }}
+
+  function decodePointerToken(token) {{
+    return String(token).replace(/~1/g, '/').replace(/~0/g, '~');
+  }}
+
+  function resolvePath(path) {{
+    if (typeof path !== 'string' || !path) return null;
+    if (!path.startsWith('/')) return null;
+    var tokens = path.split('/');
+    if (tokens.length < 2 || tokens[0] !== '') return null;
+    var rootToken = decodePointerToken(tokens[1]);
+    if (rootToken !== 'summary' && rootToken !== 'plot_data') return null;
+
+    var cur = rootToken === 'summary' ? REPORT.summary : REPORT.plot_data;
+    for (var i = 2; i < tokens.length; i++) {{
+      var key = decodePointerToken(tokens[i]);
+      if (cur == null || typeof cur !== 'object' || !(key in cur)) return null;
+      cur = cur[key];
+    }}
+    return cur;
+  }}
+
+  function toNumberArray(value) {{
+    if (!Array.isArray(value)) return null;
+    var out = [];
+    for (var i = 0; i < value.length; i++) {{
+      var n = value[i];
+      if (typeof n !== 'number' || !isFinite(n)) return null;
+      out.push(n);
+    }}
+    return out;
+  }}
+
+  var views = customViewsFromReport();
+  if (!views.length) return;
+
+  for (var i = 0; i < views.length; i++) {{
+    var v = views[i];
+    if (!v || typeof v !== 'object') {{
+      setViewState(i, 'unsupported', 'View spec must be an object.');
+      continue;
+    }}
+
+    var chart = (v && typeof v.chart === 'object') ? v.chart : null;
+    var chartType = String((chart && chart.type) || '').toLowerCase();
+    var quality = (v && typeof v.quality === 'object') ? v.quality : null;
+    var declaredStatus = String((quality && quality.status) || '').toLowerCase();
+    var flags = (quality && Array.isArray(quality.flags)) ? quality.flags : [];
+    var reason = flags.length ? flags.join(', ') : '';
+    if (declaredStatus === 'unavailable') {{
+      setViewState(i, declaredStatus, reason || 'Marked by producer.');
+      continue;
+    }}
+    if (chartType !== 'scatter' && chartType !== 'line' && chartType !== 'bar') {{
+      setViewState(i, 'unsupported', 'Unsupported chart_type: ' + chartType);
+      continue;
+    }}
+
+    var series = chart && Array.isArray(chart.series) ? chart.series : [];
+    if (!series.length) {{
+      setViewState(i, 'unavailable', 'No series provided.');
+      continue;
+    }}
+    var traces = [];
+    var viewDegraded = declaredStatus === 'degraded';
+    var degradeReason = reason;
+
+    for (var j = 0; j < series.length; j++) {{
+      var s = series[j] || {{}};
+      var xPath = (s.x && s.x.path) || null;
+      var yPath = (s.y && s.y.path) || null;
+      var yErrPath = (s.y_err && s.y_err.path) || null;
+      var xVals = toNumberArray(resolvePath(xPath));
+      var yVals = toNumberArray(resolvePath(yPath));
+      if (!xVals || !yVals || xVals.length !== yVals.length || xVals.length === 0) {{
+        viewDegraded = true;
+        if (!degradeReason) degradeReason = 'Series data unavailable or invalid for x/y paths.';
+        continue;
+      }}
+
+      var trace = {{
+        x: xVals,
+        y: yVals,
+        name: String(s.label || ('Series ' + (j + 1))),
+      }};
+      var yErrVals = toNumberArray(resolvePath(yErrPath));
+      if (yErrVals && yErrVals.length === yVals.length) {{
+        trace.error_y = {{
+          type: 'data',
+          array: yErrVals,
+          visible: true,
+        }};
+      }}
+      if (chartType === 'bar') {{
+        trace.type = 'bar';
+      }} else {{
+        trace.type = 'scattergl';
+        trace.mode = chartType === 'line' ? 'lines' : 'markers';
+        trace.marker = {{ size: 4, opacity: 0.75 }};
+      }}
+      traces.push(trace);
+    }}
+
+    if (!traces.length) {{
+      setViewState(i, 'unavailable', degradeReason || 'No renderable series.');
+      continue;
+    }}
+
+    var options = (chart && typeof chart.options === 'object') ? chart.options : {{}};
+    var layout = Object.assign({{}}, {_plotly_layout_defaults()}, {{
+      xaxis: Object.assign({{}}, {_plotly_layout_defaults()}.xaxis, {{
+        title: {{ text: String(options.x_label || 'x'), standoff: 8 }},
+        range: Array.isArray(options.x_range) ? options.x_range : undefined,
+      }}),
+      yaxis: Object.assign({{}}, {_plotly_layout_defaults()}.yaxis, {{
+        title: {{ text: String(options.y_label || 'y'), standoff: 8 }},
+        range: Array.isArray(options.y_range) ? options.y_range : undefined,
+      }}),
+      showlegend: options.legend !== false,
+    }});
+
+    try {{
+      Plotly.newPlot('custom-view-plot-' + i, traces, layout, {{responsive: true}});
+      if (viewDegraded) {{
+        setViewState(i, 'degraded', degradeReason || 'Rendered with partial data.');
+      }} else {{
+        setViewState(i, 'ready', reason);
+      }}
+    }} catch (err) {{
+      setViewState(i, 'unavailable', 'Render error: ' + (err && err.message ? err.message : 'unknown'));
+    }}
+  }}
 }})();"""

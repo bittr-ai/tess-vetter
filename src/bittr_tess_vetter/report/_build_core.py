@@ -106,6 +106,7 @@ def build_report(
     max_timing_points: int = 200,
     include_lc_robustness: bool = True,
     max_lc_robustness_epochs: int = 128,
+    custom_views: dict[str, Any] | None = None,
 ) -> ReportData:
     """Assemble LC-only report data packet.
 
@@ -135,6 +136,7 @@ def build_report(
         max_timing_points: Max per-epoch points for timing series.
         include_lc_robustness: If True, compute LC robustness data.
         max_lc_robustness_epochs: Max per-epoch windows in lc_robustness payload.
+        custom_views: Optional authored custom view contract to attach.
 
     Returns:
         ReportData with all LC report contents populated.
@@ -273,6 +275,7 @@ def build_report(
             v03_enabled="V03" in enabled,
             v03_disabled_reason=v03_disabled_reason,
         ),
+        custom_views=custom_views,
         checks_run=[r.id for r in results],
     )
 
