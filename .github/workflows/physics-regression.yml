@@ -23,5 +23,8 @@ jobs:
             tests/report/test_physics_invariants_depth_secondary_morphology.py \
             tests/report/test_physics_invariants_alias.py \
             tests/test_correctness/test_report_scalar_benchmark_synthetic_lc.py \
-            tests/test_correctness/test_report_scalar_benchmark_synthetic_pixel.py \
+            tests/test_correctness/test_report_scalar_benchmark_synthetic_pixel.py
+      - name: Run slow-marked offline benchmark
+        run: |
+          uv run pytest -q -m slow \
             tests/test_correctness/test_report_scalar_benchmark_toi5807_offline.py
