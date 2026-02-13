@@ -12,8 +12,9 @@ import click
 from bittr_tess_vetter.api.generate_report import EnrichmentConfig, generate_report
 from bittr_tess_vetter.api.pipeline import PipelineConfig
 from bittr_tess_vetter.cli.common_cli import (
+    EXIT_DATA_UNAVAILABLE,
     EXIT_INPUT_ERROR,
-    EXIT_LIGHTCURVE_NOT_FOUND,
+    EXIT_PROGRESS_ERROR,
     EXIT_REMOTE_TIMEOUT,
     EXIT_RUNTIME_ERROR,
     BtvCliError,
@@ -175,7 +176,7 @@ def report_command(
             try:
                 existing = read_progress_metadata(progress_file)
             except ProgressIOError as exc:
-                raise BtvCliError(str(exc), exit_code=EXIT_INPUT_ERROR) from exc
+                raise BtvCliError(str(exc), exit_code=EXIT_PROGRESS_ERROR) from exc
 
         output_exists = bool(out_path and out_path.exists())
         decision = decide_resume_for_single_candidate(
@@ -197,7 +198,7 @@ def report_command(
                 try:
                     write_progress_metadata_atomic(progress_file, skipped)
                 except ProgressIOError as exc:
-                    raise BtvCliError(str(exc), exit_code=EXIT_INPUT_ERROR) from exc
+                    raise BtvCliError(str(exc), exit_code=EXIT_PROGRESS_ERROR) from exc
             return
 
     started = time.monotonic()
@@ -256,7 +257,7 @@ def report_command(
     except BtvCliError:
         raise
     except ProgressIOError as exc:
-        raise BtvCliError(str(exc), exit_code=EXIT_INPUT_ERROR) from exc
+        raise BtvCliError(str(exc), exit_code=EXIT_PROGRESS_ERROR) from exc
     except LightCurveNotFoundError as exc:
         if progress_file is not None:
             errored = build_single_candidate_progress(
@@ -271,7 +272,7 @@ def report_command(
             )
             with suppress(ProgressIOError):
                 write_progress_metadata_atomic(progress_file, errored)
-        raise BtvCliError(str(exc), exit_code=EXIT_LIGHTCURVE_NOT_FOUND) from exc
+        raise BtvCliError(str(exc), exit_code=EXIT_DATA_UNAVAILABLE) from exc
     except Exception as exc:
         mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
         if progress_file is not None:

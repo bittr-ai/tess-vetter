@@ -16,8 +16,8 @@ from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
 from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve, TPFStamp
 from bittr_tess_vetter.api.vet import vet_candidate
 from bittr_tess_vetter.cli.common_cli import (
+    EXIT_DATA_UNAVAILABLE,
     EXIT_INPUT_ERROR,
-    EXIT_LIGHTCURVE_NOT_FOUND,
     EXIT_PROGRESS_ERROR,
     EXIT_REMOTE_TIMEOUT,
     EXIT_RUNTIME_ERROR,
@@ -32,6 +32,11 @@ from bittr_tess_vetter.cli.progress_metadata import (
     decide_resume_for_single_candidate,
     read_progress_metadata,
     write_progress_metadata_atomic,
+)
+from bittr_tess_vetter.platform.catalogs.toi_resolution import (
+    LookupStatus,
+    lookup_tic_coordinates,
+    resolve_toi_to_tic_ephemeris_depth,
 )
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
 
@@ -59,6 +64,273 @@ def _progress_path_from_args(
     return None
 
 
+def _to_optional_float(value: Any) -> float | None:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+_HIGH_SALIENCE_FLAGS = {"MODEL_PREFERS_NON_TRANSIT"}
+
+
+def _to_optional_toi(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _extract_resolved_toi(payload: dict[str, Any]) -> str | None:
+    results = payload.get("results")
+    if not isinstance(results, list):
+        return None
+    for row in results:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("id")) != "V07":
+            continue
+        metrics = row.get("metrics")
+        if isinstance(metrics, dict):
+            resolved = _to_optional_toi(metrics.get("toi"))
+            if resolved is not None:
+                return resolved
+        raw = row.get("raw")
+        if isinstance(raw, dict):
+            nested = raw.get("row")
+            if isinstance(nested, dict):
+                resolved = _to_optional_toi(nested.get("toi"))
+                if resolved is not None:
+                    return resolved
+    return None
+
+
+def _build_root_summary(*, payload: dict[str, Any]) -> dict[str, Any]:
+    results = payload.get("results")
+    rows = [r for r in results if isinstance(r, dict)] if isinstance(results, list) else []
+    n_ok = sum(1 for row in rows if row.get("status") == "ok")
+    n_skipped = sum(1 for row in rows if row.get("status") == "skipped")
+    n_failed = sum(1 for row in rows if row.get("status") == "error")
+
+    flagged_checks: set[str] = set()
+    concerns: set[str] = set()
+    for row in rows:
+        flags = row.get("flags")
+        check_id = str(row.get("id") or "")
+        if row.get("status") == "error" and check_id:
+            flagged_checks.add(check_id)
+        if isinstance(flags, list):
+            if any(str(flag) in _HIGH_SALIENCE_FLAGS for flag in flags) and check_id:
+                flagged_checks.add(check_id)
+            for flag in flags:
+                if str(flag) in _HIGH_SALIENCE_FLAGS:
+                    concerns.add(str(flag))
+
+    if "MODEL_PREFERS_NON_TRANSIT" in concerns:
+        disposition_hint = "needs_model_competition_review"
+    elif n_failed > 0:
+        disposition_hint = "needs_failed_checks_review"
+    elif n_skipped > 0:
+        disposition_hint = "needs_additional_data"
+    else:
+        disposition_hint = "all_clear"
+    return {
+        "n_ok": int(n_ok),
+        "n_failed": int(n_failed),
+        "n_skipped": int(n_skipped),
+        "flagged_checks": sorted(flagged_checks),
+        "concerns": sorted(concerns),
+        "disposition_hint": disposition_hint,
+    }
+
+
+def _apply_cli_payload_contract(
+    *,
+    payload: dict[str, Any],
+    toi: str | None,
+    input_resolution: dict[str, Any] | None,
+    coordinate_resolution: dict[str, Any] | None,
+) -> dict[str, Any]:
+    inputs_summary_raw = payload.get("inputs_summary")
+    if isinstance(inputs_summary_raw, dict):
+        inputs_summary = inputs_summary_raw
+    else:
+        inputs_summary = {}
+        payload["inputs_summary"] = inputs_summary
+
+    if input_resolution is not None:
+        inputs_summary["input_resolution"] = input_resolution
+    if coordinate_resolution is not None:
+        inputs_summary["coordinate_resolution"] = coordinate_resolution
+
+    resolved_toi = _extract_resolved_toi(payload)
+    effective_toi = toi if toi is not None else resolved_toi
+    if input_resolution is not None and effective_toi is not None:
+        inputs = inputs_summary.get("input_resolution", {}).get("inputs")
+        if isinstance(inputs, dict):
+            inputs["toi"] = effective_toi
+
+    payload["summary"] = _build_root_summary(payload=payload)
+    return payload
+
+
+def _resolution_error_to_exit(status: LookupStatus) -> int:
+    if status == LookupStatus.TIMEOUT:
+        return EXIT_REMOTE_TIMEOUT
+    if status == LookupStatus.DATA_UNAVAILABLE:
+        return EXIT_DATA_UNAVAILABLE
+    return EXIT_RUNTIME_ERROR
+
+
+def _resolve_candidate_inputs(
+    *,
+    network_ok: bool,
+    toi: str | None,
+    tic_id: int | None,
+    period_days: float | None,
+    t0_btjd: float | None,
+    duration_hours: float | None,
+    depth_ppm: float | None,
+) -> tuple[int, float, float, float, float | None, dict[str, Any]]:
+    resolved = {
+        "tic_id": None,
+        "period_days": None,
+        "t0_btjd": None,
+        "duration_hours": None,
+        "depth_ppm": None,
+    }
+    overrides: list[str] = []
+    errors: list[str] = []
+    source = "cli"
+    resolved_from = "cli"
+
+    if toi is not None:
+        if not network_ok:
+            raise BtvCliError(
+                "--toi requires --network-ok to resolve ExoFOP inputs",
+                exit_code=EXIT_DATA_UNAVAILABLE,
+            )
+        toi_result = resolve_toi_to_tic_ephemeris_depth(toi)
+        source = "toi_catalog"
+        resolved_from = "exofop_toi_table"
+        if toi_result.status != LookupStatus.OK:
+            if tic_id is None and period_days is None and t0_btjd is None and duration_hours is None:
+                raise BtvCliError(
+                    toi_result.message or f"Failed to resolve TOI {toi}",
+                    exit_code=_resolution_error_to_exit(toi_result.status),
+                )
+            errors.append(toi_result.message or f"TOI resolution degraded for {toi}")
+        resolved["tic_id"] = toi_result.tic_id
+        resolved["period_days"] = toi_result.period_days
+        resolved["t0_btjd"] = toi_result.t0_btjd
+        resolved["duration_hours"] = toi_result.duration_hours
+        resolved["depth_ppm"] = toi_result.depth_ppm
+
+    manual_inputs = {
+        "tic_id": tic_id,
+        "period_days": period_days,
+        "t0_btjd": t0_btjd,
+        "duration_hours": duration_hours,
+        "depth_ppm": depth_ppm,
+    }
+    for key, value in manual_inputs.items():
+        if value is not None:
+            if resolved.get(key) is not None:
+                overrides.append(key)
+            resolved[key] = value
+
+    if resolved["tic_id"] is None:
+        raise BtvCliError(
+            "Missing TIC identifier. Provide --tic-id or --toi.",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    missing_ephemeris = [
+        name
+        for name in ("period_days", "t0_btjd", "duration_hours")
+        if resolved[name] is None
+    ]
+    if missing_ephemeris:
+        if toi is not None:
+            raise BtvCliError(
+                f"Resolved TOI is missing required fields: {', '.join(missing_ephemeris)}",
+                exit_code=EXIT_DATA_UNAVAILABLE,
+            )
+        raise BtvCliError(
+            f"Missing required inputs: {', '.join(missing_ephemeris)}",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+
+    input_resolution = {
+        "source": source,
+        "inputs": {
+            "tic_id": resolved["tic_id"],
+            "period_days": resolved["period_days"],
+            "t0_btjd": resolved["t0_btjd"],
+            "duration_hours": resolved["duration_hours"],
+            "depth_ppm": resolved["depth_ppm"],
+        },
+        "resolved_from": resolved_from,
+        "overrides": overrides,
+        "errors": errors,
+    }
+    return (
+        int(resolved["tic_id"]),
+        float(resolved["period_days"]),
+        float(resolved["t0_btjd"]),
+        float(resolved["duration_hours"]),
+        float(resolved["depth_ppm"]) if resolved["depth_ppm"] is not None else None,
+        input_resolution,
+    )
+
+
+def _resolve_coordinates(
+    *,
+    tic_id: int,
+    ra_deg: float | None,
+    dec_deg: float | None,
+    network_ok: bool,
+    require_coordinates: bool,
+) -> tuple[float | None, float | None, dict[str, Any]]:
+    errors: list[str] = []
+    if ra_deg is not None and dec_deg is not None:
+        return ra_deg, dec_deg, {
+            "ra_deg": ra_deg,
+            "dec_deg": dec_deg,
+            "source": "user",
+            "errors": errors,
+        }
+
+    if network_ok:
+        coord_result = lookup_tic_coordinates(tic_id=tic_id)
+        if coord_result.status == LookupStatus.OK:
+            return coord_result.ra_deg, coord_result.dec_deg, {
+                "ra_deg": coord_result.ra_deg,
+                "dec_deg": coord_result.dec_deg,
+                "source": "mast",
+                "errors": errors,
+            }
+        errors.append(coord_result.message or "Coordinate lookup failed")
+        if require_coordinates:
+            raise BtvCliError(
+                coord_result.message or "Coordinates unavailable",
+                exit_code=_resolution_error_to_exit(coord_result.status),
+            )
+    elif require_coordinates:
+        raise BtvCliError(
+            "Coordinates required but --network-ok is disabled and no coordinates were provided.",
+            exit_code=EXIT_DATA_UNAVAILABLE,
+        )
+
+    return ra_deg, dec_deg, {
+        "ra_deg": ra_deg,
+        "dec_deg": dec_deg,
+        "source": "missing",
+        "errors": errors,
+    }
+
+
 def _execute_vet(
     *,
     tic_id: int,
@@ -66,6 +338,9 @@ def _execute_vet(
     t0_btjd: float,
     duration_hours: float,
     depth_ppm: float | None,
+    toi: str | None,
+    ra_deg: float | None,
+    dec_deg: float | None,
     preset: str,
     checks: list[str] | None,
     network_ok: bool,
@@ -76,6 +351,8 @@ def _execute_vet(
     tpf_sector_strategy: str,
     tpf_sectors: list[int] | None,
     pipeline_config: PipelineConfig,
+    input_resolution: dict[str, Any] | None = None,
+    coordinate_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     client = MASTClient()
     lightcurves = client.download_all_sectors(tic_id, flux_type=flux_type, sectors=sectors)
@@ -122,13 +399,22 @@ def _execute_vet(
         candidate=candidate,
         tpf=tpf,
         network=network_ok,
+        ra_deg=ra_deg,
+        dec_deg=dec_deg,
         tic_id=tic_id,
         preset=preset,
         checks=checks,
+        context={"toi": toi} if toi is not None else None,
         pipeline_config=pipeline_config,
     )
 
-    return bundle.model_dump(mode="json")
+    payload = bundle.model_dump(mode="json")
+    return _apply_cli_payload_contract(
+        payload=payload,
+        toi=toi,
+        input_resolution=input_resolution,
+        coordinate_resolution=coordinate_resolution,
+    )
 
 
 def _load_tpf_for_vetting(
@@ -199,11 +485,20 @@ def _load_tpf_for_vetting(
 
 
 @click.command("vet")
-@click.option("--tic-id", type=int, required=True, help="TIC identifier.")
-@click.option("--period-days", type=float, required=True, help="Orbital period in days.")
-@click.option("--t0-btjd", type=float, required=True, help="Reference epoch in BTJD.")
-@click.option("--duration-hours", type=float, required=True, help="Transit duration in hours.")
+@click.option("--tic-id", type=int, default=None, help="TIC identifier.")
+@click.option("--period-days", type=float, default=None, help="Orbital period in days.")
+@click.option("--t0-btjd", type=float, default=None, help="Reference epoch in BTJD.")
+@click.option("--duration-hours", type=float, default=None, help="Transit duration in hours.")
 @click.option("--depth-ppm", type=float, default=None, help="Transit depth in ppm.")
+@click.option("--toi", type=str, default=None, help="Optional TOI label (overrides resolved value).")
+@click.option("--ra-deg", type=float, default=None, help="Right ascension in degrees.")
+@click.option("--dec-deg", type=float, default=None, help="Declination in degrees.")
+@click.option(
+    "--require-coordinates",
+    is_flag=True,
+    default=False,
+    help="Fail if coordinates cannot be resolved or provided.",
+)
 @click.option(
     "--preset",
     type=click.Choice(["default", "extended"], case_sensitive=False),
@@ -261,11 +556,15 @@ def _load_tpf_for_vetting(
 @click.option("--progress-path", type=str, default=None, help="Optional progress metadata path.")
 @click.option("--resume", is_flag=True, default=False, help="Skip when completed output already exists.")
 def vet_command(
-    tic_id: int,
-    period_days: float,
-    t0_btjd: float,
-    duration_hours: float,
+    tic_id: int | None,
+    period_days: float | None,
+    t0_btjd: float | None,
+    duration_hours: float | None,
     depth_ppm: float | None,
+    toi: str | None,
+    ra_deg: float | None,
+    dec_deg: float | None,
+    require_coordinates: bool,
     preset: str,
     checks: tuple[str, ...],
     network_ok: bool,
@@ -291,11 +590,34 @@ def vet_command(
     out_path = resolve_optional_output_path(output_path_arg)
     progress_file = _progress_path_from_args(out_path, progress_path, resume)
 
+    (
+        resolved_tic_id,
+        resolved_period_days,
+        resolved_t0_btjd,
+        resolved_duration_hours,
+        resolved_depth_ppm,
+        input_resolution,
+    ) = _resolve_candidate_inputs(
+        network_ok=network_ok,
+        toi=toi,
+        tic_id=tic_id,
+        period_days=period_days,
+        t0_btjd=t0_btjd,
+        duration_hours=duration_hours,
+        depth_ppm=depth_ppm,
+    )
+    resolved_ra, resolved_dec, coordinate_resolution = _resolve_coordinates(
+        tic_id=resolved_tic_id,
+        ra_deg=ra_deg,
+        dec_deg=dec_deg,
+        network_ok=network_ok,
+        require_coordinates=require_coordinates,
+    )
     candidate_meta = {
-        "tic_id": tic_id,
-        "period_days": period_days,
-        "t0_btjd": t0_btjd,
-        "duration_hours": duration_hours,
+        "tic_id": resolved_tic_id,
+        "period_days": resolved_period_days,
+        "t0_btjd": resolved_t0_btjd,
+        "duration_hours": resolved_duration_hours,
     }
     if tpf_sectors and str(tpf_sector_strategy).lower() != "requested":
         raise BtvCliError(
@@ -358,11 +680,14 @@ def vet_command(
 
     try:
         payload = _execute_vet(
-            tic_id=tic_id,
-            period_days=period_days,
-            t0_btjd=t0_btjd,
-            duration_hours=duration_hours,
-            depth_ppm=depth_ppm,
+            tic_id=resolved_tic_id,
+            period_days=resolved_period_days,
+            t0_btjd=resolved_t0_btjd,
+            duration_hours=resolved_duration_hours,
+            depth_ppm=resolved_depth_ppm,
+            toi=toi,
+            ra_deg=resolved_ra,
+            dec_deg=resolved_dec,
             preset=str(preset).lower(),
             checks=list(checks) if checks else None,
             network_ok=network_ok,
@@ -373,6 +698,14 @@ def vet_command(
             sectors=list(sectors) if sectors else None,
             flux_type=str(flux_type).lower(),
             pipeline_config=config,
+            input_resolution=input_resolution,
+            coordinate_resolution=coordinate_resolution,
+        )
+        payload = _apply_cli_payload_contract(
+            payload=payload,
+            toi=toi,
+            input_resolution=input_resolution,
+            coordinate_resolution=coordinate_resolution,
         )
         dump_json_output(payload, out_path)
 
@@ -404,7 +737,7 @@ def vet_command(
             )
             with suppress(ProgressIOError):
                 write_progress_metadata_atomic(progress_file, errored)
-        raise BtvCliError(str(exc), exit_code=EXIT_LIGHTCURVE_NOT_FOUND) from exc
+        raise BtvCliError(str(exc), exit_code=EXIT_DATA_UNAVAILABLE) from exc
     except Exception as exc:
         if progress_file is not None:
             errored = build_single_candidate_progress(
