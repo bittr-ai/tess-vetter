@@ -39,6 +39,8 @@ Quick Example
    for r in bundle.results:
        print(f"{r.id} {r.name}: status={r.status} flags={r.flags}")
 
+For agent-first usage, start with ``quickstart``. For API-level recipes and callable surfaces, use ``api``.
+
 Contents
 --------
 

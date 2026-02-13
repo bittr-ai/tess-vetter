@@ -120,6 +120,8 @@ The recommended import alias follows patterns from astropy (`import astropy.unit
 import bittr_tess_vetter.api as btv
 ```
 
+Agent-first walkthroughs and CLI-first examples are in `docs/quickstart.rst`.
+
 ### Single candidate vetting
 
 ```python
@@ -227,6 +229,8 @@ User-facing docs are built with Sphinx from `docs/`:
 ```bash
 uv run sphinx-build -b html -W docs docs/_build/html
 ```
+
+For agent onboarding, start with `docs/quickstart.rst`. For API usage recipes and signatures, see `docs/api.rst`.
 
 Internal working notes live in `working_docs/` and are not part of the stable API.
 
