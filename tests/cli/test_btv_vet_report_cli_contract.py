@@ -18,6 +18,7 @@ def test_btv_help_lists_enrich_vet_report() -> None:
     assert "enrich" in result.output
     assert "vet" in result.output
     assert "report" in result.output
+    assert "measure-sectors" in result.output
 
 
 def test_btv_vet_success_writes_bundle_json(monkeypatch, tmp_path: Path) -> None:
@@ -524,6 +525,102 @@ def test_btv_vet_tpf_sector_requires_requested_strategy() -> None:
             "2.5",
             "--tpf-sector",
             "5",
+        ],
+    )
+    assert result.exit_code == 1
+
+
+def test_btv_vet_sector_measurements_forwarded_and_emitted(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_execute_vet(**kwargs):
+        captured.update(kwargs)
+        return {
+            "results": [
+                {
+                    "id": "V21",
+                    "status": "ok",
+                    "flags": [],
+                    "raw": {"measurements": kwargs.get("sector_measurements", [])},
+                }
+            ],
+            "warnings": [],
+            "provenance": {},
+            "inputs_summary": {},
+        }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+
+    sector_path = tmp_path / "sector_measurements.json"
+    sector_path.write_text(
+        json.dumps(
+            {
+                "sector_measurements": [
+                    {"sector": 4, "depth_ppm": 500.0, "depth_err_ppm": 50.0, "quality_weight": 1.0},
+                    {"sector": 5, "depth_ppm": 520.0, "depth_err_ppm": 55.0, "quality_weight": 1.0},
+                ],
+                "provenance": {"command": "measure-sectors"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    out_path = tmp_path / "vet.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--sector-measurements",
+            str(sector_path),
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert isinstance(captured.get("sector_measurements"), list)
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert "sector_measurements" in payload
+    assert "sector_gating" in payload
+    assert payload["sector_gating"]["v21_status"] == "ok"
+    assert payload["sector_gating"]["used_by_v21"] is True
+
+
+def test_btv_vet_sector_measurements_schema_error_maps_to_exit_1(tmp_path: Path) -> None:
+    sector_path = tmp_path / "broken_sector_measurements.json"
+    sector_path.write_text(
+        json.dumps(
+            {
+                "sector_measurements": [
+                    {"sector": 4, "depth_ppm": 500.0, "depth_err_ppm": 0.0},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--sector-measurements",
+            str(sector_path),
         ],
     )
     assert result.exit_code == 1
