@@ -19,8 +19,7 @@ from bittr_tess_vetter.compute.transit import (
 )
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.validation.report_bridge import (
-    compute_alias_scalar_signals,
-    compute_alias_summary,
+    compute_alias_diagnostics,
     compute_timing_series,
     run_lc_checks,
 )
@@ -1070,43 +1069,38 @@ def _build_alias_harmonic_summary_data(
     """Build compact harmonic summary payload from bridge diagnostics."""
     eph = candidate.ephemeris
     internal_lc = _to_internal_lightcurve(lc)
-    summary = compute_alias_summary(
+    alias_diagnostics = compute_alias_diagnostics(
         internal_lc,
         period_days=eph.period_days,
         t0_btjd=eph.t0_btjd,
         duration_hours=eph.duration_hours,
     )
-    scalar_signals = compute_alias_scalar_signals(
-        internal_lc,
-        period_days=eph.period_days,
-        t0_btjd=eph.t0_btjd,
-        duration_hours=eph.duration_hours,
-        harmonic_summary=summary,
-    )
-    harmonics = summary.harmonics
     return AliasHarmonicSummaryData(
-        harmonic_labels=[str(h.harmonic) for h in harmonics],
-        periods=[float(h.period) for h in harmonics],
-        scores=[float(h.score) for h in harmonics],
-        harmonic_depth_ppm=[float(h.depth_ppm) for h in harmonics],
-        best_harmonic=str(summary.best_harmonic),
-        best_ratio_over_p=float(summary.best_ratio_over_p),
-        classification=str(scalar_signals.get("classification"))
-        if scalar_signals.get("classification") is not None
+        harmonic_labels=[str(label) for label in alias_diagnostics.harmonic_labels],
+        periods=[float(period) for period in alias_diagnostics.periods],
+        scores=[float(score) for score in alias_diagnostics.scores],
+        harmonic_depth_ppm=[
+            float(depth_ppm)
+            for depth_ppm in alias_diagnostics.harmonic_depth_ppm
+        ],
+        best_harmonic=str(alias_diagnostics.best_harmonic),
+        best_ratio_over_p=float(alias_diagnostics.best_ratio_over_p),
+        classification=str(alias_diagnostics.classification)
+        if alias_diagnostics.classification is not None
         else None,
         phase_shift_event_count=(
-            int(scalar_signals["phase_shift_event_count"])
-            if scalar_signals.get("phase_shift_event_count") is not None
+            int(alias_diagnostics.phase_shift_event_count)
+            if alias_diagnostics.phase_shift_event_count is not None
             else None
         ),
         phase_shift_peak_sigma=(
-            float(scalar_signals["phase_shift_peak_sigma"])
-            if scalar_signals.get("phase_shift_peak_sigma") is not None
+            float(alias_diagnostics.phase_shift_peak_sigma)
+            if alias_diagnostics.phase_shift_peak_sigma is not None
             else None
         ),
         secondary_significance=(
-            float(scalar_signals["secondary_significance"])
-            if scalar_signals.get("secondary_significance") is not None
+            float(alias_diagnostics.secondary_significance)
+            if alias_diagnostics.secondary_significance is not None
             else None
         ),
     )

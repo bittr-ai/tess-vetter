@@ -13,11 +13,17 @@ from bittr_tess_vetter.validation.alias_diagnostics import (
     detect_phase_shift_events,
 )
 from bittr_tess_vetter.validation.report_bridge import (
+    AliasDiagnosticsConfig,
+    compute_alias_diagnostics,
     compute_alias_scalar_signals,
     compute_alias_summary,
     compute_timing_series,
     run_lc_checks,
 )
+
+
+_REL_TOL = 1e-9
+_ABS_TOL = 1e-12
 
 
 def _make_box_transit_lc(
@@ -44,6 +50,36 @@ def _make_box_transit_lc(
     flux[in_transit] *= 1.0 - depth_frac
 
     return LightCurve(time=time, flux=flux, flux_err=flux_err)
+
+
+def _assert_parity_with_tolerance_policy(actual: object, expected: object) -> None:
+    if isinstance(expected, bool):
+        assert isinstance(actual, bool)
+        assert actual is expected
+        return
+    if isinstance(expected, int):
+        assert isinstance(actual, int)
+        assert actual == expected
+        return
+    if isinstance(expected, str):
+        assert isinstance(actual, str)
+        assert actual == expected
+        return
+    if expected is None:
+        assert actual is None
+        return
+    if isinstance(expected, float):
+        assert isinstance(actual, float)
+        assert actual == pytest.approx(expected, rel=_REL_TOL, abs=_ABS_TOL)
+        return
+    if isinstance(expected, list):
+        assert isinstance(actual, list)
+        assert len(actual) == len(expected)
+        for got_item, exp_item in zip(actual, expected, strict=True):
+            _assert_parity_with_tolerance_policy(got_item, exp_item)
+        return
+
+    raise AssertionError(f"Unsupported parity type: {type(expected).__name__}")
 
 
 def test_run_lc_checks_matches_current_wrapper_behavior() -> None:
@@ -159,3 +195,86 @@ def test_compute_alias_scalar_signals_matches_underlying_primitives() -> None:
     else:
         assert got["phase_shift_peak_sigma"] == pytest.approx(expected_peak)
     assert got["secondary_significance"] == pytest.approx(expected_secondary)
+
+
+def test_compute_alias_diagnostics_harmonic_projection_parity_with_wrapper() -> None:
+    lc = _make_box_transit_lc(noise_ppm=35.0, seed=19)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    internal = lc.to_internal()
+
+    diagnostics = compute_alias_diagnostics(
+        internal,
+        period_days=eph.period_days,
+        t0_btjd=eph.t0_btjd,
+        duration_hours=eph.duration_hours,
+    )
+    wrapper_summary = compute_alias_summary(
+        internal,
+        period_days=eph.period_days,
+        t0_btjd=eph.t0_btjd,
+        duration_hours=eph.duration_hours,
+    )
+
+    _assert_parity_with_tolerance_policy(
+        diagnostics.harmonic_labels,
+        [str(h.harmonic) for h in wrapper_summary.harmonics],
+    )
+    _assert_parity_with_tolerance_policy(
+        diagnostics.periods,
+        [float(h.period) for h in wrapper_summary.harmonics],
+    )
+    _assert_parity_with_tolerance_policy(
+        diagnostics.scores,
+        [float(h.score) for h in wrapper_summary.harmonics],
+    )
+    _assert_parity_with_tolerance_policy(
+        diagnostics.harmonic_depth_ppm,
+        [float(h.depth_ppm) for h in wrapper_summary.harmonics],
+    )
+    _assert_parity_with_tolerance_policy(
+        diagnostics.best_harmonic,
+        str(wrapper_summary.best_harmonic),
+    )
+    _assert_parity_with_tolerance_policy(
+        diagnostics.best_ratio_over_p,
+        float(wrapper_summary.best_ratio_over_p),
+    )
+
+
+def test_compute_alias_diagnostics_scalar_projection_parity_with_wrapper() -> None:
+    lc = _make_box_transit_lc(noise_ppm=30.0, seed=23)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    internal = lc.to_internal()
+    config = AliasDiagnosticsConfig()
+
+    diagnostics = compute_alias_diagnostics(
+        internal,
+        period_days=eph.period_days,
+        t0_btjd=eph.t0_btjd,
+        duration_hours=eph.duration_hours,
+        config=config,
+    )
+    wrapper_summary = compute_alias_summary(
+        internal,
+        period_days=eph.period_days,
+        t0_btjd=eph.t0_btjd,
+        duration_hours=eph.duration_hours,
+    )
+    wrapper_scalars = compute_alias_scalar_signals(
+        internal,
+        period_days=eph.period_days,
+        t0_btjd=eph.t0_btjd,
+        duration_hours=eph.duration_hours,
+        harmonic_summary=wrapper_summary,
+        n_phase_bins=config.n_phase_bins,
+        significance_threshold=config.phase_shift_significance_threshold,
+    )
+
+    projected_scalars = {
+        "classification": diagnostics.classification,
+        "phase_shift_event_count": diagnostics.phase_shift_event_count,
+        "phase_shift_peak_sigma": diagnostics.phase_shift_peak_sigma,
+        "secondary_significance": diagnostics.secondary_significance,
+    }
+    for key, expected in wrapper_scalars.items():
+        _assert_parity_with_tolerance_policy(projected_scalars[key], expected)

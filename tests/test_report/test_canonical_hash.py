@@ -49,3 +49,40 @@ def test_canonical_hash_normalizes_tuples_like_lists() -> None:
     )
 
     assert _canonical_sha256(plot_data_with_tuple) == fixture["expected"]["plot_data_hash"]
+
+
+def test_canonical_hash_alias_collapse_payload_is_order_invariant() -> None:
+    summary = {
+        "alias_scalar_summary": {
+            "best_harmonic": "P",
+            "best_ratio_over_p": 1.0,
+            "score_p": 0.61,
+            "score_p_over_2": 0.25,
+            "score_2p": 0.14,
+            "depth_ppm_peak": 1000.0,
+            "classification": "NONE",
+            "phase_shift_event_count": 0,
+            "phase_shift_peak_sigma": None,
+            "secondary_significance": 0.0,
+        },
+    }
+    plot_data = {
+        "alias_summary": {
+            "harmonic_labels": ["P", "P/2", "2P"],
+            "periods": [3.5, 1.75, 7.0],
+            "scores": [0.61, 0.25, 0.14],
+            "harmonic_depth_ppm": [1000.0, 350.0, 150.0],
+            "best_harmonic": "P",
+            "best_ratio_over_p": 1.0,
+            "classification": "NONE",
+            "phase_shift_event_count": 0,
+            "phase_shift_peak_sigma": None,
+            "secondary_significance": 0.0,
+        },
+    }
+
+    summary_hash = _canonical_sha256(summary)
+    plot_data_hash = _canonical_sha256(plot_data)
+
+    assert summary_hash == _canonical_sha256(_reverse_key_order(copy.deepcopy(summary)))
+    assert plot_data_hash == _canonical_sha256(_reverse_key_order(copy.deepcopy(plot_data)))

@@ -7,6 +7,7 @@ low-level validation/transit/domain primitives (no API wrapper calls).
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -18,6 +19,7 @@ from bittr_tess_vetter.transit.result import TransitTimingSeries
 from bittr_tess_vetter.transit.timing import build_timing_series, measure_all_transit_times
 from bittr_tess_vetter.validation.alias_diagnostics import (
     HarmonicPowerSummary,
+    HarmonicScore,
     classify_alias,
     compute_secondary_significance,
     detect_phase_shift_events,
@@ -44,6 +46,90 @@ from bittr_tess_vetter.validation.result_schema import CheckResult, ok_result
 
 _LC_CHECK_ORDER: tuple[str, ...] = ("V01", "V02", "V03", "V04", "V05", "V13", "V15")
 _REPORT_DEFAULT_ENABLED: set[str] = {"V01", "V02", "V04", "V05", "V13", "V15"}
+
+
+@dataclass(frozen=True, slots=True)
+class AliasDiagnosticsConfig:
+    """Single source of deterministic alias diagnostic thresholds."""
+
+    n_phase_bins: int = 10
+    phase_shift_significance_threshold: float = 3.0
+    alias_ratio_threshold_strong: float = 1.5
+    alias_ratio_threshold_weak: float = 1.1
+
+
+@dataclass(frozen=True, slots=True)
+class AliasDiagnosticsResult:
+    """Canonical alias diagnostics payload (harmonic + scalar + metadata)."""
+
+    base_period: float
+    base_t0: float
+    duration_hours: float
+    harmonic_labels: list[str]
+    periods: list[float]
+    scores: list[float]
+    harmonic_depth_ppm: list[float]
+    harmonic_duration_hours: list[float | None]
+    best_harmonic: str
+    best_ratio_over_p: float
+    classification: str
+    phase_shift_event_count: int
+    phase_shift_peak_sigma: float | None
+    secondary_significance: float
+    n_phase_bins: int
+    phase_shift_significance_threshold: float
+    alias_ratio_threshold_strong: float
+    alias_ratio_threshold_weak: float
+
+
+def _masked_lc_arrays(
+    lightcurve: LightCurveData,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    mask = np.asarray(lightcurve.valid_mask, dtype=np.bool_)
+    return (
+        np.asarray(lightcurve.time, dtype=np.float64)[mask],
+        np.asarray(lightcurve.flux, dtype=np.float64)[mask],
+        np.asarray(lightcurve.flux_err, dtype=np.float64)[mask],
+    )
+
+
+def _summary_from_alias_diagnostics(diagnostics: AliasDiagnosticsResult) -> HarmonicPowerSummary:
+    harmonics = [
+        HarmonicScore(
+            harmonic=label,
+            period=float(period),
+            score=float(score),
+            depth_ppm=float(depth_ppm),
+            duration_hours=duration_hours,
+        )
+        for label, period, score, depth_ppm, duration_hours in zip(
+            diagnostics.harmonic_labels,
+            diagnostics.periods,
+            diagnostics.scores,
+            diagnostics.harmonic_depth_ppm,
+            diagnostics.harmonic_duration_hours,
+            strict=False,
+        )
+    ]
+    return HarmonicPowerSummary(
+        base_period=float(diagnostics.base_period),
+        base_t0=float(diagnostics.base_t0),
+        duration_hours=float(diagnostics.duration_hours),
+        harmonics=harmonics,
+        best_harmonic=str(diagnostics.best_harmonic),
+        best_ratio_over_p=float(diagnostics.best_ratio_over_p),
+    )
+
+
+def _scalar_signals_from_alias_diagnostics(
+    diagnostics: AliasDiagnosticsResult,
+) -> dict[str, float | int | str | None]:
+    return {
+        "classification": str(diagnostics.classification),
+        "phase_shift_event_count": int(diagnostics.phase_shift_event_count),
+        "phase_shift_peak_sigma": diagnostics.phase_shift_peak_sigma,
+        "secondary_significance": float(diagnostics.secondary_significance),
+    }
 
 
 def _convert_legacy_result(result: VetterCheckResult) -> CheckResult:
@@ -183,16 +269,85 @@ def compute_alias_summary(
     period_days: float,
     t0_btjd: float,
     duration_hours: float,
+    diagnostics: AliasDiagnosticsResult | None = None,
+    config: AliasDiagnosticsConfig | None = None,
 ) -> HarmonicPowerSummary:
     """Compute compact harmonic alias summary at P, P/2, and 2P."""
-    mask = np.asarray(lightcurve.valid_mask, dtype=np.bool_)
-    return summarize_harmonic_power(
-        time=np.asarray(lightcurve.time, dtype=np.float64)[mask],
-        flux=np.asarray(lightcurve.flux, dtype=np.float64)[mask],
-        flux_err=np.asarray(lightcurve.flux_err, dtype=np.float64)[mask],
+    alias_diagnostics = diagnostics or compute_alias_diagnostics(
+        lightcurve,
+        period_days=period_days,
+        t0_btjd=t0_btjd,
+        duration_hours=duration_hours,
+        config=config or AliasDiagnosticsConfig(),
+    )
+    return _summary_from_alias_diagnostics(alias_diagnostics)
+
+
+def compute_alias_diagnostics(
+    lightcurve: LightCurveData,
+    *,
+    period_days: float,
+    t0_btjd: float,
+    duration_hours: float,
+    config: AliasDiagnosticsConfig = AliasDiagnosticsConfig(),  # noqa: B008
+) -> AliasDiagnosticsResult:
+    """Compute canonical harmonic + scalar alias diagnostics."""
+    time, flux, flux_err = _masked_lc_arrays(lightcurve)
+
+    summary = summarize_harmonic_power(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
         base_period=period_days,
         base_t0=t0_btjd,
         duration_hours=duration_hours,
+    )
+    harmonics = list(summary.harmonics)
+    base_score = next((h.score for h in harmonics if h.harmonic == "P"), 0.0)
+    classification, best_harmonic, best_ratio_over_p = classify_alias(
+        harmonics,
+        base_score=base_score,
+        strong_ratio_threshold=config.alias_ratio_threshold_strong,
+        weak_ratio_threshold=config.alias_ratio_threshold_weak,
+    )
+    events = detect_phase_shift_events(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        period=period_days,
+        t0=t0_btjd,
+        n_phase_bins=config.n_phase_bins,
+        significance_threshold=config.phase_shift_significance_threshold,
+    )
+    peak_sigma = max((float(e.significance) for e in events), default=None)
+    secondary_significance = compute_secondary_significance(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        period=period_days,
+        t0=t0_btjd,
+        duration_hours=duration_hours,
+    )
+
+    return AliasDiagnosticsResult(
+        base_period=float(summary.base_period),
+        base_t0=float(summary.base_t0),
+        duration_hours=float(summary.duration_hours),
+        harmonic_labels=[str(h.harmonic) for h in harmonics],
+        periods=[float(h.period) for h in harmonics],
+        scores=[float(h.score) for h in harmonics],
+        harmonic_depth_ppm=[float(h.depth_ppm) for h in harmonics],
+        harmonic_duration_hours=[h.duration_hours for h in harmonics],
+        best_harmonic=str(best_harmonic),
+        best_ratio_over_p=float(best_ratio_over_p),
+        classification=str(classification),
+        phase_shift_event_count=int(len(events)),
+        phase_shift_peak_sigma=peak_sigma,
+        secondary_significance=float(secondary_significance),
+        n_phase_bins=int(config.n_phase_bins),
+        phase_shift_significance_threshold=float(config.phase_shift_significance_threshold),
+        alias_ratio_threshold_strong=float(config.alias_ratio_threshold_strong),
+        alias_ratio_threshold_weak=float(config.alias_ratio_threshold_weak),
     )
 
 
@@ -205,57 +360,68 @@ def compute_alias_scalar_signals(
     harmonic_summary: HarmonicPowerSummary | None = None,
     n_phase_bins: int = 10,
     significance_threshold: float = 3.0,
+    diagnostics: AliasDiagnosticsResult | None = None,
+    config: AliasDiagnosticsConfig | None = None,
 ) -> dict[str, float | int | str | None]:
     """Compute scalar alias diagnostics from deterministic base assumptions."""
-    mask = np.asarray(lightcurve.valid_mask, dtype=np.bool_)
-    time = np.asarray(lightcurve.time, dtype=np.float64)[mask]
-    flux = np.asarray(lightcurve.flux, dtype=np.float64)[mask]
-    flux_err = np.asarray(lightcurve.flux_err, dtype=np.float64)[mask]
-
-    summary = harmonic_summary or summarize_harmonic_power(
-        time=time,
-        flux=flux,
-        flux_err=flux_err,
-        base_period=period_days,
-        base_t0=t0_btjd,
-        duration_hours=duration_hours,
-    )
-    harmonics = list(summary.harmonics)
-    base_score = next((h.score for h in harmonics if h.harmonic == "P"), 0.0)
-    classification, _best_harmonic, _ratio = classify_alias(
-        harmonics,
-        base_score=base_score,
-    )
-
-    events = detect_phase_shift_events(
-        time=time,
-        flux=flux,
-        flux_err=flux_err,
-        period=period_days,
-        t0=t0_btjd,
+    effective_config = config or AliasDiagnosticsConfig(
         n_phase_bins=n_phase_bins,
-        significance_threshold=significance_threshold,
+        phase_shift_significance_threshold=significance_threshold,
     )
-    peak_sigma = max((float(e.significance) for e in events), default=None)
+    if diagnostics is not None:
+        return _scalar_signals_from_alias_diagnostics(diagnostics)
 
-    secondary_significance = compute_secondary_significance(
-        time=time,
-        flux=flux,
-        flux_err=flux_err,
-        period=period_days,
-        t0=t0_btjd,
+    # Preserve backward compatibility: when a harmonic summary is supplied,
+    # derive alias classification from that summary rather than discarding it.
+    if harmonic_summary is not None:
+        time, flux, flux_err = _masked_lc_arrays(lightcurve)
+        harmonics = list(harmonic_summary.harmonics)
+        base_score = next((h.score for h in harmonics if h.harmonic == "P"), 0.0)
+        classification, _best_harmonic, _ratio = classify_alias(
+            harmonics,
+            base_score=base_score,
+            strong_ratio_threshold=effective_config.alias_ratio_threshold_strong,
+            weak_ratio_threshold=effective_config.alias_ratio_threshold_weak,
+        )
+        events = detect_phase_shift_events(
+            time=time,
+            flux=flux,
+            flux_err=flux_err,
+            period=period_days,
+            t0=t0_btjd,
+            n_phase_bins=effective_config.n_phase_bins,
+            significance_threshold=effective_config.phase_shift_significance_threshold,
+        )
+        peak_sigma = max((float(e.significance) for e in events), default=None)
+        secondary_significance = compute_secondary_significance(
+            time=time,
+            flux=flux,
+            flux_err=flux_err,
+            period=period_days,
+            t0=t0_btjd,
+            duration_hours=duration_hours,
+        )
+        return {
+            "classification": str(classification),
+            "phase_shift_event_count": int(len(events)),
+            "phase_shift_peak_sigma": peak_sigma,
+            "secondary_significance": float(secondary_significance),
+        }
+
+    alias_diagnostics = compute_alias_diagnostics(
+        lightcurve,
+        period_days=period_days,
+        t0_btjd=t0_btjd,
         duration_hours=duration_hours,
+        config=effective_config,
     )
-
-    return {
-        "classification": str(classification),
-        "phase_shift_event_count": int(len(events)),
-        "phase_shift_peak_sigma": peak_sigma,
-        "secondary_significance": float(secondary_significance),
-    }
+    return _scalar_signals_from_alias_diagnostics(alias_diagnostics)
 
 
 __all__ = [
+    "AliasDiagnosticsConfig",
+    "AliasDiagnosticsResult",
+    "compute_alias_diagnostics",
     "compute_alias_scalar_signals",
     "compute_alias_summary",
     "compute_timing_series",

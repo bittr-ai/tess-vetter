@@ -12,6 +12,7 @@ Covers:
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -38,6 +39,7 @@ from bittr_tess_vetter.report import (
     TransitTimingPlotData,
     build_report,
 )
+import bittr_tess_vetter.report._build as report_build
 from bittr_tess_vetter.report._build import (
     _bin_phase_data,
     _downsample_phase_preserving_transit,
@@ -516,6 +518,54 @@ def test_alias_scalar_summary_regression_deterministic_and_scalar_only() -> None
     assert block_a["secondary_significance"] == pytest.approx(0.0)
 
     _assert_scalar_only_summary_block(block_a, block_name="alias_scalar_summary")
+
+
+def test_build_report_alias_path_uses_single_canonical_compute(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Report assembly should compute alias diagnostics once through canonical bridge API."""
+    time, flux, flux_err = _make_box_transit_lc()
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10_000.0)
+
+    calls = {"canonical": 0}
+
+    def _canonical_alias_stub(*args: object, **kwargs: object) -> SimpleNamespace:
+        calls["canonical"] += 1
+        return SimpleNamespace(
+            harmonic_labels=["P", "P/2", "2P"],
+            periods=[3.5, 1.75, 7.0],
+            scores=[0.61, 0.25, 0.14],
+            harmonic_depth_ppm=[1000.0, 350.0, 150.0],
+            best_harmonic="P",
+            best_ratio_over_p=1.0,
+            classification="NONE",
+            phase_shift_event_count=0,
+            phase_shift_peak_sigma=None,
+            secondary_significance=0.0,
+        )
+
+    def _legacy_wrapper_called(*args: object, **kwargs: object) -> None:
+        raise AssertionError("legacy alias wrapper entrypoint should not be used by build_report")
+
+    monkeypatch.setattr(
+        report_build,
+        "compute_alias_diagnostics",
+        _canonical_alias_stub,
+        raising=False,
+    )
+    if hasattr(report_build, "compute_alias_summary"):
+        monkeypatch.setattr(report_build, "compute_alias_summary", _legacy_wrapper_called)
+    if hasattr(report_build, "compute_alias_scalar_signals"):
+        monkeypatch.setattr(report_build, "compute_alias_scalar_signals", _legacy_wrapper_called)
+
+    report = build_report(lc, candidate)
+    payload = report.to_json()
+
+    assert calls["canonical"] == 1
+    assert payload["plot_data"]["alias_summary"]["best_harmonic"] == "P"
+    assert payload["summary"]["alias_scalar_summary"]["classification"] == "NONE"
 
 
 def test_timing_summary_regression_rules_and_scalar_only() -> None:
