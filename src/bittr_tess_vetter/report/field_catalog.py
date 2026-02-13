@@ -108,7 +108,20 @@ class FieldKey(StrEnum):
     SUMMARY_DATA_GAP_N_EPOCHS_EVALUATED_IN_COVERAGE = (
         "summary.data_gap_summary.n_epochs_evaluated_in_coverage"
     )
+    SUMMARY_CHECK_EXECUTION = "summary.check_execution"
+    SUMMARY_CHECK_EXECUTION_V03_REQUESTED = "summary.check_execution.v03_requested"
+    SUMMARY_CHECK_EXECUTION_V03_ENABLED = "summary.check_execution.v03_enabled"
+    SUMMARY_CHECK_EXECUTION_V03_DISABLED_REASON = (
+        "summary.check_execution.v03_disabled_reason"
+    )
     SUMMARY_ENRICHMENT = "summary.enrichment"
+    PAYLOAD_META_CONTRACT_VERSION = "payload_meta.contract_version"
+    PAYLOAD_META_REQUIRED_METRICS_BY_CHECK = "payload_meta.required_metrics_by_check"
+    PAYLOAD_META_MISSING_REQUIRED_METRICS_BY_CHECK = (
+        "payload_meta.missing_required_metrics_by_check"
+    )
+    PAYLOAD_META_METRIC_KEYS_BY_CHECK = "payload_meta.metric_keys_by_check"
+    PAYLOAD_META_HAS_MISSING_REQUIRED_METRICS = "payload_meta.has_missing_required_metrics"
     PLOT_PHASE_FOLDED = "plot_data.phase_folded"
     PLOT_FULL_LC = "plot_data.full_lc"
 
@@ -574,11 +587,61 @@ FIELD_CATALOG: dict[FieldKey, FieldSpec] = {
         description="Count of candidate epochs evaluated with cadence coverage.",
         units="epochs",
     ),
+    FieldKey.SUMMARY_CHECK_EXECUTION: FieldSpec(
+        path=FieldKey.SUMMARY_CHECK_EXECUTION.value,
+        display_name="Check Execution",
+        description="Execution-state summary for per-check enablement decisions.",
+    ),
+    FieldKey.SUMMARY_CHECK_EXECUTION_V03_REQUESTED: FieldSpec(
+        path=FieldKey.SUMMARY_CHECK_EXECUTION_V03_REQUESTED.value,
+        display_name="V03 Requested",
+        description="True when report build was requested to include V03.",
+    ),
+    FieldKey.SUMMARY_CHECK_EXECUTION_V03_ENABLED: FieldSpec(
+        path=FieldKey.SUMMARY_CHECK_EXECUTION_V03_ENABLED.value,
+        display_name="V03 Enabled",
+        description="True when V03 was actually enabled and executed.",
+    ),
+    FieldKey.SUMMARY_CHECK_EXECUTION_V03_DISABLED_REASON: FieldSpec(
+        path=FieldKey.SUMMARY_CHECK_EXECUTION_V03_DISABLED_REASON.value,
+        display_name="V03 Disabled Reason",
+        description="Reason V03 was disabled when requested but unavailable.",
+    ),
     FieldKey.SUMMARY_ENRICHMENT: FieldSpec(
         path=FieldKey.SUMMARY_ENRICHMENT.value,
         display_name="Enrichment",
         description="Operational status/provenance for non-LC context blocks.",
         category="enrichment",
+    ),
+    FieldKey.PAYLOAD_META_CONTRACT_VERSION: FieldSpec(
+        path=FieldKey.PAYLOAD_META_CONTRACT_VERSION.value,
+        display_name="Metric Contract Version",
+        description="Version tag for summary-relevant check metric contract metadata.",
+        category="metadata",
+    ),
+    FieldKey.PAYLOAD_META_REQUIRED_METRICS_BY_CHECK: FieldSpec(
+        path=FieldKey.PAYLOAD_META_REQUIRED_METRICS_BY_CHECK.value,
+        display_name="Required Metrics By Check",
+        description="Deterministic map of expected required metric keys per check ID.",
+        category="metadata",
+    ),
+    FieldKey.PAYLOAD_META_MISSING_REQUIRED_METRICS_BY_CHECK: FieldSpec(
+        path=FieldKey.PAYLOAD_META_MISSING_REQUIRED_METRICS_BY_CHECK.value,
+        display_name="Missing Required Metrics By Check",
+        description="Required metric keys currently missing from each provided check.",
+        category="metadata",
+    ),
+    FieldKey.PAYLOAD_META_METRIC_KEYS_BY_CHECK: FieldSpec(
+        path=FieldKey.PAYLOAD_META_METRIC_KEYS_BY_CHECK.value,
+        display_name="Metric Keys By Check",
+        description="Exact sorted metric keys observed on each summary-relevant check.",
+        category="metadata",
+    ),
+    FieldKey.PAYLOAD_META_HAS_MISSING_REQUIRED_METRICS: FieldSpec(
+        path=FieldKey.PAYLOAD_META_HAS_MISSING_REQUIRED_METRICS.value,
+        display_name="Has Missing Required Metrics",
+        description="True when any provided summary-relevant check misses required metrics.",
+        category="metadata",
     ),
     FieldKey.PLOT_PHASE_FOLDED: FieldSpec(
         path=FieldKey.PLOT_PHASE_FOLDED.value,

@@ -9,9 +9,10 @@ Public API:
     PhaseFoldedPlotData -- Plot-ready phase-folded arrays
 """
 
-from bittr_tess_vetter.report._build import build_report
+from bittr_tess_vetter.report._build_core import build_report
 from bittr_tess_vetter.report._data import (
     AliasHarmonicSummaryData,
+    CheckExecutionState,
     EnrichmentBlockData,
     FullLCPlotData,
     LCFPSignals,
@@ -38,6 +39,7 @@ from bittr_tess_vetter.report._render_html import render_html, render_html_from_
 from bittr_tess_vetter.report.field_catalog import FIELD_CATALOG, FieldKey, FieldSpec
 from bittr_tess_vetter.report.schema import (
     BundleSummaryModel,
+    CheckExecutionSummaryModel,
     CheckSummaryModel,
     ReportPayloadMetaModel,
     ReportPayloadModel,
@@ -56,11 +58,13 @@ __all__ = [
     "ReportPlotDataModel",
     "ReportPayloadMetaModel",
     "CheckSummaryModel",
+    "CheckExecutionSummaryModel",
     "BundleSummaryModel",
     "FieldKey",
     "FieldSpec",
     "FIELD_CATALOG",
     "ReportData",
+    "CheckExecutionState",
     "LCSummary",
     "AliasHarmonicSummaryData",
     "EnrichmentBlockData",

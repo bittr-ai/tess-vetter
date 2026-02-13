@@ -137,6 +137,7 @@ def test_report_payload_schema_includes_new_deterministic_summary_blocks() -> No
     assert "timing_summary" in summary_props
     assert "secondary_scan_summary" in summary_props
     assert "data_gap_summary" in summary_props
+    assert "check_execution" in summary_props
 
 
 def test_report_payload_accepts_data_gap_summary_scalars_and_nulls() -> None:
@@ -207,6 +208,91 @@ def test_report_payload_rejects_non_scalar_values_in_new_summary_blocks() -> Non
         "n_epochs_excluded_no_coverage": [1],
         "n_epochs_evaluated_in_coverage": {"count": 4},
     }
+
+    with pytest.raises(Exception):
+        ReportPayloadModel.model_validate(payload)
+
+
+def test_report_payload_accepts_check_execution_state_shape() -> None:
+    lc = _make_minimal_lc()
+    candidate = Candidate(
+        ephemeris=Ephemeris(period_days=1.0, t0_btjd=0.0, duration_hours=1.0),
+        depth_ppm=500.0,
+    )
+    payload = build_report(lc, candidate, include_additional_plots=False).to_json()
+    payload = copy.deepcopy(payload)
+    payload["summary"]["check_execution"] = {
+        "v03_requested": True,
+        "v03_enabled": False,
+        "v03_disabled_reason": "stellar is required to enable V03",
+    }
+
+    parsed = ReportPayloadModel.model_validate(payload)
+    assert parsed.summary.check_execution is not None
+    assert parsed.summary.check_execution.v03_requested is True
+    assert parsed.summary.check_execution.v03_enabled is False
+    assert isinstance(parsed.summary.check_execution.v03_disabled_reason, str)
+
+
+def test_report_payload_rejects_invalid_check_execution_types() -> None:
+    lc = _make_minimal_lc()
+    candidate = Candidate(
+        ephemeris=Ephemeris(period_days=1.0, t0_btjd=0.0, duration_hours=1.0),
+        depth_ppm=500.0,
+    )
+    payload = build_report(lc, candidate, include_additional_plots=False).to_json()
+    payload = copy.deepcopy(payload)
+    payload["summary"]["check_execution"] = {
+        "v03_requested": "yes",
+        "v03_enabled": {"enabled": False},
+        "v03_disabled_reason": 123,
+    }
+
+    with pytest.raises(Exception):
+        ReportPayloadModel.model_validate(payload)
+
+
+def test_report_payload_accepts_metric_contract_payload_meta_shape() -> None:
+    lc = _make_minimal_lc()
+    candidate = Candidate(
+        ephemeris=Ephemeris(period_days=1.0, t0_btjd=0.0, duration_hours=1.0),
+        depth_ppm=500.0,
+    )
+    payload = build_report(lc, candidate, include_additional_plots=False).to_json()
+    payload = copy.deepcopy(payload)
+    payload["payload_meta"].update(
+        {
+            "contract_version": "1",
+            "required_metrics_by_check": {"V01": ["delta_sigma"]},
+            "missing_required_metrics_by_check": {"V01": ["depth_even_ppm"]},
+            "metric_keys_by_check": {"V01": ["delta_sigma"]},
+            "has_missing_required_metrics": True,
+        }
+    )
+
+    parsed = ReportPayloadModel.model_validate(payload)
+    assert parsed.payload_meta.contract_version == "1"
+    assert parsed.payload_meta.required_metrics_by_check["V01"] == ["delta_sigma"]
+    assert parsed.payload_meta.has_missing_required_metrics is True
+
+
+def test_report_payload_rejects_invalid_metric_contract_payload_meta_types() -> None:
+    lc = _make_minimal_lc()
+    candidate = Candidate(
+        ephemeris=Ephemeris(period_days=1.0, t0_btjd=0.0, duration_hours=1.0),
+        depth_ppm=500.0,
+    )
+    payload = build_report(lc, candidate, include_additional_plots=False).to_json()
+    payload = copy.deepcopy(payload)
+    payload["payload_meta"].update(
+        {
+            "contract_version": 1,
+            "required_metrics_by_check": ["V01"],
+            "missing_required_metrics_by_check": {"V01": "depth_even_ppm"},
+            "metric_keys_by_check": {"V01": [123]},
+            "has_missing_required_metrics": "false",
+        }
+    )
 
     with pytest.raises(Exception):
         ReportPayloadModel.model_validate(payload)

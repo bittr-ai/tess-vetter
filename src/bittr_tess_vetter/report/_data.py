@@ -8,6 +8,7 @@ The report module never renders -- it only assembles data.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+import logging
 from typing import Any
 
 from bittr_tess_vetter.report._references import (
@@ -18,6 +19,7 @@ from bittr_tess_vetter.report._references import (
 from bittr_tess_vetter.report._serialization_utils import _canonical_sha256, _scrub_non_finite
 from bittr_tess_vetter.report._summary_builders import (
     _build_alias_scalar_summary,
+    _build_check_metric_contract_meta,
     _build_data_gap_summary,
     _build_noise_summary,
     _build_odd_even_summary,
@@ -28,6 +30,8 @@ from bittr_tess_vetter.report._summary_builders import (
 )
 from bittr_tess_vetter.report.schema import ReportPayloadModel
 from bittr_tess_vetter.validation.result_schema import CheckResult, VettingBundleResult
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -321,6 +325,15 @@ class ReportEnrichmentData:
     followup_context: EnrichmentBlockData | None
 
 
+@dataclass(frozen=True)
+class CheckExecutionState:
+    """Execution-state metadata for check enablement decisions."""
+
+    v03_requested: bool
+    v03_enabled: bool
+    v03_disabled_reason: str | None = None
+
+
 @dataclass
 class ReportData:
     """LC-only report data packet.
@@ -363,6 +376,7 @@ class ReportData:
     enrichment: ReportEnrichmentData | None = None
     odd_even_phase: OddEvenPhasePlotData | None = None
     secondary_scan: SecondaryScanPlotData | None = None
+    check_execution: CheckExecutionState | None = None
 
     # --- Metadata ---
     version: str = "1.0.0"
@@ -391,6 +405,8 @@ class ReportData:
 
         if self.lc_summary is not None:
             summary["lc_summary"] = asdict(self.lc_summary)
+        if self.check_execution is not None:
+            summary["check_execution"] = asdict(self.check_execution)
 
         checks_summary: dict[str, Any] = {}
         check_overlays: dict[str, Any] = {}
@@ -499,6 +515,14 @@ class ReportData:
 
         summary = _scrub_non_finite(summary)
         plot_data = _scrub_non_finite(plot_data)
+        metric_contract_meta = _build_check_metric_contract_meta(self.checks)
+        for check_id in sorted(metric_contract_meta["missing_required_metrics_by_check"]):
+            missing_keys = metric_contract_meta["missing_required_metrics_by_check"][check_id]
+            logger.warning(
+                "Missing required check metrics for %s: %s",
+                check_id,
+                ",".join(missing_keys),
+            )
         result: dict[str, Any] = {
             "schema_version": self.version,
             "summary": summary,
@@ -508,6 +532,7 @@ class ReportData:
                 "plot_data_version": "1",
                 "summary_hash": _canonical_sha256(summary),
                 "plot_data_hash": _canonical_sha256(plot_data),
+                **metric_contract_meta,
             },
         }
         result = _scrub_non_finite(result)

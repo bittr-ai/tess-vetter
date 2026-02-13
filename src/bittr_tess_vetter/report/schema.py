@@ -159,6 +159,16 @@ class BundleSummaryModel(BaseModel):
     failed_ids: list[str] = Field(default_factory=list)
 
 
+class CheckExecutionSummaryModel(BaseModel):
+    """Execution-state block for explicit check enablement decisions."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    v03_requested: bool
+    v03_enabled: bool
+    v03_disabled_reason: str | None = None
+
+
 class ReportSummaryModel(BaseModel):
     """Non-plot summary payload."""
 
@@ -172,6 +182,7 @@ class ReportSummaryModel(BaseModel):
     stellar: dict[str, Any] | None = None
     lc_summary: dict[str, Any] | None = None
     checks: dict[str, CheckSummaryModel] = Field(default_factory=dict)
+    check_execution: CheckExecutionSummaryModel | None = None
     bundle_summary: BundleSummaryModel | None = None
     odd_even_summary: OddEvenSummaryModel | None = None
     noise_summary: NoiseSummaryModel | None = None
@@ -212,6 +223,11 @@ class ReportPayloadMetaModel(BaseModel):
     plot_data_version: str
     summary_hash: str
     plot_data_hash: str
+    contract_version: str | None = None
+    required_metrics_by_check: dict[str, list[str]] = Field(default_factory=dict)
+    missing_required_metrics_by_check: dict[str, list[str]] = Field(default_factory=dict)
+    metric_keys_by_check: dict[str, list[str]] = Field(default_factory=dict)
+    has_missing_required_metrics: bool = False
 
 
 class ReportPayloadModel(BaseModel):

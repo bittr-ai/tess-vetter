@@ -30,6 +30,26 @@ from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
 _EPH = {"period_days": 3.5, "t0_btjd": 1850.0, "duration_hours": 2.5}
 
 
+def _extract_include_v03_state(report_json: dict[str, object]) -> tuple[bool, bool, str | None]:
+    summary = report_json["summary"]
+    assert isinstance(summary, dict)
+    check_execution = summary.get("check_execution")
+    assert isinstance(check_execution, dict)
+    if "include_v03" in check_execution:
+        include_v03 = check_execution["include_v03"]
+        assert isinstance(include_v03, dict)
+        return (
+            bool(include_v03.get("requested")),
+            bool(include_v03.get("enabled")),
+            include_v03.get("reason"),
+        )
+    return (
+        bool(check_execution.get("v03_requested")),
+        bool(check_execution.get("v03_enabled")),
+        check_execution.get("v03_disabled_reason"),
+    )
+
+
 def _make_lc_data(sector: int, n: int = 500, tic_id: int = 123456789) -> LightCurveData:
     """Create a minimal but valid LightCurveData for testing."""
     rng = np.random.default_rng(sector)
@@ -156,6 +176,44 @@ def test_include_html_false() -> None:
     client = _mock_client(sectors=[1])
     result = generate_report(123456789, **_EPH, mast_client=client)
     assert result.html is None
+
+
+def test_include_v03_execution_state_enabled_with_stellar() -> None:
+    client = _mock_client(sectors=[1])
+    explicit_stellar = StellarParameters(teff=5800.0, radius=1.1, mass=1.0)
+
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        include_v03=True,
+        stellar=explicit_stellar,
+    )
+    assert _extract_include_v03_state(result.report_json) == (True, True, None)
+
+
+def test_include_v03_execution_state_disabled_without_stellar() -> None:
+    client = _mock_client(sectors=[1], get_target_raises=True)
+
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        include_v03=True,
+    )
+    requested, enabled, reason = _extract_include_v03_state(result.report_json)
+    assert requested is True
+    assert enabled is False
+    assert isinstance(reason, str) and reason
+
+
+def test_include_v03_execution_state_default_false() -> None:
+    client = _mock_client(sectors=[1])
+    result = generate_report(123456789, **_EPH, mast_client=client, include_v03=False)
+    requested, enabled, reason = _extract_include_v03_state(result.report_json)
+    assert requested is False
+    assert enabled is False
+    assert reason is None or isinstance(reason, str)
 
 
 # ---------------------------------------------------------------------------

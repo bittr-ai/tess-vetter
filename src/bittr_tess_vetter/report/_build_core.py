@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 
 from bittr_tess_vetter.compute.transit import detect_transit, measure_depth
-from bittr_tess_vetter.report._data import LCSummary, ReportData
+from bittr_tess_vetter.report._data import CheckExecutionState, LCSummary, ReportData
 from bittr_tess_vetter.validation.base import (
     count_transits,
     get_in_transit_mask,
@@ -155,8 +155,10 @@ def build_report(
 
     # 1. Determine enabled checks
     enabled = set(_DEFAULT_ENABLED)
+    v03_disabled_reason: str | None = None
     if include_v03:
         if stellar is None:
+            v03_disabled_reason = "stellar is required to enable V03"
             logger.warning(
                 "include_v03=True but stellar is None; disabling V03"
             )
@@ -266,6 +268,11 @@ def build_report(
         lc_robustness=lc_robustness_data,
         odd_even_phase=odd_even_phase,
         secondary_scan=secondary_scan,
+        check_execution=CheckExecutionState(
+            v03_requested=include_v03,
+            v03_enabled="V03" in enabled,
+            v03_disabled_reason=v03_disabled_reason,
+        ),
         checks_run=[r.id for r in results],
     )
 

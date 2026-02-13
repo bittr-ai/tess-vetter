@@ -105,3 +105,30 @@ def test_canonical_hash_data_gap_summary_block_is_order_invariant_and_hash_sensi
     changed = copy.deepcopy(summary)
     changed["data_gap_summary"]["n_epochs_missing_ge_0p25_in_coverage"] = 4
     assert _canonical_sha256(changed) != base_hash
+
+
+def test_payload_meta_changes_do_not_change_summary_or_plot_hash_inputs() -> None:
+    fixture = _load_fixture()
+    payload = {
+        "schema_version": "1.0.0",
+        "summary": copy.deepcopy(fixture["summary"]),
+        "plot_data": copy.deepcopy(fixture["plot_data"]),
+        "payload_meta": {
+            "summary_version": "1",
+            "plot_data_version": "1",
+            "summary_hash": fixture["expected"]["summary_hash"],
+            "plot_data_hash": fixture["expected"]["plot_data_hash"],
+        },
+    }
+
+    summary_hash_before = _canonical_sha256(payload["summary"])
+    plot_hash_before = _canonical_sha256(payload["plot_data"])
+    assert summary_hash_before == payload["payload_meta"]["summary_hash"]
+    assert plot_hash_before == payload["payload_meta"]["plot_data_hash"]
+
+    payload["payload_meta"]["summary_version"] = "2"
+    payload["payload_meta"]["plot_data_version"] = "3"
+    payload["payload_meta"]["new_contract_field"] = "ignored-by-hash-inputs"
+
+    assert _canonical_sha256(payload["summary"]) == summary_hash_before
+    assert _canonical_sha256(payload["plot_data"]) == plot_hash_before

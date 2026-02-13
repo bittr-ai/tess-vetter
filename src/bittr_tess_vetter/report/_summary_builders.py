@@ -19,6 +19,22 @@ if TYPE_CHECKING:
         TransitTimingPlotData,
     )
 
+_SUMMARY_RELEVANT_CHECK_IDS: tuple[str, ...] = ("V01", "V02", "V04", "V05", "V13", "V15")
+_REQUIRED_METRIC_KEYS_BY_CHECK: dict[str, tuple[str, ...]] = {
+    "V01": ("delta_sigma", "depth_even_ppm", "depth_odd_ppm"),
+    "V02": ("secondary_depth_sigma",),
+    "V04": ("chi2_reduced",),
+    "V05": ("tflat_ttotal_ratio",),
+    "V13": (
+        "missing_frac_max_in_coverage",
+        "missing_frac_median_in_coverage",
+        "n_epochs_evaluated_in_coverage",
+        "n_epochs_excluded_no_coverage",
+        "n_epochs_missing_ge_0p25_in_coverage",
+    ),
+    "V15": ("asymmetry_sigma",),
+}
+
 
 def _model_dump_like(value: Any) -> Any:
     """Serialize model-like objects without requiring pydantic at call sites."""
@@ -322,4 +338,36 @@ def _build_data_gap_summary(checks: dict[str, CheckResult]) -> dict[str, Any]:
         "n_epochs_evaluated_in_coverage": _coerce_int(
             metrics.get("n_epochs_evaluated_in_coverage")
         ),
+    }
+
+
+def _build_check_metric_contract_meta(checks: dict[str, CheckResult]) -> dict[str, Any]:
+    """Build deterministic metric-contract introspection metadata."""
+    required_metrics_by_check: dict[str, list[str]] = {}
+    missing_required_metrics_by_check: dict[str, list[str]] = {}
+    metric_keys_by_check: dict[str, list[str]] = {}
+
+    for check_id in sorted(_SUMMARY_RELEVANT_CHECK_IDS):
+        required_keys = sorted(_REQUIRED_METRIC_KEYS_BY_CHECK.get(check_id, ()))
+        required_metrics_by_check[check_id] = list(required_keys)
+
+        check = checks.get(check_id)
+        raw_metrics = check.metrics if check is not None else {}
+        metrics = raw_metrics if isinstance(raw_metrics, dict) else {}
+        metric_keys = sorted(str(key) for key in metrics)
+        metric_keys_by_check[check_id] = metric_keys
+
+        if check is None:
+            continue
+
+        missing_keys = [key for key in required_keys if key not in metrics]
+        if missing_keys:
+            missing_required_metrics_by_check[check_id] = missing_keys
+
+    return {
+        "contract_version": "1",
+        "required_metrics_by_check": required_metrics_by_check,
+        "missing_required_metrics_by_check": missing_required_metrics_by_check,
+        "metric_keys_by_check": metric_keys_by_check,
+        "has_missing_required_metrics": bool(missing_required_metrics_by_check),
     }

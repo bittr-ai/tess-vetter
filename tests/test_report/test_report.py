@@ -39,12 +39,12 @@ from bittr_tess_vetter.report import (
     TransitTimingPlotData,
     build_report,
 )
-import bittr_tess_vetter.report._build as report_build
-from bittr_tess_vetter.report._build import (
+import bittr_tess_vetter.report._build_panels as report_build_panels
+from bittr_tess_vetter.report._build_core import _validate_build_inputs
+from bittr_tess_vetter.report._build_utils import (
     _bin_phase_data,
     _downsample_phase_preserving_transit,
     _downsample_preserving_transits,
-    _validate_build_inputs,
 )
 from bittr_tess_vetter.report._data import _scrub_non_finite
 
@@ -91,6 +91,25 @@ def _assert_scalar_only_summary_block(block: dict[str, object], *, block_name: s
         assert value is None or isinstance(value, scalar_types), (
             f"{block_name}.{key} must be scalar, got {type(value).__name__}"
         )
+
+
+def _extract_include_v03_state(summary: dict[str, object]) -> tuple[bool, bool, str | None]:
+    """Return normalized include_v03 execution-state fields from report summary."""
+    state = summary.get("check_execution")
+    assert isinstance(state, dict), "summary.check_execution must be present"
+    if "include_v03" in state:
+        include_v03 = state["include_v03"]
+        assert isinstance(include_v03, dict), "check_execution.include_v03 must be a dict"
+        return (
+            bool(include_v03.get("requested")),
+            bool(include_v03.get("enabled")),
+            include_v03.get("reason"),
+        )
+    return (
+        bool(state.get("v03_requested")),
+        bool(state.get("v03_enabled")),
+        state.get("v03_disabled_reason"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -407,6 +426,34 @@ def test_json_schema_keys_and_types() -> None:
     assert isinstance(serialized, str)
 
 
+def test_payload_meta_contract_shape_and_deterministic_ordering() -> None:
+    """payload_meta keys should be stable and hashes must derive from summary/plot_data."""
+    time, flux, flux_err = _make_box_transit_lc()
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    eph = Ephemeris(period_days=3.5, t0_btjd=0.5, duration_hours=2.5)
+    candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
+
+    payload_a = build_report(lc, candidate).to_json()
+    payload_b = build_report(lc, candidate).to_json()
+
+    assert list(payload_a["payload_meta"].keys()) == [
+        "summary_version",
+        "plot_data_version",
+        "summary_hash",
+        "plot_data_hash",
+        "contract_version",
+        "required_metrics_by_check",
+        "missing_required_metrics_by_check",
+        "metric_keys_by_check",
+        "has_missing_required_metrics",
+    ]
+    assert payload_a["payload_meta"] == payload_b["payload_meta"]
+    assert isinstance(payload_a["payload_meta"]["summary_hash"], str)
+    assert isinstance(payload_a["payload_meta"]["plot_data_hash"], str)
+    assert len(payload_a["payload_meta"]["summary_hash"]) == 64
+    assert len(payload_a["payload_meta"]["plot_data_hash"]) == 64
+
+
 # ---------------------------------------------------------------------------
 # Plot data passthrough test
 # ---------------------------------------------------------------------------
@@ -550,16 +597,11 @@ def test_build_report_alias_path_uses_single_canonical_compute(
     def _legacy_wrapper_called(*args: object, **kwargs: object) -> None:
         raise AssertionError("legacy alias wrapper entrypoint should not be used by build_report")
 
-    monkeypatch.setattr(
-        report_build,
-        "compute_alias_diagnostics",
-        _canonical_alias_stub,
-        raising=False,
-    )
-    if hasattr(report_build, "compute_alias_summary"):
-        monkeypatch.setattr(report_build, "compute_alias_summary", _legacy_wrapper_called)
-    if hasattr(report_build, "compute_alias_scalar_signals"):
-        monkeypatch.setattr(report_build, "compute_alias_scalar_signals", _legacy_wrapper_called)
+    monkeypatch.setattr(report_build_panels, "compute_alias_diagnostics", _canonical_alias_stub)
+    if hasattr(report_build_panels, "compute_alias_summary"):
+        monkeypatch.setattr(report_build_panels, "compute_alias_summary", _legacy_wrapper_called)
+    if hasattr(report_build_panels, "compute_alias_scalar_signals"):
+        monkeypatch.setattr(report_build_panels, "compute_alias_scalar_signals", _legacy_wrapper_called)
 
     report = build_report(lc, candidate)
     payload = report.to_json()
@@ -773,10 +815,12 @@ def test_include_v03_adds_v03() -> None:
     stellar = StellarParams(radius=1.0, mass=1.0)
 
     report = build_report(lc, candidate, include_v03=True, stellar=stellar)
+    payload = report.to_json()
 
     assert "V03" in report.checks
     assert "V03" in report.checks_run
     assert set(report.checks.keys()) == {"V01", "V02", "V03", "V04", "V05", "V13", "V15"}
+    assert _extract_include_v03_state(payload["summary"]) == (True, True, None)
 
 
 def test_include_v03_without_stellar_disables() -> None:
@@ -787,9 +831,14 @@ def test_include_v03_without_stellar_disables() -> None:
     candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
 
     report = build_report(lc, candidate, include_v03=True)
+    payload = report.to_json()
 
     assert "V03" not in report.checks
     assert "V03" not in report.checks_run
+    requested, enabled, reason = _extract_include_v03_state(payload["summary"])
+    assert requested is True
+    assert enabled is False
+    assert isinstance(reason, str) and reason
 
 
 def test_default_excludes_v03() -> None:
@@ -800,9 +849,14 @@ def test_default_excludes_v03() -> None:
     candidate = Candidate(ephemeris=eph, depth_ppm=10000.0)
 
     report = build_report(lc, candidate)
+    payload = report.to_json()
 
     assert "V03" not in report.checks
     assert "V03" not in report.checks_run
+    requested, enabled, reason = _extract_include_v03_state(payload["summary"])
+    assert requested is False
+    assert enabled is False
+    assert reason is None or isinstance(reason, str)
 
 
 # ---------------------------------------------------------------------------
