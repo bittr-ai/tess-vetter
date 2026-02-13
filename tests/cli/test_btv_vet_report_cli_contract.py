@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 from click.testing import CliRunner
@@ -413,6 +414,57 @@ def test_btv_vet_pipeline_config_flags_forwarded(monkeypatch, tmp_path: Path) ->
     assert cfg.fail_fast is True
     assert cfg.emit_warnings is True
     assert cfg.extra_params["alpha"] == 1
+
+
+def test_btv_vet_require_coordinates_without_network_maps_to_exit_4() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--require-coordinates",
+        ],
+    )
+    assert result.exit_code == 4
+
+
+def test_btv_vet_require_coordinates_timeout_maps_to_exit_5(monkeypatch) -> None:
+    def _timeout_lookup(*, tic_id: int):
+        _ = tic_id
+        return SimpleNamespace(
+            status="timeout",
+            ra_deg=None,
+            dec_deg=None,
+            message="coord lookup timeout",
+        )
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.lookup_tic_coordinates", _timeout_lookup)
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--require-coordinates",
+            "--network-ok",
+        ],
+    )
+    assert result.exit_code == 5
 
 
 def test_btv_vet_detrend_defaults_are_backward_compatible(monkeypatch, tmp_path: Path) -> None:

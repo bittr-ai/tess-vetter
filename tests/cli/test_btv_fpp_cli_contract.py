@@ -7,6 +7,7 @@ from typing import Any
 from click.testing import CliRunner
 
 import bittr_tess_vetter.cli.enrich_cli as enrich_cli
+from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
 
 
 def test_btv_help_lists_fpp() -> None:
@@ -129,6 +130,59 @@ def test_btv_fpp_timeout_maps_to_exit_5(monkeypatch) -> None:
     )
 
     assert result.exit_code == 5
+
+
+def test_btv_fpp_missing_depth_from_toi_maps_to_exit_4(monkeypatch) -> None:
+    def _fake_resolve_candidate_inputs(**_kwargs: Any):
+        return 123, 7.5, 2500.25, 3.0, None, {"source": "toi_catalog", "resolved_from": "exofop"}
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--toi",
+            "TOI-123.01",
+            "--network-ok",
+        ],
+    )
+
+    assert result.exit_code == 4
+
+
+def test_btv_fpp_lightcurve_missing_maps_to_exit_4(monkeypatch) -> None:
+    def _missing_cache(**_kwargs: Any):
+        raise LightCurveNotFoundError("missing sectors")
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp",
+        _missing_cache,
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+        ],
+    )
+
+    assert result.exit_code == 4
 
 
 def test_build_cache_for_fpp_stores_requested_sector_products(monkeypatch, tmp_path: Path) -> None:
