@@ -409,3 +409,121 @@ def test_btv_vet_pipeline_config_flags_forwarded(monkeypatch, tmp_path: Path) ->
     assert cfg.fail_fast is True
     assert cfg.emit_warnings is True
     assert cfg.extra_params["alpha"] == 1
+
+
+def test_btv_vet_tpf_flags_forwarded(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_execute_vet(**kwargs):
+        captured.update(kwargs)
+        return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    out_path = tmp_path / "vet.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--fetch-tpf",
+            "--tpf-sector-strategy",
+            "requested",
+            "--tpf-sector",
+            "4",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["fetch_tpf"] is True
+    assert captured["require_tpf"] is False
+    assert captured["tpf_sector_strategy"] == "requested"
+    assert captured["tpf_sectors"] == [4]
+
+
+def test_btv_vet_require_tpf_forces_fetch(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_execute_vet(**kwargs):
+        captured.update(kwargs)
+        return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    out_path = tmp_path / "vet.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--require-tpf",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["require_tpf"] is True
+    assert captured["fetch_tpf"] is True
+
+
+def test_btv_vet_require_tpf_missing_maps_to_exit_4(monkeypatch) -> None:
+    def _missing(**_kwargs):
+        raise LightCurveNotFoundError("TPF unavailable")
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _missing)
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--require-tpf",
+        ],
+    )
+
+    assert result.exit_code == 4
+
+
+def test_btv_vet_tpf_sector_requires_requested_strategy() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--tpf-sector",
+            "5",
+        ],
+    )
+    assert result.exit_code == 1
