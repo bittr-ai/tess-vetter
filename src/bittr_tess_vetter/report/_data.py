@@ -7,27 +7,17 @@ The report module never renders -- it only assembles data.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
 import logging
+from dataclasses import dataclass, field
 from typing import Any
 
-from bittr_tess_vetter.report._references import (
-    reference_entries,
-    refs_for_check,
-    refs_for_summary_block,
+from bittr_tess_vetter.report._assembly import (
+    ReportAssemblyContext,
+    assemble_plot_data,
+    assemble_summary,
 )
 from bittr_tess_vetter.report._serialization_utils import _canonical_sha256, _scrub_non_finite
-from bittr_tess_vetter.report._summary_builders import (
-    _build_alias_scalar_summary,
-    _build_check_metric_contract_meta,
-    _build_data_gap_summary,
-    _build_noise_summary,
-    _build_odd_even_summary,
-    _build_secondary_scan_summary,
-    _build_timing_summary,
-    _build_variability_summary,
-    _model_dump_like,
-)
+from bittr_tess_vetter.report._summary_builders import _build_check_metric_contract_meta
 from bittr_tess_vetter.report.schema import ReportPayloadModel
 from bittr_tess_vetter.validation.result_schema import CheckResult, VettingBundleResult
 
@@ -384,136 +374,31 @@ class ReportData:
 
     def to_json(self) -> dict[str, Any]:
         """Serialize to modular JSON contract: summary + plot_data."""
-        summary: dict[str, Any] = {
-            "tic_id": self.tic_id,
-            "toi": self.toi,
-            "checks_run": list(self.checks_run),
-        }
-        plot_data: dict[str, Any] = {}
-
-        if self.candidate is not None:
-            eph = self.candidate.ephemeris
-            summary["ephemeris"] = {
-                "period_days": eph.period_days,
-                "t0_btjd": eph.t0_btjd,
-                "duration_hours": eph.duration_hours,
-            }
-            summary["input_depth_ppm"] = getattr(self.candidate, "depth_ppm", None)
-
-        if self.stellar is not None:
-            summary["stellar"] = _model_dump_like(self.stellar)
-
-        if self.lc_summary is not None:
-            summary["lc_summary"] = asdict(self.lc_summary)
-        if self.check_execution is not None:
-            summary["check_execution"] = asdict(self.check_execution)
-
-        checks_summary: dict[str, Any] = {}
-        check_overlays: dict[str, Any] = {}
-        reference_ids: set[str] = set()
-        for check_id, cr in self.checks.items():
-            method_refs = refs_for_check(check_id)
-            reference_ids.update(method_refs)
-            checks_summary[check_id] = {
-                "id": cr.id,
-                "name": cr.name,
-                "status": cr.status,
-                "confidence": cr.confidence,
-                "metrics": cr.metrics,
-                "flags": cr.flags,
-                "notes": cr.notes,
-                "provenance": cr.provenance,
-                "method_refs": method_refs,
-            }
-            if isinstance(cr.raw, dict) and "plot_data" in cr.raw:
-                check_overlays[check_id] = cr.raw["plot_data"]
-        summary["checks"] = checks_summary
-        if check_overlays:
-            plot_data["check_overlays"] = check_overlays
-
-        summary["odd_even_summary"] = _build_odd_even_summary(self.checks)
-        summary["noise_summary"] = _build_noise_summary(
-            self.lc_summary, self.lc_robustness
+        context = ReportAssemblyContext(
+            tic_id=self.tic_id,
+            toi=self.toi,
+            candidate=self.candidate,
+            stellar=self.stellar,
+            lc_summary=self.lc_summary,
+            check_execution=self.check_execution,
+            checks=self.checks,
+            bundle=self.bundle,
+            enrichment=self.enrichment,
+            lc_robustness=self.lc_robustness,
+            full_lc=self.full_lc,
+            phase_folded=self.phase_folded,
+            per_transit_stack=self.per_transit_stack,
+            local_detrend=self.local_detrend,
+            oot_context=self.oot_context,
+            timing_series=self.timing_series,
+            timing_summary_series=self.timing_summary_series,
+            alias_summary=self.alias_summary,
+            odd_even_phase=self.odd_even_phase,
+            secondary_scan=self.secondary_scan,
+            checks_run=self.checks_run,
         )
-        summary["variability_summary"] = _build_variability_summary(
-            self.lc_summary, self.timing_series
-        )
-        summary["alias_scalar_summary"] = _build_alias_scalar_summary(self.alias_summary)
-        timing_summary_source = (
-            self.timing_summary_series
-            if self.timing_summary_series is not None
-            else self.timing_series
-        )
-        summary["timing_summary"] = _build_timing_summary(timing_summary_source)
-        summary["secondary_scan_summary"] = _build_secondary_scan_summary(
-            self.secondary_scan
-        )
-        summary["data_gap_summary"] = _build_data_gap_summary(self.checks)
-        reference_ids.update(refs_for_summary_block("odd_even_summary"))
-        reference_ids.update(refs_for_summary_block("noise_summary"))
-        reference_ids.update(refs_for_summary_block("variability_summary"))
-        reference_ids.update(refs_for_summary_block("alias_scalar_summary"))
-        reference_ids.update(refs_for_summary_block("timing_summary"))
-        reference_ids.update(refs_for_summary_block("secondary_scan_summary"))
-        reference_ids.update(refs_for_summary_block("data_gap_summary"))
-        summary["references"] = reference_entries(reference_ids)
-
-        if self.bundle is not None:
-            summary["bundle_summary"] = {
-                "n_checks": len(self.bundle.results),
-                "n_ok": self.bundle.n_passed,
-                "n_failed": self.bundle.n_failed,
-                "n_skipped": self.bundle.n_unknown,
-                "failed_ids": self.bundle.failed_check_ids,
-            }
-
-        if self.enrichment is not None:
-            summary["enrichment"] = asdict(self.enrichment)
-
-        if self.lc_robustness is not None:
-            rb = self.lc_robustness.robustness
-            rn = self.lc_robustness.red_noise
-            fp = self.lc_robustness.fp_signals
-            summary["lc_robustness_summary"] = {
-                "version": self.lc_robustness.version,
-                "n_epochs_stored": len(self.lc_robustness.per_epoch),
-                "n_epochs_measured": rb.n_epochs_measured,
-                "dominance_index": rb.dominance_index,
-                "loto_snr_min": rb.loto_snr_min,
-                "loto_snr_mean": rb.loto_snr_mean,
-                "loto_snr_max": rb.loto_snr_max,
-                "loto_depth_ppm_min": rb.loto_depth_ppm_min,
-                "loto_depth_ppm_max": rb.loto_depth_ppm_max,
-                "loto_depth_shift_ppm_max": rb.loto_depth_shift_ppm_max,
-                "beta_30m": rn.beta_30m,
-                "beta_60m": rn.beta_60m,
-                "beta_duration": rn.beta_duration,
-                "odd_even_depth_diff_sigma": fp.odd_even_depth_diff_sigma,
-                "secondary_depth_sigma": fp.secondary_depth_sigma,
-                "phase_0p5_bin_depth_ppm": fp.phase_0p5_bin_depth_ppm,
-                "v_shape_metric": fp.v_shape_metric,
-                "asymmetry_sigma": fp.asymmetry_sigma,
-            }
-            plot_data["lc_robustness"] = asdict(self.lc_robustness)
-
-        if self.full_lc is not None:
-            plot_data["full_lc"] = asdict(self.full_lc)
-        if self.phase_folded is not None:
-            plot_data["phase_folded"] = asdict(self.phase_folded)
-        if self.per_transit_stack is not None:
-            plot_data["per_transit_stack"] = asdict(self.per_transit_stack)
-        if self.local_detrend is not None:
-            plot_data["local_detrend"] = asdict(self.local_detrend)
-        if self.oot_context is not None:
-            plot_data["oot_context"] = asdict(self.oot_context)
-        if self.timing_series is not None:
-            plot_data["timing_series"] = asdict(self.timing_series)
-        if self.alias_summary is not None:
-            plot_data["alias_summary"] = asdict(self.alias_summary)
-        if self.odd_even_phase is not None:
-            plot_data["odd_even_phase"] = asdict(self.odd_even_phase)
-        if self.secondary_scan is not None:
-            plot_data["secondary_scan"] = asdict(self.secondary_scan)
+        summary, check_overlays = assemble_summary(context)
+        plot_data = assemble_plot_data(context, check_overlays=check_overlays)
 
         summary = _scrub_non_finite(summary)
         plot_data = _scrub_non_finite(plot_data)

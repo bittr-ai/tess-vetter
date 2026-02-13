@@ -354,6 +354,35 @@ def _build_data_gap_summary(checks: dict[str, CheckResult]) -> dict[str, Any]:
     }
 
 
+def _build_lc_robustness_summary(lc_robustness: Any | None) -> dict[str, Any] | None:
+    """Build scalar LC robustness summary from compact robustness payload."""
+    if lc_robustness is None:
+        return None
+    rb = lc_robustness.robustness
+    rn = lc_robustness.red_noise
+    fp = lc_robustness.fp_signals
+    return {
+        "version": lc_robustness.version,
+        "n_epochs_stored": len(lc_robustness.per_epoch),
+        "n_epochs_measured": rb.n_epochs_measured,
+        "dominance_index": rb.dominance_index,
+        "loto_snr_min": rb.loto_snr_min,
+        "loto_snr_mean": rb.loto_snr_mean,
+        "loto_snr_max": rb.loto_snr_max,
+        "loto_depth_ppm_min": rb.loto_depth_ppm_min,
+        "loto_depth_ppm_max": rb.loto_depth_ppm_max,
+        "loto_depth_shift_ppm_max": rb.loto_depth_shift_ppm_max,
+        "beta_30m": rn.beta_30m,
+        "beta_60m": rn.beta_60m,
+        "beta_duration": rn.beta_duration,
+        "odd_even_depth_diff_sigma": fp.odd_even_depth_diff_sigma,
+        "secondary_depth_sigma": fp.secondary_depth_sigma,
+        "phase_0p5_bin_depth_ppm": fp.phase_0p5_bin_depth_ppm,
+        "v_shape_metric": fp.v_shape_metric,
+        "asymmetry_sigma": fp.asymmetry_sigma,
+    }
+
+
 def _build_check_metric_contract_meta(checks: dict[str, CheckResult]) -> dict[str, Any]:
     """Build deterministic metric-contract introspection metadata."""
     required_metrics_by_check: dict[str, list[str]] = {}
