@@ -51,6 +51,7 @@ Contents
    installation
    quickstart
    stability
+   verification/confidence_semantics
    tutorials
    tutorials/blend_localization
 

@@ -80,6 +80,20 @@ Once you have a candidate, run the vetting pipeline:
    for check in bundle.results:
        print(f"{check.id} {check.name}: status={check.status} flags={check.flags}")
 
+CLI Vetting Help and Semantics
+------------------------------
+
+The ``btv vet`` help text points to this page and the API reference:
+
+.. code-block:: bash
+
+   uv run python -m bittr_tess_vetter.cli.enrich_cli vet --help
+
+Use :doc:`verification/confidence_semantics` as the canonical reference for:
+
+- how to interpret ``CheckResult.status`` and ``CheckResult.confidence``
+- process-level ``btv vet`` exit codes (``0`` through ``5``)
+
 Vetting Check Categories
 ------------------------
 
@@ -230,4 +244,5 @@ Next Steps
 ----------
 
 - See the :doc:`api` reference for complete API documentation
+- See :doc:`verification/confidence_semantics` for confidence and CLI exit-code contracts
 - Explore the ``working_docs/`` directory for internal design notes
