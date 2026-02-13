@@ -8,10 +8,12 @@ from pathlib import Path
 from typing import Any
 
 import click
+import numpy as np
 
+from bittr_tess_vetter.api.generate_report import _select_tpf_sectors
 from bittr_tess_vetter.api.pipeline import PipelineConfig
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve, TPFStamp
 from bittr_tess_vetter.api.vet import vet_candidate
 from bittr_tess_vetter.cli.common_cli import (
     EXIT_INPUT_ERROR,
@@ -69,6 +71,10 @@ def _execute_vet(
     network_ok: bool,
     sectors: list[int] | None,
     flux_type: str,
+    fetch_tpf: bool,
+    require_tpf: bool,
+    tpf_sector_strategy: str,
+    tpf_sectors: list[int] | None,
     pipeline_config: PipelineConfig,
 ) -> dict[str, Any]:
     client = MASTClient()
@@ -90,10 +96,31 @@ def _execute_vet(
         ),
         depth_ppm=depth_ppm,
     )
+    sectors_used = sorted({int(lc_data.sector) for lc_data in lightcurves if lc_data.sector is not None})
+    sector_times = {
+        int(lc_data.sector): np.asarray(lc_data.time, dtype=np.float64)
+        for lc_data in lightcurves
+        if lc_data.sector is not None and lc_data.time is not None
+    }
+
+    tpf = _load_tpf_for_vetting(
+        client=client,
+        tic_id=tic_id,
+        lc=lc,
+        candidate=candidate,
+        sectors_used=sectors_used,
+        sector_times=sector_times,
+        fetch_tpf=fetch_tpf,
+        require_tpf=require_tpf,
+        network_ok=network_ok,
+        tpf_sector_strategy=tpf_sector_strategy,
+        requested_tpf_sectors=tpf_sectors,
+    )
 
     bundle = vet_candidate(
         lc=lc,
         candidate=candidate,
+        tpf=tpf,
         network=network_ok,
         tic_id=tic_id,
         preset=preset,
@@ -102,6 +129,73 @@ def _execute_vet(
     )
 
     return bundle.model_dump(mode="json")
+
+
+def _load_tpf_for_vetting(
+    *,
+    client: MASTClient,
+    tic_id: int,
+    lc: LightCurve,
+    candidate: Candidate,
+    sectors_used: list[int],
+    sector_times: dict[int, np.ndarray],
+    fetch_tpf: bool,
+    require_tpf: bool,
+    network_ok: bool,
+    tpf_sector_strategy: str,
+    requested_tpf_sectors: list[int] | None,
+) -> TPFStamp | None:
+    """Best-effort TPF acquisition for vetting flows."""
+    if not fetch_tpf and not require_tpf:
+        return None
+
+    selected = _select_tpf_sectors(
+        strategy=tpf_sector_strategy,
+        sectors_used=sectors_used,
+        requested=requested_tpf_sectors,
+        lc_api=lc,
+        candidate_api=candidate,
+        sector_times=sector_times,
+    )
+    if len(selected) == 0:
+        if require_tpf:
+            raise LightCurveNotFoundError("No TPF sector selected for this candidate")
+        return None
+
+    last_exc: Exception | None = None
+    for sector in selected:
+        try:
+            time_arr, flux_cube, flux_err, wcs, aperture_mask, quality = client.download_tpf_cached(
+                tic_id=tic_id,
+                sector=sector,
+            )
+        except Exception as exc_cached:
+            last_exc = exc_cached
+            if not network_ok:
+                continue
+            try:
+                time_arr, flux_cube, flux_err, wcs, aperture_mask, quality = client.download_tpf(
+                    tic_id=tic_id,
+                    sector=sector,
+                )
+            except Exception as exc:
+                last_exc = exc
+                continue
+
+        return TPFStamp(
+            time=np.asarray(time_arr, dtype=np.float64),
+            flux=np.asarray(flux_cube, dtype=np.float64),
+            flux_err=np.asarray(flux_err, dtype=np.float64) if flux_err is not None else None,
+            wcs=wcs,
+            aperture_mask=np.asarray(aperture_mask) if aperture_mask is not None else None,
+            quality=np.asarray(quality, dtype=np.int32) if quality is not None else None,
+        )
+
+    if require_tpf:
+        if last_exc is None:
+            raise LightCurveNotFoundError(f"No TPF available for TIC {tic_id}")
+        raise LightCurveNotFoundError(f"TPF unavailable for TIC {tic_id}: {last_exc}")
+    return None
 
 
 @click.command("vet")
@@ -124,6 +218,26 @@ def _execute_vet(
     show_default=True,
     help="Allow network-dependent checks.",
 )
+@click.option(
+    "--fetch-tpf/--no-fetch-tpf",
+    default=False,
+    show_default=True,
+    help="Attempt to fetch TPF for pixel-level checks.",
+)
+@click.option(
+    "--require-tpf",
+    is_flag=True,
+    default=False,
+    help="Fail if TPF cannot be loaded.",
+)
+@click.option(
+    "--tpf-sector-strategy",
+    type=click.Choice(["best", "all", "requested"], case_sensitive=False),
+    default="best",
+    show_default=True,
+    help="How to choose sector(s) for TPF fetch.",
+)
+@click.option("--tpf-sector", "tpf_sectors", multiple=True, type=int, help="Sector(s) when strategy=requested.")
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
     "--flux-type",
@@ -155,6 +269,10 @@ def vet_command(
     preset: str,
     checks: tuple[str, ...],
     network_ok: bool,
+    fetch_tpf: bool,
+    require_tpf: bool,
+    tpf_sector_strategy: str,
+    tpf_sectors: tuple[int, ...],
     sectors: tuple[int, ...],
     flux_type: str,
     timeout_seconds: float | None,
@@ -166,7 +284,10 @@ def vet_command(
     progress_path: str | None,
     resume: bool,
 ) -> None:
-    """Run candidate vetting and emit `VettingBundleResult` JSON."""
+    """Run candidate vetting and emit `VettingBundleResult` JSON.
+
+    See `docs/quickstart.rst` for agent quickstart and `docs/api.rst` for API recipes.
+    """
     out_path = resolve_optional_output_path(output_path_arg)
     progress_file = _progress_path_from_args(out_path, progress_path, resume)
 
@@ -176,6 +297,12 @@ def vet_command(
         "t0_btjd": t0_btjd,
         "duration_hours": duration_hours,
     }
+    if tpf_sectors and str(tpf_sector_strategy).lower() != "requested":
+        raise BtvCliError(
+            "--tpf-sector requires --tpf-sector-strategy=requested",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    effective_fetch_tpf = bool(fetch_tpf or require_tpf)
 
     if resume:
         existing = None
@@ -239,6 +366,10 @@ def vet_command(
             preset=str(preset).lower(),
             checks=list(checks) if checks else None,
             network_ok=network_ok,
+            fetch_tpf=effective_fetch_tpf,
+            require_tpf=require_tpf,
+            tpf_sector_strategy=str(tpf_sector_strategy).lower(),
+            tpf_sectors=list(tpf_sectors) if tpf_sectors else None,
             sectors=list(sectors) if sectors else None,
             flux_type=str(flux_type).lower(),
             pipeline_config=config,
