@@ -6,6 +6,7 @@ to avoid network calls.
 
 from __future__ import annotations
 
+import inspect
 import time
 from unittest.mock import MagicMock
 
@@ -216,6 +217,63 @@ def test_include_v03_execution_state_default_false() -> None:
     assert reason is None or isinstance(reason, str)
 
 
+def test_deterministic_budget_kwargs_forwarded_to_build_report(monkeypatch) -> None:
+    client = _mock_client(sectors=[1])
+    real_build_report = generate_report_api.build_report
+    captured: dict[str, object] = {}
+
+    def _spy_build_report(*args, **kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return real_build_report(*args, **kwargs)
+
+    monkeypatch.setattr(generate_report_api, "build_report", _spy_build_report)
+    generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        include_additional_plots=False,
+        max_transit_windows=12,
+        max_points_per_window=123,
+        max_timing_points=77,
+        include_lc_robustness=False,
+        max_lc_robustness_epochs=55,
+    )
+
+    assert captured["include_additional_plots"] is False
+    assert captured["max_transit_windows"] == 12
+    assert captured["max_points_per_window"] == 123
+    assert captured["max_timing_points"] == 77
+    assert captured["include_lc_robustness"] is False
+    assert captured["max_lc_robustness_epochs"] == 55
+
+
+def test_deterministic_budget_defaults_match_build_report() -> None:
+    generate_sig = inspect.signature(generate_report_api.generate_report)
+    build_sig = inspect.signature(generate_report_api.build_report)
+    params = (
+        "include_additional_plots",
+        "max_transit_windows",
+        "max_points_per_window",
+        "max_timing_points",
+        "include_lc_robustness",
+        "max_lc_robustness_epochs",
+    )
+
+    for name in params:
+        assert generate_sig.parameters[name].default == build_sig.parameters[name].default
+
+
+def test_invalid_deterministic_budget_propagates() -> None:
+    client = _mock_client(sectors=[1])
+    with pytest.raises(ValueError, match="max_transit_windows"):
+        generate_report(
+            123456789,
+            **_EPH,
+            mast_client=client,
+            max_transit_windows=0,
+        )
+
+
 # ---------------------------------------------------------------------------
 # 8. mast_client injection
 # ---------------------------------------------------------------------------
@@ -324,6 +382,35 @@ def test_include_enrichment_respects_block_toggles() -> None:
     assert e["pixel_diagnostics"] is None
     assert e["catalog_context"]["status"] == "skipped"
     assert e["followup_context"] is None
+
+
+def test_enrichment_budget_knobs_are_passed_through_to_catalog_provenance() -> None:
+    """Budget knobs should be surfaced in catalog_context provenance."""
+    client = _mock_client(sectors=[1])
+    cfg = EnrichmentConfig(
+        include_catalog_context=True,
+        include_pixel_diagnostics=False,
+        include_followup_context=False,
+        network=False,
+        max_catalog_rows=7,
+        per_request_timeout_seconds=1.25,
+        max_network_seconds=9.5,
+        max_concurrent_requests=2,
+    )
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        include_enrichment=True,
+        enrichment_config=cfg,
+    )
+    catalog = result.report_json["summary"]["enrichment"]["catalog_context"]
+    budget = catalog["provenance"]["budget"]
+    network_cfg = catalog["provenance"]["network_config"]
+    assert budget["max_catalog_rows"] == 7
+    assert network_cfg["per_request_timeout_seconds"] == 1.25
+    assert network_cfg["max_network_seconds"] == 9.5
+    assert network_cfg["max_concurrent_requests"] == 2
 
 
 def test_enrichment_fail_open_true_recovers_block_errors(monkeypatch) -> None:

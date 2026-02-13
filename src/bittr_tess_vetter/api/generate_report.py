@@ -107,6 +107,12 @@ def generate_report(
     bin_minutes: float = 30.0,
     max_lc_points: int = 50_000,
     max_phase_points: int = 10_000,
+    include_additional_plots: bool = True,
+    max_transit_windows: int = 24,
+    max_points_per_window: int = 300,
+    max_timing_points: int = 200,
+    include_lc_robustness: bool = True,
+    max_lc_robustness_epochs: int = 128,
     check_config: dict[str, dict[str, Any]] | None = None,
     include_enrichment: bool = False,
     enrichment_config: EnrichmentConfig | None = None,
@@ -134,6 +140,13 @@ def generate_report(
         bin_minutes: Phase-fold bin width in minutes.
         max_lc_points: Downsample full LC if longer than this.
         max_phase_points: Downsample phase-folded if longer than this.
+        include_additional_plots: If True, include per-transit stack,
+            odd/even phase, and secondary scan payloads.
+        max_transit_windows: Max transit windows in per-transit plots.
+        max_points_per_window: Max points per per-transit window.
+        max_timing_points: Max per-epoch timing points.
+        include_lc_robustness: If True, include LC robustness payloads.
+        max_lc_robustness_epochs: Max epochs in LC robustness payload.
         check_config: Per-check config overrides.
         include_enrichment: If True, attach non-LC enrichment scaffold blocks.
         enrichment_config: Optional config for enrichment scaffolding.
@@ -205,6 +218,12 @@ def generate_report(
         bin_minutes=bin_minutes,
         max_lc_points=max_lc_points,
         max_phase_points=max_phase_points,
+        include_additional_plots=include_additional_plots,
+        max_transit_windows=max_transit_windows,
+        max_points_per_window=max_points_per_window,
+        max_timing_points=max_timing_points,
+        include_lc_robustness=include_lc_robustness,
+        max_lc_robustness_epochs=max_lc_robustness_epochs,
         check_config=check_config,
     )
 

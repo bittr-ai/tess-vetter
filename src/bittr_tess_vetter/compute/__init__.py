@@ -220,16 +220,11 @@ PRIMITIVES_CATALOG: dict[str, PrimitiveInfo] = {
     ),
     "refine_period": PrimitiveInfo("Refine period estimate with higher resolution TLS search"),
     "compute_bls_model": PrimitiveInfo("Compute box model for given transit parameters"),
-    # Future phase folding operations
-    "astro.fold_transit": PrimitiveInfo("Fold light curve centered on transit", implemented=False),
-    # Future transit operations
-    "astro.detect_transit": PrimitiveInfo(
-        "Detect transit signals in light curve", implemented=False
-    ),
-    "astro.measure_depth": PrimitiveInfo("Measure transit depth and duration", implemented=False),
-    "astro.transit_mask": PrimitiveInfo(
-        "Create boolean mask for in-transit points", implemented=False
-    ),
+    # Transit operations
+    "astro.fold_transit": PrimitiveInfo("Fold light curve centered on transit"),
+    "astro.detect_transit": PrimitiveInfo("Detect transit signals in light curve"),
+    "astro.measure_depth": PrimitiveInfo("Measure transit depth and duration"),
+    "astro.transit_mask": PrimitiveInfo("Create boolean mask for in-transit points"),
     # Detrending operations
     "wotan_flatten": PrimitiveInfo(
         "Transit-aware detrending using wotan (biweight, median, spline methods)"
