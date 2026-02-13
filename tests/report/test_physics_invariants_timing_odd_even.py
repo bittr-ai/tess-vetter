@@ -47,6 +47,7 @@ def test_timing_summary_deterministic_physics_invariants() -> None:
 @pytest.mark.parametrize(
     ("depth_diff_sigma", "expected_significant", "expected_flags"),
     [
+        (3.0, True, ["ODD_EVEN_MISMATCH"]),
         (3.05, True, ["ODD_EVEN_MISMATCH"]),
         (2.95, False, []),
     ],

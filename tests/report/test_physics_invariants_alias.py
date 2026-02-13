@@ -38,17 +38,17 @@ def _assert_non_negative_alias_scalars(block: dict[str, object]) -> None:
         value = block.get(key)
         if value is not None:
             assert isinstance(value, float)
-            assert value >= -_SCORE_ABS_TOL
+            assert value >= 0.0
 
     secondary = block.get("secondary_significance")
     if secondary is not None:
         assert isinstance(secondary, float)
-        assert secondary >= -_SIGNIFICANCE_ABS_TOL
+        assert secondary >= 0.0
 
     phase_shift_peak = block.get("phase_shift_peak_sigma")
     if phase_shift_peak is not None:
         assert isinstance(phase_shift_peak, float)
-        assert phase_shift_peak >= -_SIGNIFICANCE_ABS_TOL
+        assert phase_shift_peak >= 0.0
 
 
 def test_alias_scalar_summary_physics_invariants_and_determinism() -> None:

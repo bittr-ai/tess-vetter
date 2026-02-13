@@ -121,19 +121,24 @@ def test_morphology_and_significance_fields_match_summary_with_tolerance_policy(
     v_shape_metric = rb["v_shape_metric"]
     if v_shape_metric is not None:
         assert 0.0 <= v_shape_metric <= 1.0
-        expected_v_shape = checks["V05"]["metrics"].get("tflat_ttotal_ratio")
+        check_v05 = checks.get("V05")
+        expected_v_shape = None if not check_v05 else check_v05["metrics"].get("tflat_ttotal_ratio")
         if expected_v_shape is not None:
             _assert_morphology_close(float(v_shape_metric), float(expected_v_shape))
 
     asymmetry_sigma = rb["asymmetry_sigma"]
     if asymmetry_sigma is not None:
-        expected_asymmetry = checks["V15"]["metrics"].get("asymmetry_sigma")
+        check_v15 = checks.get("V15")
+        expected_asymmetry = None if not check_v15 else check_v15["metrics"].get("asymmetry_sigma")
         if expected_asymmetry is not None:
             _assert_significance_close(float(asymmetry_sigma), float(expected_asymmetry))
 
     secondary_depth_sigma = rb["secondary_depth_sigma"]
     if secondary_depth_sigma is not None:
-        expected_secondary_sigma = checks["V02"]["metrics"].get("secondary_depth_sigma")
+        check_v02 = checks.get("V02")
+        expected_secondary_sigma = (
+            None if not check_v02 else check_v02["metrics"].get("secondary_depth_sigma")
+        )
         if expected_secondary_sigma is not None:
             _assert_significance_close(
                 float(secondary_depth_sigma),
