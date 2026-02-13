@@ -35,6 +35,8 @@ dependencies = [
   "click>=8.0.0",  # CLI framework
   "filelock>=3.12.0",  # Concurrent-safe file writes
   "pandas>=2.3.3",
+  "mechanicalsoup>=1.4.0",
+  "pytransit>=2.6.17",
 ]
 
 [project.scripts]
