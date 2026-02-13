@@ -214,6 +214,7 @@ def build_report(
     local_detrend: LocalDetrendDiagnosticPlotData | None = None
     oot_context: OOTContextPlotData | None = None
     timing_diag: TransitTimingPlotData | None = None
+    timing_summary_source: TransitTimingPlotData | None = None
     alias_diag: AliasHarmonicSummaryData | None = None
     lc_robustness_data: LCRobustnessData | None = None
     odd_even_phase: OddEvenPhasePlotData | None = None
@@ -242,7 +243,7 @@ def build_report(
             ephemeris,
             max_points=max_phase_points,
         )
-        timing_diag = _build_timing_series_plot_data(
+        timing_diag, timing_summary_source = _build_timing_series_plot_data(
             lc,
             candidate,
             max_points=max_timing_points,
@@ -280,6 +281,7 @@ def build_report(
         local_detrend=local_detrend,
         oot_context=oot_context,
         timing_series=timing_diag,
+        timing_summary_series=timing_summary_source,
         alias_summary=alias_diag,
         lc_robustness=lc_robustness_data,
         odd_even_phase=odd_even_phase,
@@ -1024,7 +1026,7 @@ def _build_timing_series_plot_data(
     candidate: Any,
     *,
     max_points: int,
-) -> TransitTimingPlotData:
+) -> tuple[TransitTimingPlotData, TransitTimingPlotData]:
     """Build timing diagnostics payload from bridge timing series."""
     eph = candidate.ephemeris
     series = compute_timing_series(
@@ -1034,15 +1036,23 @@ def _build_timing_series_plot_data(
         duration_hours=eph.duration_hours,
         min_snr=2.0,
     )
-    points = list(series.points)
-    if len(points) > max_points:
-        outliers = [p for p in points if p.is_outlier]
-        non_outliers = [p for p in points if not p.is_outlier]
+    points_full = list(series.points)
+    summary_series = _to_timing_plot_data(
+        points=points_full,
+        rms_seconds=series.rms_seconds,
+        periodicity_score=series.periodicity_score,
+        linear_trend_sec_per_epoch=series.linear_trend_sec_per_epoch,
+    )
+
+    points_plot = points_full
+    if len(points_plot) > max_points:
+        outliers = [p for p in points_plot if p.is_outlier]
+        non_outliers = [p for p in points_plot if not p.is_outlier]
 
         if len(outliers) >= max_points:
             # Keep the strongest anomalies when outliers exceed display budget.
             outliers_sorted = sorted(outliers, key=lambda p: abs(p.oc_seconds), reverse=True)
-            points = sorted(outliers_sorted[:max_points], key=lambda p: p.epoch)
+            points_plot = sorted(outliers_sorted[:max_points], key=lambda p: p.epoch)
         else:
             n_keep_non_outliers = max_points - len(outliers)
             if len(non_outliers) > n_keep_non_outliers and n_keep_non_outliers > 0:
@@ -1050,15 +1060,33 @@ def _build_timing_series_plot_data(
                     np.linspace(0, len(non_outliers) - 1, n_keep_non_outliers)
                 ).astype(int)
                 non_outliers = [non_outliers[int(i)] for i in pick]
-            points = sorted([*outliers, *non_outliers], key=lambda p: p.epoch)
+            points_plot = sorted([*outliers, *non_outliers], key=lambda p: p.epoch)
 
+    return (
+        _to_timing_plot_data(
+            points=points_plot,
+            rms_seconds=series.rms_seconds,
+            periodicity_score=series.periodicity_score,
+            linear_trend_sec_per_epoch=series.linear_trend_sec_per_epoch,
+        ),
+        summary_series,
+    )
+
+
+def _to_timing_plot_data(
+    *,
+    points: list[Any],
+    rms_seconds: float | None,
+    periodicity_score: float | None,
+    linear_trend_sec_per_epoch: float | None,
+) -> TransitTimingPlotData:
     return TransitTimingPlotData(
         epochs=[int(p.epoch) for p in points],
         oc_seconds=[float(p.oc_seconds) for p in points],
         snr=[float(p.snr) for p in points],
-        rms_seconds=series.rms_seconds,
-        periodicity_score=series.periodicity_score,
-        linear_trend_sec_per_epoch=series.linear_trend_sec_per_epoch,
+        rms_seconds=rms_seconds,
+        periodicity_score=periodicity_score,
+        linear_trend_sec_per_epoch=linear_trend_sec_per_epoch,
     )
 
 

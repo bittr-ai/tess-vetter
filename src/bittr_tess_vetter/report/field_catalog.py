@@ -92,6 +92,22 @@ class FieldKey(StrEnum):
     )
     SUMMARY_SECONDARY_SCAN_IS_DEGRADED = "summary.secondary_scan_summary.is_degraded"
     SUMMARY_SECONDARY_SCAN_QUALITY_FLAG_COUNT = "summary.secondary_scan_summary.quality_flag_count"
+    SUMMARY_DATA_GAP = "summary.data_gap_summary"
+    SUMMARY_DATA_GAP_MISSING_FRAC_MAX_IN_COVERAGE = (
+        "summary.data_gap_summary.missing_frac_max_in_coverage"
+    )
+    SUMMARY_DATA_GAP_MISSING_FRAC_MEDIAN_IN_COVERAGE = (
+        "summary.data_gap_summary.missing_frac_median_in_coverage"
+    )
+    SUMMARY_DATA_GAP_N_EPOCHS_MISSING_GE_0P25_IN_COVERAGE = (
+        "summary.data_gap_summary.n_epochs_missing_ge_0p25_in_coverage"
+    )
+    SUMMARY_DATA_GAP_N_EPOCHS_EXCLUDED_NO_COVERAGE = (
+        "summary.data_gap_summary.n_epochs_excluded_no_coverage"
+    )
+    SUMMARY_DATA_GAP_N_EPOCHS_EVALUATED_IN_COVERAGE = (
+        "summary.data_gap_summary.n_epochs_evaluated_in_coverage"
+    )
     SUMMARY_ENRICHMENT = "summary.enrichment"
     PLOT_PHASE_FOLDED = "plot_data.phase_folded"
     PLOT_FULL_LC = "plot_data.full_lc"
@@ -522,6 +538,41 @@ FIELD_CATALOG: dict[FieldKey, FieldSpec] = {
         path=FieldKey.SUMMARY_SECONDARY_SCAN_QUALITY_FLAG_COUNT.value,
         display_name="Secondary Quality Flag Count",
         description="Number of quality flags raised for the secondary scan.",
+    ),
+    FieldKey.SUMMARY_DATA_GAP: FieldSpec(
+        path=FieldKey.SUMMARY_DATA_GAP.value,
+        display_name="Data Gap Summary",
+        description="Scalar rollup of V13 in-coverage missing-cadence diagnostics.",
+    ),
+    FieldKey.SUMMARY_DATA_GAP_MISSING_FRAC_MAX_IN_COVERAGE: FieldSpec(
+        path=FieldKey.SUMMARY_DATA_GAP_MISSING_FRAC_MAX_IN_COVERAGE.value,
+        display_name="Max Missing Fraction In Coverage",
+        description="Maximum missing cadence fraction among epochs with coverage.",
+        units="fraction",
+    ),
+    FieldKey.SUMMARY_DATA_GAP_MISSING_FRAC_MEDIAN_IN_COVERAGE: FieldSpec(
+        path=FieldKey.SUMMARY_DATA_GAP_MISSING_FRAC_MEDIAN_IN_COVERAGE.value,
+        display_name="Median Missing Fraction In Coverage",
+        description="Median missing cadence fraction among epochs with coverage.",
+        units="fraction",
+    ),
+    FieldKey.SUMMARY_DATA_GAP_N_EPOCHS_MISSING_GE_0P25_IN_COVERAGE: FieldSpec(
+        path=FieldKey.SUMMARY_DATA_GAP_N_EPOCHS_MISSING_GE_0P25_IN_COVERAGE.value,
+        display_name="Epochs Missing >= 0.25 In Coverage",
+        description="Count of in-coverage epochs with missing fraction >= 0.25.",
+        units="epochs",
+    ),
+    FieldKey.SUMMARY_DATA_GAP_N_EPOCHS_EXCLUDED_NO_COVERAGE: FieldSpec(
+        path=FieldKey.SUMMARY_DATA_GAP_N_EPOCHS_EXCLUDED_NO_COVERAGE.value,
+        display_name="Epochs Excluded No Coverage",
+        description="Count of candidate epochs excluded because no cadence coverage exists.",
+        units="epochs",
+    ),
+    FieldKey.SUMMARY_DATA_GAP_N_EPOCHS_EVALUATED_IN_COVERAGE: FieldSpec(
+        path=FieldKey.SUMMARY_DATA_GAP_N_EPOCHS_EVALUATED_IN_COVERAGE.value,
+        display_name="Epochs Evaluated In Coverage",
+        description="Count of candidate epochs evaluated with cadence coverage.",
+        units="epochs",
     ),
     FieldKey.SUMMARY_ENRICHMENT: FieldSpec(
         path=FieldKey.SUMMARY_ENRICHMENT.value,

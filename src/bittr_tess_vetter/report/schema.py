@@ -135,6 +135,18 @@ class SecondaryScanSummaryModel(BaseModel):
     quality_flag_count: int = 0
 
 
+class DataGapSummaryModel(BaseModel):
+    """Scalar V13 data-gap diagnostics for in-coverage epochs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    missing_frac_max_in_coverage: float | None = None
+    missing_frac_median_in_coverage: float | None = None
+    n_epochs_missing_ge_0p25_in_coverage: int | None = None
+    n_epochs_excluded_no_coverage: int | None = None
+    n_epochs_evaluated_in_coverage: int | None = None
+
+
 class BundleSummaryModel(BaseModel):
     """Aggregate check counts."""
 
@@ -170,6 +182,7 @@ class ReportSummaryModel(BaseModel):
     alias_scalar_summary: AliasScalarSummaryModel | None = None
     timing_summary: TimingSummaryModel | None = None
     secondary_scan_summary: SecondaryScanSummaryModel | None = None
+    data_gap_summary: DataGapSummaryModel | None = None
 
 
 class ReportPlotDataModel(BaseModel):

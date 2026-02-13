@@ -86,3 +86,22 @@ def test_canonical_hash_alias_collapse_payload_is_order_invariant() -> None:
 
     assert summary_hash == _canonical_sha256(_reverse_key_order(copy.deepcopy(summary)))
     assert plot_data_hash == _canonical_sha256(_reverse_key_order(copy.deepcopy(plot_data)))
+
+
+def test_canonical_hash_data_gap_summary_block_is_order_invariant_and_hash_sensitive() -> None:
+    summary = {
+        "data_gap_summary": {
+            "missing_frac_max_in_coverage": 0.45,
+            "missing_frac_median_in_coverage": 0.2,
+            "n_epochs_missing_ge_0p25_in_coverage": 3,
+            "n_epochs_excluded_no_coverage": 1,
+            "n_epochs_evaluated_in_coverage": 9,
+        },
+    }
+
+    base_hash = _canonical_sha256(summary)
+    assert base_hash == _canonical_sha256(_reverse_key_order(copy.deepcopy(summary)))
+
+    changed = copy.deepcopy(summary)
+    changed["data_gap_summary"]["n_epochs_missing_ge_0p25_in_coverage"] = 4
+    assert _canonical_sha256(changed) != base_hash

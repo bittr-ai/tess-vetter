@@ -136,6 +136,32 @@ def test_report_payload_schema_includes_new_deterministic_summary_blocks() -> No
     assert "alias_scalar_summary" in summary_props
     assert "timing_summary" in summary_props
     assert "secondary_scan_summary" in summary_props
+    assert "data_gap_summary" in summary_props
+
+
+def test_report_payload_accepts_data_gap_summary_scalars_and_nulls() -> None:
+    lc = _make_minimal_lc()
+    candidate = Candidate(
+        ephemeris=Ephemeris(period_days=1.0, t0_btjd=0.0, duration_hours=1.0),
+        depth_ppm=500.0,
+    )
+    payload = build_report(lc, candidate, include_additional_plots=False).to_json()
+    payload = copy.deepcopy(payload)
+    payload["summary"]["data_gap_summary"] = {
+        "missing_frac_max_in_coverage": 0.5,
+        "missing_frac_median_in_coverage": None,
+        "n_epochs_missing_ge_0p25_in_coverage": 2,
+        "n_epochs_excluded_no_coverage": 1,
+        "n_epochs_evaluated_in_coverage": 4,
+    }
+
+    parsed = ReportPayloadModel.model_validate(payload)
+    assert parsed.summary.data_gap_summary is not None
+    assert parsed.summary.data_gap_summary.missing_frac_max_in_coverage == 0.5
+    assert parsed.summary.data_gap_summary.missing_frac_median_in_coverage is None
+    assert parsed.summary.data_gap_summary.n_epochs_missing_ge_0p25_in_coverage == 2
+    assert parsed.summary.data_gap_summary.n_epochs_excluded_no_coverage == 1
+    assert parsed.summary.data_gap_summary.n_epochs_evaluated_in_coverage == 4
 
 
 def test_report_payload_rejects_non_scalar_values_in_new_summary_blocks() -> None:
@@ -173,6 +199,13 @@ def test_report_payload_rejects_non_scalar_values_in_new_summary_blocks() -> Non
         "strongest_dip_depth_ppm": 1500.0,
         "is_degraded": True,
         "quality_flag_count": [1],
+    }
+    payload["summary"]["data_gap_summary"] = {
+        "missing_frac_max_in_coverage": [0.5],
+        "missing_frac_median_in_coverage": {"bad": 0.2},
+        "n_epochs_missing_ge_0p25_in_coverage": 2,
+        "n_epochs_excluded_no_coverage": [1],
+        "n_epochs_evaluated_in_coverage": {"count": 4},
     }
 
     with pytest.raises(Exception):

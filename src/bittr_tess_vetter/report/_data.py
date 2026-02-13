@@ -368,6 +368,16 @@ def _coerce_finite_float(value: Any, *, scale: float = 1.0) -> float | None:
     return out
 
 
+def _coerce_int(value: Any) -> int | None:
+    """Best-effort integer coercion for scalar summary fields."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _model_dump_like(value: Any) -> Any:
     """Serialize model-like objects without requiring pydantic at call sites."""
     if hasattr(value, "model_dump"):
@@ -651,6 +661,28 @@ def _build_secondary_scan_summary(
     }
 
 
+def _build_data_gap_summary(checks: dict[str, CheckResult]) -> dict[str, Any]:
+    """Build scalar V13 in-coverage data-gap summary."""
+    metrics = checks.get("V13").metrics if checks.get("V13") is not None else {}
+    return {
+        "missing_frac_max_in_coverage": _coerce_finite_float(
+            metrics.get("missing_frac_max_in_coverage")
+        ),
+        "missing_frac_median_in_coverage": _coerce_finite_float(
+            metrics.get("missing_frac_median_in_coverage")
+        ),
+        "n_epochs_missing_ge_0p25_in_coverage": _coerce_int(
+            metrics.get("n_epochs_missing_ge_0p25_in_coverage")
+        ),
+        "n_epochs_excluded_no_coverage": _coerce_int(
+            metrics.get("n_epochs_excluded_no_coverage")
+        ),
+        "n_epochs_evaluated_in_coverage": _coerce_int(
+            metrics.get("n_epochs_evaluated_in_coverage")
+        ),
+    }
+
+
 @dataclass
 class ReportData:
     """LC-only report data packet.
@@ -686,6 +718,8 @@ class ReportData:
     local_detrend: LocalDetrendDiagnosticPlotData | None = None
     oot_context: OOTContextPlotData | None = None
     timing_series: TransitTimingPlotData | None = None
+    # Internal full-series timing source for scalar summaries.
+    timing_summary_series: TransitTimingPlotData | None = None
     alias_summary: AliasHarmonicSummaryData | None = None
     lc_robustness: LCRobustnessData | None = None
     enrichment: ReportEnrichmentData | None = None
@@ -751,16 +785,23 @@ class ReportData:
             self.lc_summary, self.timing_series
         )
         summary["alias_scalar_summary"] = _build_alias_scalar_summary(self.alias_summary)
-        summary["timing_summary"] = _build_timing_summary(self.timing_series)
+        timing_summary_source = (
+            self.timing_summary_series
+            if self.timing_summary_series is not None
+            else self.timing_series
+        )
+        summary["timing_summary"] = _build_timing_summary(timing_summary_source)
         summary["secondary_scan_summary"] = _build_secondary_scan_summary(
             self.secondary_scan
         )
+        summary["data_gap_summary"] = _build_data_gap_summary(self.checks)
         reference_ids.update(refs_for_summary_block("odd_even_summary"))
         reference_ids.update(refs_for_summary_block("noise_summary"))
         reference_ids.update(refs_for_summary_block("variability_summary"))
         reference_ids.update(refs_for_summary_block("alias_scalar_summary"))
         reference_ids.update(refs_for_summary_block("timing_summary"))
         reference_ids.update(refs_for_summary_block("secondary_scan_summary"))
+        reference_ids.update(refs_for_summary_block("data_gap_summary"))
         summary["references"] = reference_entries(reference_ids)
 
         if self.bundle is not None:

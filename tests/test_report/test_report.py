@@ -273,6 +273,7 @@ def test_json_schema_keys_and_types() -> None:
     assert isinstance(s["odd_even_summary"], dict)
     assert isinstance(s["noise_summary"], dict)
     assert isinstance(s["variability_summary"], dict)
+    assert isinstance(s["data_gap_summary"], dict)
 
     # Ephemeris
     assert isinstance(s["ephemeris"], dict)
@@ -611,6 +612,43 @@ def test_timing_summary_regression_rules_and_scalar_only() -> None:
     _assert_scalar_only_summary_block(block_a, block_name="timing_summary")
 
 
+def test_timing_summary_invariant_to_max_timing_points_downsampling() -> None:
+    """Timing summary must be invariant to timing plot downsampling budget."""
+    period_days = 2.0
+    time, flux, flux_err = _make_box_transit_lc(
+        period_days=period_days,
+        t0_btjd=0.5,
+        duration_hours=2.5,
+        baseline_days=80.0,
+        cadence_minutes=10.0,
+        seed=123,
+    )
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    candidate = Candidate(
+        ephemeris=Ephemeris(period_days=period_days, t0_btjd=0.5, duration_hours=2.5),
+        depth_ppm=10000.0,
+    )
+
+    low_budget_payload = build_report(
+        lc,
+        candidate,
+        max_timing_points=5,
+    ).to_json()
+    high_budget_payload = build_report(
+        lc,
+        candidate,
+        max_timing_points=500,
+    ).to_json()
+
+    low_timing = low_budget_payload["plot_data"]["timing_series"]["epochs"]
+    high_timing = high_budget_payload["plot_data"]["timing_series"]["epochs"]
+    assert len(low_timing) <= 5
+    assert len(high_timing) >= len(low_timing)
+    assert low_budget_payload["summary"]["timing_summary"] == high_budget_payload["summary"][
+        "timing_summary"
+    ]
+
+
 def test_secondary_scan_summary_regression_naming_unit_and_scalar_only() -> None:
     """Secondary scan summary should expose ppm depth naming and scalar-only fields."""
     report = ReportData(
@@ -659,6 +697,44 @@ def test_secondary_scan_summary_regression_naming_unit_and_scalar_only() -> None
     assert block_a["quality_flag_count"] == 1
 
     _assert_scalar_only_summary_block(block_a, block_name="secondary_scan_summary")
+
+
+def test_data_gap_summary_presence_shape_scalar_only_and_null_safe() -> None:
+    """Data-gap summary should always exist and remain scalar/null-safe."""
+    valid_and_invalid = ok_result(
+        id="V13",
+        name="data_gaps",
+        confidence=0.8,
+        metrics={
+            "missing_frac_max_in_coverage": 0.4,
+            "missing_frac_median_in_coverage": "not-a-number",
+            "n_epochs_missing_ge_0p25_in_coverage": 3,
+            "n_epochs_excluded_no_coverage": "bad-int",
+            "n_epochs_evaluated_in_coverage": 10,
+        },
+    )
+    payload = ReportData(checks={"V13": valid_and_invalid}, checks_run=["V13"]).to_json()
+    block = payload["summary"]["data_gap_summary"]
+
+    assert set(block.keys()).issubset(
+        {
+            "missing_frac_max_in_coverage",
+            "missing_frac_median_in_coverage",
+            "n_epochs_missing_ge_0p25_in_coverage",
+            "n_epochs_excluded_no_coverage",
+            "n_epochs_evaluated_in_coverage",
+        }
+    )
+    assert block["missing_frac_max_in_coverage"] == pytest.approx(0.4)
+    assert block["n_epochs_missing_ge_0p25_in_coverage"] == 3
+    assert block["n_epochs_evaluated_in_coverage"] == 10
+    assert "missing_frac_median_in_coverage" not in block
+    assert "n_epochs_excluded_no_coverage" not in block
+    _assert_scalar_only_summary_block(block, block_name="data_gap_summary")
+
+    null_safe_block = ReportData(checks_run=[]).to_json()["summary"]["data_gap_summary"]
+    assert null_safe_block == {}
+    _assert_scalar_only_summary_block(null_safe_block, block_name="data_gap_summary")
 
 
 def test_lc_robustness_summary_includes_vshape_and_asymmetry_scalars() -> None:

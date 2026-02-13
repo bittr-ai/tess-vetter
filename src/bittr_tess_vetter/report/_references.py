@@ -168,6 +168,7 @@ SUMMARY_METHOD_REFS: dict[str, tuple[str, ...]] = {
     "alias_scalar_summary": ("THOMPSON_2018",),
     "timing_summary": ("IVSHINA_WINN_2022", "FORD_2012", "HOLMAN_MURRAY_2005", "AGOL_2005"),
     "secondary_scan_summary": ("COUGHLIN_LOPEZ_MORALES_2012", "FRESSIN_2013", "THOMPSON_2018"),
+    "data_gap_summary": ("THOMPSON_2018",),
 }
 
 
