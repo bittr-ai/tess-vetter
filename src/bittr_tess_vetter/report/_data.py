@@ -482,6 +482,8 @@ class ReportData:
                 "loto_snr_min": rb.loto_snr_min,
                 "loto_snr_mean": rb.loto_snr_mean,
                 "loto_snr_max": rb.loto_snr_max,
+                "loto_depth_ppm_min": rb.loto_depth_ppm_min,
+                "loto_depth_ppm_max": rb.loto_depth_ppm_max,
                 "loto_depth_shift_ppm_max": rb.loto_depth_shift_ppm_max,
                 "beta_30m": rn.beta_30m,
                 "beta_60m": rn.beta_60m,

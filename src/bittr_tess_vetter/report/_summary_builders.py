@@ -222,6 +222,8 @@ def _build_timing_summary(
             "linear_trend_sec_per_epoch": None,
             "max_abs_oc_seconds": None,
             "max_snr": None,
+            "snr_median": None,
+            "oc_median": None,
             "outlier_count": 0,
             "outlier_fraction": None,
             "deepest_epoch": None,
@@ -237,6 +239,9 @@ def _build_timing_summary(
 
     finite_snr = [v for v in snr_values if v is not None]
     max_snr = float(max(finite_snr)) if finite_snr else None
+    snr_median = float(np.median(finite_snr)) if finite_snr else None
+    finite_oc_signed = [v for v in oc_seconds if v is not None]
+    oc_median = float(np.median(finite_oc_signed)) if finite_oc_signed else None
 
     # Outlier policy is deterministic and derived from existing O-C + RMS only.
     rms_seconds = _coerce_finite_float(timing_series.rms_seconds)
@@ -273,6 +278,8 @@ def _build_timing_summary(
         ),
         "max_abs_oc_seconds": max_abs_oc_seconds,
         "max_snr": max_snr,
+        "snr_median": snr_median,
+        "oc_median": oc_median,
         "outlier_count": int(outlier_count),
         "outlier_fraction": outlier_fraction,
         "deepest_epoch": deepest_epoch,
@@ -285,6 +292,8 @@ def _build_secondary_scan_summary(
     """Build scalar secondary-scan quality and dip rollup."""
     if secondary_scan is None:
         return {
+            "n_raw_points": None,
+            "n_bins": None,
             "phase_coverage_fraction": None,
             "largest_phase_gap": None,
             "n_bins_with_error": None,
@@ -305,6 +314,10 @@ def _build_secondary_scan_summary(
         quality_flag_count = int(len(quality.flags))
 
     return {
+        "n_raw_points": (
+            int(quality.n_raw_points) if quality is not None else int(len(secondary_scan.phase))
+        ),
+        "n_bins": int(quality.n_bins) if quality is not None else int(len(secondary_scan.bin_centers)),
         "phase_coverage_fraction": (
             _coerce_finite_float(quality.phase_coverage_fraction) if quality is not None else None
         ),

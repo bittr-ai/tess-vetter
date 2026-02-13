@@ -133,11 +133,17 @@ def test_report_payload_rejects_invalid_typed_reference_shape() -> None:
 def test_report_payload_schema_includes_new_deterministic_summary_blocks() -> None:
     schema = report_payload_json_schema()
     summary_props = schema["$defs"]["ReportSummaryModel"]["properties"]
+    timing_props = schema["$defs"]["TimingSummaryModel"]["properties"]
+    secondary_props = schema["$defs"]["SecondaryScanSummaryModel"]["properties"]
     assert "alias_scalar_summary" in summary_props
     assert "timing_summary" in summary_props
     assert "secondary_scan_summary" in summary_props
     assert "data_gap_summary" in summary_props
     assert "check_execution" in summary_props
+    assert "snr_median" in timing_props
+    assert "oc_median" in timing_props
+    assert "n_raw_points" in secondary_props
+    assert "n_bins" in secondary_props
 
 
 def test_report_payload_accepts_data_gap_summary_scalars_and_nulls() -> None:
@@ -165,6 +171,48 @@ def test_report_payload_accepts_data_gap_summary_scalars_and_nulls() -> None:
     assert parsed.summary.data_gap_summary.n_epochs_evaluated_in_coverage == 4
 
 
+def test_report_payload_accepts_new_timing_and_secondary_scan_scalar_fields() -> None:
+    lc = _make_minimal_lc()
+    candidate = Candidate(
+        ephemeris=Ephemeris(period_days=1.0, t0_btjd=0.0, duration_hours=1.0),
+        depth_ppm=500.0,
+    )
+    payload = build_report(lc, candidate, include_additional_plots=False).to_json()
+    payload = copy.deepcopy(payload)
+    payload["summary"]["timing_summary"] = {
+        "n_epochs_measured": 3,
+        "rms_seconds": 25.0,
+        "periodicity_score": 0.5,
+        "linear_trend_sec_per_epoch": 0.2,
+        "max_abs_oc_seconds": 30.0,
+        "max_snr": 12.0,
+        "snr_median": 10.0,
+        "oc_median": 15.0,
+        "outlier_count": 1,
+        "outlier_fraction": 1 / 3,
+        "deepest_epoch": 1,
+    }
+    payload["summary"]["secondary_scan_summary"] = {
+        "n_raw_points": 3,
+        "n_bins": 2,
+        "phase_coverage_fraction": 0.4,
+        "largest_phase_gap": 0.6,
+        "n_bins_with_error": 2,
+        "strongest_dip_phase": 0.0,
+        "strongest_dip_depth_ppm": 1500.0,
+        "is_degraded": True,
+        "quality_flag_count": 1,
+    }
+
+    parsed = ReportPayloadModel.model_validate(payload)
+    assert parsed.summary.timing_summary is not None
+    assert parsed.summary.secondary_scan_summary is not None
+    assert parsed.summary.timing_summary.snr_median == pytest.approx(10.0)
+    assert parsed.summary.timing_summary.oc_median == pytest.approx(15.0)
+    assert parsed.summary.secondary_scan_summary.n_raw_points == 3
+    assert parsed.summary.secondary_scan_summary.n_bins == 2
+
+
 def test_report_payload_rejects_non_scalar_values_in_new_summary_blocks() -> None:
     lc = _make_minimal_lc()
     candidate = Candidate(
@@ -188,11 +236,15 @@ def test_report_payload_rejects_non_scalar_values_in_new_summary_blocks() -> Non
         "linear_trend_sec_per_epoch": 0.2,
         "max_abs_oc_seconds": 30.0,
         "max_snr": 12.0,
+        "snr_median": [10.0],
+        "oc_median": {"bad": 15.0},
         "outlier_count": 1,
         "outlier_fraction": [1 / 3],
         "deepest_epoch": 1,
     }
     payload["summary"]["secondary_scan_summary"] = {
+        "n_raw_points": [3],
+        "n_bins": {"bad": 2},
         "phase_coverage_fraction": 0.4,
         "largest_phase_gap": 0.6,
         "n_bins_with_error": 2,

@@ -639,6 +639,8 @@ def test_timing_summary_regression_rules_and_scalar_only() -> None:
         "linear_trend_sec_per_epoch",
         "max_abs_oc_seconds",
         "max_snr",
+        "snr_median",
+        "oc_median",
         "outlier_count",
         "outlier_fraction",
         "deepest_epoch",
@@ -650,6 +652,8 @@ def test_timing_summary_regression_rules_and_scalar_only() -> None:
     assert block_a["rms_seconds"] == pytest.approx(25.0)
     assert block_a["linear_trend_sec_per_epoch"] == pytest.approx(0.2)
     assert block_a["max_abs_oc_seconds"] == pytest.approx(30.0)
+    assert block_a["snr_median"] == pytest.approx(10.0)
+    assert block_a["oc_median"] == pytest.approx(15.0)
 
     _assert_scalar_only_summary_block(block_a, block_name="timing_summary")
 
@@ -726,6 +730,8 @@ def test_secondary_scan_summary_regression_naming_unit_and_scalar_only() -> None
     assert block_a == block_b, "secondary_scan_summary must be deterministic"
 
     assert set(block_a.keys()) == {
+        "n_raw_points",
+        "n_bins",
         "phase_coverage_fraction",
         "largest_phase_gap",
         "n_bins_with_error",
@@ -735,6 +741,8 @@ def test_secondary_scan_summary_regression_naming_unit_and_scalar_only() -> None
         "quality_flag_count",
     }
     assert "strongest_dip_flux" not in block_a
+    assert block_a["n_raw_points"] == 3
+    assert block_a["n_bins"] == 2
     assert block_a["strongest_dip_depth_ppm"] == pytest.approx(1500.0)
     assert block_a["quality_flag_count"] == 1
 
@@ -791,8 +799,17 @@ def test_lc_robustness_summary_includes_vshape_and_asymmetry_scalars() -> None:
     checks = payload["summary"]["checks"]
     assert "v_shape_metric" in block
     assert "asymmetry_sigma" in block
+    assert "loto_depth_ppm_min" in block
+    assert "loto_depth_ppm_max" in block
     assert block["v_shape_metric"] is None or isinstance(block["v_shape_metric"], float)
     assert block["asymmetry_sigma"] is None or isinstance(block["asymmetry_sigma"], float)
+    assert block["loto_depth_ppm_min"] is None or isinstance(block["loto_depth_ppm_min"], float)
+    assert block["loto_depth_ppm_max"] is None or isinstance(block["loto_depth_ppm_max"], float)
+    if (
+        block["loto_depth_ppm_min"] is not None
+        and block["loto_depth_ppm_max"] is not None
+    ):
+        assert block["loto_depth_ppm_min"] <= block["loto_depth_ppm_max"]
     expected_v_shape = checks["V05"]["metrics"].get("tflat_ttotal_ratio")
     expected_asymmetry = checks["V15"]["metrics"].get("asymmetry_sigma")
     if expected_v_shape is not None:

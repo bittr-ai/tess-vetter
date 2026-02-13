@@ -116,6 +116,8 @@ class TimingSummaryModel(BaseModel):
     linear_trend_sec_per_epoch: float | None = None
     max_abs_oc_seconds: float | None = None
     max_snr: float | None = None
+    snr_median: float | None = None
+    oc_median: float | None = None
     outlier_count: int = 0
     outlier_fraction: float | None = None
     deepest_epoch: int | None = None
@@ -126,6 +128,8 @@ class SecondaryScanSummaryModel(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    n_raw_points: int | None = None
+    n_bins: int | None = None
     phase_coverage_fraction: float | None = None
     largest_phase_gap: float | None = None
     n_bins_with_error: int | None = None

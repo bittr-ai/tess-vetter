@@ -78,6 +78,32 @@ Key top-level blocks:
 - Robustness: `lc_robustness`
 - Optional enrichment: `enrichment` with `pixel_diagnostics`, `catalog_context`, `followup_context`
 
+## Contract and Versioning Policy
+
+- `schema_version` (`ReportData.version`, currently `1.0.0`) is the top-level payload contract version.
+- Bump `schema_version` when JSON structure changes in a way that can break clients (add/remove/rename/move top-level or nested contract fields, or change field types).
+- `payload_meta.summary_version` tracks semantic/shape changes scoped to `summary`.
+- `payload_meta.plot_data_version` tracks semantic/shape changes scoped to `plot_data`.
+- Bump `summary_version` or `plot_data_version` for domain-level evolution in that block when top-level contract compatibility is still maintained.
+- `payload_meta.summary_hash` and `payload_meta.plot_data_hash` are deterministic content hashes; treat them as cache keys, not compatibility versions.
+
+## Null and Missing-Key Semantics (Frontend)
+
+- Producer validates payloads, then serializes with `exclude_none=True`; any `None` value is emitted as a missing key.
+- Missing key means "unavailable/not produced" and must not be interpreted as `0`, `false`, or empty string.
+- Some summary blocks are always present but may be empty objects (`{}`) when all values are unavailable (for example `summary.data_gap_summary`).
+- Plot sections are additive/optional: if a plot block key is absent in `plot_data`, that panel should be hidden or rendered as unavailable.
+- Keep frontend reads defensive (`key in object` checks), especially for scalar metrics that may appear/disappear by dataset quality.
+
+## Feature Gating With `payload_meta`
+
+- Use `payload_meta.contract_version` to gate UI logic tied to metric-contract interpretation (current value: `"1"`).
+- `payload_meta.required_metrics_by_check` defines required keys per summary-relevant check (`V01`, `V02`, `V04`, `V05`, `V13`, `V15`).
+- `payload_meta.missing_required_metrics_by_check` lists required keys missing from each *present* check result.
+- `payload_meta.has_missing_required_metrics` is the coarse gate: if `true`, disable or degrade UI features that require strict metric completeness.
+- `payload_meta.metric_keys_by_check` is the observed key set for debugging and telemetry; use it to explain degraded panels.
+- For check-level gating, require both check presence (`summary.checks`/`summary.checks_run`) and no entry for that check in `payload_meta.missing_required_metrics_by_check`.
+
 ## Current HTML Sections
 
 - Light Curve Summary

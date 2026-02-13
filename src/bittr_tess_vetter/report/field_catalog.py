@@ -70,6 +70,8 @@ class FieldKey(StrEnum):
     )
     SUMMARY_LC_ROBUSTNESS_V_SHAPE_METRIC = "summary.lc_robustness_summary.v_shape_metric"
     SUMMARY_LC_ROBUSTNESS_ASYMMETRY_SIGMA = "summary.lc_robustness_summary.asymmetry_sigma"
+    SUMMARY_LC_ROBUSTNESS_LOTO_DEPTH_PPM_MIN = "summary.lc_robustness_summary.loto_depth_ppm_min"
+    SUMMARY_LC_ROBUSTNESS_LOTO_DEPTH_PPM_MAX = "summary.lc_robustness_summary.loto_depth_ppm_max"
     SUMMARY_TIMING = "summary.timing_summary"
     SUMMARY_TIMING_N_EPOCHS_MEASURED = "summary.timing_summary.n_epochs_measured"
     SUMMARY_TIMING_RMS_SECONDS = "summary.timing_summary.rms_seconds"
@@ -77,10 +79,14 @@ class FieldKey(StrEnum):
     SUMMARY_TIMING_LINEAR_TREND_SEC_PER_EPOCH = "summary.timing_summary.linear_trend_sec_per_epoch"
     SUMMARY_TIMING_MAX_ABS_OC_SECONDS = "summary.timing_summary.max_abs_oc_seconds"
     SUMMARY_TIMING_MAX_SNR = "summary.timing_summary.max_snr"
+    SUMMARY_TIMING_SNR_MEDIAN = "summary.timing_summary.snr_median"
+    SUMMARY_TIMING_OC_MEDIAN = "summary.timing_summary.oc_median"
     SUMMARY_TIMING_OUTLIER_COUNT = "summary.timing_summary.outlier_count"
     SUMMARY_TIMING_OUTLIER_FRACTION = "summary.timing_summary.outlier_fraction"
     SUMMARY_TIMING_DEEPEST_EPOCH = "summary.timing_summary.deepest_epoch"
     SUMMARY_SECONDARY_SCAN = "summary.secondary_scan_summary"
+    SUMMARY_SECONDARY_SCAN_N_RAW_POINTS = "summary.secondary_scan_summary.n_raw_points"
+    SUMMARY_SECONDARY_SCAN_N_BINS = "summary.secondary_scan_summary.n_bins"
     SUMMARY_SECONDARY_SCAN_PHASE_COVERAGE_FRACTION = (
         "summary.secondary_scan_summary.phase_coverage_fraction"
     )
@@ -452,6 +458,18 @@ FIELD_CATALOG: dict[FieldKey, FieldSpec] = {
         description="Ingress/egress asymmetry significance from LC robustness FP signals.",
         units="sigma",
     ),
+    FieldKey.SUMMARY_LC_ROBUSTNESS_LOTO_DEPTH_PPM_MIN: FieldSpec(
+        path=FieldKey.SUMMARY_LC_ROBUSTNESS_LOTO_DEPTH_PPM_MIN.value,
+        display_name="LOTO Depth Min",
+        description="Minimum leave-one-transit-out measured depth across epochs.",
+        units="ppm",
+    ),
+    FieldKey.SUMMARY_LC_ROBUSTNESS_LOTO_DEPTH_PPM_MAX: FieldSpec(
+        path=FieldKey.SUMMARY_LC_ROBUSTNESS_LOTO_DEPTH_PPM_MAX.value,
+        display_name="LOTO Depth Max",
+        description="Maximum leave-one-transit-out measured depth across epochs.",
+        units="ppm",
+    ),
     FieldKey.SUMMARY_TIMING: FieldSpec(
         path=FieldKey.SUMMARY_TIMING.value,
         display_name="Timing Summary",
@@ -491,6 +509,18 @@ FIELD_CATALOG: dict[FieldKey, FieldSpec] = {
         description="Largest per-epoch timing-fit signal-to-noise ratio.",
         units="sigma",
     ),
+    FieldKey.SUMMARY_TIMING_SNR_MEDIAN: FieldSpec(
+        path=FieldKey.SUMMARY_TIMING_SNR_MEDIAN.value,
+        display_name="Median Timing SNR",
+        description="Median per-epoch timing-fit signal-to-noise ratio.",
+        units="sigma",
+    ),
+    FieldKey.SUMMARY_TIMING_OC_MEDIAN: FieldSpec(
+        path=FieldKey.SUMMARY_TIMING_OC_MEDIAN.value,
+        display_name="Median O-C",
+        description="Median signed observed-minus-computed timing residual.",
+        units="seconds",
+    ),
     FieldKey.SUMMARY_TIMING_OUTLIER_COUNT: FieldSpec(
         path=FieldKey.SUMMARY_TIMING_OUTLIER_COUNT.value,
         display_name="Timing Outlier Count",
@@ -512,6 +542,16 @@ FIELD_CATALOG: dict[FieldKey, FieldSpec] = {
         path=FieldKey.SUMMARY_SECONDARY_SCAN.value,
         display_name="Secondary Scan Summary",
         description="Scalar rollup of secondary eclipse scan coverage and quality.",
+    ),
+    FieldKey.SUMMARY_SECONDARY_SCAN_N_RAW_POINTS: FieldSpec(
+        path=FieldKey.SUMMARY_SECONDARY_SCAN_N_RAW_POINTS.value,
+        display_name="Raw Secondary Points",
+        description="Number of raw phase-folded points included in the secondary scan.",
+    ),
+    FieldKey.SUMMARY_SECONDARY_SCAN_N_BINS: FieldSpec(
+        path=FieldKey.SUMMARY_SECONDARY_SCAN_N_BINS.value,
+        display_name="Secondary Bins",
+        description="Number of binned phase points in the secondary scan.",
     ),
     FieldKey.SUMMARY_SECONDARY_SCAN_PHASE_COVERAGE_FRACTION: FieldSpec(
         path=FieldKey.SUMMARY_SECONDARY_SCAN_PHASE_COVERAGE_FRACTION.value,

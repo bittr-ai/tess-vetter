@@ -107,6 +107,46 @@ def test_canonical_hash_data_gap_summary_block_is_order_invariant_and_hash_sensi
     assert _canonical_sha256(changed) != base_hash
 
 
+def test_canonical_hash_timing_and_secondary_summary_new_fields_are_order_invariant() -> None:
+    summary = {
+        "timing_summary": {
+            "n_epochs_measured": 3,
+            "rms_seconds": 25.0,
+            "periodicity_score": 0.5,
+            "linear_trend_sec_per_epoch": 0.2,
+            "max_abs_oc_seconds": 30.0,
+            "max_snr": 12.0,
+            "snr_median": 10.0,
+            "oc_median": 15.0,
+            "outlier_count": 1,
+            "outlier_fraction": 1 / 3,
+            "deepest_epoch": 1,
+        },
+        "secondary_scan_summary": {
+            "n_raw_points": 3,
+            "n_bins": 2,
+            "phase_coverage_fraction": 0.4,
+            "largest_phase_gap": 0.6,
+            "n_bins_with_error": 2,
+            "strongest_dip_phase": 0.0,
+            "strongest_dip_depth_ppm": 1500.0,
+            "is_degraded": True,
+            "quality_flag_count": 1,
+        },
+    }
+
+    base_hash = _canonical_sha256(summary)
+    assert base_hash == _canonical_sha256(_reverse_key_order(copy.deepcopy(summary)))
+
+    changed = copy.deepcopy(summary)
+    changed["timing_summary"]["snr_median"] = 11.0
+    assert _canonical_sha256(changed) != base_hash
+
+    changed = copy.deepcopy(summary)
+    changed["secondary_scan_summary"]["n_bins"] = 3
+    assert _canonical_sha256(changed) != base_hash
+
+
 def test_payload_meta_changes_do_not_change_summary_or_plot_hash_inputs() -> None:
     fixture = _load_fixture()
     payload = {
