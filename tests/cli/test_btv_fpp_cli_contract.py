@@ -86,16 +86,21 @@ def test_btv_fpp_success_plumbs_api_params_and_emits_contract(monkeypatch, tmp_p
     assert seen["seed"] == 99
     assert seen["sectors"] == [14, 15]
     assert seen["timeout_seconds"] == 120.0
+    assert seen["stellar_radius"] is None
+    assert seen["stellar_mass"] is None
+    assert seen["tmag"] is None
 
     payload = json.loads(out_path.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == "cli.fpp.v1"
+    assert payload["schema_version"] == "cli.fpp.v2"
     assert "fpp_result" in payload
     assert "provenance" in payload
     assert "inputs" in payload["provenance"]
+    assert payload["provenance"]["depth_source"] == "explicit"
+    assert payload["provenance"]["depth_ppm_used"] == 900.0
     assert payload["provenance"]["resolved_source"] == "cli"
     assert payload["provenance"]["runtime"]["preset"] == "standard"
-    assert payload["provenance"]["runtime"]["seed"] == 99
     assert payload["provenance"]["runtime"]["seed_requested"] == 99
+    assert payload["provenance"]["runtime"]["seed_effective"] == 99
 
 
 def test_btv_fpp_timeout_maps_to_exit_5(monkeypatch) -> None:
@@ -153,6 +158,169 @@ def test_btv_fpp_missing_depth_from_toi_maps_to_exit_4(monkeypatch) -> None:
     )
 
     assert result.exit_code == 4
+
+
+def test_btv_fpp_uses_detrended_depth_before_catalog(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_resolve_candidate_inputs(**_kwargs: Any):
+        return 123, 7.5, 2500.25, 3.0, 600.0, {"source": "toi_catalog", "resolved_from": "exofop"}
+
+    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
+        return object(), [14]
+
+    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
+
+    def _fake_detrended_depth(**_kwargs: Any) -> tuple[float | None, dict[str, Any]]:
+        return 777.0, {"method": "transit_masked_bin_median"}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._estimate_detrended_depth_ppm", _fake_detrended_depth)
+
+    out_path = tmp_path / "detrended.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--detrend",
+            "transit_masked_bin_median",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen["depth_ppm"] == 777.0
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["depth_source"] == "detrended"
+    assert payload["provenance"]["depth_ppm_used"] == 777.0
+    assert payload["provenance"]["inputs"]["depth_ppm_catalog"] == 600.0
+
+
+def test_btv_fpp_depth_precedence_explicit_over_detrended(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {"detrended_called": False}
+
+    def _fake_resolve_candidate_inputs(**_kwargs: Any):
+        return 123, 7.5, 2500.25, 3.0, 900.0, {"source": "cli", "resolved_from": "cli"}
+
+    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
+        return object(), [14]
+
+    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
+
+    def _fake_detrended_depth(**_kwargs: Any) -> tuple[float | None, dict[str, Any]]:
+        seen["detrended_called"] = True
+        return 777.0, {"method": "transit_masked_bin_median"}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._estimate_detrended_depth_ppm", _fake_detrended_depth)
+
+    out_path = tmp_path / "explicit.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--detrend",
+            "transit_masked_bin_median",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen["depth_ppm"] == 900.0
+    assert seen["detrended_called"] is False
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["depth_source"] == "explicit"
+
+
+def test_btv_fpp_stellar_precedence_explicit_over_file_over_auto(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+    stellar_file = tmp_path / "stellar.json"
+    stellar_file.write_text(
+        json.dumps({"stellar": {"radius": 0.8, "mass": 0.7, "tmag": 10.2}}),
+        encoding="utf-8",
+    )
+
+    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
+        return object(), [1]
+
+    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"fpp": 0.2, "nfpp": 0.01, "base_seed": 5}
+
+    def _fake_auto(_tic_id: int) -> dict[str, float | None]:
+        return {"radius": 1.1, "mass": 1.0, "tmag": 11.0}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._load_auto_stellar_inputs", _fake_auto)
+
+    out_path = tmp_path / "stellar_out.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--stellar-file",
+            str(stellar_file),
+            "--stellar-mass",
+            "0.95",
+            "--use-stellar-auto",
+            "--network-ok",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen["stellar_radius"] == 0.8
+    assert seen["stellar_mass"] == 0.95
+    assert seen["tmag"] == 10.2
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["stellar"]["sources"] == {
+        "radius": "file",
+        "mass": "explicit",
+        "tmag": "file",
+    }
 
 
 def test_btv_fpp_lightcurve_missing_maps_to_exit_4(monkeypatch) -> None:

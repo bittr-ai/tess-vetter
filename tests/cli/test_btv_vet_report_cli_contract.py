@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from click.testing import CliRunner
 
 import bittr_tess_vetter.cli.enrich_cli as enrich_cli
@@ -57,7 +58,10 @@ def test_btv_vet_success_writes_bundle_json(monkeypatch, tmp_path: Path) -> None
 
     assert result.exit_code == 0, result.output
     payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "cli.vet.v2"
     assert payload["provenance"]["pipeline_version"] == "0.1.0"
+    assert payload["provenance"]["confidence_semantics_ref"] == "docs/verification/confidence_semantics.md"
+    assert payload["inputs_summary"]["confidence_semantics_ref"] == "docs/verification/confidence_semantics.md"
 
 
 def test_btv_vet_runtime_error_maps_to_exit_2(monkeypatch) -> None:
@@ -181,7 +185,11 @@ def test_btv_report_timeout_maps_to_exit_5(monkeypatch) -> None:
 def test_btv_report_success_writes_payload_and_html(monkeypatch, tmp_path: Path) -> None:
     def _ok(**_kwargs):
         return {
-            "report_json": {"schema_version": "1.0.0", "summary": {}, "plot_data": {}},
+            "report_json": {
+                "schema_version": "cli.report.v2",
+                "provenance": {"vet_artifact": {"provided": False}},
+                "report": {"schema_version": "1.0.0", "summary": {}, "plot_data": {}},
+            },
             "html": "<html></html>",
         }
 
@@ -212,8 +220,144 @@ def test_btv_report_success_writes_payload_and_html(monkeypatch, tmp_path: Path)
 
     assert result.exit_code == 0, result.output
     payload = json.loads(out_path.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == "1.0.0"
+    assert payload["schema_version"] == "cli.report.v2"
+    assert payload["report"]["schema_version"] == "1.0.0"
     assert html_path.read_text(encoding="utf-8") == "<html></html>"
+
+
+def test_btv_report_rejects_malformed_vet_result_file(tmp_path: Path) -> None:
+    vet_path = tmp_path / "vet.json"
+    vet_path.write_text(json.dumps({"not": "a_vet_bundle"}), encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "report",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--vet-result",
+            str(vet_path),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "Invalid vet result file schema" in result.output
+
+
+def test_btv_report_rejects_mismatched_vet_result_candidate(tmp_path: Path) -> None:
+    vet_path = tmp_path / "vet.json"
+    vet_path.write_text(
+        json.dumps(
+            {
+                "results": [],
+                "warnings": [],
+                "provenance": {},
+                "inputs_summary": {
+                    "input_resolution": {
+                        "resolved": {
+                            "tic_id": 999,
+                            "period_days": 10.5,
+                            "t0_btjd": 2000.2,
+                            "duration_hours": 2.5,
+                        }
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "report",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--vet-result",
+            str(vet_path),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "vet result candidate mismatch" in result.output
+
+
+def test_btv_report_forwards_vet_result_payload(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _ok(**kwargs):
+        captured.update(kwargs)
+        return {
+            "report_json": {
+                "schema_version": "cli.report.v2",
+                "provenance": {"vet_artifact": {"provided": True}},
+                "report": {"schema_version": "2.0.0", "summary": {}, "plot_data": {}},
+            },
+            "html": None,
+        }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
+
+    vet_path = tmp_path / "vet.json"
+    vet_path.write_text(
+        json.dumps(
+            {
+                "results": [
+                    {
+                        "id": "V01",
+                        "name": "Odd/even",
+                        "status": "ok",
+                        "confidence": 0.5,
+                        "metrics": {},
+                        "flags": [],
+                        "notes": [],
+                        "provenance": {},
+                        "raw": None,
+                    }
+                ],
+                "warnings": [],
+                "provenance": {},
+                "inputs_summary": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out_path = tmp_path / "report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "report",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--vet-result",
+            str(vet_path),
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["vet_result_path"] == str(vet_path)
+    vet_payload = captured["vet_result"]
+    assert isinstance(vet_payload, dict)
+    assert isinstance(vet_payload.get("results"), list)
 
 
 def test_btv_vet_invalid_extra_param_maps_to_exit_1() -> None:
@@ -414,6 +558,94 @@ def test_btv_vet_pipeline_config_flags_forwarded(monkeypatch, tmp_path: Path) ->
     assert cfg.fail_fast is True
     assert cfg.emit_warnings is True
     assert cfg.extra_params["alpha"] == 1
+
+
+def test_btv_vet_stellar_flags_forwarded_and_emitted(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_execute_vet(**kwargs):
+        captured.update(kwargs)
+        return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+
+    out_path = tmp_path / "vet.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--stellar-radius",
+            "1.11",
+            "--stellar-mass",
+            "0.97",
+            "--stellar-tmag",
+            "10.2",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    stellar_block = captured["stellar_block"]
+    assert stellar_block["radius_rsun"] == pytest.approx(1.11)
+    assert stellar_block["mass_msun"] == pytest.approx(0.97)
+    assert stellar_block["tmag"] == pytest.approx(10.2)
+    assert stellar_block["source"] == "user"
+    stellar_resolution = captured["stellar_resolution"]
+    assert stellar_resolution["sources"] == {"radius": "explicit", "mass": "explicit", "tmag": "explicit"}
+
+
+def test_btv_vet_stellar_file_and_explicit_precedence(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_execute_vet(**kwargs):
+        captured.update(kwargs)
+        return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+
+    stellar_path = tmp_path / "stellar.json"
+    stellar_path.write_text(
+        json.dumps({"stellar": {"radius": 0.9, "mass": 0.8, "tmag": 11.3}}),
+        encoding="utf-8",
+    )
+
+    out_path = tmp_path / "vet.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--stellar-file",
+            str(stellar_path),
+            "--stellar-radius",
+            "1.2",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    stellar_resolution = captured["stellar_resolution"]
+    assert stellar_resolution["values"] == {"radius": 1.2, "mass": 0.8, "tmag": 11.3}
+    assert stellar_resolution["sources"] == {"radius": "explicit", "mass": "file", "tmag": "file"}
 
 
 def test_btv_vet_require_coordinates_without_network_maps_to_exit_4() -> None:

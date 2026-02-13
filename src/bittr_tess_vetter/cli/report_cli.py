@@ -8,9 +8,15 @@ from pathlib import Path
 from typing import Any
 
 import click
+from pydantic import ValidationError
 
 from bittr_tess_vetter.api.generate_report import EnrichmentConfig, generate_report
 from bittr_tess_vetter.api.pipeline import PipelineConfig
+from bittr_tess_vetter.api.report_vet_reuse import (
+    build_cli_report_payload,
+    coerce_vetting_bundle,
+    validate_vet_artifact_candidate_match,
+)
 from bittr_tess_vetter.cli.common_cli import (
     EXIT_DATA_UNAVAILABLE,
     EXIT_INPUT_ERROR,
@@ -77,6 +83,8 @@ def _execute_report(
     include_enrichment: bool,
     custom_views: dict[str, Any] | None,
     pipeline_config: PipelineConfig,
+    vet_result: dict[str, Any] | None,
+    vet_result_path: str | None,
 ) -> dict[str, Any]:
     enrichment_cfg = EnrichmentConfig() if include_enrichment else None
     result = generate_report(
@@ -93,9 +101,26 @@ def _execute_report(
         enrichment_config=enrichment_cfg,
         custom_views=custom_views,
         pipeline_config=pipeline_config,
+        vet_result=vet_result,
     )
+    if result.vet_artifact_reuse is not None:
+        vet_artifact = result.vet_artifact_reuse.to_json(
+            provided=True,
+            path=vet_result_path,
+        )
+    else:
+        vet_artifact = {
+            "provided": False,
+            "path": None,
+            "reused": False,
+            "missing_fields": [],
+            "incremental_compute": [],
+        }
     return {
-        "report_json": result.report_json,
+        "report_json": build_cli_report_payload(
+            report_json=result.report_json,
+            vet_artifact=vet_artifact,
+        ),
         "html": result.html,
     }
 
@@ -117,6 +142,7 @@ def _execute_report(
 @click.option("--include-html", is_flag=True, default=False, help="Include standalone HTML output.")
 @click.option("--include-enrichment", is_flag=True, default=False, help="Include enrichment blocks.")
 @click.option("--custom-view-file", type=str, default=None, help="JSON file for custom views contract.")
+@click.option("--vet-result", type=str, default=None, help="Optional prior vet artifact JSON for check reuse.")
 @click.option("--timeout-seconds", type=float, default=None)
 @click.option("--random-seed", type=int, default=None)
 @click.option("--extra-param", "extra_params", multiple=True, help="Repeat KEY=VALUE entries.")
@@ -145,6 +171,7 @@ def report_command(
     include_html: bool,
     include_enrichment: bool,
     custom_view_file: str | None,
+    vet_result: str | None,
     timeout_seconds: float | None,
     random_seed: int | None,
     extra_params: tuple[str, ...],
@@ -210,6 +237,25 @@ def report_command(
         fail_fast=fail_fast,
         extra_params=parse_extra_params(extra_params),
     )
+    vet_result_payload: dict[str, Any] | None = None
+    if vet_result:
+        vet_result_payload = load_json_file(Path(vet_result), label="vet result file")
+        try:
+            vet_bundle = coerce_vetting_bundle(vet_result_payload)
+            validate_vet_artifact_candidate_match(
+                vet_bundle=vet_bundle,
+                tic_id=tic_id,
+                period_days=period_days,
+                t0_btjd=t0_btjd,
+                duration_hours=duration_hours,
+            )
+        except ValidationError as exc:
+            raise BtvCliError(
+                f"Invalid vet result file schema: {exc}",
+                exit_code=EXIT_INPUT_ERROR,
+            ) from exc
+        except ValueError as exc:
+            raise BtvCliError(str(exc), exit_code=EXIT_INPUT_ERROR) from exc
 
     try:
         if progress_file is not None:
@@ -235,6 +281,8 @@ def report_command(
             include_enrichment=include_enrichment,
             custom_views=_load_custom_views(custom_view_file),
             pipeline_config=config,
+            vet_result=vet_result_payload,
+            vet_result_path=vet_result,
         )
 
         dump_json_output(output["report_json"], out_path)

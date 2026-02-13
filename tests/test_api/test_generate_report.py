@@ -23,6 +23,7 @@ from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.domain.target import StellarParameters, Target
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
+from bittr_tess_vetter.validation.result_schema import CheckResult
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -98,6 +99,28 @@ def _mock_client(
         client.get_target_info.return_value = target
 
     return client
+
+
+def _mock_vet_artifact(check_ids: list[str]) -> dict[str, object]:
+    return {
+        "results": [
+            {
+                "id": check_id,
+                "name": f"check {check_id}",
+                "status": "ok",
+                "confidence": 0.5,
+                "metrics": {},
+                "flags": [],
+                "notes": [],
+                "provenance": {},
+                "raw": None,
+            }
+            for check_id in check_ids
+        ],
+        "warnings": [],
+        "provenance": {"pipeline_version": "test"},
+        "inputs_summary": {},
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -505,6 +528,63 @@ def test_enrichment_budget_knobs_are_passed_through_to_catalog_provenance() -> N
     assert network_cfg["per_request_timeout_seconds"] == 1.25
     assert network_cfg["max_network_seconds"] == 9.5
     assert network_cfg["max_concurrent_requests"] == 2
+
+
+def test_report_reuses_complete_vet_artifact_without_incremental_checks(monkeypatch) -> None:
+    client = _mock_client(sectors=[1])
+
+    def _no_incremental(**kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("incremental checks should not run for complete artifact")
+
+    monkeypatch.setattr("bittr_tess_vetter.api.report_vet_reuse.run_lc_checks", _no_incremental)
+    artifact = _mock_vet_artifact(["V01", "V02", "V04", "V05", "V13", "V15"])
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        vet_result=artifact,
+    )
+
+    assert result.vet_artifact_reuse is not None
+    assert result.vet_artifact_reuse.missing_fields == []
+    assert result.vet_artifact_reuse.incremental_compute == []
+    assert result.vet_artifact_reuse.reused is True
+
+
+def test_report_partial_vet_artifact_runs_only_missing_checks(monkeypatch) -> None:
+    client = _mock_client(sectors=[1])
+    captured: dict[str, object] = {}
+
+    def _only_missing(_lightcurve, **kwargs):  # type: ignore[no-untyped-def]
+        captured["enabled"] = kwargs["enabled"]
+        return [
+            CheckResult(
+                id="V13",
+                name="check V13",
+                status="ok",
+                confidence=0.7,
+                metrics={},
+                flags=[],
+                notes=[],
+                provenance={},
+                raw=None,
+            )
+        ]
+
+    monkeypatch.setattr("bittr_tess_vetter.api.report_vet_reuse.run_lc_checks", _only_missing)
+    artifact = _mock_vet_artifact(["V01", "V02", "V04", "V05", "V15"])
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        vet_result=artifact,
+    )
+
+    assert captured["enabled"] == {"V13"}
+    assert result.vet_artifact_reuse is not None
+    assert result.vet_artifact_reuse.missing_fields == ["checks.V13"]
+    assert result.vet_artifact_reuse.incremental_compute == ["compute_check.V13"]
+    assert "V13" in result.report_json["summary"]["checks"]
 
 
 def test_enrichment_fail_open_true_recovers_block_errors(monkeypatch) -> None:

@@ -22,6 +22,11 @@ from typing import Any
 import numpy as np
 
 from bittr_tess_vetter.api.pipeline import PipelineConfig, VettingPipeline
+from bittr_tess_vetter.api.report_vet_reuse import (
+    VetArtifactReuseSummary,
+    build_report_with_vet_artifact,
+    coerce_vetting_bundle,
+)
 from bittr_tess_vetter.api.stitch import SectorDiagnostics, stitch_lightcurve_data
 from bittr_tess_vetter.api.types import (
     Candidate,
@@ -69,6 +74,7 @@ class GenerateReportResult:
     html: str | None
     sectors_used: list[int]
     stitch_diagnostics: list[SectorDiagnostics] | None
+    vet_artifact_reuse: VetArtifactReuseSummary | None = None
 
 
 @dataclass(frozen=True)
@@ -119,6 +125,7 @@ def generate_report(
     enrichment_config: EnrichmentConfig | None = None,
     custom_views: dict[str, Any] | None = None,
     progress_callback: Callable[[DownloadProgress], None] | None = None,
+    vet_result: VettingBundleResult | dict[str, Any] | None = None,
 ) -> GenerateReportResult:
     """Generate a complete LC-only vetting report for a TESS candidate.
 
@@ -213,25 +220,48 @@ def generate_report(
     )
     candidate = Candidate(ephemeris=ephemeris, depth_ppm=depth_ppm)
 
-    report = build_report(
-        lc,
-        candidate,
-        stellar=stellar,
-        tic_id=tic_id,
-        toi=toi,
-        include_v03=include_v03,
-        bin_minutes=bin_minutes,
-        max_lc_points=max_lc_points,
-        max_phase_points=max_phase_points,
-        include_additional_plots=include_additional_plots,
-        max_transit_windows=max_transit_windows,
-        max_points_per_window=max_points_per_window,
-        max_timing_points=max_timing_points,
-        include_lc_robustness=include_lc_robustness,
-        max_lc_robustness_epochs=max_lc_robustness_epochs,
-        check_config=check_config,
-        custom_views=custom_views,
-    )
+    vet_reuse: VetArtifactReuseSummary | None = None
+    if vet_result is None:
+        report = build_report(
+            lc,
+            candidate,
+            stellar=stellar,
+            tic_id=tic_id,
+            toi=toi,
+            include_v03=include_v03,
+            bin_minutes=bin_minutes,
+            max_lc_points=max_lc_points,
+            max_phase_points=max_phase_points,
+            include_additional_plots=include_additional_plots,
+            max_transit_windows=max_transit_windows,
+            max_points_per_window=max_points_per_window,
+            max_timing_points=max_timing_points,
+            include_lc_robustness=include_lc_robustness,
+            max_lc_robustness_epochs=max_lc_robustness_epochs,
+            check_config=check_config,
+            custom_views=custom_views,
+        )
+    else:
+        report, vet_reuse = build_report_with_vet_artifact(
+            lc=lc,
+            candidate=candidate,
+            vet_bundle=coerce_vetting_bundle(vet_result),
+            stellar=stellar,
+            tic_id=tic_id,
+            toi=toi,
+            include_v03=include_v03,
+            bin_minutes=bin_minutes,
+            check_config=check_config,
+            max_lc_points=max_lc_points,
+            max_phase_points=max_phase_points,
+            include_additional_plots=include_additional_plots,
+            max_transit_windows=max_transit_windows,
+            max_points_per_window=max_points_per_window,
+            max_timing_points=max_timing_points,
+            include_lc_robustness=include_lc_robustness,
+            max_lc_robustness_epochs=max_lc_robustness_epochs,
+            custom_views=custom_views,
+        )
 
     if include_enrichment:
         cfg = enrichment_config or EnrichmentConfig()
@@ -263,6 +293,7 @@ def generate_report(
         html=html,
         sectors_used=sectors_used,
         stitch_diagnostics=stitch_diag,
+        vet_artifact_reuse=vet_reuse,
     )
 
 

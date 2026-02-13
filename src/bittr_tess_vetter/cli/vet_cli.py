@@ -17,6 +17,7 @@ from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
 from bittr_tess_vetter.api.transit_masks import get_out_of_transit_mask
 from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve, TPFStamp
 from bittr_tess_vetter.api.vet import vet_candidate
+from bittr_tess_vetter.cli.stellar_inputs import resolve_stellar_inputs
 from bittr_tess_vetter.cli.common_cli import (
     EXIT_DATA_UNAVAILABLE,
     EXIT_INPUT_ERROR,
@@ -36,12 +37,17 @@ from bittr_tess_vetter.cli.progress_metadata import (
     read_progress_metadata,
     write_progress_metadata_atomic,
 )
+from bittr_tess_vetter.domain.target import StellarParameters
 from bittr_tess_vetter.platform.catalogs.toi_resolution import (
     LookupStatus,
     lookup_tic_coordinates,
     resolve_toi_to_tic_ephemeris_depth,
 )
+from bittr_tess_vetter.platform.io import TargetNotFoundError
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
+
+CLI_VET_SCHEMA_VERSION = "cli.vet.v2"
+CONFIDENCE_SEMANTICS_DOC = "docs/verification/confidence_semantics.md"
 
 
 def _looks_like_timeout(exc: BaseException) -> bool:
@@ -236,6 +242,63 @@ def _extract_resolved_toi(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def _load_auto_stellar_inputs(tic_id: int) -> dict[str, float | None]:
+    target = MASTClient().get_target_info(int(tic_id))
+    return {
+        "radius": target.stellar.radius,
+        "mass": target.stellar.mass,
+        "tmag": target.stellar.tmag,
+    }
+
+
+def _build_stellar_block(
+    *,
+    resolved_stellar: dict[str, float | None],
+    stellar_resolution: dict[str, Any],
+) -> dict[str, Any]:
+    sources_raw = stellar_resolution.get("sources")
+    sources = sources_raw if isinstance(sources_raw, dict) else {}
+
+    mapped_sources = {"explicit": "user", "file": "file", "auto": "tic_catalog"}
+    present_field_sources: set[str] = set()
+    for field in ("radius", "mass", "tmag"):
+        if resolved_stellar.get(field) is None:
+            continue
+        source = str(sources.get(field, "missing"))
+        present_field_sources.add(mapped_sources.get(source, source))
+
+    if len(present_field_sources) == 1:
+        source_label = next(iter(present_field_sources))
+    elif len(present_field_sources) > 1:
+        source_label = "mixed"
+    else:
+        source_label = "missing"
+
+    radius_source = str(sources.get("radius", "missing"))
+    mass_source = str(sources.get("mass", "missing"))
+    quality = "catalog_estimate" if ("auto" in {radius_source, mass_source}) else "explicit"
+
+    missing: list[str] = []
+    if resolved_stellar.get("radius") is None:
+        missing.append("radius_rsun")
+    if resolved_stellar.get("mass") is None:
+        missing.append("mass_msun")
+    if resolved_stellar.get("tmag") is None:
+        missing.append("tmag")
+    missing.extend(["teff_k", "logg_cgs"])
+
+    return {
+        "teff_k": None,
+        "logg_cgs": None,
+        "radius_rsun": resolved_stellar.get("radius"),
+        "mass_msun": resolved_stellar.get("mass"),
+        "tmag": resolved_stellar.get("tmag"),
+        "source": source_label,
+        "quality": quality,
+        "missing": missing,
+    }
+
+
 def _load_sector_measurements(path: str) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     payload = load_json_file(Path(path), label="sector measurements file")
     rows_raw = payload.get("sector_measurements")
@@ -412,6 +475,8 @@ def _apply_cli_payload_contract(
     input_resolution: dict[str, Any] | None,
     coordinate_resolution: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    payload["schema_version"] = CLI_VET_SCHEMA_VERSION
+
     inputs_summary_raw = payload.get("inputs_summary")
     if isinstance(inputs_summary_raw, dict):
         inputs_summary = inputs_summary_raw
@@ -423,6 +488,12 @@ def _apply_cli_payload_contract(
         inputs_summary["input_resolution"] = input_resolution
     if coordinate_resolution is not None:
         inputs_summary["coordinate_resolution"] = coordinate_resolution
+    inputs_summary["confidence_semantics_ref"] = CONFIDENCE_SEMANTICS_DOC
+
+    provenance_raw = payload.get("provenance")
+    provenance = provenance_raw if isinstance(provenance_raw, dict) else {}
+    provenance["confidence_semantics_ref"] = CONFIDENCE_SEMANTICS_DOC
+    payload["provenance"] = provenance
 
     resolved_toi = _extract_resolved_toi(payload)
     effective_toi = toi if toi is not None else resolved_toi
@@ -617,6 +688,9 @@ def _execute_vet(
     input_resolution: dict[str, Any] | None = None,
     coordinate_resolution: dict[str, Any] | None = None,
     sector_measurements: list[dict[str, Any]] | None = None,
+    stellar_params: StellarParameters | None = None,
+    stellar_block: dict[str, Any] | None = None,
+    stellar_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     client = MASTClient()
     lightcurves = client.download_all_sectors(tic_id, flux_type=flux_type, sectors=sectors)
@@ -659,12 +733,14 @@ def _execute_vet(
     )
 
     context: dict[str, Any] | None = None
-    if toi is not None or sector_measurements is not None:
+    if toi is not None or sector_measurements is not None or stellar_block is not None:
         context = {}
         if toi is not None:
             context["toi"] = toi
         if sector_measurements is not None:
             context["sector_measurements"] = sector_measurements
+        if stellar_block is not None:
+            context["stellar"] = stellar_block
 
     detrend_provenance: dict[str, Any] | None = None
     vet_lc = lc
@@ -681,6 +757,7 @@ def _execute_vet(
     bundle = vet_candidate(
         lc=vet_lc,
         candidate=candidate,
+        stellar=stellar_params,
         tpf=tpf,
         network=network_ok,
         ra_deg=ra_deg,
@@ -697,6 +774,13 @@ def _execute_vet(
         provenance_raw = payload.get("provenance")
         provenance = provenance_raw if isinstance(provenance_raw, dict) else {}
         provenance["detrend"] = detrend_provenance
+        payload["provenance"] = provenance
+    if stellar_block is not None:
+        payload["stellar"] = stellar_block
+    if stellar_resolution is not None:
+        provenance_raw = payload.get("provenance")
+        provenance = provenance_raw if isinstance(provenance_raw, dict) else {}
+        provenance["stellar"] = stellar_resolution
         payload["provenance"] = provenance
     return _apply_cli_payload_contract(
         payload=payload,
@@ -831,6 +915,22 @@ def _load_tpf_for_vetting(
 )
 @click.option("--timeout-seconds", type=float, default=None)
 @click.option("--random-seed", type=int, default=None)
+@click.option("--stellar-radius", type=float, default=None, help="Stellar radius (Rsun).")
+@click.option("--stellar-mass", type=float, default=None, help="Stellar mass (Msun).")
+@click.option("--stellar-tmag", type=float, default=None, help="TESS magnitude.")
+@click.option("--stellar-file", type=str, default=None, help="JSON file with stellar inputs.")
+@click.option(
+    "--use-stellar-auto/--no-use-stellar-auto",
+    default=False,
+    show_default=True,
+    help="Resolve stellar inputs from TIC when missing from explicit/file inputs.",
+)
+@click.option(
+    "--require-stellar/--no-require-stellar",
+    default=False,
+    show_default=True,
+    help="Fail unless stellar radius and mass resolve.",
+)
 @click.option(
     "--detrend",
     type=str,
@@ -884,6 +984,12 @@ def vet_command(
     flux_type: str,
     timeout_seconds: float | None,
     random_seed: int | None,
+    stellar_radius: float | None,
+    stellar_mass: float | None,
+    stellar_tmag: float | None,
+    stellar_file: str | None,
+    use_stellar_auto: bool,
+    require_stellar: bool,
     detrend: str | None,
     detrend_bin_hours: float,
     detrend_buffer: float,
@@ -938,6 +1044,39 @@ def vet_command(
         sector_measurements_rows, sector_measurements_provenance = _load_sector_measurements(
             sector_measurements
         )
+    if use_stellar_auto and not network_ok:
+        raise BtvCliError("--use-stellar-auto requires --network-ok", exit_code=EXIT_DATA_UNAVAILABLE)
+
+    try:
+        resolved_stellar, stellar_resolution = resolve_stellar_inputs(
+            tic_id=resolved_tic_id,
+            stellar_radius=stellar_radius,
+            stellar_mass=stellar_mass,
+            stellar_tmag=stellar_tmag,
+            stellar_file=stellar_file,
+            use_stellar_auto=use_stellar_auto,
+            require_stellar=require_stellar,
+            auto_loader=_load_auto_stellar_inputs if use_stellar_auto else None,
+        )
+    except (TargetNotFoundError, LightCurveNotFoundError) as exc:
+        raise BtvCliError(str(exc), exit_code=EXIT_DATA_UNAVAILABLE) from exc
+    except Exception as exc:
+        if isinstance(exc, BtvCliError):
+            raise
+        mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
+        raise BtvCliError(str(exc), exit_code=mapped) from exc
+
+    stellar_params: StellarParameters | None = None
+    if any(resolved_stellar.get(key) is not None for key in ("radius", "mass", "tmag")):
+        stellar_params = StellarParameters(
+            radius=resolved_stellar.get("radius"),
+            mass=resolved_stellar.get("mass"),
+            tmag=resolved_stellar.get("tmag"),
+        )
+    stellar_block = _build_stellar_block(
+        resolved_stellar=resolved_stellar,
+        stellar_resolution=stellar_resolution,
+    )
 
     if tpf_sectors and str(tpf_sector_strategy).lower() != "requested":
         raise BtvCliError(
@@ -1032,6 +1171,9 @@ def vet_command(
             input_resolution=input_resolution,
             coordinate_resolution=coordinate_resolution,
             sector_measurements=sector_measurements_rows,
+            stellar_params=stellar_params,
+            stellar_block=stellar_block,
+            stellar_resolution=stellar_resolution,
         )
         payload = _apply_cli_payload_contract(
             payload=payload,

@@ -19,6 +19,9 @@ from bittr_tess_vetter.cli.common_cli import (
 )
 from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
+from bittr_tess_vetter.validation.detrend_grid_defaults import (
+    resolve_detrend_grid_axes,
+)
 
 
 def _to_float_array(values: Any) -> np.ndarray:
@@ -148,11 +151,14 @@ def _execute_detrend_grid(
         flux_err = _to_float_array(stitched_lc.flux_err)
         flux_err_source = "lightcurve_flux_err"
 
-    effective_downsample_levels = list(downsample_levels) if downsample_levels is not None else [1, 2, 5]
-    effective_outlier_policies = (
-        list(outlier_policies) if outlier_policies is not None else ["none", "sigma_clip_4"]
+    effective_downsample_levels, effective_outlier_policies, effective_detrenders = resolve_detrend_grid_axes(
+        downsample_levels=downsample_levels,
+        outlier_policies=outlier_policies,
+        detrenders=detrenders,
     )
-    effective_detrenders = list(detrenders) if detrenders is not None else ["none", "running_median_0.5d"]
+    cross_product_variant_count = (
+        len(effective_downsample_levels) * len(effective_outlier_policies) * len(effective_detrenders)
+    )
 
     sweep = compute_sensitivity_sweep_numpy(
         time=time,
@@ -197,6 +203,12 @@ def _execute_detrend_grid(
         **payload,
         "ranked_sweep_table": ranked_rows,
         "best_variant": best_variant,
+        "variant_axes": {
+            "downsample_levels": effective_downsample_levels,
+            "outlier_policies": effective_outlier_policies,
+            "detrenders": effective_detrenders,
+            "include_celerite2_sho": bool(include_celerite2_sho),
+        },
         "provenance": {
             "command": "detrend-grid",
             "tic_id": int(tic_id),
@@ -224,6 +236,12 @@ def _execute_detrend_grid(
                 "detrenders": effective_detrenders,
                 "include_celerite2_sho": bool(include_celerite2_sho),
                 "stability_threshold": float(stability_threshold),
+            },
+            "variant_counts": {
+                "cross_product": int(cross_product_variant_count),
+                "with_optional_gp": int(
+                    cross_product_variant_count + (1 if bool(include_celerite2_sho) else 0)
+                ),
             },
             "runtime_caps": {
                 "gp_max_iterations": int(gp_max_iterations),
@@ -279,7 +297,7 @@ def _execute_detrend_grid(
     "detrenders",
     multiple=True,
     type=str,
-    help="Repeatable detrenders (default: none,running_median_0.5d).",
+    help="Repeatable detrenders (default: none,running_median_0.5d,transit_masked_bin_median).",
 )
 @click.option(
     "--include-celerite2-sho/--no-include-celerite2-sho",

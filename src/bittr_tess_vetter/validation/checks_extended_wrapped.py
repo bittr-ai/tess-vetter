@@ -33,6 +33,7 @@ from bittr_tess_vetter.validation.result_schema import (
     ok_result,
     skipped_result,
 )
+from bittr_tess_vetter.validation.systematic_periods import compute_systematic_period_proximity
 
 
 def _valid_lc_arrays(inputs: CheckInputs) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -292,6 +293,24 @@ class EphemerisReliabilityRegimeCheck:
                 "effective_n_points": float(res.concentration.effective_n_points),
             }
 
+            peak_ratio = float(res.period_neighborhood.peak_to_next)
+            if np.isfinite(peak_ratio) and peak_ratio > 1.5:
+                uniqueness_regime = "strong"
+            elif np.isfinite(peak_ratio) and peak_ratio >= 1.1:
+                uniqueness_regime = "moderate"
+            elif np.isfinite(peak_ratio) and peak_ratio >= 1.0:
+                uniqueness_regime = "marginal"
+            else:
+                uniqueness_regime = "confused"
+
+            competing_pct = float(100.0 / peak_ratio) if np.isfinite(peak_ratio) and peak_ratio > 0.0 else float("nan")
+            if np.isfinite(competing_pct):
+                interpretation_note = f"Competing period has {competing_pct:.1f}% of top score"
+            else:
+                interpretation_note = "Competing period fraction is undefined for this run"
+            metrics["uniqueness_regime"] = uniqueness_regime
+            metrics["interpretation_note"] = interpretation_note
+
             raw = res.to_dict()
             # Plot data (schema version 1): include phase-shift null inputs and period neighborhood.
             from bittr_tess_vetter.validation.ephemeris_specificity import (
@@ -484,9 +503,20 @@ class AliasDiagnosticsCheck:
                 "max_phase_shift_event_sigma": float(max_event_sigma),
             }
 
+            systematic_threshold = float(extra.get("systematic_period_threshold_fraction", 0.05))
+            systematic_proximity = compute_systematic_period_proximity(
+                period_days=float(inputs.candidate.period),
+                threshold_fraction=systematic_threshold,
+            )
+            metrics["systematic_nearest_period_days"] = float(systematic_proximity["nearest_systematic_days"])
+            metrics["systematic_fractional_distance"] = float(systematic_proximity["fractional_distance"])
+            metrics["systematic_within_threshold"] = bool(systematic_proximity["within_threshold"])
+            metrics["systematic_threshold_fraction"] = float(systematic_proximity["threshold_fraction"])
+
             raw = {
                 "harmonic_scores": [s.__dict__ for s in scores],
                 "phase_shift_events": [e.__dict__ for e in events],
+                "systematic_period_proximity": systematic_proximity,
                 "plot_data": {
                     "version": 1,
                     "harmonic_labels": [str(s.harmonic) for s in scores],
@@ -497,6 +527,7 @@ class AliasDiagnosticsCheck:
             provenance = {
                 "n_phase_bins": int(extra.get("n_phase_bins", 10)),
                 "event_sigma_threshold": float(extra.get("event_sigma_threshold", 3.0)),
+                "systematic_period_threshold_fraction": systematic_threshold,
             }
             return ok_result(self.id, self.name, metrics=metrics, provenance=provenance, raw=raw)
         except Exception as e:

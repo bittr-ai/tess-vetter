@@ -10,17 +10,23 @@ import numpy as np
 from bittr_tess_vetter.api.sector_metrics import (
     SectorEphemerisMetrics,
     compute_sector_ephemeris_metrics,
-    compute_sector_ephemeris_metrics_from_stitched,
 )
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
+from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 from bittr_tess_vetter.cli.common_cli import (
     EXIT_DATA_UNAVAILABLE,
+    EXIT_INPUT_ERROR,
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
     resolve_optional_output_path,
 )
-from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
+from bittr_tess_vetter.cli.vet_cli import (
+    _detrend_lightcurve_for_vetting,
+    _normalize_detrend_method,
+    _resolve_candidate_inputs,
+    _validate_detrend_args,
+)
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
 
 
@@ -50,6 +56,10 @@ def _execute_measure_sectors(
     duration_hours: float,
     sectors: list[int] | None,
     flux_type: str,
+    detrend: str | None,
+    detrend_bin_hours: float,
+    detrend_buffer: float,
+    detrend_sigma_clip: float,
     input_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     client = MASTClient()
@@ -70,24 +80,56 @@ def _execute_measure_sectors(
             if lc.flux_err is not None
             else np.zeros_like(flux, dtype=np.float64)
         )
+        quality = (
+            np.asarray(lc.quality, dtype=np.int32)
+            if getattr(lc, "quality", None) is not None
+            else np.zeros(len(time), dtype=np.int32)
+        )
         sector = np.full(len(time), int(lc.sector), dtype=np.int32)
-        metrics = compute_sector_ephemeris_metrics(
+    else:
+        stitched_lc, stitched = stitch_lightcurve_data(lightcurves, tic_id=int(tic_id))
+        time = np.asarray(stitched.time, dtype=np.float64)
+        flux = np.asarray(stitched.flux, dtype=np.float64)
+        flux_err = np.asarray(stitched.flux_err, dtype=np.float64)
+        quality = np.asarray(stitched_lc.quality, dtype=np.int32)
+        sector = np.asarray(stitched.sector, dtype=np.int32)
+
+    detrend_provenance: dict[str, Any] | None = None
+    if detrend is not None:
+        candidate = Candidate(
+            ephemeris=Ephemeris(
+                period_days=float(period_days),
+                t0_btjd=float(t0_btjd),
+                duration_hours=float(duration_hours),
+            )
+        )
+        lc_for_detrend = LightCurve(
             time=time,
             flux=flux,
             flux_err=flux_err,
-            sector=sector,
-            period_days=float(period_days),
-            t0_btjd=float(t0_btjd),
-            duration_hours=float(duration_hours),
+            quality=quality,
+            valid_mask=(quality == 0),
         )
-    else:
-        _, stitched = stitch_lightcurve_data(lightcurves, tic_id=int(tic_id))
-        metrics = compute_sector_ephemeris_metrics_from_stitched(
-            stitched=stitched,
-            period_days=float(period_days),
-            t0_btjd=float(t0_btjd),
-            duration_hours=float(duration_hours),
+        detrended_lc, detrend_provenance = _detrend_lightcurve_for_vetting(
+            lc=lc_for_detrend,
+            candidate=candidate,
+            method=str(detrend),
+            bin_hours=float(detrend_bin_hours),
+            buffer_factor=float(detrend_buffer),
+            clip_sigma=float(detrend_sigma_clip),
         )
+        flux = np.asarray(detrended_lc.flux, dtype=np.float64)
+        flux_err = np.asarray(detrended_lc.flux_err, dtype=np.float64)
+
+    metrics = compute_sector_ephemeris_metrics(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        sector=sector,
+        period_days=float(period_days),
+        t0_btjd=float(t0_btjd),
+        duration_hours=float(duration_hours),
+    )
 
     sector_measurements = [
         _metric_to_measurement(metric, duration_hours=float(duration_hours)) for metric in metrics
@@ -107,6 +149,11 @@ def _execute_measure_sectors(
             "flux_type": str(flux_type).lower(),
             "requested_sectors": [int(s) for s in sectors] if sectors else None,
             "loaded_sectors": sectors_loaded,
+            "sectors_requested": [int(s) for s in sectors] if sectors else None,
+            "sectors_used": sectors_loaded,
+            "detrend": detrend_provenance
+            if detrend_provenance is not None
+            else {"applied": False, "method": None},
             "input_resolution": input_resolution,
         },
     }
@@ -133,6 +180,15 @@ def _execute_measure_sectors(
     show_default=True,
 )
 @click.option(
+    "--detrend",
+    type=click.Choice(["transit_masked_bin_median"], case_sensitive=False),
+    default=None,
+    help="Optional pre-measurement detrend method (matches `btv vet --detrend`).",
+)
+@click.option("--detrend-bin-hours", type=float, default=6.0, show_default=True)
+@click.option("--detrend-buffer", type=float, default=2.0, show_default=True)
+@click.option("--detrend-sigma-clip", type=float, default=5.0, show_default=True)
+@click.option(
     "--out",
     "output_path_arg",
     type=str,
@@ -150,6 +206,10 @@ def measure_sectors_command(
     network_ok: bool,
     sectors: tuple[int, ...],
     flux_type: str,
+    detrend: str | None,
+    detrend_bin_hours: float,
+    detrend_buffer: float,
+    detrend_sigma_clip: float,
     output_path_arg: str,
 ) -> None:
     """Measure per-sector transit depths for V21 sector consistency checks."""
@@ -171,6 +231,18 @@ def measure_sectors_command(
         duration_hours=duration_hours,
         depth_ppm=depth_ppm,
     )
+    detrend_method = _normalize_detrend_method(detrend)
+    if detrend_method is not None:
+        try:
+            _validate_detrend_args(
+                detrend_bin_hours=float(detrend_bin_hours),
+                detrend_buffer=float(detrend_buffer),
+                detrend_sigma_clip=float(detrend_sigma_clip),
+            )
+        except BtvCliError:
+            raise
+        except Exception as exc:
+            raise BtvCliError(str(exc), exit_code=EXIT_INPUT_ERROR) from exc
 
     try:
         payload = _execute_measure_sectors(
@@ -180,6 +252,10 @@ def measure_sectors_command(
             duration_hours=resolved_duration_hours,
             sectors=list(sectors) if sectors else None,
             flux_type=str(flux_type).lower(),
+            detrend=detrend_method,
+            detrend_bin_hours=float(detrend_bin_hours),
+            detrend_buffer=float(detrend_buffer),
+            detrend_sigma_clip=float(detrend_sigma_clip),
             input_resolution=input_resolution,
         )
     except LightCurveNotFoundError as exc:
