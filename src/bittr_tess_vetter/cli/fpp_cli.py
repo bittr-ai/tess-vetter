@@ -206,7 +206,8 @@ def fpp_command(
             "runtime": {
                 "preset": str(preset).lower(),
                 "replicates": replicates,
-                "seed": seed,
+                "seed": result.get("base_seed", seed),
+                "seed_requested": seed,
                 "timeout_seconds": timeout_seconds,
                 "network_ok": bool(network_ok),
             },

@@ -148,6 +148,12 @@ def _execute_detrend_grid(
         flux_err = _to_float_array(stitched_lc.flux_err)
         flux_err_source = "lightcurve_flux_err"
 
+    effective_downsample_levels = list(downsample_levels) if downsample_levels is not None else [1, 2, 5]
+    effective_outlier_policies = (
+        list(outlier_policies) if outlier_policies is not None else ["none", "sigma_clip_4"]
+    )
+    effective_detrenders = list(detrenders) if detrenders is not None else ["none", "running_median_0.5d"]
+
     sweep = compute_sensitivity_sweep_numpy(
         time=time,
         flux=flux,
@@ -156,9 +162,9 @@ def _execute_detrend_grid(
         t0_btjd=float(t0_btjd),
         duration_hours=float(duration_hours),
         config=SmoothTemplateConfig(),
-        downsample_levels=downsample_levels,
-        outlier_policies=outlier_policies,
-        detrenders=detrenders,
+        downsample_levels=effective_downsample_levels,
+        outlier_policies=effective_outlier_policies,
+        detrenders=effective_detrenders,
         include_celerite2_sho=bool(include_celerite2_sho),
         stability_threshold=float(stability_threshold),
         random_seed=int(random_seed),
@@ -206,9 +212,16 @@ def _execute_detrend_grid(
             "input_resolution": input_resolution,
             "flux_err_source": flux_err_source,
             "grid_config": {
-                "downsample_levels": downsample_levels,
-                "outlier_policies": outlier_policies,
-                "detrenders": detrenders,
+                "downsample_levels": list(downsample_levels) if downsample_levels is not None else None,
+                "outlier_policies": list(outlier_policies) if outlier_policies is not None else None,
+                "detrenders": list(detrenders) if detrenders is not None else None,
+                "include_celerite2_sho": bool(include_celerite2_sho),
+                "stability_threshold": float(stability_threshold),
+            },
+            "effective_grid_config": {
+                "downsample_levels": effective_downsample_levels,
+                "outlier_policies": effective_outlier_policies,
+                "detrenders": effective_detrenders,
                 "include_celerite2_sho": bool(include_celerite2_sho),
                 "stability_threshold": float(stability_threshold),
             },
