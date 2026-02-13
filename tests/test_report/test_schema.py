@@ -45,6 +45,53 @@ def test_report_to_json_conforms_to_payload_model() -> None:
     assert parsed.plot_data.phase_folded is not None
 
 
+def test_report_to_json_has_no_unknown_summary_or_plot_data_keys() -> None:
+    # CI strict-mode contract guard: runtime schema remains extra='allow'.
+    allowed_summary_keys = {
+        "alias_scalar_summary",
+        "bundle_summary",
+        "check_execution",
+        "checks",
+        "checks_run",
+        "data_gap_summary",
+        "ephemeris",
+        "enrichment",
+        "input_depth_ppm",
+        "lc_robustness_summary",
+        "lc_summary",
+        "noise_summary",
+        "odd_even_summary",
+        "references",
+        "secondary_scan_summary",
+        "stellar",
+        "tic_id",
+        "timing_summary",
+        "toi",
+        "variability_summary",
+    }
+    allowed_plot_data_keys = {
+        "check_overlays",
+        "full_lc",
+        "lc_robustness",
+        "phase_folded",
+    }
+
+    lc = _make_minimal_lc()
+    candidate = Candidate(
+        ephemeris=Ephemeris(period_days=1.0, t0_btjd=0.0, duration_hours=1.0),
+        depth_ppm=500.0,
+    )
+    payload = build_report(lc, candidate, include_additional_plots=False).to_json()
+
+    unexpected_summary_keys = sorted(set(payload["summary"]) - allowed_summary_keys)
+    unexpected_plot_data_keys = sorted(set(payload["plot_data"]) - allowed_plot_data_keys)
+    assert not unexpected_summary_keys and not unexpected_plot_data_keys, (
+        "Unexpected producer keys detected. "
+        f"summary={unexpected_summary_keys}, plot_data={unexpected_plot_data_keys}. "
+        "If this is intentional, update the strict guard allowlists in this test."
+    )
+
+
 def test_field_catalog_paths_match_enum_values() -> None:
     for key, spec in FIELD_CATALOG.items():
         assert isinstance(key, FieldKey)

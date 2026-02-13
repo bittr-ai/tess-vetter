@@ -1025,6 +1025,53 @@ def test_build_report_with_flux_err_none() -> None:
     assert isinstance(serialized, str)
 
 
+def test_timing_summary_flux_err_none_matches_flux_err_present_signal() -> None:
+    """Timing summary should remain informative when flux_err is omitted."""
+    period_days = 2.0
+    time, flux, flux_err = _make_box_transit_lc(
+        period_days=period_days,
+        t0_btjd=0.5,
+        duration_hours=2.5,
+        baseline_days=80.0,
+        cadence_minutes=10.0,
+        depth_frac=0.01,
+        noise_ppm=50.0,
+        seed=123,
+    )
+    candidate = Candidate(
+        ephemeris=Ephemeris(period_days=period_days, t0_btjd=0.5, duration_hours=2.5),
+        depth_ppm=10000.0,
+    )
+
+    with_err_payload = build_report(
+        LightCurve(time=time, flux=flux, flux_err=flux_err),
+        candidate,
+    ).to_json()
+    none_err_payload = build_report(
+        LightCurve(time=time, flux=flux, flux_err=None),
+        candidate,
+    ).to_json()
+
+    timing_with_err = with_err_payload["summary"]["timing_summary"]
+    timing_none_err = none_err_payload["summary"]["timing_summary"]
+
+    assert timing_with_err["n_epochs_measured"] > 0
+    assert timing_none_err["n_epochs_measured"] > 0
+    assert timing_none_err["n_epochs_measured"] >= timing_with_err["n_epochs_measured"] // 2
+
+    for key in (
+        "rms_seconds",
+        "max_abs_oc_seconds",
+        "snr_median",
+        "oc_median",
+        "deepest_epoch",
+    ):
+        assert timing_with_err[key] is not None
+        assert timing_none_err[key] is not None
+
+    assert set(timing_none_err.keys()) == set(timing_with_err.keys())
+
+
 # ---------------------------------------------------------------------------
 # Edge case: single transit visible
 # ---------------------------------------------------------------------------

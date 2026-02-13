@@ -133,13 +133,59 @@ def _depth_ppm_to_flux(depth_ppm: float | None) -> float | None:
     return float(1.0 - (depth_ppm / 1e6))
 
 
+def _estimate_flux_err_fallback(flux: np.ndarray) -> float:
+    """Estimate deterministic positive flux uncertainty from robust scatter."""
+    finite_flux = np.asarray(flux[np.isfinite(flux)], dtype=np.float64)
+    if len(finite_flux) == 0:
+        return 1e-6
+
+    # Prefer point-to-point scatter to suppress low-frequency variability.
+    sigma_pp: float | None = None
+    if len(finite_flux) >= 3:
+        diffs = np.diff(finite_flux)
+        mad_diff = float(np.median(np.abs(diffs - np.median(diffs))))
+        if np.isfinite(mad_diff) and mad_diff > 0.0:
+            sigma_pp = (1.4826 * mad_diff) / np.sqrt(2.0)
+
+    mad_flux = float(np.median(np.abs(finite_flux - np.median(finite_flux))))
+    sigma_flux = (1.4826 * mad_flux) if np.isfinite(mad_flux) and mad_flux > 0.0 else 0.0
+
+    sigma = sigma_pp if sigma_pp is not None else sigma_flux
+    if not np.isfinite(sigma) or sigma <= 0.0:
+        sigma = sigma_flux
+    if not np.isfinite(sigma) or sigma <= 0.0:
+        sigma = float(np.std(finite_flux))
+    if not np.isfinite(sigma) or sigma <= 0.0:
+        sigma = 1e-6
+    return float(max(sigma, 1e-12))
+
+
 def _to_internal_lightcurve(lc: Any) -> LightCurveData:
     """Convert a report input light curve to internal immutable LightCurveData."""
     to_internal = getattr(lc, "to_internal", None)
     if callable(to_internal):
         internal = to_internal()
         if isinstance(internal, LightCurveData):
-            return internal
+            if getattr(lc, "flux_err", None) is not None:
+                return internal
+            internal_flux = np.asarray(internal.flux, dtype=np.float64)
+            internal_valid = np.asarray(internal.valid_mask, dtype=np.bool_)
+            flux_for_estimate = internal_flux[internal_valid & np.isfinite(internal_flux)]
+            if flux_for_estimate.size == 0:
+                flux_for_estimate = internal_flux[np.isfinite(internal_flux)]
+            fallback_sigma = _estimate_flux_err_fallback(flux_for_estimate)
+            flux_err = np.full(len(internal.time), fallback_sigma, dtype=np.float64)
+            return LightCurveData(
+                time=np.asarray(internal.time, dtype=np.float64),
+                flux=np.asarray(internal.flux, dtype=np.float64),
+                flux_err=flux_err,
+                quality=np.asarray(internal.quality, dtype=np.int32),
+                valid_mask=np.asarray(internal.valid_mask, dtype=np.bool_),
+                tic_id=int(internal.tic_id),
+                sector=int(internal.sector),
+                cadence_seconds=float(internal.cadence_seconds),
+                provenance=internal.provenance,
+            )
 
     time = np.asarray(lc.time, dtype=np.float64)
     flux = np.asarray(lc.flux, dtype=np.float64)
@@ -158,7 +204,21 @@ def _to_internal_lightcurve(lc: Any) -> LightCurveData:
                 f"got {len(flux_err)} vs {len(time)}"
             )
     else:
-        flux_err = np.zeros(n_points, dtype=np.float64)
+        valid_mask_in = getattr(lc, "valid_mask", None)
+        if valid_mask_in is not None:
+            provisional_valid = np.asarray(valid_mask_in, dtype=np.bool_)
+            if provisional_valid.shape != time.shape:
+                raise ValueError(
+                    "valid_mask must have the same length as time/flux, "
+                    f"got {len(provisional_valid)} vs {len(time)}"
+                )
+        else:
+            provisional_valid = np.ones(n_points, dtype=np.bool_)
+        flux_for_estimate = flux[provisional_valid & np.isfinite(flux)]
+        if flux_for_estimate.size == 0:
+            flux_for_estimate = flux[np.isfinite(flux)]
+        fallback_sigma = _estimate_flux_err_fallback(flux_for_estimate)
+        flux_err = np.full(n_points, fallback_sigma, dtype=np.float64)
 
     quality_in = getattr(lc, "quality", None)
     if quality_in is not None:

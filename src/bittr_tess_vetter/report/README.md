@@ -139,7 +139,11 @@ Use `generate_report(..., enrichment_config=...)` for non-LC controls:
 
 When adding new report capabilities:
 - Add structured fields in `_data.py` first.
-- Compute/assemble in `_build.py` (or API layer for non-LC enrichment).
+- Keep `build_report(...)` orchestration and report assembly flow in `_build_core.py`.
+- Add or extend panel payload builders in `_build_panels.py`.
+- Put reusable build helpers in `_build_utils.py`.
+- Keep `_build.py` as legacy import path exposing `build_report` only.
+- Use API-layer modules for non-LC enrichment assembly.
 - Keep renderer (`_render_html.py`) presentation-only.
 - Prefer additive fields and deterministic defaults.
 - Keep JSON primitive-safe (`dict/list/str/int/float/bool/null`).
@@ -148,5 +152,8 @@ When adding new report capabilities:
 
 - `__init__.py`: public exports
 - `_data.py`: report dataclasses + serialization
-- `_build.py`: report assembly logic
+- `_build_core.py`: `build_report(...)` orchestration and core assembly
+- `_build_panels.py`: panel/diagnostic payload builders
+- `_build_utils.py`: shared build helpers
+- `_build.py`: legacy module path exposing `build_report` only
 - `_render_html.py`: HTML renderer
