@@ -20,7 +20,8 @@ References:
 from __future__ import annotations
 
 import warnings
-from typing import Any
+from dataclasses import asdict
+from typing import TYPE_CHECKING, Any
 
 from bittr_tess_vetter.api.references import (
     COUGHLIN_2016,
@@ -39,8 +40,18 @@ from bittr_tess_vetter.validation.result_schema import (
     VettingBundleResult as SchemaVettingBundleResult,
 )
 
+if TYPE_CHECKING:
+    from bittr_tess_vetter.api.pipeline import PipelineConfig
+
 # Module-level references for programmatic access (generated from central registry)
 REFERENCES = [ref.to_dict() for ref in [COUGHLIN_2016, THOMPSON_2018, GUERRERO_2021]]
+
+
+def _pipeline_config_provenance(config: PipelineConfig) -> dict[str, Any]:
+    """Serialize effective pipeline config into provenance-safe primitives."""
+    data = asdict(config)
+    data["extra_params"] = dict(data.get("extra_params", {}))
+    return data
 
 
 @cites(
@@ -61,6 +72,7 @@ def vet_candidate(
     preset: str = "default",
     checks: list[str] | None = None,
     context: dict[str, Any] | None = None,
+    pipeline_config: PipelineConfig | None = None,
 ) -> SchemaVettingBundleResult:
     """Run vetting checks on a transit candidate.
 
@@ -82,6 +94,7 @@ def vet_candidate(
             - "extended": default set plus additional metrics-only diagnostics (V16+)
         checks: Optional list of check IDs to run. If None, runs all registered.
         context: Additional context for checks.
+        pipeline_config: Optional PipelineConfig forwarded to VettingPipeline.
 
     Returns:
         SchemaVettingBundleResult with all check results.
@@ -109,7 +122,7 @@ def vet_candidate(
         [2] Thompson et al. 2018, ApJS 235, 38 (2018ApJS..235...38T)
             Section 3: Check execution ordering and aggregation
     """
-    from bittr_tess_vetter.api.pipeline import VettingPipeline
+    from bittr_tess_vetter.api.pipeline import PipelineConfig, VettingPipeline
     from bittr_tess_vetter.domain.detection import TransitCandidate
     from bittr_tess_vetter.validation.register_defaults import (
         register_all_defaults,
@@ -146,7 +159,12 @@ def vet_candidate(
     )
 
     # Create and run pipeline
-    pipeline = VettingPipeline(checks=checks, registry=registry)
+    effective_pipeline_config = pipeline_config or PipelineConfig()
+    pipeline = VettingPipeline(
+        checks=checks,
+        registry=registry,
+        config=effective_pipeline_config,
+    )
     bundle = pipeline.run(
         lc_internal,
         candidate_internal,
@@ -157,6 +175,9 @@ def vet_candidate(
         dec_deg=dec_deg,
         tic_id=tic_id,
         context=context,
+    )
+    bundle.provenance["pipeline_config"] = _pipeline_config_provenance(
+        effective_pipeline_config
     )
     return bundle
 
@@ -179,6 +200,7 @@ def vet_many(
     preset: str = "default",
     checks: list[str] | None = None,
     context: dict[str, Any] | None = None,
+    pipeline_config: PipelineConfig | None = None,
 ) -> tuple[list[SchemaVettingBundleResult], list[dict[str, Any]]]:
     """Run vetting for multiple candidates against one light curve.
 
@@ -186,7 +208,7 @@ def vet_many(
     run multiple candidate ephemerides (or multi-planet candidates) on the same
     light curve and get both full bundles and a compact summary table.
     """
-    from bittr_tess_vetter.api.pipeline import VettingPipeline
+    from bittr_tess_vetter.api.pipeline import PipelineConfig, VettingPipeline
     from bittr_tess_vetter.domain.detection import TransitCandidate
     from bittr_tess_vetter.validation.register_defaults import (
         register_all_defaults,
@@ -215,7 +237,12 @@ def vet_many(
             )
         )
 
-    pipeline = VettingPipeline(checks=checks, registry=registry)
+    effective_pipeline_config = pipeline_config or PipelineConfig()
+    pipeline = VettingPipeline(
+        checks=checks,
+        registry=registry,
+        config=effective_pipeline_config,
+    )
     bundles, summary = pipeline.run_many(
         lc_internal,
         candidates_internal,
@@ -227,6 +254,9 @@ def vet_many(
         tic_id=tic_id,
         context=context,
     )
+    config_provenance = _pipeline_config_provenance(effective_pipeline_config)
+    for bundle in bundles:
+        bundle.provenance["pipeline_config"] = dict(config_provenance)
     return (bundles, summary)
 
 

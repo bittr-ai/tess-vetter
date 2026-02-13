@@ -16,7 +16,7 @@ import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, wait
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
 import numpy as np
@@ -114,6 +114,7 @@ def generate_report(
     include_lc_robustness: bool = True,
     max_lc_robustness_epochs: int = 128,
     check_config: dict[str, dict[str, Any]] | None = None,
+    pipeline_config: PipelineConfig | None = None,
     include_enrichment: bool = False,
     enrichment_config: EnrichmentConfig | None = None,
     custom_views: dict[str, Any] | None = None,
@@ -149,6 +150,8 @@ def generate_report(
         include_lc_robustness: If True, include LC robustness payloads.
         max_lc_robustness_epochs: Max epochs in LC robustness payload.
         check_config: Per-check config overrides.
+        pipeline_config: Optional PipelineConfig forwarded to enrichment-tier
+            VettingPipeline runs (catalog/pixel blocks).
         include_enrichment: If True, attach non-LC enrichment scaffold blocks.
         enrichment_config: Optional config for enrichment scaffolding.
         custom_views: Optional authored custom-view contract payload.
@@ -246,6 +249,7 @@ def generate_report(
             sector_times=sector_times,
             target=target if "target" in locals() else None,
             config=cfg,
+            pipeline_config=pipeline_config,
         )
 
     report_json = report.to_json()
@@ -285,6 +289,7 @@ def _build_enrichment_data(
     sector_times: dict[int, np.ndarray],
     target: Any | None,
     config: EnrichmentConfig,
+    pipeline_config: PipelineConfig | None = None,
 ) -> ReportEnrichmentData:
     """Build enrichment blocks using existing pipeline tiers."""
     started = time.monotonic()
@@ -330,6 +335,7 @@ def _build_enrichment_data(
                     "network": config.network,
                     "max_catalog_rows": int(config.max_catalog_rows),
                     "config": config,
+                    "pipeline_config": pipeline_config,
                 },
             )
         )
@@ -348,6 +354,7 @@ def _build_enrichment_data(
                     "target": target,
                     "mast_client": mast_client,
                     "config": config,
+                    "pipeline_config": pipeline_config,
                 },
             )
         )
@@ -425,6 +432,7 @@ def _tier_bundle(
     tpf: TPFStamp | None = None,
     check_timeout_seconds: float | None = None,
     check_ids_override: list[str] | None = None,
+    pipeline_config: PipelineConfig | None = None,
 ) -> VettingBundleResult:
     registry = CheckRegistry()
     register_all_defaults(registry)
@@ -433,13 +441,14 @@ def _tier_bundle(
         if check_ids_override is not None
         else [c.id for c in registry.list_by_tier(tier)]
     )
+    effective_pipeline_config = _resolve_effective_pipeline_config(
+        pipeline_config=pipeline_config,
+        check_timeout_seconds=check_timeout_seconds,
+    )
     pipeline = VettingPipeline(
         checks=check_ids,
         registry=registry,
-        config=PipelineConfig(
-            timeout_seconds=check_timeout_seconds,
-            extra_params={"request_timeout_seconds": check_timeout_seconds},
-        ),
+        config=effective_pipeline_config,
     )
     lc_internal = lc_api.to_internal(tic_id=tic_id)
     candidate_internal = TransitCandidate(
@@ -451,7 +460,7 @@ def _tier_bundle(
     )
     ra = getattr(target, "ra", None) if target is not None else None
     dec = getattr(target, "dec", None) if target is not None else None
-    return pipeline.run(
+    bundle = pipeline.run(
         lc_internal,
         candidate_internal,
         stellar=stellar if stellar is not None else getattr(target, "stellar", None),
@@ -460,6 +469,33 @@ def _tier_bundle(
         ra_deg=ra,
         dec_deg=dec,
         tic_id=tic_id,
+    )
+    bundle.provenance["pipeline_config"] = asdict(effective_pipeline_config)
+    return bundle
+
+
+def _resolve_effective_pipeline_config(
+    *,
+    pipeline_config: PipelineConfig | None,
+    check_timeout_seconds: float | None,
+) -> PipelineConfig:
+    """Merge optional user config with enrichment timeout defaults."""
+    base = pipeline_config or PipelineConfig()
+    extra_params = dict(base.extra_params)
+    if "request_timeout_seconds" not in extra_params:
+        extra_params["request_timeout_seconds"] = check_timeout_seconds
+
+    timeout_seconds = (
+        base.timeout_seconds
+        if base.timeout_seconds is not None
+        else check_timeout_seconds
+    )
+    return PipelineConfig(
+        timeout_seconds=timeout_seconds,
+        random_seed=base.random_seed,
+        emit_warnings=base.emit_warnings,
+        fail_fast=base.fail_fast,
+        extra_params=extra_params,
     )
 
 
@@ -553,6 +589,7 @@ def _run_catalog_context(
     network: bool,
     max_catalog_rows: int,
     config: EnrichmentConfig,
+    pipeline_config: PipelineConfig | None = None,
 ) -> EnrichmentBlockData:
     bundle = _tier_bundle(
         tier=CheckTier.CATALOG,
@@ -566,6 +603,7 @@ def _run_catalog_context(
         # V06 (Vizier nearby-EB query) is intentionally excluded from inline
         # report enrichment due endpoint latency flakiness. Keep V07 only.
         check_ids_override=["V07"],
+        pipeline_config=pipeline_config,
     )
     check_rows = []
     for result in bundle.results:
@@ -674,6 +712,7 @@ def _run_pixel_diagnostics(
     target: Any | None,
     mast_client: MASTClient,
     config: EnrichmentConfig,
+    pipeline_config: PipelineConfig | None = None,
 ) -> EnrichmentBlockData:
     if not config.fetch_tpf:
         return _skipped_enrichment_block("TPF_FETCH_DISABLED")
@@ -805,6 +844,7 @@ def _run_pixel_diagnostics(
         network=config.network,
         tpf=tpf_obj,
         check_timeout_seconds=float(config.per_request_timeout_seconds),
+        pipeline_config=pipeline_config,
     )
 
     payload = {
