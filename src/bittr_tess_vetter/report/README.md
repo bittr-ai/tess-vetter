@@ -70,6 +70,8 @@ html = result.html
 - artifact persistence
 - API transport
 
+External adapter/charting seam documentation lives at `docs/report_external_charting_seam.md`.
+
 Key top-level blocks:
 - Identity/inputs: `tic_id`, `toi`, `ephemeris`, `stellar`, `input_depth_ppm`
 - Summary: `lc_summary`
@@ -80,7 +82,7 @@ Key top-level blocks:
 
 ## Contract and Versioning Policy
 
-- `schema_version` (`ReportData.version`, currently `1.0.0`) is the top-level payload contract version.
+- `schema_version` (`ReportData.version`, currently `2.0.0`) is the top-level payload contract version.
 - Bump `schema_version` when JSON structure changes in a way that can break clients (add/remove/rename/move top-level or nested contract fields, or change field types).
 - `payload_meta.summary_version` tracks semantic/shape changes scoped to `summary`.
 - `payload_meta.plot_data_version` tracks semantic/shape changes scoped to `plot_data`.
