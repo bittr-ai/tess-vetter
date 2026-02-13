@@ -3,12 +3,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 from click.testing import CliRunner
 
 import bittr_tess_vetter.cli.enrich_cli as enrich_cli
 from bittr_tess_vetter.cli.progress_metadata import ProgressIOError
+from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.pipeline import make_candidate_key
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
+from bittr_tess_vetter.validation.result_schema import VettingBundleResult
 
 
 def test_btv_help_lists_enrich_vet_report() -> None:
@@ -410,6 +413,186 @@ def test_btv_vet_pipeline_config_flags_forwarded(monkeypatch, tmp_path: Path) ->
     assert cfg.fail_fast is True
     assert cfg.emit_warnings is True
     assert cfg.extra_params["alpha"] == 1
+
+
+def test_btv_vet_detrend_defaults_are_backward_compatible(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_execute_vet(**kwargs):
+        captured.update(kwargs)
+        return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+
+    out_path = tmp_path / "vet.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["detrend"] is None
+    assert captured["detrend_bin_hours"] == 6.0
+    assert captured["detrend_buffer"] == 2.0
+    assert captured["detrend_sigma_clip"] == 5.0
+
+
+def test_btv_vet_detrend_method_and_params_forwarded(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_execute_vet(**kwargs):
+        captured.update(kwargs)
+        return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+
+    out_path = tmp_path / "vet.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--detrend",
+            "transit_masked_bin_median",
+            "--detrend-bin-hours",
+            "8",
+            "--detrend-buffer",
+            "2.5",
+            "--detrend-sigma-clip",
+            "4.0",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["detrend"] == "transit_masked_bin_median"
+    assert captured["detrend_bin_hours"] == 8.0
+    assert captured["detrend_buffer"] == 2.5
+    assert captured["detrend_sigma_clip"] == 4.0
+
+
+def test_btv_vet_rejects_unknown_detrend_method(tmp_path: Path) -> None:
+    out_path = tmp_path / "vet.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--detrend",
+            "unknown_method",
+            "--detrend-bin-hours",
+            "8",
+            "--detrend-buffer",
+            "2.5",
+            "--detrend-sigma-clip",
+            "4.0",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "--detrend must be one of: transit_masked_bin_median" in result.output
+
+
+def test_btv_vet_emits_detrend_provenance_when_enabled(monkeypatch, tmp_path: Path) -> None:
+    time = np.linspace(2000.0, 2012.0, 800, dtype=np.float64)
+    baseline = 1.0 + 0.001 * (time - np.min(time))
+    flux = baseline.copy()
+    flux[np.abs(((time - 2000.2) % 10.5) - 10.5 / 2.0) < (2.5 / 24.0)] -= 0.0002
+    flux_err = np.full_like(flux, 1e-4, dtype=np.float64)
+    quality = np.zeros_like(flux, dtype=np.int32)
+    valid = np.ones_like(flux, dtype=bool)
+    lc_data = LightCurveData(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        quality=quality,
+        valid_mask=valid,
+        tic_id=123,
+        sector=1,
+        cadence_seconds=120.0,
+    )
+
+    class _FakeMASTClient:
+        def download_all_sectors(self, tic_id: int, *, flux_type: str, sectors: list[int] | None = None):
+            return [lc_data]
+
+    captured: dict[str, np.ndarray] = {}
+
+    def _fake_vet_candidate(**kwargs):
+        captured["flux"] = np.asarray(kwargs["lc"].flux, dtype=np.float64)
+        return VettingBundleResult(results=[], warnings=[], provenance={}, inputs_summary={})
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
+
+    out_path = tmp_path / "vet.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--detrend",
+            "transit_masked_bin_median",
+            "--detrend-bin-hours",
+            "6.0",
+            "--detrend-buffer",
+            "2.0",
+            "--detrend-sigma-clip",
+            "5.0",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    detrend = payload["provenance"]["detrend"]
+    assert detrend["applied"] is True
+    assert detrend["method"] == "transit_masked_bin_median"
+    assert detrend["bin_hours"] == 6.0
+    assert detrend["buffer_factor"] == 2.0
+    assert detrend["sigma_clip"] == 5.0
+    assert not np.allclose(captured["flux"], flux)
 
 
 def test_btv_vet_tpf_flags_forwarded(monkeypatch, tmp_path: Path) -> None:

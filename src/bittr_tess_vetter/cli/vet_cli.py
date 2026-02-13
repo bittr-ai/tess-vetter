@@ -10,9 +10,11 @@ from typing import Any
 import click
 import numpy as np
 
+from bittr_tess_vetter.api.detrend import bin_median_trend, sigma_clip
 from bittr_tess_vetter.api.generate_report import _select_tpf_sectors
 from bittr_tess_vetter.api.pipeline import PipelineConfig
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
+from bittr_tess_vetter.api.transit_masks import get_out_of_transit_mask
 from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve, TPFStamp
 from bittr_tess_vetter.api.vet import vet_candidate
 from bittr_tess_vetter.cli.common_cli import (
@@ -108,6 +110,99 @@ def _to_optional_finite_float(value: Any) -> float | None:
 
 
 _HIGH_SALIENCE_FLAGS = {"MODEL_PREFERS_NON_TRANSIT"}
+_SUPPORTED_DETREND_METHODS: tuple[str, ...] = ("transit_masked_bin_median",)
+
+
+def _validate_detrend_args(
+    *,
+    detrend_bin_hours: float,
+    detrend_buffer: float,
+    detrend_sigma_clip: float,
+) -> None:
+    if float(detrend_bin_hours) <= 0.0:
+        raise BtvCliError("--detrend-bin-hours must be > 0", exit_code=EXIT_INPUT_ERROR)
+    if float(detrend_buffer) <= 0.0:
+        raise BtvCliError("--detrend-buffer must be > 0", exit_code=EXIT_INPUT_ERROR)
+    if float(detrend_sigma_clip) <= 0.0:
+        raise BtvCliError("--detrend-sigma-clip must be > 0", exit_code=EXIT_INPUT_ERROR)
+
+
+def _normalize_detrend_method(detrend: str | None) -> str | None:
+    if detrend is None:
+        return None
+    method = str(detrend).strip().lower()
+    if method == "":
+        return None
+    if method not in _SUPPORTED_DETREND_METHODS:
+        choices = ", ".join(_SUPPORTED_DETREND_METHODS)
+        raise BtvCliError(
+            f"--detrend must be one of: {choices}",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    return method
+
+
+def _detrend_lightcurve_for_vetting(
+    *,
+    lc: LightCurve,
+    candidate: Candidate,
+    method: str,
+    bin_hours: float,
+    buffer_factor: float,
+    clip_sigma: float,
+) -> tuple[LightCurve, dict[str, Any]]:
+    time = np.asarray(lc.time, dtype=np.float64)
+    flux = np.asarray(lc.flux, dtype=np.float64)
+    flux_err = np.asarray(lc.flux_err, dtype=np.float64) if lc.flux_err is not None else np.zeros_like(flux)
+    valid_mask = np.asarray(lc.valid_mask, dtype=bool) if lc.valid_mask is not None else np.ones_like(flux, dtype=bool)
+
+    finite_mask = np.isfinite(time) & np.isfinite(flux) & np.isfinite(flux_err)
+    oot_mask = get_out_of_transit_mask(
+        time,
+        candidate.ephemeris.period_days,
+        candidate.ephemeris.t0_btjd,
+        candidate.ephemeris.duration_hours,
+        buffer_factor=float(buffer_factor),
+    )
+    trend_fit_mask = valid_mask & finite_mask & oot_mask
+
+    n_sigma_clipped = 0
+    if int(np.sum(trend_fit_mask)) >= 3:
+        clip_keep = sigma_clip(flux[trend_fit_mask], sigma=float(clip_sigma))
+        n_sigma_clipped = int(np.sum(trend_fit_mask)) - int(np.sum(clip_keep))
+        trend_indices = np.flatnonzero(trend_fit_mask)
+        trend_fit_mask = trend_fit_mask.copy()
+        trend_fit_mask[trend_indices[~clip_keep]] = False
+
+    fit_flux = flux.copy()
+    fit_flux[~trend_fit_mask] = np.nan
+    trend = bin_median_trend(time, fit_flux, bin_hours=float(bin_hours), min_bin_points=1)
+
+    trend_ref = float(np.nanmedian(trend[trend_fit_mask])) if np.any(trend_fit_mask) else float(np.nanmedian(trend))
+    if not np.isfinite(trend_ref) or trend_ref == 0.0:
+        trend_ref = 1.0
+    safe_trend = np.where(np.isfinite(trend) & (trend != 0.0), trend, trend_ref)
+
+    detrended_flux = flux / safe_trend * trend_ref
+    detrended_flux_err = flux_err / safe_trend * trend_ref
+    detrended_lc = LightCurve(
+        time=time,
+        flux=detrended_flux,
+        flux_err=detrended_flux_err,
+        quality=np.asarray(lc.quality, dtype=np.int32) if lc.quality is not None else None,
+        valid_mask=valid_mask,
+    )
+    detrend_provenance: dict[str, Any] = {
+        "applied": True,
+        "method": str(method),
+        "bin_hours": float(bin_hours),
+        "buffer_factor": float(buffer_factor),
+        "sigma_clip": float(clip_sigma),
+        "n_points": int(len(time)),
+        "n_trend_fit_points": int(np.sum(trend_fit_mask)),
+        "n_sigma_clipped": int(n_sigma_clipped),
+    }
+    return detrended_lc, detrend_provenance
 
 
 def _to_optional_toi(value: Any) -> str | None:
@@ -515,6 +610,10 @@ def _execute_vet(
     tpf_sector_strategy: str,
     tpf_sectors: list[int] | None,
     pipeline_config: PipelineConfig,
+    detrend: str | None,
+    detrend_bin_hours: float,
+    detrend_buffer: float,
+    detrend_sigma_clip: float,
     input_resolution: dict[str, Any] | None = None,
     coordinate_resolution: dict[str, Any] | None = None,
     sector_measurements: list[dict[str, Any]] | None = None,
@@ -567,8 +666,20 @@ def _execute_vet(
         if sector_measurements is not None:
             context["sector_measurements"] = sector_measurements
 
+    detrend_provenance: dict[str, Any] | None = None
+    vet_lc = lc
+    if detrend is not None:
+        vet_lc, detrend_provenance = _detrend_lightcurve_for_vetting(
+            lc=lc,
+            candidate=candidate,
+            method=detrend,
+            bin_hours=float(detrend_bin_hours),
+            buffer_factor=float(detrend_buffer),
+            clip_sigma=float(detrend_sigma_clip),
+        )
+
     bundle = vet_candidate(
-        lc=lc,
+        lc=vet_lc,
         candidate=candidate,
         tpf=tpf,
         network=network_ok,
@@ -582,6 +693,11 @@ def _execute_vet(
     )
 
     payload = bundle.model_dump(mode="json")
+    if detrend_provenance is not None:
+        provenance_raw = payload.get("provenance")
+        provenance = provenance_raw if isinstance(provenance_raw, dict) else {}
+        provenance["detrend"] = detrend_provenance
+        payload["provenance"] = provenance
     return _apply_cli_payload_contract(
         payload=payload,
         toi=toi,
@@ -715,6 +831,19 @@ def _load_tpf_for_vetting(
 )
 @click.option("--timeout-seconds", type=float, default=None)
 @click.option("--random-seed", type=int, default=None)
+@click.option(
+    "--detrend",
+    type=str,
+    default=None,
+    show_default=True,
+    help=(
+        "Pre-vetting detrend method. Supported: "
+        "transit_masked_bin_median."
+    ),
+)
+@click.option("--detrend-bin-hours", type=float, default=6.0, show_default=True)
+@click.option("--detrend-buffer", type=float, default=2.0, show_default=True)
+@click.option("--detrend-sigma-clip", type=float, default=5.0, show_default=True)
 @click.option("--extra-param", "extra_params", multiple=True, help="Repeat KEY=VALUE entries.")
 @click.option("--fail-fast/--no-fail-fast", default=False, show_default=True)
 @click.option("--emit-warnings/--no-emit-warnings", default=False, show_default=True)
@@ -755,6 +884,10 @@ def vet_command(
     flux_type: str,
     timeout_seconds: float | None,
     random_seed: int | None,
+    detrend: str | None,
+    detrend_bin_hours: float,
+    detrend_buffer: float,
+    detrend_sigma_clip: float,
     extra_params: tuple[str, ...],
     fail_fast: bool,
     emit_warnings: bool,
@@ -812,6 +945,13 @@ def vet_command(
             exit_code=EXIT_INPUT_ERROR,
         )
     effective_fetch_tpf = bool(fetch_tpf or require_tpf)
+    detrend_method = _normalize_detrend_method(detrend)
+    if detrend_method is not None:
+        _validate_detrend_args(
+            detrend_bin_hours=float(detrend_bin_hours),
+            detrend_buffer=float(detrend_buffer),
+            detrend_sigma_clip=float(detrend_sigma_clip),
+        )
 
     if resume:
         existing = None
@@ -885,6 +1025,10 @@ def vet_command(
             sectors=list(sectors) if sectors else None,
             flux_type=str(flux_type).lower(),
             pipeline_config=config,
+            detrend=detrend_method,
+            detrend_bin_hours=float(detrend_bin_hours),
+            detrend_buffer=float(detrend_buffer),
+            detrend_sigma_clip=float(detrend_sigma_clip),
             input_resolution=input_resolution,
             coordinate_resolution=coordinate_resolution,
             sector_measurements=sector_measurements_rows,
