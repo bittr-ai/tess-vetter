@@ -23,6 +23,7 @@ from bittr_tess_vetter.cli.common_cli import (
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
+    load_json_file,
     parse_extra_params,
     resolve_optional_output_path,
 )
@@ -73,6 +74,39 @@ def _to_optional_float(value: Any) -> float | None:
         return None
 
 
+def _to_required_finite_float(value: Any, *, label: str) -> float:
+    if value is None:
+        raise BtvCliError(f"Sector measurements schema error: missing {label}")
+    try:
+        out = float(value)
+    except (TypeError, ValueError) as exc:
+        raise BtvCliError(f"Sector measurements schema error: {label} must be numeric") from exc
+    if not np.isfinite(out):
+        raise BtvCliError(f"Sector measurements schema error: {label} must be finite")
+    return out
+
+
+def _to_required_int(value: Any, *, label: str) -> int:
+    if value is None:
+        raise BtvCliError(f"Sector measurements schema error: missing {label}")
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise BtvCliError(f"Sector measurements schema error: {label} must be an integer") from exc
+
+
+def _to_optional_finite_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(out):
+        return None
+    return out
+
+
 _HIGH_SALIENCE_FLAGS = {"MODEL_PREFERS_NON_TRANSIT"}
 
 
@@ -105,6 +139,136 @@ def _extract_resolved_toi(payload: dict[str, Any]) -> str | None:
                 if resolved is not None:
                     return resolved
     return None
+
+
+def _load_sector_measurements(path: str) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    payload = load_json_file(Path(path), label="sector measurements file")
+    rows_raw = payload.get("sector_measurements")
+    if not isinstance(rows_raw, list):
+        raise BtvCliError(
+            "Sector measurements schema error: top-level 'sector_measurements' must be a list",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+
+    rows: list[dict[str, Any]] = []
+    for idx, row_raw in enumerate(rows_raw):
+        if not isinstance(row_raw, dict):
+            raise BtvCliError(
+                f"Sector measurements schema error: row {idx} must be an object",
+                exit_code=EXIT_INPUT_ERROR,
+            )
+        sector = _to_required_int(row_raw.get("sector"), label=f"row {idx}.sector")
+        depth_ppm = _to_required_finite_float(row_raw.get("depth_ppm"), label=f"row {idx}.depth_ppm")
+        depth_err_ppm = _to_required_finite_float(
+            row_raw.get("depth_err_ppm"), label=f"row {idx}.depth_err_ppm"
+        )
+        if not depth_err_ppm > 0.0:
+            raise BtvCliError(
+                f"Sector measurements schema error: row {idx}.depth_err_ppm must be > 0",
+                exit_code=EXIT_INPUT_ERROR,
+            )
+
+        normalized: dict[str, Any] = {
+            "sector": int(sector),
+            "depth_ppm": float(depth_ppm),
+            "depth_err_ppm": float(depth_err_ppm),
+        }
+        if "duration_hours" in row_raw:
+            duration_hours = _to_optional_finite_float(row_raw.get("duration_hours"))
+            if duration_hours is None:
+                raise BtvCliError(
+                    f"Sector measurements schema error: row {idx}.duration_hours must be finite",
+                    exit_code=EXIT_INPUT_ERROR,
+                )
+            normalized["duration_hours"] = float(duration_hours)
+        if "duration_err_hours" in row_raw:
+            duration_err_hours = _to_optional_finite_float(row_raw.get("duration_err_hours"))
+            if duration_err_hours is None:
+                raise BtvCliError(
+                    f"Sector measurements schema error: row {idx}.duration_err_hours must be finite",
+                    exit_code=EXIT_INPUT_ERROR,
+                )
+            normalized["duration_err_hours"] = float(duration_err_hours)
+        if "n_transits" in row_raw:
+            normalized["n_transits"] = _to_required_int(row_raw.get("n_transits"), label=f"row {idx}.n_transits")
+        if "shape_metric" in row_raw:
+            shape_metric = _to_optional_finite_float(row_raw.get("shape_metric"))
+            if shape_metric is None:
+                raise BtvCliError(
+                    f"Sector measurements schema error: row {idx}.shape_metric must be finite",
+                    exit_code=EXIT_INPUT_ERROR,
+                )
+            normalized["shape_metric"] = float(shape_metric)
+        if "quality_weight" in row_raw:
+            quality_weight = _to_optional_finite_float(row_raw.get("quality_weight"))
+            if quality_weight is None:
+                raise BtvCliError(
+                    f"Sector measurements schema error: row {idx}.quality_weight must be finite",
+                    exit_code=EXIT_INPUT_ERROR,
+                )
+            normalized["quality_weight"] = float(quality_weight)
+
+        rows.append(normalized)
+
+    provenance = payload.get("provenance")
+    if provenance is not None and not isinstance(provenance, dict):
+        raise BtvCliError(
+            "Sector measurements schema error: top-level 'provenance' must be an object when present",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    return rows, provenance
+
+
+def _build_sector_gating_block(
+    *,
+    payload: dict[str, Any],
+    sector_measurements: list[dict[str, Any]],
+    source_path: str,
+    source_provenance: dict[str, Any] | None,
+) -> dict[str, Any]:
+    v21_row: dict[str, Any] | None = None
+    results = payload.get("results")
+    if isinstance(results, list):
+        for row in results:
+            if isinstance(row, dict) and str(row.get("id")) == "V21":
+                v21_row = row
+                break
+
+    positive_weight = 0
+    positive_depth_err = 0
+    for row in sector_measurements:
+        weight = _to_optional_float(row.get("quality_weight"))
+        err = _to_optional_float(row.get("depth_err_ppm"))
+        if weight is None or weight > 0.0:
+            positive_weight += 1
+        if err is not None and err > 0.0:
+            positive_depth_err += 1
+
+    v21_status = "not_run"
+    v21_flags: list[str] = []
+    v21_measurements_used = 0
+    if v21_row is not None:
+        v21_status = str(v21_row.get("status") or "unknown")
+        flags = v21_row.get("flags")
+        if isinstance(flags, list):
+            v21_flags = [str(flag) for flag in flags]
+        raw = v21_row.get("raw")
+        if isinstance(raw, dict):
+            raw_measurements = raw.get("measurements")
+            if isinstance(raw_measurements, list):
+                v21_measurements_used = len([item for item in raw_measurements if isinstance(item, dict)])
+
+    return {
+        "source_path": source_path,
+        "source_provenance": source_provenance,
+        "n_input_rows": int(len(sector_measurements)),
+        "n_positive_weight_rows": int(positive_weight),
+        "n_positive_depth_err_rows": int(positive_depth_err),
+        "v21_status": v21_status,
+        "v21_flags": v21_flags,
+        "v21_measurements_used": int(v21_measurements_used),
+        "used_by_v21": bool(v21_row is not None),
+    }
 
 
 def _build_root_summary(*, payload: dict[str, Any]) -> dict[str, Any]:
@@ -353,6 +517,7 @@ def _execute_vet(
     pipeline_config: PipelineConfig,
     input_resolution: dict[str, Any] | None = None,
     coordinate_resolution: dict[str, Any] | None = None,
+    sector_measurements: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     client = MASTClient()
     lightcurves = client.download_all_sectors(tic_id, flux_type=flux_type, sectors=sectors)
@@ -394,6 +559,14 @@ def _execute_vet(
         requested_tpf_sectors=tpf_sectors,
     )
 
+    context: dict[str, Any] | None = None
+    if toi is not None or sector_measurements is not None:
+        context = {}
+        if toi is not None:
+            context["toi"] = toi
+        if sector_measurements is not None:
+            context["sector_measurements"] = sector_measurements
+
     bundle = vet_candidate(
         lc=lc,
         candidate=candidate,
@@ -404,7 +577,7 @@ def _execute_vet(
         tic_id=tic_id,
         preset=preset,
         checks=checks,
-        context={"toi": toi} if toi is not None else None,
+        context=context,
         pipeline_config=pipeline_config,
     )
 
@@ -555,6 +728,12 @@ def _load_tpf_for_vetting(
 )
 @click.option("--progress-path", type=str, default=None, help="Optional progress metadata path.")
 @click.option("--resume", is_flag=True, default=False, help="Skip when completed output already exists.")
+@click.option(
+    "--sector-measurements",
+    type=str,
+    default=None,
+    help="Path to JSON file containing top-level sector_measurements list for V21.",
+)
 def vet_command(
     tic_id: int | None,
     period_days: float | None,
@@ -582,6 +761,7 @@ def vet_command(
     output_path_arg: str,
     progress_path: str | None,
     resume: bool,
+    sector_measurements: str | None,
 ) -> None:
     """Run candidate vetting and emit `VettingBundleResult` JSON.
 
@@ -619,6 +799,13 @@ def vet_command(
         "t0_btjd": resolved_t0_btjd,
         "duration_hours": resolved_duration_hours,
     }
+    sector_measurements_rows: list[dict[str, Any]] | None = None
+    sector_measurements_provenance: dict[str, Any] | None = None
+    if sector_measurements:
+        sector_measurements_rows, sector_measurements_provenance = _load_sector_measurements(
+            sector_measurements
+        )
+
     if tpf_sectors and str(tpf_sector_strategy).lower() != "requested":
         raise BtvCliError(
             "--tpf-sector requires --tpf-sector-strategy=requested",
@@ -700,6 +887,7 @@ def vet_command(
             pipeline_config=config,
             input_resolution=input_resolution,
             coordinate_resolution=coordinate_resolution,
+            sector_measurements=sector_measurements_rows,
         )
         payload = _apply_cli_payload_contract(
             payload=payload,
@@ -707,6 +895,14 @@ def vet_command(
             input_resolution=input_resolution,
             coordinate_resolution=coordinate_resolution,
         )
+        if sector_measurements_rows is not None and sector_measurements is not None:
+            payload["sector_measurements"] = sector_measurements_rows
+            payload["sector_gating"] = _build_sector_gating_block(
+                payload=payload,
+                sector_measurements=sector_measurements_rows,
+                source_path=sector_measurements,
+                source_provenance=sector_measurements_provenance,
+            )
         dump_json_output(payload, out_path)
 
         if progress_file is not None:

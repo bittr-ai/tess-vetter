@@ -27,6 +27,7 @@ from bittr_tess_vetter.cli.common_cli import (
     BtvCliError,
 )
 from bittr_tess_vetter.cli.describe_checks_cli import describe_checks_command
+from bittr_tess_vetter.cli.measure_sectors_cli import measure_sectors_command
 from bittr_tess_vetter.cli.report_cli import report_command
 from bittr_tess_vetter.cli.vet_cli import vet_command
 from bittr_tess_vetter.features import FeatureConfig
@@ -74,6 +75,7 @@ def cli() -> None:
 cli.add_command(vet_command)
 cli.add_command(report_command)
 cli.add_command(describe_checks_command)
+cli.add_command(measure_sectors_command)
 
 
 @cli.command()
