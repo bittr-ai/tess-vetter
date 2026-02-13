@@ -21,6 +21,9 @@ from typing import Any
 
 import click
 
+from bittr_tess_vetter.cli.common_cli import BtvCliError
+from bittr_tess_vetter.cli.report_cli import report_command
+from bittr_tess_vetter.cli.vet_cli import vet_command
 from bittr_tess_vetter.features import FeatureConfig
 
 
@@ -61,6 +64,10 @@ def _stream_worklist(input_path: Path) -> Iterator[dict[str, Any]]:
 def cli() -> None:
     """bittr-tess-vetter CLI for TESS transit vetting."""
     pass
+
+
+cli.add_command(vet_command)
+cli.add_command(report_command)
 
 
 @cli.command()
@@ -231,11 +238,17 @@ def enrich(
 def main() -> int:
     """Main entry point for the CLI."""
     try:
-        cli()
+        argv = sys.argv[1:]
+        if argv and argv[0].startswith("-") and argv[0] not in {"--help", "--version"}:
+            argv = ["enrich", *argv]
+        cli(args=argv, standalone_mode=False)
         return 0
+    except BtvCliError as e:
+        e.show()
+        return e.exit_code
     except click.ClickException as e:
         e.show()
-        return 1
+        return e.exit_code
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         return 1
