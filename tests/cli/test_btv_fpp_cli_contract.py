@@ -28,6 +28,7 @@ def test_btv_fpp_success_plumbs_api_params_and_emits_contract(monkeypatch, tmp_p
             "fpp": 0.123,
             "nfpp": 0.001,
             "disposition": "possible_planet",
+            "base_seed": 99,
         }
 
     monkeypatch.setattr(
@@ -93,6 +94,7 @@ def test_btv_fpp_success_plumbs_api_params_and_emits_contract(monkeypatch, tmp_p
     assert payload["provenance"]["resolved_source"] == "cli"
     assert payload["provenance"]["runtime"]["preset"] == "standard"
     assert payload["provenance"]["runtime"]["seed"] == 99
+    assert payload["provenance"]["runtime"]["seed_requested"] == 99
 
 
 def test_btv_fpp_timeout_maps_to_exit_5(monkeypatch) -> None:
@@ -127,3 +129,37 @@ def test_btv_fpp_timeout_maps_to_exit_5(monkeypatch) -> None:
     )
 
     assert result.exit_code == 5
+
+
+def test_build_cache_for_fpp_stores_requested_sector_products(monkeypatch, tmp_path: Path) -> None:
+    class _FakeLC:
+        def __init__(self, sector: int) -> None:
+            self.sector = sector
+
+    class _FakeMASTClient:
+        def download_all_sectors(self, tic_id: int, *, flux_type: str, sectors: list[int] | None = None):
+            assert tic_id == 123
+            assert flux_type == "pdcsap"
+            assert sectors == [14, 15]
+            return [_FakeLC(14), _FakeLC(15)]
+
+    class _FakePersistentCache:
+        def __init__(self, cache_dir: Path | None = None) -> None:
+            self.cache_dir = cache_dir
+            self.records: dict[str, object] = {}
+
+        def put(self, key: str, value: object) -> None:
+            self.records[key] = value
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.PersistentCache", _FakePersistentCache)
+
+    from bittr_tess_vetter.cli.fpp_cli import _build_cache_for_fpp
+
+    cache, loaded = _build_cache_for_fpp(tic_id=123, sectors=[14, 15], cache_dir=tmp_path)
+    assert loaded == [14, 15]
+    assert isinstance(cache, _FakePersistentCache)
+    assert sorted(cache.records.keys()) == [
+        "lc:123:14:pdcsap",
+        "lc:123:15:pdcsap",
+    ]

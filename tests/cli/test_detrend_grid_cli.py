@@ -133,6 +133,12 @@ def test_detrend_grid_output_schema_keys(monkeypatch) -> None:
     assert "ranked_sweep_table" in payload
     assert payload["best_variant"]["variant_id"] == "variant_a"
     assert payload["provenance"]["command"] == "detrend-grid"
+    assert payload["provenance"]["effective_grid_config"]["downsample_levels"] == [1, 2, 5]
+    assert payload["provenance"]["effective_grid_config"]["outlier_policies"] == ["none", "sigma_clip_4"]
+    assert payload["provenance"]["effective_grid_config"]["detrenders"] == [
+        "none",
+        "running_median_0.5d",
+    ]
 
 
 def test_detrend_grid_seed_is_deterministic_and_defaults_to_zero(monkeypatch) -> None:
