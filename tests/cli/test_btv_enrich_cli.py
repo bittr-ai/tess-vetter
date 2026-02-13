@@ -116,7 +116,7 @@ def test_main_exit_code_mapping(monkeypatch) -> None:
     assert enrich_cli.main() == 1
 
     monkeypatch.setattr(enrich_cli, "cli", _unexpected_error)
-    assert enrich_cli.main() == 1
+    assert enrich_cli.main() == 2
 
 
 def test_main_maps_option_first_invocation_to_enrich(monkeypatch, tmp_path: Path) -> None:
