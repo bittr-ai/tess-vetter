@@ -81,6 +81,13 @@ from bittr_tess_vetter.platform.catalogs.store import (
     CatalogNotFoundError,
     CatalogSnapshotStore,
 )
+from bittr_tess_vetter.platform.catalogs.toi_resolution import (
+    LookupStatus,
+    TICCoordinateLookupResult,
+    ToiResolutionResult,
+    lookup_tic_coordinates,
+    resolve_toi_to_tic_ephemeris_depth,
+)
 
 __all__ = [
     # Snapshot ID utilities
@@ -96,6 +103,12 @@ __all__ = [
     "CatalogInstallError",
     "CatalogNotFoundError",
     "CatalogSnapshotStore",
+    # TOI/TIC resolution helpers
+    "LookupStatus",
+    "ToiResolutionResult",
+    "TICCoordinateLookupResult",
+    "resolve_toi_to_tic_ephemeris_depth",
+    "lookup_tic_coordinates",
     # Crossmatch
     "ContaminationRisk",
     "CrossmatchError",
