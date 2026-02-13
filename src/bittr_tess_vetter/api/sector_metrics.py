@@ -9,8 +9,10 @@ but do not apply pass/fail thresholds.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypedDict, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -21,6 +23,29 @@ from bittr_tess_vetter.api.ephemeris_specificity import (
 )
 from bittr_tess_vetter.api.stitch import StitchedLC, _infer_cadence_seconds
 from bittr_tess_vetter.validation.base import get_in_transit_mask, get_out_of_transit_mask
+from bittr_tess_vetter.validation.sector_consistency import SectorMeasurement
+
+SECTOR_MEASUREMENTS_SCHEMA_VERSION = 1
+
+
+class V21SectorMeasurementRow(TypedDict):
+    """Stable JSON row schema for V21 sector measurements."""
+
+    sector: int
+    depth_ppm: float
+    depth_err_ppm: float
+    duration_hours: float
+    duration_err_hours: float
+    n_transits: int
+    shape_metric: float
+    quality_weight: float
+
+
+class V21SectorMeasurementsPayload(TypedDict):
+    """Stable JSON payload schema for V21 sector measurements."""
+
+    schema_version: int
+    measurements: list[V21SectorMeasurementRow]
 
 
 @dataclass(frozen=True)
@@ -213,8 +238,107 @@ def compute_sector_ephemeris_metrics_from_stitched(
     )
 
 
+def _coerce_sector_measurement_row(row: Mapping[str, Any]) -> SectorMeasurement:
+    if "sector" not in row or "depth_ppm" not in row or "depth_err_ppm" not in row:
+        raise ValueError("each sector measurement row must include sector, depth_ppm, and depth_err_ppm")
+    return SectorMeasurement(
+        sector=int(row["sector"]),
+        depth_ppm=float(row["depth_ppm"]),
+        depth_err_ppm=float(row["depth_err_ppm"]),
+        duration_hours=float(row.get("duration_hours", 0.0)),
+        duration_err_hours=float(row.get("duration_err_hours", 0.0)),
+        n_transits=int(row.get("n_transits", 0)),
+        shape_metric=float(row.get("shape_metric", 0.0)),
+        quality_weight=float(row.get("quality_weight", 1.0)),
+    )
+
+
+def serialize_v21_sector_measurements(
+    measurements: list[SectorMeasurement] | list[SectorEphemerisMetrics],
+) -> V21SectorMeasurementsPayload:
+    """Serialize sector measurements to a stable, CLI-friendly V21 payload."""
+    if not measurements:
+        return {
+            "schema_version": SECTOR_MEASUREMENTS_SCHEMA_VERSION,
+            "measurements": [],
+        }
+
+    rows: list[V21SectorMeasurementRow] = []
+    first = measurements[0]
+    if isinstance(first, SectorEphemerisMetrics):
+        for m in cast(list[SectorEphemerisMetrics], measurements):
+            rows.append(
+                {
+                    "sector": int(m.sector),
+                    "depth_ppm": float(m.depth_hat_ppm),
+                    "depth_err_ppm": float(m.depth_sigma_ppm),
+                    "duration_hours": 0.0,
+                    "duration_err_hours": 0.0,
+                    "n_transits": 0,
+                    "shape_metric": 0.0,
+                    "quality_weight": 1.0,
+                }
+            )
+    else:
+        for m in cast(list[SectorMeasurement], measurements):
+            rows.append(
+                {
+                    "sector": int(m.sector),
+                    "depth_ppm": float(m.depth_ppm),
+                    "depth_err_ppm": float(m.depth_err_ppm),
+                    "duration_hours": float(m.duration_hours),
+                    "duration_err_hours": float(m.duration_err_hours),
+                    "n_transits": int(m.n_transits),
+                    "shape_metric": float(m.shape_metric),
+                    "quality_weight": float(m.quality_weight),
+                }
+            )
+
+    return {
+        "schema_version": SECTOR_MEASUREMENTS_SCHEMA_VERSION,
+        "measurements": rows,
+    }
+
+
+def deserialize_v21_sector_measurements(
+    payload: str | Mapping[str, Any],
+) -> list[SectorMeasurement]:
+    """Deserialize V21 sector-measurement payload from JSON text or mapping."""
+    data: Mapping[str, Any]
+    if isinstance(payload, str):
+        loaded = json.loads(payload)
+        if not isinstance(loaded, dict):
+            raise ValueError("V21 sector measurements payload must be a JSON object")
+        data = cast(Mapping[str, Any], loaded)
+    else:
+        data = payload
+
+    version = int(data.get("schema_version", -1))
+    if version != SECTOR_MEASUREMENTS_SCHEMA_VERSION:
+        raise ValueError(
+            f"unsupported V21 sector measurements schema_version: {version} "
+            f"(expected {SECTOR_MEASUREMENTS_SCHEMA_VERSION})"
+        )
+
+    raw_rows = data.get("measurements")
+    if not isinstance(raw_rows, list):
+        raise ValueError("V21 sector measurements payload must include a list 'measurements'")
+
+    rows: list[SectorMeasurement] = []
+    for raw in raw_rows:
+        if not isinstance(raw, Mapping):
+            raise ValueError("each sector measurement must be an object")
+        rows.append(_coerce_sector_measurement_row(raw))
+    return rows
+
+
 __all__ = [
+    "SECTOR_MEASUREMENTS_SCHEMA_VERSION",
     "SectorEphemerisMetrics",
+    "V21SectorMeasurementRow",
+    "V21SectorMeasurementsPayload",
     "compute_sector_ephemeris_metrics",
     "compute_sector_ephemeris_metrics_from_stitched",
+    "serialize_v21_sector_measurements",
+    "deserialize_v21_sector_measurements",
 ]

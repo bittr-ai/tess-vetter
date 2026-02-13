@@ -212,8 +212,13 @@ __all__ = [
     # Sector / Consistency Metrics (metrics-only)
     # -------------------------------------------------------------------------
     "SectorEphemerisMetrics",
+    "SECTOR_MEASUREMENTS_SCHEMA_VERSION",
+    "V21SectorMeasurementRow",
+    "V21SectorMeasurementsPayload",
     "compute_sector_ephemeris_metrics",
     "compute_sector_ephemeris_metrics_from_stitched",
+    "serialize_v21_sector_measurements",
+    "deserialize_v21_sector_measurements",
     # -------------------------------------------------------------------------
     # Short Aliases (convenience)
     # -------------------------------------------------------------------------
@@ -628,9 +633,14 @@ if TYPE_CHECKING:
         compute_sector_consistency,
     )
     from bittr_tess_vetter.api.sector_metrics import (  # noqa: F401
+        SECTOR_MEASUREMENTS_SCHEMA_VERSION,
         SectorEphemerisMetrics,
+        V21SectorMeasurementRow,
+        V21SectorMeasurementsPayload,
         compute_sector_ephemeris_metrics,
         compute_sector_ephemeris_metrics_from_stitched,
+        deserialize_v21_sector_measurements,
+        serialize_v21_sector_measurements,
     )
 
     # Stellar dilution / implied-size physics (metrics-only)

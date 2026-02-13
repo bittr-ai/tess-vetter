@@ -1,6 +1,13 @@
 import numpy as np
+import pytest
 
 from bittr_tess_vetter.api import compute_sector_ephemeris_metrics
+from bittr_tess_vetter.api.sector_consistency import SectorMeasurement
+from bittr_tess_vetter.api.sector_metrics import (
+    SECTOR_MEASUREMENTS_SCHEMA_VERSION,
+    deserialize_v21_sector_measurements,
+    serialize_v21_sector_measurements,
+)
 
 
 def test_compute_sector_ephemeris_metrics_two_sectors() -> None:
@@ -49,3 +56,45 @@ def test_compute_sector_ephemeris_metrics_two_sectors() -> None:
         assert 50.0 <= m.depth_hat_ppm <= 2000.0
         assert m.depth_sigma_ppm > 0
 
+
+def test_v21_sector_measurements_serialize_deserialize_roundtrip() -> None:
+    measurements = [
+        SectorMeasurement(
+            sector=14,
+            depth_ppm=820.0,
+            depth_err_ppm=65.0,
+            duration_hours=2.4,
+            duration_err_hours=0.3,
+            n_transits=5,
+            shape_metric=0.1,
+            quality_weight=0.9,
+        ),
+        SectorMeasurement(
+            sector=15,
+            depth_ppm=790.0,
+            depth_err_ppm=70.0,
+            duration_hours=2.3,
+            duration_err_hours=0.4,
+            n_transits=4,
+            shape_metric=0.2,
+            quality_weight=0.8,
+        ),
+    ]
+
+    payload = serialize_v21_sector_measurements(measurements)
+    assert payload["schema_version"] == SECTOR_MEASUREMENTS_SCHEMA_VERSION
+    assert len(payload["measurements"]) == 2
+
+    restored = deserialize_v21_sector_measurements(payload)
+    assert [m.sector for m in restored] == [14, 15]
+    assert restored[0].depth_ppm == pytest.approx(820.0)
+    assert restored[1].depth_err_ppm == pytest.approx(70.0)
+
+
+def test_v21_sector_measurements_rejects_unknown_schema_version() -> None:
+    bad_payload = {
+        "schema_version": 999,
+        "measurements": [{"sector": 1, "depth_ppm": 1000.0, "depth_err_ppm": 50.0}],
+    }
+    with pytest.raises(ValueError, match="unsupported V21 sector measurements schema_version"):
+        _ = deserialize_v21_sector_measurements(bad_payload)
