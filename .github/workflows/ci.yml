@@ -49,7 +49,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
       - name: Run tests
-        run: uv run pytest -q
+        run: uv run pytest -q -m "not slow"
 
   test-extras:
     runs-on: ubuntu-latest
@@ -62,7 +62,7 @@ jobs:
       - name: Install dependencies (with extras)
         run: uv sync --group dev --extra tls --extra fit --extra wotan --extra triceratops --extra exovetter --extra batman
       - name: Run tests
-        run: uv run pytest -q
+        run: uv run pytest -q -m "not slow"
 
   docs:
     runs-on: ubuntu-latest

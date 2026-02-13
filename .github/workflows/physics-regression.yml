@@ -1,0 +1,27 @@
+name: Physics Regression
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  report-physics-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --group dev
+      - name: Run deterministic report physics suites
+        run: |
+          uv run pytest -q \
+            tests/report/test_physics_invariants_timing_odd_even.py \
+            tests/report/test_physics_invariants_depth_secondary_morphology.py \
+            tests/report/test_physics_invariants_alias.py \
+            tests/test_correctness/test_report_scalar_benchmark_synthetic_lc.py \
+            tests/test_correctness/test_report_scalar_benchmark_synthetic_pixel.py \
+            tests/test_correctness/test_report_scalar_benchmark_toi5807_offline.py

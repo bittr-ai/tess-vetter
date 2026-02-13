@@ -24,7 +24,7 @@ def _to_tpf_stamp(tpf_fits: TPFFitsData) -> TPFStamp:
     )
 
 
-def _make_blended_binary_tpf_fits() -> TPFFitsData:
+def _make_blended_binary_tpf_fits(*, transit_on_secondary: bool) -> TPFFitsData:
     rng = np.random.default_rng(42)
     n_cadences = 500
     n_rows = n_cols = 11
@@ -44,7 +44,10 @@ def _make_blended_binary_tpf_fits() -> TPFFitsData:
     phase = ((time - t0) % period) / period
     phase = np.where(phase > 0.5, phase - 1.0, phase)
     in_transit = np.abs(phase) <= ((duration_days / 2.0) / period)
-    flux[in_transit, secondary_r, secondary_c] *= 0.95
+    if transit_on_secondary:
+        flux[in_transit, secondary_r, secondary_c] *= 0.95
+    else:
+        flux[in_transit, primary_r, primary_c] *= 0.95
 
     wcs = WCS(naxis=2)
     wcs.wcs.crpix = [6.0, 6.0]
@@ -67,7 +70,7 @@ def _make_blended_binary_tpf_fits() -> TPFFitsData:
 
 
 def test_synthetic_pixel_scalar_benchmark_gate() -> None:
-    tpf_fits = _make_blended_binary_tpf_fits()
+    tpf_fits = _make_blended_binary_tpf_fits(transit_on_secondary=True)
     candidate = Candidate(
         ephemeris=Ephemeris(period_days=5.0, t0_btjd=2458001.0, duration_hours=4.8),
         depth_ppm=50000.0,
@@ -111,3 +114,23 @@ def test_synthetic_pixel_scalar_benchmark_gate() -> None:
     checks = vet_pixel(stamp, candidate)
     check_ids = {c.id for c in checks}
     assert {"V08", "V09", "V10"}.issubset(check_ids)
+
+
+def test_synthetic_pixel_on_target_control_gate() -> None:
+    tpf_fits = _make_blended_binary_tpf_fits(transit_on_secondary=False)
+    center_ra = float(tpf_fits.wcs.wcs.crval[0])
+    center_dec = float(tpf_fits.wcs.wcs.crval[1])
+
+    result = localize_transit_source(
+        tpf_fits=tpf_fits,
+        period=5.0,
+        t0=2458001.0,
+        duration_hours=4.8,
+        reference_sources=[{"name": "primary", "ra": center_ra, "dec": center_dec}],
+        bootstrap_draws=100,
+        bootstrap_seed=42,
+    )
+
+    # On-target control should not look strongly off-target.
+    assert "primary" in result.distances_to_sources
+    assert float(result.distances_to_sources["primary"]) < 10.0
