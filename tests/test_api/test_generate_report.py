@@ -185,6 +185,34 @@ def test_stellar_auto_fetch_fails_gracefully() -> None:
     assert result.report is not None
 
 
+def test_stellar_auto_fetch_falls_back_to_exofop() -> None:
+    client = _mock_client(sectors=[1], get_target_raises=True)
+
+    class _FakeTable:
+        def entries_for_tic(self, tic_id: int):  # noqa: ARG002
+            return [
+                {
+                    "stellar_radius_r_sun": "0.91",
+                    "stellar_mass_m_sun": "0.84",
+                    "tess_mag": "11.7",
+                    "stellar_eff_temp_k": "5200",
+                }
+            ]
+
+    original_fetch = generate_report_api.fetch_exofop_toi_table
+    generate_report_api.fetch_exofop_toi_table = lambda: _FakeTable()  # type: ignore[assignment]
+    try:
+        result = generate_report(123456789, **_EPH, mast_client=client)
+    finally:
+        generate_report_api.fetch_exofop_toi_table = original_fetch  # type: ignore[assignment]
+
+    stellar = result.report_json["summary"].get("stellar")
+    assert isinstance(stellar, dict)
+    assert stellar.get("radius") == pytest.approx(0.91)
+    assert stellar.get("mass") == pytest.approx(0.84)
+    assert stellar.get("tmag") == pytest.approx(11.7)
+
+
 # ---------------------------------------------------------------------------
 # 6. include_html=True
 # ---------------------------------------------------------------------------

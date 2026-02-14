@@ -23,6 +23,7 @@ def test_btv_help_lists_enrich_vet_report() -> None:
     assert "enrich" in result.output
     assert "vet" in result.output
     assert "report" in result.output
+    assert "resolve-stellar" in result.output
     assert "measure-sectors" in result.output
 
 

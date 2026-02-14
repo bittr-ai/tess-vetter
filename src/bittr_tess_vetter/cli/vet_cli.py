@@ -21,7 +21,7 @@ from bittr_tess_vetter.api.transit_masks import (
 )
 from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve, TPFStamp
 from bittr_tess_vetter.api.vet import vet_candidate
-from bittr_tess_vetter.cli.stellar_inputs import resolve_stellar_inputs
+from bittr_tess_vetter.cli.stellar_inputs import load_auto_stellar_with_fallback, resolve_stellar_inputs
 from bittr_tess_vetter.cli.common_cli import (
     EXIT_DATA_UNAVAILABLE,
     EXIT_INPUT_ERROR,
@@ -254,13 +254,11 @@ def _extract_resolved_toi(payload: dict[str, Any]) -> str | None:
     return None
 
 
-def _load_auto_stellar_inputs(tic_id: int) -> dict[str, float | None]:
-    target = MASTClient().get_target_info(int(tic_id))
-    return {
-        "radius": target.stellar.radius,
-        "mass": target.stellar.mass,
-        "tmag": target.stellar.tmag,
-    }
+def _load_auto_stellar_inputs(
+    tic_id: int,
+    toi: str | None = None,
+) -> tuple[dict[str, float | None], dict[str, Any]]:
+    return load_auto_stellar_with_fallback(tic_id=int(tic_id), toi=toi)
 
 
 def _build_stellar_block(
@@ -859,7 +857,8 @@ def _execute_vet(
         warnings_raw = payload.get("warnings")
         warnings = warnings_raw if isinstance(warnings_raw, list) else []
         warnings.append(
-            "Stellar parameters unavailable from TIC/MAST. Retry recommended, or provide --stellar-file / --stellar-radius / --stellar-mass."
+            "Stellar parameters unavailable from TIC/MAST or ExoFOP. Retry recommended, "
+            "or provide --stellar-file / --stellar-radius / --stellar-mass."
         )
         payload["warnings"] = warnings
     return _apply_cli_payload_contract(
@@ -1136,7 +1135,13 @@ def vet_command(
             stellar_file=stellar_file,
             use_stellar_auto=use_stellar_auto,
             require_stellar=require_stellar,
-            auto_loader=_load_auto_stellar_inputs if use_stellar_auto else None,
+            auto_loader=(
+                (lambda _tic_id: _load_auto_stellar_inputs(_tic_id, toi=toi))
+                if toi is not None
+                else (lambda _tic_id: _load_auto_stellar_inputs(_tic_id))
+            )
+            if use_stellar_auto
+            else None,
         )
     except (TargetNotFoundError, LightCurveNotFoundError) as exc:
         raise BtvCliError(str(exc), exit_code=EXIT_DATA_UNAVAILABLE) from exc

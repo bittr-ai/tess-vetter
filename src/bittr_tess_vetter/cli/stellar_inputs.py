@@ -8,12 +8,35 @@ from typing import Any, Callable, Mapping
 import numpy as np
 
 from bittr_tess_vetter.cli.common_cli import EXIT_DATA_UNAVAILABLE, EXIT_INPUT_ERROR, BtvCliError, load_json_file
+from bittr_tess_vetter.platform.catalogs.exofop_toi_table import fetch_exofop_toi_table
+from bittr_tess_vetter.platform.io.mast_client import MASTClient
 
 _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "radius": ("radius", "stellar_radius", "stellar_radius_rsun"),
     "mass": ("mass", "stellar_mass", "stellar_mass_msun"),
     "tmag": ("tmag", "stellar_tmag"),
 }
+
+_EXOFOP_STELLAR_ALIASES: dict[str, tuple[str, ...]] = {
+    "radius": ("stellar_radius_r_sun", "stellar_radius", "radius_r_sun", "radius"),
+    "mass": ("stellar_mass_m_sun", "stellar_mass", "mass_m_sun", "mass"),
+    "tmag": ("tess_mag", "tmag", "stellar_tmag"),
+    "teff": ("stellar_eff_temp_k", "teff", "teff_k"),
+    "logg": ("stellar_log_g_cm_s^2", "stellar_log_g", "logg", "logg_cgs"),
+}
+
+
+def _safe_optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        out = float(text)
+    except Exception:
+        return None
+    return out if np.isfinite(out) else None
 
 
 def _coerce_optional_finite_float(value: Any, *, label: str) -> float | None:
@@ -86,12 +109,18 @@ def resolve_stellar_inputs(
         file_values, file_meta = load_stellar_inputs_file(stellar_file)
 
     auto_values: dict[str, float | None] = {"radius": None, "mass": None, "tmag": None}
+    auto_meta: dict[str, Any] | None = None
     if use_stellar_auto:
         if auto_loader is None:
             raise BtvCliError("stellar auto lookup is unavailable", exit_code=EXIT_DATA_UNAVAILABLE)
         auto_raw = auto_loader(int(tic_id))
         if auto_raw is not None:
-            auto_values = _normalize_stellar_mapping(auto_raw, label="auto stellar")
+            if isinstance(auto_raw, tuple):
+                auto_payload, raw_meta = auto_raw
+                auto_values = _normalize_stellar_mapping(auto_payload, label="auto stellar")
+                auto_meta = dict(raw_meta) if isinstance(raw_meta, dict) else None
+            else:
+                auto_values = _normalize_stellar_mapping(auto_raw, label="auto stellar")
 
     resolved: dict[str, float | None] = {"radius": None, "mass": None, "tmag": None}
     sources: dict[str, str] = {"radius": "missing", "mass": "missing", "tmag": "missing"}
@@ -120,8 +149,106 @@ def resolve_stellar_inputs(
         "sources": sources,
         "file": file_meta,
         "use_stellar_auto": bool(use_stellar_auto),
+        "auto": auto_meta,
     }
     return resolved, provenance
 
 
-__all__ = ["load_stellar_inputs_file", "resolve_stellar_inputs"]
+def _lookup_exofop_stellar_values(tic_id: int, *, toi: str | None = None) -> tuple[dict[str, float | None], dict[str, Any]]:
+    rows = fetch_exofop_toi_table().entries_for_tic(int(tic_id))
+    if toi is not None:
+        toi_norm = str(toi).upper().replace("TOI-", "").replace("TOI", "").strip()
+        filtered = [r for r in rows if str(r.get("toi", "")).strip() == toi_norm]
+        if filtered:
+            rows = filtered
+    if not rows:
+        return {"radius": None, "mass": None, "tmag": None}, {
+            "source": "exofop_toi_table",
+            "status": "data_unavailable",
+            "message": f"No ExoFOP TOI rows for TIC {int(tic_id)}",
+        }
+
+    row = dict(rows[0])
+    out: dict[str, float | None] = {"radius": None, "mass": None, "tmag": None}
+    for field, aliases in _EXOFOP_STELLAR_ALIASES.items():
+        for alias in aliases:
+            value = row.get(alias)
+            if value is None:
+                continue
+            try:
+                num = float(value)
+            except Exception:
+                continue
+            if np.isfinite(num):
+                if field in out:
+                    out[field] = num
+                break
+
+    return out, {
+        "source": "exofop_toi_table",
+        "status": "ok",
+        "toi": row.get("toi"),
+        "teff": _safe_optional_float(row.get("stellar_eff_temp_k")),
+        "logg": _safe_optional_float(row.get("stellar_log_g_cm_s^2")),
+    }
+
+
+def load_auto_stellar_with_fallback(
+    *,
+    tic_id: int,
+    toi: str | None = None,
+) -> tuple[dict[str, float | None], dict[str, Any]]:
+    attempts: list[dict[str, Any]] = []
+    tic_values: dict[str, float | None] = {"radius": None, "mass": None, "tmag": None}
+    tic_ok = False
+    try:
+        target = MASTClient().get_target_info(int(tic_id))
+        tic_values = {
+            "radius": _coerce_optional_finite_float(target.stellar.radius, label="tic radius"),
+            "mass": _coerce_optional_finite_float(target.stellar.mass, label="tic mass"),
+            "tmag": _coerce_optional_finite_float(target.stellar.tmag, label="tic tmag"),
+        }
+        tic_ok = True
+        attempts.append({"source": "tic_mast", "status": "ok"})
+    except Exception as exc:
+        attempts.append({"source": "tic_mast", "status": "error", "message": f"{type(exc).__name__}: {exc}"})
+
+    exo_values, exo_meta = _lookup_exofop_stellar_values(int(tic_id), toi=toi)
+    attempts.append({k: v for k, v in exo_meta.items() if k in {"source", "status", "message", "toi"}})
+
+    resolved = dict(tic_values)
+    field_sources: dict[str, str] = {}
+    for field in ("radius", "mass", "tmag"):
+        if resolved.get(field) is None and exo_values.get(field) is not None:
+            resolved[field] = exo_values[field]
+            field_sources[field] = "exofop_toi_table"
+        elif resolved.get(field) is not None:
+            field_sources[field] = "tic_mast"
+        else:
+            field_sources[field] = "missing"
+
+    same_as_tic = False
+    if tic_ok:
+        overlap = [
+            field
+            for field in ("radius", "mass", "tmag")
+            if tic_values.get(field) is not None and exo_values.get(field) is not None
+        ]
+        same_as_tic = bool(overlap) and all(
+            abs(float(tic_values[field]) - float(exo_values[field])) <= 1e-9 for field in overlap
+        )
+
+    return resolved, {
+        "selected_source": "tic_mast" if tic_ok else "exofop_toi_table",
+        "field_sources": field_sources,
+        "attempts": attempts,
+        "echo_of_tic": same_as_tic,
+        "exofop": exo_meta,
+    }
+
+
+__all__ = [
+    "load_stellar_inputs_file",
+    "resolve_stellar_inputs",
+    "load_auto_stellar_with_fallback",
+]

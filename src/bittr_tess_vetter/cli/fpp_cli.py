@@ -23,7 +23,7 @@ from bittr_tess_vetter.cli.common_cli import (
     parse_extra_params,
     resolve_optional_output_path,
 )
-from bittr_tess_vetter.cli.stellar_inputs import resolve_stellar_inputs
+from bittr_tess_vetter.cli.stellar_inputs import load_auto_stellar_with_fallback, resolve_stellar_inputs
 from bittr_tess_vetter.cli.vet_cli import (
     _detrend_lightcurve_for_vetting,
     _normalize_detrend_method,
@@ -309,13 +309,11 @@ def _estimate_detrended_depth_ppm(
     }
 
 
-def _load_auto_stellar_inputs(tic_id: int) -> dict[str, float | None]:
-    target = MASTClient().get_target_info(int(tic_id))
-    return {
-        "radius": target.stellar.radius,
-        "mass": target.stellar.mass,
-        "tmag": target.stellar.tmag,
-    }
+def _load_auto_stellar_inputs(
+    tic_id: int,
+    toi: str | None = None,
+) -> tuple[dict[str, float | None], dict[str, Any]]:
+    return load_auto_stellar_with_fallback(tic_id=int(tic_id), toi=toi)
 
 
 @click.command("fpp")
@@ -507,7 +505,13 @@ def fpp_command(
             stellar_file=stellar_file,
             use_stellar_auto=use_stellar_auto,
             require_stellar=require_stellar,
-            auto_loader=_load_auto_stellar_inputs if use_stellar_auto else None,
+            auto_loader=(
+                (lambda _tic_id: _load_auto_stellar_inputs(_tic_id, toi=toi))
+                if toi is not None
+                else (lambda _tic_id: _load_auto_stellar_inputs(_tic_id))
+            )
+            if use_stellar_auto
+            else None,
         )
     except (TargetNotFoundError, LightCurveNotFoundError) as exc:
         raise BtvCliError(str(exc), exit_code=EXIT_DATA_UNAVAILABLE) from exc

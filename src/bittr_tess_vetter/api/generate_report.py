@@ -41,6 +41,7 @@ from bittr_tess_vetter.platform.io.mast_client import (
     LightCurveNotFoundError,
     MASTClient,
 )
+from bittr_tess_vetter.platform.catalogs.exofop_toi_table import fetch_exofop_toi_table
 from bittr_tess_vetter.report import (
     EnrichmentBlockData,
     ReportData,
@@ -54,6 +55,42 @@ from bittr_tess_vetter.validation.registry import CheckRegistry, CheckTier
 from bittr_tess_vetter.validation.result_schema import VettingBundleResult
 
 logger = logging.getLogger(__name__)
+
+
+def _to_optional_finite_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        out = float(text)
+    except Exception:
+        return None
+    return out if np.isfinite(out) else None
+
+
+def _fallback_stellar_from_exofop(tic_id: int) -> StellarParams | None:
+    try:
+        rows = fetch_exofop_toi_table().entries_for_tic(int(tic_id))
+    except Exception:
+        return None
+    if not rows:
+        return None
+
+    row = dict(rows[0])
+    radius = _to_optional_finite_float(
+        row.get("stellar_radius_r_sun") or row.get("stellar_radius") or row.get("radius")
+    )
+    mass = _to_optional_finite_float(
+        row.get("stellar_mass_m_sun") or row.get("stellar_mass") or row.get("mass")
+    )
+    tmag = _to_optional_finite_float(row.get("tess_mag") or row.get("tmag"))
+    teff = _to_optional_finite_float(row.get("stellar_eff_temp_k") or row.get("teff"))
+
+    if radius is None and mass is None and tmag is None and teff is None:
+        return None
+    return StellarParams(radius=radius, mass=mass, tmag=tmag, teff=teff)
 
 
 @dataclass(frozen=True)
@@ -212,6 +249,7 @@ def generate_report(
             logger.warning(
                 "TIC stellar query failed for %d; proceeding without", tic_id
             )
+            stellar = _fallback_stellar_from_exofop(tic_id)
 
     # 6. Build report (pure, network-free)
     lc = LightCurve.from_internal(stitched_lc_data)
