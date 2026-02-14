@@ -29,9 +29,12 @@ from bittr_tess_vetter.cli.common_cli import (
 from bittr_tess_vetter.cli.describe_checks_cli import describe_checks_command
 from bittr_tess_vetter.cli.detrend_grid_cli import detrend_grid_command
 from bittr_tess_vetter.cli.fpp_cli import fpp_command
+from bittr_tess_vetter.cli.localize_cli import localize_command
 from bittr_tess_vetter.cli.measure_sectors_cli import measure_sectors_command
+from bittr_tess_vetter.cli.periodogram_cli import periodogram_command
 from bittr_tess_vetter.cli.resolve_stellar_cli import resolve_stellar_command
 from bittr_tess_vetter.cli.report_cli import report_command
+from bittr_tess_vetter.cli.transit_fit_cli import fit_command
 from bittr_tess_vetter.cli.vet_cli import vet_command
 from bittr_tess_vetter.features import FeatureConfig
 
@@ -82,6 +85,9 @@ cli.add_command(resolve_stellar_command)
 cli.add_command(describe_checks_command)
 cli.add_command(measure_sectors_command)
 cli.add_command(detrend_grid_command)
+cli.add_command(localize_command)
+cli.add_command(fit_command)
+cli.add_command(periodogram_command)
 
 
 @cli.command()
