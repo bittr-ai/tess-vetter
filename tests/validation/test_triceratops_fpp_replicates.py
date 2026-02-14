@@ -130,6 +130,7 @@ class TestAggregateReplicateResults:
         assert out["replicates"] == 1
         assert out["n_success"] == 1
         assert out["n_fail"] == 0
+        assert out["replicate_success_rate"] == 1.0
 
     def test_multiple_success_aggregation(self):
         """Multiple successful results should be aggregated with median/CI."""
@@ -155,6 +156,7 @@ class TestAggregateReplicateResults:
         assert out["replicates"] == 3
         assert out["n_success"] == 3
         assert out["n_fail"] == 0
+        assert out["replicate_success_rate"] == 1.0
         assert out["runtime_seconds"] == 15.0
 
     def test_mixed_success_and_degenerate(self):
@@ -170,6 +172,7 @@ class TestAggregateReplicateResults:
 
         assert out["n_success"] == 2
         assert out["n_fail"] == 1
+        assert out["replicate_success_rate"] == 0.666667
         assert len(out["fpp_summary"]["values"]) == 2
 
     def test_best_run_selection(self):
@@ -201,6 +204,21 @@ class TestAggregateReplicateResults:
         # Best run seed should be preserved (though overwritten by summary in practice)
         # The median FPP should be 0.03
         assert out["fpp_summary"]["median"] == 0.03
+
+    def test_warning_note_emitted_for_high_failure_rate(self):
+        """A high replicate failure rate should add a warning note."""
+        results = [
+            {"fpp": 0.01, "nfpp": 0.001, "posterior_sum_total": 1.0},
+            {"error": "failed", "error_type": "internal_error"},
+            {"fpp": float("nan"), "nfpp": 0.1},
+            {"error": "timed out", "error_type": "timeout"},
+        ]
+        out = _aggregate_replicate_results(
+            results, tic_id=12345, sectors_used=[1], total_runtime=10.0
+        )
+
+        assert out["replicate_success_rate"] == 0.25
+        assert "warning_note" in out
 
 
 # =============================================================================
@@ -382,6 +400,8 @@ class TestCalculateFppHandlerReplicates:
         assert "error" in result
         assert result["error_type"] == "degenerate_posterior"
         assert result["n_success"] == 0
+        assert result["replicate_success_rate"] == 0.0
+        assert "warning_note" in result
 
     @patch("bittr_tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
     @patch("bittr_tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
@@ -414,6 +434,7 @@ class TestCalculateFppHandlerReplicates:
         assert "error" not in result
         assert result["replicates"] == 3
         assert result["n_success"] >= 1
+        assert "replicate_success_rate" in result
         assert "fpp_summary" in result or result["n_success"] == 1
 
     @patch("bittr_tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
@@ -440,7 +461,9 @@ class TestCalculateFppHandlerReplicates:
         assert result["error_type"] == "degenerate_posterior"
         assert result["n_success"] == 0
         assert result["replicates"] == 3
+        assert result["replicate_success_rate"] == 0.0
         assert "degenerate_reasons" in result
+        assert "warning_note" in result
 
     @patch("bittr_tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
     @patch("bittr_tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")

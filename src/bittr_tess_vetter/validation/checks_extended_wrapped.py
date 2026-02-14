@@ -508,6 +508,9 @@ class AliasDiagnosticsCheck:
                 period_days=float(inputs.candidate.period),
                 threshold_fraction=systematic_threshold,
             )
+            metrics["nearest_systematic_period"] = float(systematic_proximity["nearest_systematic_period"])
+            metrics["systematic_period_name"] = str(systematic_proximity["systematic_period_name"])
+            metrics["fractional_distance"] = float(systematic_proximity["fractional_distance"])
             metrics["systematic_nearest_period_days"] = float(systematic_proximity["nearest_systematic_days"])
             metrics["systematic_fractional_distance"] = float(systematic_proximity["fractional_distance"])
             metrics["systematic_within_threshold"] = bool(systematic_proximity["within_threshold"])

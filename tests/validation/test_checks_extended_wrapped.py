@@ -40,6 +40,8 @@ def _make_inputs(*, period_days: float = 3.0) -> CheckInputs:
 
 def test_compute_systematic_period_proximity_nominal() -> None:
     out = compute_systematic_period_proximity(period_days=13.0, threshold_fraction=0.05)
+    assert out["nearest_systematic_period"] == 13.7
+    assert out["systematic_period_name"] == "tess_orbital"
     assert out["nearest_systematic_days"] == 13.7
     assert np.isclose(out["fractional_distance"], 0.7 / 13.7)
     assert out["within_threshold"] is False
@@ -113,6 +115,9 @@ def test_v19_includes_systematic_period_proximity(monkeypatch) -> None:
 
     result = check.run(inputs, config)
     assert result.status == "ok"
+    assert result.metrics["nearest_systematic_period"] == 13.7
+    assert result.metrics["systematic_period_name"] == "tess_orbital"
+    assert np.isclose(float(result.metrics["fractional_distance"]), 0.7 / 13.7)
     assert result.metrics["systematic_nearest_period_days"] == 13.7
     assert result.metrics["systematic_within_threshold"] is False
     assert result.raw is not None

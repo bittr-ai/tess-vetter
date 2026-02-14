@@ -54,6 +54,7 @@ logger = logging.getLogger(__name__)
 TRILEGAL_POLL_TIMEOUT_SECONDS = 180.0
 TRILEGAL_POLL_INTERVAL_SECONDS = 5.0
 TRICERATOPS_INIT_TIMEOUT_DEFAULT = 300.0
+REPLICATE_SUCCESS_RATE_WARN_THRESHOLD = 0.5
 
 _INSECURE_PERMS_MASK = 0o022  # group/other writable
 
@@ -749,6 +750,12 @@ def _aggregate_replicate_results(
     out["replicates"] = len(results)
     out["n_success"] = n_success
     out["n_fail"] = n_fail
+    total = max(1, n_success + n_fail)
+    out["replicate_success_rate"] = round(float(n_success) / float(total), 6)
+    if out["replicate_success_rate"] < REPLICATE_SUCCESS_RATE_WARN_THRESHOLD:
+        out["warning_note"] = (
+            f"High replicate failure rate ({n_fail}/{total}); review replicate_errors/degenerate_reason."
+        )
     out["runtime_seconds"] = round(total_runtime, 1)
 
     out["fpp"] = round(fpp_median, 6)
@@ -1496,6 +1503,13 @@ def calculate_fpp_handler(
     successful_results = [r for r in replicate_results if not _is_result_degenerate(r)]
     n_success = len(successful_results)
     n_fail = len(replicate_results) - n_success + len(replicate_errors)
+    total_attempts = max(1, n_success + n_fail)
+    replicate_success_rate = round(float(n_success) / float(total_attempts), 6)
+    high_failure_warning = (
+        f"High replicate failure rate ({n_fail}/{total_attempts}); review replicate_errors/degenerate_reasons."
+        if replicate_success_rate < REPLICATE_SUCCESS_RATE_WARN_THRESHOLD
+        else None
+    )
 
     if n_success == 0:
         # All runs failed or were degenerate - return explicit degenerate_posterior error
@@ -1517,9 +1531,11 @@ def calculate_fpp_handler(
             "replicates": n_replicates,
             "n_success": 0,
             "n_fail": n_fail,
+            "replicate_success_rate": replicate_success_rate,
             "base_seed": base_seed,
             "degenerate_reasons": degenerate_reasons[:10],  # Limit to first 10
             "replicate_errors": replicate_errors[:5],  # Limit to first 5
+            "warning_note": high_failure_warning,
         }
 
     # If we have successful results, aggregate them
@@ -1532,6 +1548,9 @@ def calculate_fpp_handler(
             total_runtime=total_runtime,
         )
         out["base_seed"] = base_seed
+        out["replicate_success_rate"] = replicate_success_rate
+        if high_failure_warning is not None:
+            out["warning_note"] = high_failure_warning
         if replicate_errors:
             out["replicate_errors"] = replicate_errors[:5]
         return out
@@ -1541,8 +1560,11 @@ def calculate_fpp_handler(
         out["replicates"] = n_replicates
         out["n_success"] = n_success
         out["n_fail"] = n_fail
+        out["replicate_success_rate"] = replicate_success_rate
         out["base_seed"] = base_seed
         out["runtime_seconds"] = round(total_runtime, 1)
+        if high_failure_warning is not None:
+            out["warning_note"] = high_failure_warning
         if replicate_errors:
             out["replicate_errors"] = replicate_errors[:5]
 

@@ -101,6 +101,112 @@ def test_btv_fpp_success_plumbs_api_params_and_emits_contract(monkeypatch, tmp_p
     assert payload["provenance"]["runtime"]["preset"] == "standard"
     assert payload["provenance"]["runtime"]["seed_requested"] == 99
     assert payload["provenance"]["runtime"]["seed_effective"] == 99
+    assert payload["provenance"]["runtime"]["timeout_seconds_requested"] == 120.0
+    assert payload["provenance"]["runtime"]["timeout_seconds"] == 120.0
+
+
+def test_btv_fpp_standard_preset_defaults_timeout_900(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
+        return object(), [14, 15]
+
+    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"fpp": 0.123, "nfpp": 0.001, "base_seed": 99}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_standard_default_timeout.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--preset",
+            "standard",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen["timeout_seconds"] == 900.0
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["runtime"]["timeout_seconds_requested"] is None
+    assert payload["provenance"]["runtime"]["timeout_seconds"] == 900.0
+
+
+def test_btv_fpp_contrast_curve_tbl_parsed_and_passed(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
+        return object(), [14]
+
+    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    cc_path = tmp_path / "contrast.tbl"
+    cc_path.write_text(
+        "\n".join(
+            [
+                "# ExoFOP contrast curve",
+                "0.10 1.5",
+                "0.50 4.2",
+                "1.00 6.0",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    out_path = tmp_path / "fpp_with_contrast.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--contrast-curve",
+            str(cc_path),
+            "--contrast-curve-filter",
+            "Kcont",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    cc = seen["contrast_curve"]
+    assert cc is not None
+    assert cc.filter == "Kcont"
+    assert len(cc.separation_arcsec) == 3
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["contrast_curve"]["path"] == str(cc_path)
+    assert payload["provenance"]["contrast_curve"]["filter"] == "Kcont"
 
 
 def test_btv_fpp_timeout_maps_to_exit_5(monkeypatch) -> None:

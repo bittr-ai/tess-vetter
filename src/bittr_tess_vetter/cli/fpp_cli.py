@@ -9,6 +9,7 @@ import click
 import numpy as np
 
 from bittr_tess_vetter.api.fpp import calculate_fpp
+from bittr_tess_vetter.api.fpp_helpers import load_contrast_curve_exofop_tbl
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
 from bittr_tess_vetter.api.transit_masks import get_in_transit_mask, get_out_of_transit_mask, measure_transit_depth
 from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
@@ -35,6 +36,8 @@ from bittr_tess_vetter.platform.io import (
     PersistentCache,
     TargetNotFoundError,
 )
+
+_STANDARD_PRESET_TIMEOUT_SECONDS = 900.0
 
 
 def _looks_like_timeout(exc: BaseException) -> bool:
@@ -79,6 +82,7 @@ def _execute_fpp(
     stellar_radius: float | None,
     stellar_mass: float | None,
     stellar_tmag: float | None,
+    contrast_curve: Any | None,
 ) -> tuple[dict[str, Any], list[int]]:
     cache, sectors_loaded = _build_cache_for_fpp(
         tic_id=tic_id,
@@ -100,6 +104,7 @@ def _execute_fpp(
         preset=preset,
         replicates=replicates,
         seed=seed,
+        contrast_curve=contrast_curve,
     )
     return result, sectors_loaded
 
@@ -204,12 +209,29 @@ def _load_auto_stellar_inputs(tic_id: int) -> dict[str, float | None]:
     type=click.Choice(["fast", "standard"], case_sensitive=False),
     default="fast",
     show_default=True,
-    help="TRICERATOPS runtime preset.",
+    help="TRICERATOPS runtime preset (standard typically expects a longer timeout budget).",
 )
 @click.option("--replicates", type=int, default=None, help="Replicate count for FPP aggregation.")
 @click.option("--seed", type=int, default=None, help="Base RNG seed.")
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
-@click.option("--timeout-seconds", type=float, default=None, help="Optional timeout budget.")
+@click.option(
+    "--timeout-seconds",
+    type=float,
+    default=None,
+    help="Optional timeout budget. If omitted with --preset standard, defaults to 900 seconds.",
+)
+@click.option(
+    "--contrast-curve",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="ExoFOP-style .tbl contrast-curve file for TRICERATOPS companion constraints.",
+)
+@click.option(
+    "--contrast-curve-filter",
+    type=str,
+    default=None,
+    help="Optional band label override for --contrast-curve (for example Kcont, Ks, r).",
+)
 @click.option(
     "--network-ok/--no-network",
     default=False,
@@ -262,6 +284,8 @@ def fpp_command(
     seed: int | None,
     sectors: tuple[int, ...],
     timeout_seconds: float | None,
+    contrast_curve: Path | None,
+    contrast_curve_filter: str | None,
     network_ok: bool,
     cache_dir: Path | None,
     stellar_radius: float | None,
@@ -303,6 +327,33 @@ def fpp_command(
         raise BtvCliError("--replicates must be >= 1", exit_code=EXIT_INPUT_ERROR)
     if use_stellar_auto and not network_ok:
         raise BtvCliError("--use-stellar-auto requires --network-ok", exit_code=EXIT_DATA_UNAVAILABLE)
+    if timeout_seconds is not None and float(timeout_seconds) <= 0.0:
+        raise BtvCliError("--timeout-seconds must be > 0", exit_code=EXIT_INPUT_ERROR)
+
+    preset_name = str(preset).lower()
+    effective_timeout_seconds = (
+        float(timeout_seconds)
+        if timeout_seconds is not None
+        else (_STANDARD_PRESET_TIMEOUT_SECONDS if preset_name == "standard" else None)
+    )
+    if timeout_seconds is None and preset_name == "standard":
+        click.echo(
+            "Using default timeout_seconds=900 for --preset standard.",
+            err=True,
+        )
+
+    parsed_contrast_curve: Any | None = None
+    if contrast_curve is not None:
+        try:
+            parsed_contrast_curve = load_contrast_curve_exofop_tbl(
+                contrast_curve,
+                filter=contrast_curve_filter,
+            )
+        except Exception as exc:
+            raise BtvCliError(
+                f"Failed to parse --contrast-curve: {exc}",
+                exit_code=EXIT_INPUT_ERROR,
+            ) from exc
 
     try:
         resolved_stellar, stellar_resolution = resolve_stellar_inputs(
@@ -373,14 +424,15 @@ def fpp_command(
             duration_hours=resolved_duration_hours,
             depth_ppm=float(depth_ppm_used),
             sectors=list(sectors) if sectors else None,
-            preset=str(preset).lower(),
+            preset=preset_name,
             replicates=replicates,
             seed=seed,
-            timeout_seconds=timeout_seconds,
+            timeout_seconds=effective_timeout_seconds,
             cache_dir=cache_dir,
             stellar_radius=resolved_stellar.get("radius"),
             stellar_mass=resolved_stellar.get("mass"),
             stellar_tmag=resolved_stellar.get("tmag"),
+            contrast_curve=parsed_contrast_curve,
         )
     except BtvCliError:
         raise
@@ -410,12 +462,17 @@ def fpp_command(
             "resolved_from": input_resolution.get("resolved_from"),
             "stellar": stellar_resolution,
             "detrended_depth": detrended_depth_meta,
+            "contrast_curve": {
+                "path": str(contrast_curve) if contrast_curve is not None else None,
+                "filter": str(parsed_contrast_curve.filter) if parsed_contrast_curve is not None else None,
+            },
             "runtime": {
-                "preset": str(preset).lower(),
+                "preset": preset_name,
                 "replicates": replicates,
                 "seed_requested": seed,
                 "seed_effective": result.get("base_seed", seed),
-                "timeout_seconds": timeout_seconds,
+                "timeout_seconds_requested": timeout_seconds,
+                "timeout_seconds": effective_timeout_seconds,
                 "network_ok": bool(network_ok),
             },
         },
