@@ -315,7 +315,10 @@ def fit_transit(
         import batman  # noqa: F401
     except ImportError:
         logger.error("batman package not installed")
-        return _make_error_result("batman not installed - required for transit fitting")
+        return _make_error_result(
+            "batman not installed - required for transit fitting. "
+            "Install with: pip install batman-package"
+        )
 
     # Check for emcee if MCMC requested
     actual_method = method

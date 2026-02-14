@@ -122,7 +122,10 @@ def test_btv_fit_api_error_status_exits_zero_and_surfaces_error(monkeypatch, tmp
             return {
                 "status": "error",
                 "fit_method": "none",
-                "error_message": "batman not installed - required for transit fitting",
+                "error_message": (
+                    "batman not installed - required for transit fitting. "
+                    "Install with: pip install batman-package"
+                ),
             }
 
     monkeypatch.setattr("bittr_tess_vetter.cli.transit_fit_cli.MASTClient", _FakeMASTClient)
@@ -152,7 +155,10 @@ def test_btv_fit_api_error_status_exits_zero_and_surfaces_error(monkeypatch, tmp
     assert result.exit_code == 0, result.output
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["fit"]["status"] == "error"
-    assert payload["fit"]["error_message"] == "batman not installed - required for transit fitting"
+    assert payload["fit"]["error_message"] == (
+        "batman not installed - required for transit fitting. "
+        "Install with: pip install batman-package"
+    )
 
 
 def test_btv_fit_missing_required_candidate_input_exits_1() -> None:

@@ -13,3 +13,6 @@ def test_top_level_help_lists_new_api_addition_commands() -> None:
     assert "localize" in result.output
     assert "fit" in result.output
     assert "periodogram" in result.output
+    assert "model-compete" in result.output
+    assert "ephemeris-reliability" in result.output
+    assert "activity" in result.output

@@ -37,6 +37,7 @@ def test_fit_transit_missing_batman_returns_error(monkeypatch: pytest.MonkeyPatc
 
     assert result.status == "error"
     assert "batman not installed" in (result.error_message or "")
+    assert "pip install batman-package" in (result.error_message or "")
 
 
 def test_fit_transit_applies_valid_mask_and_computes_t0_offset(

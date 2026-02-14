@@ -21,6 +21,7 @@ from typing import Any
 
 import click
 
+from bittr_tess_vetter.cli.activity_cli import activity_command
 from bittr_tess_vetter.cli.common_cli import (
     EXIT_INPUT_ERROR,
     EXIT_RUNTIME_ERROR,
@@ -29,8 +30,10 @@ from bittr_tess_vetter.cli.common_cli import (
 from bittr_tess_vetter.cli.describe_checks_cli import describe_checks_command
 from bittr_tess_vetter.cli.detrend_grid_cli import detrend_grid_command
 from bittr_tess_vetter.cli.fpp_cli import fpp_command
+from bittr_tess_vetter.cli.ephemeris_reliability_cli import ephemeris_reliability_command
 from bittr_tess_vetter.cli.localize_cli import localize_command
 from bittr_tess_vetter.cli.measure_sectors_cli import measure_sectors_command
+from bittr_tess_vetter.cli.model_compete_cli import model_compete_command
 from bittr_tess_vetter.cli.periodogram_cli import periodogram_command
 from bittr_tess_vetter.cli.resolve_stellar_cli import resolve_stellar_command
 from bittr_tess_vetter.cli.report_cli import report_command
@@ -88,6 +91,9 @@ cli.add_command(detrend_grid_command)
 cli.add_command(localize_command)
 cli.add_command(fit_command)
 cli.add_command(periodogram_command)
+cli.add_command(model_compete_command)
+cli.add_command(ephemeris_reliability_command)
+cli.add_command(activity_command)
 
 
 @cli.command()

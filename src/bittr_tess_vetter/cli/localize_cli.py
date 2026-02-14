@@ -19,6 +19,7 @@ from bittr_tess_vetter.cli.common_cli import (
     resolve_optional_output_path,
 )
 from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
+from bittr_tess_vetter.platform.catalogs.toi_resolution import LookupStatus, lookup_tic_coordinates
 from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
 
@@ -56,28 +57,64 @@ def _build_reference_sources(
     tpf_meta: dict[str, Any],
     ra_deg: float | None,
     dec_deg: float | None,
-) -> list[dict[str, Any]]:
+    network_ok: bool,
+) -> tuple[list[dict[str, Any]], str]:
     ra_from_meta = _coerce_finite_float(tpf_meta.get("RA_OBJ"))
     dec_from_meta = _coerce_finite_float(tpf_meta.get("DEC_OBJ"))
     if ra_from_meta is not None and dec_from_meta is not None:
-        return [
-            {
-                "name": f"Target TIC {int(tic_id)}",
-                "ra": float(ra_from_meta),
-                "dec": float(dec_from_meta),
-                "meta": {"source": "tpf_meta", "ra_key": "RA_OBJ", "dec_key": "DEC_OBJ"},
-            }
-        ]
+        return (
+            [
+                {
+                    "name": f"Target TIC {int(tic_id)}",
+                    "ra": float(ra_from_meta),
+                    "dec": float(dec_from_meta),
+                    "meta": {"source": "tpf_meta", "ra_key": "RA_OBJ", "dec_key": "DEC_OBJ"},
+                }
+            ],
+            "tpf_meta",
+        )
 
     if ra_deg is not None and dec_deg is not None:
-        return [
-            {
-                "name": f"Target TIC {int(tic_id)}",
-                "ra": float(ra_deg),
-                "dec": float(dec_deg),
-                "meta": {"source": "cli"},
-            }
-        ]
+        return (
+            [
+                {
+                    "name": f"Target TIC {int(tic_id)}",
+                    "ra": float(ra_deg),
+                    "dec": float(dec_deg),
+                    "meta": {"source": "cli"},
+                }
+            ],
+            "cli",
+        )
+
+    if network_ok:
+        coord_result = lookup_tic_coordinates(tic_id=int(tic_id))
+        if coord_result.status == LookupStatus.OK and coord_result.ra_deg is not None and coord_result.dec_deg is not None:
+            return (
+                [
+                    {
+                        "name": f"Target TIC {int(tic_id)}",
+                        "ra": float(coord_result.ra_deg),
+                        "dec": float(coord_result.dec_deg),
+                        "meta": {"source": "tic_lookup"},
+                    }
+                ],
+                "tic_lookup",
+            )
+        if coord_result.status == LookupStatus.TIMEOUT:
+            raise BtvCliError(
+                coord_result.message or f"TIC coordinate lookup timed out for TIC {tic_id}",
+                exit_code=EXIT_DATA_UNAVAILABLE,
+            )
+        if coord_result.status == LookupStatus.DATA_UNAVAILABLE:
+            raise BtvCliError(
+                coord_result.message or f"TIC coordinate lookup returned no RA/Dec for TIC {tic_id}",
+                exit_code=EXIT_DATA_UNAVAILABLE,
+            )
+        raise BtvCliError(
+            coord_result.message or f"TIC coordinate lookup failed for TIC {tic_id}",
+            exit_code=EXIT_RUNTIME_ERROR,
+        )
 
     raise BtvCliError(
         "Target coordinates unavailable. Provide --ra-deg and --dec-deg when TPF RA_OBJ/DEC_OBJ are missing.",
@@ -186,11 +223,12 @@ def _execute_localize(
         ccd=0,
         meta=tpf_meta,
     )
-    reference_sources = _build_reference_sources(
+    reference_sources, coordinate_source = _build_reference_sources(
         tic_id=int(tic_id),
         tpf_meta=tpf_meta,
         ra_deg=ra_deg,
         dec_deg=dec_deg,
+        network_ok=bool(network_ok),
     )
 
     localization_result = localize_transit_source(
@@ -218,6 +256,7 @@ def _execute_localize(
             "requested_sectors": [int(s) for s in tpf_sectors] if tpf_sectors else None,
             "tpf_sector_strategy": str(tpf_sector_strategy).lower(),
             "network_ok": bool(network_ok),
+            "coordinate_source": str(coordinate_source),
         },
     }
 
