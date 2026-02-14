@@ -135,6 +135,9 @@ def test_happy_path_multi_sector() -> None:
     assert result.stitch_diagnostics is not None
     assert len(result.stitch_diagnostics) > 0
     assert isinstance(result.report_json, dict)
+    assert "plot_data" not in result.report_json
+    assert isinstance(result.plot_data_json, dict)
+    assert "full_lc" in result.plot_data_json
 
 
 # ---------------------------------------------------------------------------

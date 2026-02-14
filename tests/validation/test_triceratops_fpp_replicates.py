@@ -17,6 +17,7 @@ from bittr_tess_vetter.validation.triceratops_fpp import (
     _aggregate_replicate_results,
     _is_result_degenerate,
 )
+from bittr_tess_vetter.platform.network.timeout import NetworkTimeoutError
 
 # =============================================================================
 # Test _is_result_degenerate helper
@@ -280,6 +281,17 @@ def make_degenerate_target() -> MockTriceratopsTarget:
     return target
 
 
+def make_timeout_target() -> MockTriceratopsTarget:
+    """Create a target that times out during calc_probs."""
+    target = MockTriceratopsTarget()
+
+    def _raise_timeout(**kwargs: Any) -> None:  # noqa: ARG001
+        raise NetworkTimeoutError("replicate timed out", 1.0)
+
+    target.calc_probs = _raise_timeout  # type: ignore[method-assign]
+    return target
+
+
 def test_vendor_triceratops_has_no_unconditional_griz_print() -> None:
     from pathlib import Path
 
@@ -474,6 +486,36 @@ class TestCalculateFppHandlerReplicates:
         assert result["replicate_success_rate"] == 0.0
         assert "degenerate_reasons" in result
         assert "warning_note" in result
+
+    @patch("bittr_tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+    @patch("bittr_tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+    def test_all_replicates_timeout_returns_timeout_error(self, mock_save, mock_load, mock_cache):
+        """Timeout-only replicate failures should return high-level timeout semantics."""
+        from bittr_tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+
+        mock_load.return_value = make_timeout_target()
+
+        result = calculate_fpp_handler(
+            cache=mock_cache,
+            tic_id=12345,
+            period=10.0,
+            t0=1500.0,
+            depth_ppm=500,
+            duration_hours=3.0,
+            replicates=3,
+            seed=42,
+        )
+
+        assert "error" in result
+        assert result["error_type"] == "timeout"
+        assert result["stage"] == "replicate_aggregation"
+        assert result["n_success"] == 0
+        assert result["replicates"] == 3
+        assert result["replicate_success_rate"] == 0.0
+        assert "actionable_guidance" in result
+        assert any(
+            err.get("error_type") == "timeout" for err in result.get("replicate_errors", [])
+        )
 
     @patch("bittr_tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
     @patch("bittr_tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")

@@ -25,7 +25,7 @@ from bittr_tess_vetter.validation.report_bridge import run_lc_checks
 from bittr_tess_vetter.validation.result_schema import CheckResult, VettingBundleResult
 
 _REPORT_BASE_CHECK_ORDER: tuple[str, ...] = ("V01", "V02", "V04", "V05", "V13", "V15")
-CLI_REPORT_V2_SCHEMA = "cli.report.v2"
+CLI_REPORT_V3_SCHEMA = "cli.report.v3"
 
 
 @dataclass(frozen=True)
@@ -286,7 +286,7 @@ def build_cli_report_payload(
     vet_artifact: dict[str, Any],
 ) -> dict[str, Any]:
     return {
-        "schema_version": CLI_REPORT_V2_SCHEMA,
+        "schema_version": CLI_REPORT_V3_SCHEMA,
         "provenance": {"vet_artifact": dict(vet_artifact)},
         "report": dict(report_json),
     }

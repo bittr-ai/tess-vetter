@@ -62,7 +62,8 @@ class GenerateReportResult:
 
     Attributes:
         report: Structured report data packet.
-        report_json: JSON-serializable dict (always computed, cheap).
+        report_json: JSON-serializable summary/metadata payload (no top-level plot_data).
+        plot_data_json: JSON-serializable plot payload emitted as a separate artifact.
         html: Rendered HTML string, or None if include_html was False.
         sectors_used: Sorted list of sectors that contributed data.
         stitch_diagnostics: Per-sector stitching diagnostics, or None
@@ -71,6 +72,7 @@ class GenerateReportResult:
 
     report: ReportData
     report_json: dict[str, Any]
+    plot_data_json: dict[str, Any]
     html: str | None
     sectors_used: list[int]
     stitch_diagnostics: list[SectorDiagnostics] | None
@@ -282,7 +284,10 @@ def generate_report(
             pipeline_config=pipeline_config,
         )
 
-    report_json = report.to_json()
+    full_report_json = report.to_json()
+    plot_data_json = dict(full_report_json.get("plot_data", {}))
+    report_json = dict(full_report_json)
+    report_json.pop("plot_data", None)
 
     # 7. Optional HTML
     html = render_html(report) if include_html else None
@@ -290,6 +295,7 @@ def generate_report(
     return GenerateReportResult(
         report=report,
         report_json=report_json,
+        plot_data_json=plot_data_json,
         html=html,
         sectors_used=sectors_used,
         stitch_diagnostics=stitch_diag,

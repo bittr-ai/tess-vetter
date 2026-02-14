@@ -60,6 +60,7 @@ result = generate_report(
 
 report = result.report
 report_json = result.report_json
+plot_data_json = result.plot_data_json
 html = result.html
 ```
 

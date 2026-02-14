@@ -330,6 +330,22 @@ def _score_variant(
     return float(res.score), float(res.depth_hat * 1e6), float(res.depth_sigma * 1e6)
 
 
+def _clean_finite_inputs(
+    time: NDArray[np.float64],
+    flux: NDArray[np.float64],
+    flux_err: NDArray[np.float64],
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], int]:
+    finite_mask = np.isfinite(time) & np.isfinite(flux) & np.isfinite(flux_err)
+    n_removed = int(len(time) - int(np.sum(finite_mask)))
+    if n_removed <= 0:
+        return time, flux, flux_err, 0
+    return time[finite_mask], flux[finite_mask], flux_err[finite_mask], n_removed
+
+
+def _score_outputs_are_finite(*, score: float, depth_hat_ppm: float, depth_err_ppm: float) -> bool:
+    return bool(np.isfinite(score) and np.isfinite(depth_hat_ppm) and np.isfinite(depth_err_ppm))
+
+
 def _celerite2_sho_variant(
     *,
     time: NDArray[np.float64],
@@ -375,6 +391,13 @@ def _celerite2_sho_variant(
     if not CELERITE2_AVAILABLE:
         base["failure_reason"] = "celerite2 not installed"
         return _finalize(base)
+
+    time, flux, flux_err, n_removed_non_finite = _clean_finite_inputs(time, flux, flux_err)
+    base["n_points_used"] = int(len(time))
+    if n_removed_non_finite > 0:
+        base["warnings"].append(
+            f"Removed {n_removed_non_finite} non-finite points before GP fitting/scoring"
+        )
 
     if len(time) < 50:
         base["failure_reason"] = f"insufficient data points ({len(time)} < 50)"
@@ -500,6 +523,16 @@ def _celerite2_sho_variant(
             duration_hours=duration_hours,
             config=config,
         )
+        if not _score_outputs_are_finite(
+            score=float(score),
+            depth_hat_ppm=float(depth_hat_ppm),
+            depth_err_ppm=float(depth_err_ppm),
+        ):
+            base["failure_reason"] = (
+                "non-finite score outputs "
+                f"(score={score}, depth_hat_ppm={depth_hat_ppm}, depth_err_ppm={depth_err_ppm})"
+            )
+            return _finalize(base)
         base["status"] = "ok"
         base["score"] = float(score)
         base["depth_hat_ppm"] = float(depth_hat_ppm)
@@ -659,6 +692,11 @@ def compute_sensitivity_sweep_numpy(
                         base_row["warnings"].append(
                             f"Applied {variant.detrender} (window={meta.get('window_cadences', 'N/A')} cadences)"
                         )
+            t_var, f_var, fe_var, n_removed_non_finite = _clean_finite_inputs(t_var, f_var, fe_var)
+            if n_removed_non_finite > 0:
+                base_row["warnings"].append(
+                    f"Removed {n_removed_non_finite} non-finite points before scoring"
+                )
             if len(t_var) < 50:
                 base_row["status"] = "failed"
                 base_row["failure_reason"] = (
@@ -674,10 +712,21 @@ def compute_sensitivity_sweep_numpy(
                     duration_hours=float(duration_hours),
                     config=config,
                 )
-                base_row["score"] = float(score)
-                base_row["depth_hat_ppm"] = float(depth_hat_ppm)
-                base_row["depth_err_ppm"] = float(depth_err_ppm)
-                base_row["n_points_used"] = int(len(t_var))
+                if not _score_outputs_are_finite(
+                    score=float(score),
+                    depth_hat_ppm=float(depth_hat_ppm),
+                    depth_err_ppm=float(depth_err_ppm),
+                ):
+                    base_row["status"] = "failed"
+                    base_row["failure_reason"] = (
+                        "non-finite score outputs "
+                        f"(score={score}, depth_hat_ppm={depth_hat_ppm}, depth_err_ppm={depth_err_ppm})"
+                    )
+                else:
+                    base_row["score"] = float(score)
+                    base_row["depth_hat_ppm"] = float(depth_hat_ppm)
+                    base_row["depth_err_ppm"] = float(depth_err_ppm)
+                    base_row["n_points_used"] = int(len(t_var))
         except Exception as e:
             base_row["status"] = "failed"
             base_row["failure_reason"] = f"{type(e).__name__}: {e}"

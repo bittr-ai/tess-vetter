@@ -1512,7 +1512,37 @@ def calculate_fpp_handler(
     )
 
     if n_success == 0:
-        # All runs failed or were degenerate - return explicit degenerate_posterior error
+        # All runs failed or were degenerate.
+        # Special-case timeout-only failures with clearer semantics/actionable guidance.
+        if replicate_errors and all(
+            str(e.get("error_type", "")).lower() == "timeout" for e in replicate_errors
+        ):
+            return {
+                "error": (
+                    f"All {n_replicates} replicate(s) timed out before producing "
+                    "a valid posterior."
+                ),
+                "error_type": "timeout",
+                "stage": "replicate_aggregation",
+                "tic_id": tic_id,
+                "tmag": tmag,
+                "sectors_used": sectors_used,
+                "runtime_seconds": round(total_runtime, 1),
+                "replicates": n_replicates,
+                "n_success": 0,
+                "n_fail": n_fail,
+                "replicate_success_rate": replicate_success_rate,
+                "base_seed": base_seed,
+                "replicate_errors": replicate_errors[:5],
+                "warning_note": high_failure_warning,
+                "actionable_guidance": [
+                    "Increase timeout_seconds to allow TRICERATOPS calc_probs to finish.",
+                    "Reduce replicates to lower total runtime pressure.",
+                    "Retry later if upstream catalog/network services are slow.",
+                ],
+            }
+
+        # Preserve existing behavior for mixed/non-timeout failures.
         degenerate_reasons: list[str] = []
         for r in replicate_results:
             if r.get("degenerate_reason"):

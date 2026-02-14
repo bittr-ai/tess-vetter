@@ -121,6 +121,7 @@ def _execute_report(
             report_json=result.report_json,
             vet_artifact=vet_artifact,
         ),
+        "plot_data_json": result.plot_data_json,
         "html": result.html,
     }
 
@@ -156,6 +157,12 @@ def _execute_report(
     show_default=True,
     help="Report payload JSON output path; '-' writes to stdout.",
 )
+@click.option(
+    "--plot-data-out",
+    type=str,
+    default=None,
+    help="Optional path for separate plot-data JSON artifact.",
+)
 @click.option("--html-out", type=str, default=None, help="Optional path to write HTML when --include-html is set.")
 @click.option("--progress-path", type=str, default=None, help="Optional progress metadata path.")
 @click.option("--resume", is_flag=True, default=False, help="Skip when completed output already exists.")
@@ -178,6 +185,7 @@ def report_command(
     fail_fast: bool,
     emit_warnings: bool,
     output_path_arg: str,
+    plot_data_out: str | None,
     html_out: str | None,
     progress_path: str | None,
     resume: bool,
@@ -185,6 +193,15 @@ def report_command(
     """Generate report payload JSON and optional HTML from candidate inputs."""
     out_path = resolve_optional_output_path(output_path_arg)
     progress_file = _progress_path_from_args(out_path, progress_path, resume)
+    if plot_data_out:
+        plot_data_path = Path(plot_data_out)
+    elif out_path is not None:
+        plot_data_path = out_path.with_suffix(out_path.suffix + ".plot_data.json")
+    else:
+        raise BtvCliError(
+            "--out - requires --plot-data-out so plot data is not dropped",
+            exit_code=EXIT_INPUT_ERROR,
+        )
     html_path = Path(html_out) if html_out else None
 
     candidate_meta = {
@@ -286,6 +303,7 @@ def report_command(
         )
 
         dump_json_output(output["report_json"], out_path)
+        dump_json_output(output["plot_data_json"], plot_data_path)
 
         html = output.get("html")
         if include_html and isinstance(html, str) and html_path is not None:

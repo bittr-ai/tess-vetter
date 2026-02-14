@@ -133,7 +133,7 @@ def test_btv_vet_progress_error_maps_to_exit_3(monkeypatch, tmp_path: Path) -> N
     assert result.exit_code == 3
 
 
-def test_btv_report_lightcurve_missing_maps_to_exit_4(monkeypatch) -> None:
+def test_btv_report_lightcurve_missing_maps_to_exit_4(monkeypatch, tmp_path: Path) -> None:
     def _missing(**_kwargs):
         raise LightCurveNotFoundError("missing")
 
@@ -152,13 +152,15 @@ def test_btv_report_lightcurve_missing_maps_to_exit_4(monkeypatch) -> None:
             "2000.2",
             "--duration-hours",
             "2.5",
+            "--plot-data-out",
+            str(tmp_path / "plot_data.json"),
         ],
     )
 
     assert result.exit_code == 4
 
 
-def test_btv_report_timeout_maps_to_exit_5(monkeypatch) -> None:
+def test_btv_report_timeout_maps_to_exit_5(monkeypatch, tmp_path: Path) -> None:
     def _timeout(**_kwargs):
         raise TimeoutError("timed out")
 
@@ -177,6 +179,8 @@ def test_btv_report_timeout_maps_to_exit_5(monkeypatch) -> None:
             "2000.2",
             "--duration-hours",
             "2.5",
+            "--plot-data-out",
+            str(tmp_path / "plot_data.json"),
         ],
     )
 
@@ -187,16 +191,18 @@ def test_btv_report_success_writes_payload_and_html(monkeypatch, tmp_path: Path)
     def _ok(**_kwargs):
         return {
             "report_json": {
-                "schema_version": "cli.report.v2",
+                "schema_version": "cli.report.v3",
                 "provenance": {"vet_artifact": {"provided": False}},
-                "report": {"schema_version": "1.0.0", "summary": {}, "plot_data": {}},
+                "report": {"schema_version": "1.0.0", "summary": {}},
             },
+            "plot_data_json": {"full_lc": {"time": [1.0], "flux": [1.0]}},
             "html": "<html></html>",
         }
 
     monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
 
     out_path = tmp_path / "report.json"
+    plot_data_path = tmp_path / "report.json.plot_data.json"
     html_path = tmp_path / "report.html"
     runner = CliRunner()
     result = runner.invoke(
@@ -221,8 +227,9 @@ def test_btv_report_success_writes_payload_and_html(monkeypatch, tmp_path: Path)
 
     assert result.exit_code == 0, result.output
     payload = json.loads(out_path.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == "cli.report.v2"
+    assert payload["schema_version"] == "cli.report.v3"
     assert payload["report"]["schema_version"] == "1.0.0"
+    assert json.loads(plot_data_path.read_text(encoding="utf-8"))["full_lc"]["time"] == [1.0]
     assert html_path.read_text(encoding="utf-8") == "<html></html>"
 
 
@@ -244,6 +251,8 @@ def test_btv_report_rejects_malformed_vet_result_file(tmp_path: Path) -> None:
             "2.5",
             "--vet-result",
             str(vet_path),
+            "--plot-data-out",
+            str(tmp_path / "plot_data.json"),
         ],
     )
     assert result.exit_code == 1
@@ -287,6 +296,8 @@ def test_btv_report_rejects_mismatched_vet_result_candidate(tmp_path: Path) -> N
             "2.5",
             "--vet-result",
             str(vet_path),
+            "--plot-data-out",
+            str(tmp_path / "plot_data.json"),
         ],
     )
     assert result.exit_code == 1
@@ -300,10 +311,11 @@ def test_btv_report_forwards_vet_result_payload(monkeypatch, tmp_path: Path) -> 
         captured.update(kwargs)
         return {
             "report_json": {
-                "schema_version": "cli.report.v2",
+                "schema_version": "cli.report.v3",
                 "provenance": {"vet_artifact": {"provided": True}},
-                "report": {"schema_version": "2.0.0", "summary": {}, "plot_data": {}},
+                "report": {"schema_version": "2.0.0", "summary": {}},
             },
+            "plot_data_json": {},
             "html": None,
         }
 
@@ -359,6 +371,71 @@ def test_btv_report_forwards_vet_result_payload(monkeypatch, tmp_path: Path) -> 
     vet_payload = captured["vet_result"]
     assert isinstance(vet_payload, dict)
     assert isinstance(vet_payload.get("results"), list)
+
+
+def test_btv_report_honors_plot_data_out_path(monkeypatch, tmp_path: Path) -> None:
+    def _ok(**_kwargs):
+        return {
+            "report_json": {
+                "schema_version": "cli.report.v3",
+                "provenance": {"vet_artifact": {"provided": False}},
+                "report": {"schema_version": "2.0.0", "summary": {}},
+            },
+            "plot_data_json": {"phase_folded": {"bin_minutes": 30.0}},
+            "html": None,
+        }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
+
+    out_path = tmp_path / "report.json"
+    plot_data_path = tmp_path / "custom_plot_data.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "report",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--out",
+            str(out_path),
+            "--plot-data-out",
+            str(plot_data_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert out_path.exists()
+    assert plot_data_path.exists()
+    payload = json.loads(plot_data_path.read_text(encoding="utf-8"))
+    assert payload["phase_folded"]["bin_minutes"] == 30.0
+
+
+def test_btv_report_stdout_requires_plot_data_out() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "report",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--out",
+            "-",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "--out - requires --plot-data-out" in result.output
 
 
 def test_btv_vet_invalid_extra_param_maps_to_exit_1() -> None:

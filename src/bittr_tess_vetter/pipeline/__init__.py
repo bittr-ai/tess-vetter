@@ -37,6 +37,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+import re
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -1406,6 +1407,96 @@ def enrich_candidate(
     # Step 7: Build RawEvidencePacket from pipeline results
     check_results_dicts = [r.model_dump() for r in bundle.results]
 
+    def _append_bundle_warning(msg: str) -> None:
+        txt = str(msg)
+        if txt and txt not in bundle.warnings:
+            bundle.warnings.append(txt)
+
+    def _check_metric_ppm(check_id: str, metric_key: str) -> float | None:
+        for r in bundle.results:
+            if str(getattr(r, "id", "")) != check_id:
+                continue
+            metrics = getattr(r, "metrics", None)
+            if not isinstance(metrics, dict):
+                continue
+            try:
+                val = float(metrics.get(metric_key))
+            except Exception:
+                return None
+            return val if np.isfinite(val) else None
+        return None
+
+    def _catalog_sectors_from_v07() -> list[int]:
+        for r in bundle.results:
+            if str(getattr(r, "id", "")) != "V07":
+                continue
+            raw = getattr(r, "raw", None)
+            if not isinstance(raw, dict):
+                continue
+            if not bool(raw.get("found")):
+                continue
+            row = raw.get("row")
+            if not isinstance(row, dict):
+                continue
+            parsed: set[int] = set()
+            for k, v in row.items():
+                if "sector" not in str(k).lower():
+                    continue
+                if isinstance(v, (list, tuple, set)):
+                    for item in v:
+                        try:
+                            iv = int(item)
+                            if iv > 0:
+                                parsed.add(iv)
+                        except Exception:
+                            continue
+                elif isinstance(v, (int, float)):
+                    try:
+                        iv = int(v)
+                        if iv > 0:
+                            parsed.add(iv)
+                    except Exception:
+                        continue
+                elif isinstance(v, str):
+                    for token in re.findall(r"\d+", v):
+                        try:
+                            iv = int(token)
+                            if iv > 0:
+                                parsed.add(iv)
+                        except Exception:
+                            continue
+            if parsed:
+                return sorted(parsed)
+        return []
+
+    primary_depth_ppm: float | None
+    try:
+        primary_depth_ppm = float(depth_ppm) if depth_ppm is not None else None
+    except Exception:
+        primary_depth_ppm = None
+    if primary_depth_ppm is not None and (not np.isfinite(primary_depth_ppm) or primary_depth_ppm <= 0):
+        primary_depth_ppm = None
+
+    # U14: Warn when ExoFOP catalog sectors disagree with discovered light-curve sectors.
+    catalog_sectors = _catalog_sectors_from_v07()
+    discovered_sectors = sorted({int(s) for s in sectors_loaded})
+    if catalog_sectors and discovered_sectors and catalog_sectors != discovered_sectors:
+        _append_bundle_warning(
+            f"ExoFOP catalog sectors {catalog_sectors} differ from discovered sectors {discovered_sectors}"
+        )
+
+    # U15: Escalate combined EB concern when both odd/even asymmetry and secondary are material.
+    if primary_depth_ppm is not None:
+        asym_ppm = _check_metric_ppm("V01", "delta_ppm")
+        sec_ppm = _check_metric_ppm("V02", "secondary_depth_ppm")
+        if asym_ppm is not None and sec_ppm is not None:
+            threshold_ppm = 0.10 * abs(primary_depth_ppm)
+            if abs(asym_ppm) >= threshold_ppm and abs(sec_ppm) >= threshold_ppm:
+                _append_bundle_warning(
+                    "Combined EB concern: V01 odd/even asymmetry and V02 secondary depth are each >=10% "
+                    "of primary depth"
+                )
+
     # Add PF01 prefilter-style metrics (used by feature builder for SNR/depth proxies).
     #
     # Note: We run enrichment from an externally supplied ephemeris, so there is no
@@ -1483,6 +1574,25 @@ def enrich_candidate(
                 "metrics": pf01_metrics,
             }
         )
+        # U17: Warn when measured PF01 depth differs strongly from catalog/input depth.
+        if primary_depth_ppm is not None:
+            measured_depth_ppm_raw = pf01_metrics.get("depth_est_ppm")
+            try:
+                measured_depth_ppm = float(measured_depth_ppm_raw)
+            except Exception:
+                measured_depth_ppm = None
+            if (
+                measured_depth_ppm is not None
+                and np.isfinite(measured_depth_ppm)
+                and abs(primary_depth_ppm) > 0
+            ):
+                frac_diff = abs(abs(measured_depth_ppm) - abs(primary_depth_ppm)) / abs(primary_depth_ppm)
+                if frac_diff > 0.20:
+                    _append_bundle_warning(
+                        "Measured depth differs from catalog depth by "
+                        f"{frac_diff * 100.0:.1f}% (>20%) "
+                        f"(measured={measured_depth_ppm:.1f} ppm, catalog={primary_depth_ppm:.1f} ppm)"
+                    )
 
     # ---------------------------------------------------------------------
     # LC-only diagnostics (ephemeris specificity, alias, systematics proxy)
@@ -1726,6 +1836,7 @@ def enrich_candidate(
             "cadence_seconds": stitched_lc_data.cadence_seconds,
             "inputs_summary": bundle.inputs_summary,
             "duration_ms": bundle.provenance.get("duration_ms"),
+            "warnings": list(bundle.warnings),
             "tpf_sector_used": tpf_sector_used,
             "tpf_exptime_used": tpf_exptime_used,
             "tpf_attempts": tpf_attempts,
