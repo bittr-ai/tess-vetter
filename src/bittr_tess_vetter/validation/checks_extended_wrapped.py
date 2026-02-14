@@ -675,12 +675,17 @@ class SectorConsistencyCheck:
             cls, outliers, chi2_pval = compute_sector_consistency(
                 rows, chi2_threshold=chi2_threshold, min_sectors=min_sectors
             )
+            rows_used = [
+                r for r in rows if float(r.quality_weight) > 0.0 and float(r.depth_ppm) > 0.0
+            ]
 
             # Keep raw chi2_pval as the primary metric. The classification string
             # is included for convenience but should not be treated as a verdict.
             metrics: dict[str, float | int | str | bool | None] = {
                 "chi2_p_value": float(chi2_pval),
-                "n_sectors_used": int(len(rows)),
+                "n_sectors_input": int(len(rows)),
+                "n_sectors_used": int(len(rows_used)),
+                "n_sectors_excluded": int(len(rows) - len(rows_used)),
                 "consistency_class": str(cls),
                 "n_outlier_sectors": int(len(outliers)),
             }

@@ -9,6 +9,7 @@ from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.validation.checks_extended_wrapped import (
     AliasDiagnosticsCheck,
     EphemerisReliabilityRegimeCheck,
+    SectorConsistencyCheck,
 )
 from bittr_tess_vetter.validation.registry import CheckConfig, CheckInputs
 from bittr_tess_vetter.validation.systematic_periods import compute_systematic_period_proximity
@@ -129,3 +130,24 @@ def test_v19_can_flag_near_systematic_harmonic() -> None:
     out = compute_systematic_period_proximity(period_days=6.85, threshold_fraction=0.05)
     assert out["within_threshold"] is True
     assert "tess_orbital_half" in str(out["systematic_period_name"])
+
+
+def test_v21_reports_input_vs_used_sector_counts() -> None:
+    check = SectorConsistencyCheck()
+    inputs = _make_inputs()
+    measurements = [
+        {"sector": 1, "depth_ppm": 700.0, "depth_err_ppm": 50.0, "quality_weight": 1.0},
+        {"sector": 2, "depth_ppm": 680.0, "depth_err_ppm": 55.0, "quality_weight": 1.0},
+        {"sector": 3, "depth_ppm": 0.0, "depth_err_ppm": 1e12, "quality_weight": 0.0},
+        {"sector": 4, "depth_ppm": -20.0, "depth_err_ppm": 100.0, "quality_weight": 1.0},
+    ]
+    inputs = CheckInputs(
+        lc=inputs.lc,
+        candidate=inputs.candidate,
+        context={"sector_measurements": measurements},
+    )
+    result = check.run(inputs, CheckConfig(extra_params={}))
+    assert result.status == "ok"
+    assert result.metrics["n_sectors_input"] == 4
+    assert result.metrics["n_sectors_used"] == 2
+    assert result.metrics["n_sectors_excluded"] == 2
