@@ -310,3 +310,128 @@ def test_detrend_grid_seed_is_deterministic_and_defaults_to_zero(monkeypatch) ->
     assert payload_a["ranked_sweep_table"][0]["variant_id"] == payload_b["ranked_sweep_table"][0]["variant_id"]
     assert payload_default["best_variant"]["variant_id"] == payload_zero["best_variant"]["variant_id"]
     assert payload_default["provenance"]["random_seed"] == 0
+
+
+def test_detrend_grid_adds_check_resolution_note_for_v16_model_competition(monkeypatch, tmp_path) -> None:
+    rows = [
+        {
+            "variant_id": "variant_a",
+            "status": "ok",
+            "backend": "numpy",
+            "runtime_seconds": 0.01,
+            "n_points_used": 200,
+            "downsample_factor": 1,
+            "outlier_policy": "none",
+            "detrender": "none",
+            "score": 5.0,
+            "depth_hat_ppm": 250.0,
+            "depth_err_ppm": 10.0,
+            "warnings": [],
+            "failure_reason": None,
+            "variant_config": {"variant_id": "variant_a"},
+            "gp_hyperparams": None,
+            "gp_fit_diagnostics": None,
+        }
+    ]
+    vet_payload = {
+        "summary": {
+            "concerns": ["MODEL_PREFERS_NON_TRANSIT"],
+            "disposition_hint": "needs_model_competition_review",
+        }
+    }
+    vet_path = tmp_path / "vet.json"
+    vet_path.write_text(json.dumps(vet_payload), encoding="utf-8")
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        lambda **_kwargs: _FakeSweepResult(rows),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(enrich_cli.cli, [*_base_args(), "--vet-summary-path", str(vet_path)])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+
+    assert payload["check_resolution_note"]["check_id"] == "V16"
+    assert payload["check_resolution_note"]["reason"] == "model_competition_concern"
+    assert "MODEL_PREFERS_NON_TRANSIT" in payload["check_resolution_note"]["triggers"]["concerns"]
+    assert payload["provenance"]["check_resolution_note"]["check_id"] == "V16"
+    assert payload["provenance"]["vet_summary"]["source_path"] == str(vet_path)
+
+
+def test_detrend_grid_omits_check_resolution_note_without_vet_summary(monkeypatch) -> None:
+    rows = [
+        {
+            "variant_id": "variant_a",
+            "status": "ok",
+            "backend": "numpy",
+            "runtime_seconds": 0.01,
+            "n_points_used": 200,
+            "downsample_factor": 1,
+            "outlier_policy": "none",
+            "detrender": "none",
+            "score": 5.0,
+            "depth_hat_ppm": 250.0,
+            "depth_err_ppm": 10.0,
+            "warnings": [],
+            "failure_reason": None,
+            "variant_config": {"variant_id": "variant_a"},
+            "gp_hyperparams": None,
+            "gp_fit_diagnostics": None,
+        }
+    ]
+    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        lambda **_kwargs: _FakeSweepResult(rows),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(enrich_cli.cli, _base_args())
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+
+    assert "check_resolution_note" not in payload
+
+
+def test_detrend_grid_accepts_summary_at_payload_root(monkeypatch, tmp_path) -> None:
+    rows = [
+        {
+            "variant_id": "variant_a",
+            "status": "ok",
+            "backend": "numpy",
+            "runtime_seconds": 0.01,
+            "n_points_used": 200,
+            "downsample_factor": 1,
+            "outlier_policy": "none",
+            "detrender": "none",
+            "score": 5.0,
+            "depth_hat_ppm": 250.0,
+            "depth_err_ppm": 10.0,
+            "warnings": [],
+            "failure_reason": None,
+            "variant_config": {"variant_id": "variant_a"},
+            "gp_hyperparams": None,
+            "gp_fit_diagnostics": None,
+        }
+    ]
+    vet_summary_root = {
+        "concerns": ["MODEL_PREFERS_NON_TRANSIT"],
+        "disposition_hint": "needs_model_competition_review",
+    }
+    vet_path = tmp_path / "vet_summary_root.json"
+    vet_path.write_text(json.dumps(vet_summary_root), encoding="utf-8")
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        lambda **_kwargs: _FakeSweepResult(rows),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(enrich_cli.cli, [*_base_args(), "--vet-summary-path", str(vet_path)])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["check_resolution_note"]["check_id"] == "V16"
+    assert payload["provenance"]["vet_summary"]["summary_source"] == "payload_root"

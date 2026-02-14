@@ -26,6 +26,17 @@ EXOFOP_TOI_URL = "https://exofop.ipac.caltech.edu/tess/download_toi.php"
 REQUEST_TIMEOUT_S = 10.0
 
 
+def _classify_request_error(error: Exception) -> str:
+    """Classify request failures for downstream wrapper policy."""
+    if isinstance(error, requests.exceptions.Timeout):
+        return "TIMEOUT"
+    if isinstance(error, requests.exceptions.ConnectionError):
+        return "CONNECTION_ERROR"
+    if isinstance(error, requests.exceptions.RequestException):
+        return "REQUEST_ERROR"
+    return type(error).__name__
+
+
 def _metrics_result(
     *,
     check_id: str,
@@ -151,9 +162,11 @@ def run_nearby_eb_search(
             details={
                 "status": "error",
                 "error": str(e),
+                "error_type": _classify_request_error(e),
                 "ra": ra_deg,
                 "dec": dec_deg,
                 "request_timeout_s": timeout_s,
+                "note": "VizieR request failed",
             },
         )
 

@@ -863,6 +863,8 @@ def test_btv_vet_emits_detrend_provenance_when_enabled(monkeypatch, tmp_path: Pa
             "2.0",
             "--detrend-sigma-clip",
             "5.0",
+            "--sectors",
+            "1",
             "--out",
             str(out_path),
         ],
@@ -876,7 +878,75 @@ def test_btv_vet_emits_detrend_provenance_when_enabled(monkeypatch, tmp_path: Pa
     assert detrend["bin_hours"] == 6.0
     assert detrend["buffer_factor"] == 2.0
     assert detrend["sigma_clip"] == 5.0
+    assert detrend["depth_source"] == "transit_masked_in_out_median"
+    assert detrend["depth_availability"] in {"available", "unavailable"}
+    if detrend["depth_availability"] == "available":
+        assert np.isfinite(float(detrend["depth_ppm"]))
+        assert np.isfinite(float(detrend["depth_err_ppm"]))
+        assert float(detrend["depth_ppm"]) > 0.0
+        assert float(detrend["depth_err_ppm"]) >= 0.0
+    else:
+        assert detrend["depth_ppm"] is None
+        assert detrend["depth_err_ppm"] is None
+        assert isinstance(detrend.get("depth_note"), str)
+        assert detrend["depth_note"] != ""
+    assert payload["provenance"]["sectors_requested"] == [1]
+    assert payload["provenance"]["sectors_used"] == [1]
     assert not np.allclose(captured["flux"], flux)
+
+
+def test_btv_vet_detrend_depth_unavailable_sets_note(monkeypatch, tmp_path: Path) -> None:
+    flux = np.ones(64, dtype=np.float64)
+    flux_err = np.full(64, 1e-4, dtype=np.float64)
+    time = np.linspace(0.0, 6.3, 64, dtype=np.float64)
+
+    class _FakeLightCurveData:
+        def __init__(self) -> None:
+            self.time = time
+            self.flux = flux
+            self.flux_err = flux_err
+            self.quality = np.zeros_like(time, dtype=np.int32)
+            self.valid_mask = np.ones_like(time, dtype=bool)
+            self.sector = 1
+
+    class _FakeMASTClient:
+        def download_all_sectors(self, *_args, **_kwargs):
+            return [_FakeLightCurveData()]
+
+    def _fake_vet_candidate(**_kwargs):
+        return VettingBundleResult(results=[], warnings=[], provenance={})
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.measure_transit_depth", lambda *_a, **_k: (float("nan"), 0.0))
+
+    out_path = tmp_path / "vet_detrend_unavailable.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "1.5",
+            "--t0-btjd",
+            "0.1",
+            "--duration-hours",
+            "2.0",
+            "--detrend",
+            "transit_masked_bin_median",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    detrend = payload["provenance"]["detrend"]
+    assert detrend["depth_availability"] == "unavailable"
+    assert detrend["depth_ppm"] is None
+    assert detrend["depth_err_ppm"] is None
+    assert isinstance(detrend.get("depth_note"), str)
 
 
 def test_btv_vet_tpf_flags_forwarded(monkeypatch, tmp_path: Path) -> None:

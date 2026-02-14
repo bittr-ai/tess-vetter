@@ -128,6 +128,7 @@ def test_cli002_summary_block_is_present_and_deduplicates_concerns(monkeypatch, 
     assert summary["n_ok"] == 1
     assert summary["n_failed"] == 1
     assert summary["n_skipped"] == 1
+    assert summary["n_flagged"] == 1
     assert "V16" in summary["flagged_checks"]
     assert summary["concerns"] == ["MODEL_PREFERS_NON_TRANSIT"]
     assert summary["disposition_hint"] == "needs_model_competition_review"

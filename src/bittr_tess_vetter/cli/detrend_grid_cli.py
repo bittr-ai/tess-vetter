@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import click
@@ -15,6 +16,7 @@ from bittr_tess_vetter.cli.common_cli import (
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
+    load_json_file,
     resolve_optional_output_path,
 )
 from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
@@ -98,6 +100,35 @@ def _build_recommended_next_step(best_variant: dict[str, Any] | None) -> str | N
     )
 
 
+def _extract_vet_summary(payload: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    summary_raw = payload.get("summary")
+    if isinstance(summary_raw, dict):
+        return summary_raw, "payload.summary"
+    return payload, "payload_root"
+
+
+def _build_check_resolution_note(summary: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(summary, dict):
+        return None
+    concerns_raw = summary.get("concerns")
+    concerns = {str(item) for item in concerns_raw if item is not None} if isinstance(concerns_raw, list) else set()
+    disposition_hint = str(summary.get("disposition_hint") or "")
+
+    has_v16_model_competition_concern = "MODEL_PREFERS_NON_TRANSIT" in concerns
+    disposition_requests_model_review = disposition_hint == "needs_model_competition_review"
+    if not has_v16_model_competition_concern and not disposition_requests_model_review:
+        return None
+
+    return {
+        "check_id": "V16",
+        "reason": "model_competition_concern",
+        "triggers": {
+            "concerns": sorted(concerns),
+            "disposition_hint": disposition_hint,
+        },
+    }
+
+
 def _build_best_variant(
     *,
     best_variant_id: str | None,
@@ -165,6 +196,8 @@ def _execute_detrend_grid(
     checks: list[str] | None,
     toi: str | None,
     input_resolution: dict[str, Any] | None = None,
+    check_resolution_note: dict[str, Any] | None = None,
+    vet_summary_provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     client = MASTClient()
     lightcurves = client.download_all_sectors(
@@ -242,7 +275,7 @@ def _execute_detrend_grid(
         {int(lc.sector) for lc in lightcurves if getattr(lc, "sector", None) is not None}
     )
     recommended_next_step = _build_recommended_next_step(best_variant)
-    return {
+    out_payload: dict[str, Any] = {
         "schema_version": 1,
         **{**payload, "sweep_table": rows_annotated},
         "ranked_sweep_table": ranked_rows,
@@ -273,6 +306,7 @@ def _execute_detrend_grid(
             "requested_checks": [str(item) for item in checks] if checks else None,
             "input_resolution": input_resolution,
             "flux_err_source": flux_err_source,
+            "vet_summary": vet_summary_provenance,
             "grid_config": {
                 "downsample_levels": list(downsample_levels) if downsample_levels is not None else None,
                 "outlier_policies": list(outlier_policies) if outlier_policies is not None else None,
@@ -304,6 +338,12 @@ def _execute_detrend_grid(
             },
         },
     }
+    if check_resolution_note is not None:
+        out_payload["check_resolution_note"] = check_resolution_note
+        provenance = out_payload.get("provenance")
+        if isinstance(provenance, dict):
+            provenance["check_resolution_note"] = check_resolution_note
+    return out_payload
 
 
 @click.command("detrend-grid")
@@ -383,6 +423,12 @@ def _execute_detrend_grid(
 )
 @click.option("--check", "checks", multiple=True, help="Optional check IDs to annotate provenance.")
 @click.option(
+    "--vet-summary-path",
+    type=str,
+    default=None,
+    help="Optional vet JSON file path (full payload or summary block) to contextualize V16 concerns.",
+)
+@click.option(
     "--out",
     "output_path_arg",
     type=str,
@@ -409,6 +455,7 @@ def detrend_grid_command(
     gp_max_iterations: int,
     gp_timeout_seconds: float,
     checks: tuple[str, ...],
+    vet_summary_path: str | None,
     output_path_arg: str,
 ) -> None:
     """Sweep detrending variants and emit ranked machine-readable diagnostics."""
@@ -431,6 +478,17 @@ def detrend_grid_command(
         depth_ppm=depth_ppm,
     )
 
+    check_resolution_note: dict[str, Any] | None = None
+    vet_summary_provenance: dict[str, Any] | None = None
+    if vet_summary_path:
+        summary_payload = load_json_file(Path(vet_summary_path), label="vet summary file")
+        summary, summary_source = _extract_vet_summary(summary_payload)
+        check_resolution_note = _build_check_resolution_note(summary)
+        vet_summary_provenance = {
+            "source_path": str(vet_summary_path),
+            "summary_source": summary_source,
+        }
+
     try:
         payload = _execute_detrend_grid(
             tic_id=resolved_tic_id,
@@ -450,6 +508,8 @@ def detrend_grid_command(
             checks=list(checks) if checks else None,
             toi=toi,
             input_resolution=input_resolution,
+            check_resolution_note=check_resolution_note,
+            vet_summary_provenance=vet_summary_provenance,
         )
     except LightCurveNotFoundError as exc:
         raise BtvCliError(str(exc), exit_code=EXIT_DATA_UNAVAILABLE) from exc

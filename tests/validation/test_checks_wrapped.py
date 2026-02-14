@@ -315,6 +315,62 @@ class TestNearbyEBSearchCheck:
         assert result.status == "ok"
         assert captured["timeout"] == 33.0
 
+    def test_maps_v06_timeout_error_to_skipped(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        check = NearbyEBSearchCheck()
+        inputs = _make_test_inputs(network=True, ra_deg=10.0, dec_deg=20.0)
+        config = CheckConfig()
+
+        def _fake_run_nearby_eb_search(**kwargs: object):  # type: ignore[no-untyped-def]
+            class _Legacy:
+                details = {
+                    "status": "error",
+                    "error_type": "TIMEOUT",
+                    "error": "Read timed out",
+                    "note": "VizieR request failed",
+                }
+                confidence = 0.0
+
+            return _Legacy()
+
+        monkeypatch.setattr(
+            "bittr_tess_vetter.validation.checks_catalog.run_nearby_eb_search",
+            _fake_run_nearby_eb_search,
+        )
+        result = check.run(inputs, config)
+        assert result.status == "skipped"
+        assert "SKIPPED:NETWORK_TIMEOUT" in result.flags
+        assert result.raw is not None
+        assert result.raw.get("error_type") == "TIMEOUT"
+        assert "VizieR request failed" in result.notes
+
+    def test_maps_v06_network_error_to_skipped(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        check = NearbyEBSearchCheck()
+        inputs = _make_test_inputs(network=True, ra_deg=10.0, dec_deg=20.0)
+        config = CheckConfig()
+
+        def _fake_run_nearby_eb_search(**kwargs: object):  # type: ignore[no-untyped-def]
+            class _Legacy:
+                details = {
+                    "status": "error",
+                    "error_type": "REQUEST_ERROR",
+                    "error": "Max retries exceeded while establishing a new connection",
+                    "note": "VizieR request failed",
+                }
+                confidence = 0.0
+
+            return _Legacy()
+
+        monkeypatch.setattr(
+            "bittr_tess_vetter.validation.checks_catalog.run_nearby_eb_search",
+            _fake_run_nearby_eb_search,
+        )
+        result = check.run(inputs, config)
+        assert result.status == "skipped"
+        assert "SKIPPED:NETWORK_ERROR" in result.flags
+        assert result.raw is not None
+        assert result.raw.get("error_type") == "REQUEST_ERROR"
+        assert "VizieR request failed" in result.notes
+
 
 class TestExoFOPTOILookupCheck:
     """Tests for V07 ExoFOPTOILookupCheck wrapper."""

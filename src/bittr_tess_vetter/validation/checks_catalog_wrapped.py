@@ -27,6 +27,52 @@ from bittr_tess_vetter.validation.result_schema import (
 )
 
 
+_TIMEOUT_ERROR_TYPES = {
+    "TIMEOUT",
+    "TIMEOUTERROR",
+    "READTIMEOUT",
+    "CONNECTTIMEOUT",
+}
+_NETWORK_ERROR_TYPES = {
+    "CONNECTIONERROR",
+    "CONNECTION_ERROR",
+    "REQUESTERROR",
+    "REQUEST_ERROR",
+    "REQUESTEXCEPTION",
+}
+
+
+def _is_timeout_like(error_type: str, error_text: str) -> bool:
+    error_type_norm = error_type.strip().upper()
+    if error_type_norm in _TIMEOUT_ERROR_TYPES:
+        return True
+    error_text_norm = error_text.lower()
+    return any(
+        token in error_text_norm
+        for token in ("timeout", "timed out", "read timed out", "connect timeout")
+    )
+
+
+def _is_network_error_like(error_type: str, error_text: str) -> bool:
+    error_type_norm = error_type.strip().upper()
+    if error_type_norm in _NETWORK_ERROR_TYPES:
+        return True
+    error_text_norm = error_text.lower()
+    return any(
+        token in error_text_norm
+        for token in (
+            "connection error",
+            "connection aborted",
+            "name resolution",
+            "dns",
+            "failed to establish a new connection",
+            "max retries exceeded",
+            "request failed",
+            "request exception",
+        )
+    )
+
+
 def _convert_catalog_result(
     legacy: Any,
     check_id: str,
@@ -47,12 +93,36 @@ def _convert_catalog_result(
     # Check for error status
     status = details.get("status")
     if status == "error":
+        error_type = str(details.get("error_type", ""))
         error_msg = details.get("error", "Unknown error")
+        note = details.get("note")
+
+        if check_id == "V06":
+            error_text = " ".join(
+                str(v) for v in (error_type, error_msg, note) if v not in (None, "")
+            )
+            if _is_timeout_like(error_type, error_text):
+                return skipped_result(
+                    check_id,
+                    check_name,
+                    reason_flag="NETWORK_TIMEOUT",
+                    notes=[str(note)] if note is not None else [],
+                    raw=details,
+                )
+            if _is_network_error_like(error_type, error_text):
+                return skipped_result(
+                    check_id,
+                    check_name,
+                    reason_flag="NETWORK_ERROR",
+                    notes=[str(note)] if note is not None else [],
+                    raw=details,
+                )
+
         return error_result(
             check_id,
             check_name,
             error=error_msg,
-            notes=[str(details.get("note", ""))],
+            notes=[str(note)] if note is not None else [],
             raw=details,
         )
 

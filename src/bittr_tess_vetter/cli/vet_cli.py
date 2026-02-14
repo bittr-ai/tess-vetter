@@ -14,7 +14,11 @@ from bittr_tess_vetter.api.detrend import bin_median_trend, sigma_clip
 from bittr_tess_vetter.api.generate_report import _select_tpf_sectors
 from bittr_tess_vetter.api.pipeline import PipelineConfig
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
-from bittr_tess_vetter.api.transit_masks import get_out_of_transit_mask
+from bittr_tess_vetter.api.transit_masks import (
+    get_in_transit_mask,
+    get_out_of_transit_mask,
+    measure_transit_depth,
+)
 from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve, TPFStamp
 from bittr_tess_vetter.api.vet import vet_candidate
 from bittr_tess_vetter.cli.stellar_inputs import resolve_stellar_inputs
@@ -462,6 +466,7 @@ def _build_root_summary(*, payload: dict[str, Any]) -> dict[str, Any]:
         "n_ok": int(n_ok),
         "n_failed": int(n_failed),
         "n_skipped": int(n_skipped),
+        "n_flagged": int(len(flagged_checks)),
         "flagged_checks": sorted(flagged_checks),
         "concerns": sorted(concerns),
         "disposition_hint": disposition_hint,
@@ -753,6 +758,58 @@ def _execute_vet(
             buffer_factor=float(detrend_buffer),
             clip_sigma=float(detrend_sigma_clip),
         )
+        depth_source = "transit_masked_in_out_median"
+        depth_availability = "unavailable"
+        depth_note = "insufficient_in_or_out_of_transit_points"
+        depth_estimate_ppm: float | None = None
+        depth_err_estimate_ppm: float | None = None
+
+        time_arr = np.asarray(vet_lc.time, dtype=np.float64)
+        flux_arr = np.asarray(vet_lc.flux, dtype=np.float64)
+        valid_mask = (
+            np.asarray(vet_lc.valid_mask, dtype=bool)
+            if vet_lc.valid_mask is not None
+            else np.ones_like(flux_arr, dtype=bool)
+        )
+        finite_mask = np.isfinite(time_arr) & np.isfinite(flux_arr) & valid_mask
+
+        in_mask = get_in_transit_mask(
+            time_arr,
+            float(period_days),
+            float(t0_btjd),
+            float(duration_hours),
+        ) & finite_mask
+        out_mask = get_out_of_transit_mask(
+            time_arr,
+            float(period_days),
+            float(t0_btjd),
+            float(duration_hours),
+            buffer_factor=float(detrend_buffer),
+        ) & finite_mask
+
+        n_in = int(np.sum(in_mask))
+        n_out = int(np.sum(out_mask))
+        if n_in > 0 and n_out > 0:
+            depth_frac, depth_err_frac = measure_transit_depth(flux_arr, in_mask, out_mask)
+            measured_depth_ppm = float(depth_frac * 1_000_000.0)
+            measured_depth_err_ppm = float(depth_err_frac * 1_000_000.0)
+            if np.isfinite(measured_depth_ppm) and np.isfinite(measured_depth_err_ppm):
+                if measured_depth_ppm > 0.0:
+                    depth_estimate_ppm = measured_depth_ppm
+                    depth_err_estimate_ppm = measured_depth_err_ppm
+                    depth_availability = "available"
+                    depth_note = ""
+                else:
+                    depth_note = "non_positive_depth_from_transit_mask_measurement"
+            else:
+                depth_note = "non_finite_depth_from_transit_mask_measurement"
+
+        detrend_provenance["depth_source"] = depth_source
+        detrend_provenance["depth_availability"] = depth_availability
+        detrend_provenance["depth_ppm"] = depth_estimate_ppm
+        detrend_provenance["depth_err_ppm"] = depth_err_estimate_ppm
+        if depth_note:
+            detrend_provenance["depth_note"] = depth_note
 
     bundle = vet_candidate(
         lc=vet_lc,
@@ -770,9 +827,12 @@ def _execute_vet(
     )
 
     payload = bundle.model_dump(mode="json")
+    provenance_raw = payload.get("provenance")
+    provenance = provenance_raw if isinstance(provenance_raw, dict) else {}
+    provenance["sectors_used"] = [int(s) for s in sectors_used]
+    provenance["sectors_requested"] = [int(s) for s in sectors] if sectors is not None else None
+    payload["provenance"] = provenance
     if detrend_provenance is not None:
-        provenance_raw = payload.get("provenance")
-        provenance = provenance_raw if isinstance(provenance_raw, dict) else {}
         provenance["detrend"] = detrend_provenance
         payload["provenance"] = provenance
     if stellar_block is not None:
