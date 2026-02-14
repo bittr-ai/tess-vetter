@@ -13,7 +13,7 @@ from bittr_tess_vetter.cli.progress_metadata import ProgressIOError
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.pipeline import make_candidate_key
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
-from bittr_tess_vetter.validation.result_schema import VettingBundleResult
+from bittr_tess_vetter.validation.result_schema import CheckResult, VettingBundleResult
 
 
 def test_btv_help_lists_enrich_vet_report() -> None:
@@ -1195,6 +1195,188 @@ def test_btv_vet_tpf_sector_requires_requested_strategy() -> None:
         ],
     )
     assert result.exit_code == 1
+
+
+def test_btv_vet_default_emits_lc_summary_and_meta_enabled_computed(monkeypatch, tmp_path: Path) -> None:
+    lc_data = LightCurveData(
+        time=np.linspace(0.0, 6.3, 128, dtype=np.float64),
+        flux=np.ones(128, dtype=np.float64),
+        flux_err=np.full(128, 1e-4, dtype=np.float64),
+        quality=np.zeros(128, dtype=np.int32),
+        valid_mask=np.ones(128, dtype=bool),
+        tic_id=123,
+        sector=1,
+        cadence_seconds=120.0,
+    )
+
+    class _FakeMASTClient:
+        def download_all_sectors(self, *_args, **_kwargs):
+            return [lc_data]
+
+    def _fake_vet_candidate(**_kwargs):
+        return VettingBundleResult(
+            results=[
+                CheckResult(
+                    id="V01",
+                    name="odd_even_depth",
+                    status="ok",
+                    confidence=0.9,
+                    metrics={},
+                    flags=[],
+                    notes=[],
+                    provenance={},
+                    raw=None,
+                )
+            ],
+            warnings=[],
+            provenance={},
+            inputs_summary={},
+        )
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
+
+    out_path = tmp_path / "vet_lc_summary_default.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "2.5",
+            "--t0-btjd",
+            "0.1",
+            "--duration-hours",
+            "2.0",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert isinstance(payload.get("lc_summary"), dict)
+    meta = payload["lc_summary_meta"]
+    assert meta["enabled"] is True
+    assert meta["computed"] is True
+    summary = payload["summary"]
+    assert summary["n_ok"] == 1
+    assert summary["n_failed"] == 0
+    assert summary["n_skipped"] == 0
+    assert summary["n_network_errors"] == 0
+
+
+def test_btv_vet_no_lc_summary_sets_disabled_reason_code(monkeypatch, tmp_path: Path) -> None:
+    lc_data = LightCurveData(
+        time=np.linspace(0.0, 6.3, 128, dtype=np.float64),
+        flux=np.ones(128, dtype=np.float64),
+        flux_err=np.full(128, 1e-4, dtype=np.float64),
+        quality=np.zeros(128, dtype=np.int32),
+        valid_mask=np.ones(128, dtype=bool),
+        tic_id=123,
+        sector=1,
+        cadence_seconds=120.0,
+    )
+
+    class _FakeMASTClient:
+        def download_all_sectors(self, *_args, **_kwargs):
+            return [lc_data]
+
+    def _fake_vet_candidate(**_kwargs):
+        return VettingBundleResult(results=[], warnings=[], provenance={}, inputs_summary={})
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
+
+    out_path = tmp_path / "vet_lc_summary_disabled.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "2.5",
+            "--t0-btjd",
+            "0.1",
+            "--duration-hours",
+            "2.0",
+            "--no-lc-summary",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["lc_summary"] is None
+    meta = payload["lc_summary_meta"]
+    assert meta["enabled"] is False
+    assert meta["computed"] is False
+    assert meta["reason"] == "disabled_by_flag"
+    summary = payload["summary"]
+    assert summary["n_network_errors"] == 0
+    assert "flagged_checks" in summary
+
+
+def test_btv_vet_lc_summary_compute_failure_degrades_with_stable_reason(monkeypatch, tmp_path: Path) -> None:
+    lc_data = LightCurveData(
+        time=np.linspace(0.0, 6.3, 128, dtype=np.float64),
+        flux=np.ones(128, dtype=np.float64),
+        flux_err=np.full(128, 1e-4, dtype=np.float64),
+        quality=np.zeros(128, dtype=np.int32),
+        valid_mask=np.ones(128, dtype=bool),
+        tic_id=123,
+        sector=1,
+        cadence_seconds=120.0,
+    )
+
+    class _FakeMASTClient:
+        def download_all_sectors(self, *_args, **_kwargs):
+            return [lc_data]
+
+    def _fake_vet_candidate(**_kwargs):
+        return VettingBundleResult(results=[], warnings=[], provenance={}, inputs_summary={})
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("report seam failed")
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.build_report_with_vet_artifact", _boom)
+
+    out_path = tmp_path / "vet_lc_summary_compute_failed.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "2.5",
+            "--t0-btjd",
+            "0.1",
+            "--duration-hours",
+            "2.0",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["lc_summary"] is None
+    meta = payload["lc_summary_meta"]
+    assert meta["enabled"] is True
+    assert meta["computed"] is False
+    assert meta["reason"] == "compute_failed"
+    summary = payload["summary"]
+    assert summary["n_network_errors"] == 0
+    assert "disposition_hint" in summary
 
 
 def test_btv_vet_summary_surfaces_v04_instability_concerns(monkeypatch, tmp_path: Path) -> None:

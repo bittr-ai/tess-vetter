@@ -13,6 +13,7 @@ import numpy as np
 from bittr_tess_vetter.api.detrend import bin_median_trend, sigma_clip
 from bittr_tess_vetter.api.generate_report import _select_tpf_sectors
 from bittr_tess_vetter.api.pipeline import PipelineConfig
+from bittr_tess_vetter.api.report_vet_reuse import build_report_with_vet_artifact
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
 from bittr_tess_vetter.api.transit_masks import (
     get_in_transit_mask,
@@ -49,6 +50,8 @@ from bittr_tess_vetter.platform.catalogs.toi_resolution import (
 )
 from bittr_tess_vetter.platform.io import TargetNotFoundError
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
+from bittr_tess_vetter.report import build_vet_lc_summary_blocks
+from bittr_tess_vetter.validation.result_schema import VettingBundleResult
 
 CLI_VET_SCHEMA_VERSION = "cli.vet.v2"
 CONFIDENCE_SEMANTICS_DOC = "docs/verification/confidence_semantics.md"
@@ -709,6 +712,92 @@ def _resolve_coordinates(
     }
 
 
+def _lc_summary_inputs_sufficient(*, lc: LightCurve, candidate: Candidate) -> bool:
+    time = np.asarray(lc.time, dtype=np.float64) if lc.time is not None else np.asarray([], dtype=np.float64)
+    flux = np.asarray(lc.flux, dtype=np.float64) if lc.flux is not None else np.asarray([], dtype=np.float64)
+    if time.size == 0 or flux.size == 0 or time.size != flux.size:
+        return False
+    valid = np.isfinite(time) & np.isfinite(flux)
+    if not np.any(valid):
+        return False
+    eph = candidate.ephemeris
+    if not (
+        np.isfinite(float(eph.period_days))
+        and np.isfinite(float(eph.t0_btjd))
+        and np.isfinite(float(eph.duration_hours))
+    ):
+        return False
+    if float(eph.period_days) <= 0.0 or float(eph.duration_hours) <= 0.0:
+        return False
+    return True
+
+
+def _attach_lc_summary_payload(
+    *,
+    payload: dict[str, Any],
+    lc: LightCurve,
+    candidate: Candidate,
+    bundle: VettingBundleResult,
+    stellar_params: StellarParameters | None,
+    tic_id: int,
+    toi: str | None,
+    include_lc_summary: bool,
+) -> None:
+    meta: dict[str, Any] = {
+        "enabled": True,
+        "computed": False,
+        "reason": "compute_failed",
+        "reason_unavailable": "compute_failed",
+        "source": "report.vet_lc_summary",
+        "schema_version": "1",
+    }
+    payload["lc_summary"] = None
+
+    if not include_lc_summary:
+        meta["enabled"] = False
+        meta["reason"] = "disabled_by_flag"
+        meta["reason_unavailable"] = "disabled_by_flag"
+        payload["lc_summary_meta"] = meta
+        return
+
+    if not _lc_summary_inputs_sufficient(lc=lc, candidate=candidate):
+        meta["reason"] = "insufficient_inputs"
+        meta["reason_unavailable"] = "insufficient_inputs"
+        payload["lc_summary_meta"] = meta
+        return
+
+    try:
+        report, _ = build_report_with_vet_artifact(
+            lc=lc,
+            candidate=candidate,
+            vet_bundle=bundle,
+            stellar=stellar_params,
+            tic_id=tic_id,
+            toi=toi,
+            include_additional_plots=True,
+            include_lc_robustness=True,
+        )
+        summary_blocks = build_vet_lc_summary_blocks(report)
+        if isinstance(summary_blocks, dict):
+            payload["lc_summary"] = dict(summary_blocks)
+            payload["lc_summary_meta"] = {
+                "enabled": True,
+                "computed": True,
+                "reason": None,
+                "reason_unavailable": None,
+                "source": "report.vet_lc_summary",
+                "schema_version": "1",
+            }
+            return
+    except Exception as exc:
+        meta["reason"] = "component_timeout" if _looks_like_timeout(exc) else "compute_failed"
+        meta["reason_unavailable"] = str(meta["reason"])
+        payload["lc_summary_meta"] = meta
+        return
+
+    payload["lc_summary_meta"] = meta
+
+
 def _execute_vet(
     *,
     tic_id: int,
@@ -733,6 +822,7 @@ def _execute_vet(
     detrend_bin_hours: float,
     detrend_buffer: float,
     detrend_sigma_clip: float,
+    include_lc_summary: bool,
     input_resolution: dict[str, Any] | None = None,
     coordinate_resolution: dict[str, Any] | None = None,
     sector_measurements: list[dict[str, Any]] | None = None,
@@ -894,6 +984,16 @@ def _execute_vet(
             "or provide --stellar-file / --stellar-radius / --stellar-mass."
         )
         payload["warnings"] = warnings
+    _attach_lc_summary_payload(
+        payload=payload,
+        lc=vet_lc,
+        candidate=candidate,
+        bundle=bundle,
+        stellar_params=stellar_params,
+        tic_id=tic_id,
+        toi=toi,
+        include_lc_summary=bool(include_lc_summary),
+    )
     return _apply_cli_payload_contract(
         payload=payload,
         toi=toi,
@@ -1056,6 +1156,12 @@ def _load_tpf_for_vetting(
 @click.option("--detrend-bin-hours", type=float, default=6.0, show_default=True)
 @click.option("--detrend-buffer", type=float, default=2.0, show_default=True)
 @click.option("--detrend-sigma-clip", type=float, default=5.0, show_default=True)
+@click.option(
+    "--include-lc-summary/--no-lc-summary",
+    default=True,
+    show_default=True,
+    help="Attach top-level lc_summary computed through the report seam.",
+)
 @click.option("--extra-param", "extra_params", multiple=True, help="Repeat KEY=VALUE entries.")
 @click.option("--fail-fast/--no-fail-fast", default=False, show_default=True)
 @click.option("--emit-warnings/--no-emit-warnings", default=False, show_default=True)
@@ -1106,6 +1212,7 @@ def vet_command(
     detrend_bin_hours: float,
     detrend_buffer: float,
     detrend_sigma_clip: float,
+    include_lc_summary: bool,
     extra_params: tuple[str, ...],
     fail_fast: bool,
     emit_warnings: bool,
@@ -1286,6 +1393,7 @@ def vet_command(
             detrend_bin_hours=float(detrend_bin_hours),
             detrend_buffer=float(detrend_buffer),
             detrend_sigma_clip=float(detrend_sigma_clip),
+            include_lc_summary=bool(include_lc_summary),
             input_resolution=input_resolution,
             coordinate_resolution=coordinate_resolution,
             sector_measurements=sector_measurements_rows,

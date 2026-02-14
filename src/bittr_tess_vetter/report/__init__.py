@@ -47,6 +47,7 @@ from bittr_tess_vetter.report.schema import (
     ReportSummaryModel,
     report_payload_json_schema,
 )
+from bittr_tess_vetter.report.vet_lc_summary import build_vet_lc_summary_blocks
 
 __all__ = [
     "build_report",
@@ -60,6 +61,7 @@ __all__ = [
     "CheckSummaryModel",
     "CheckExecutionSummaryModel",
     "BundleSummaryModel",
+    "build_vet_lc_summary_blocks",
     "FieldKey",
     "FieldSpec",
     "FIELD_CATALOG",
