@@ -20,6 +20,7 @@ from bittr_tess_vetter.cli.common_cli import (
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
+    parse_extra_params,
     resolve_optional_output_path,
 )
 from bittr_tess_vetter.cli.stellar_inputs import resolve_stellar_inputs
@@ -51,6 +52,15 @@ def _build_cache_for_fpp(
     tic_id: int,
     sectors: list[int] | None,
     cache_dir: Path | None,
+    detrend_cache: bool = False,
+    period_days: float = 1.0,
+    t0_btjd: float = 0.0,
+    duration_hours: float = 1.0,
+    depth_ppm: float = 100.0,
+    detrend_method: str | None = None,
+    detrend_bin_hours: float = 6.0,
+    detrend_buffer: float = 2.0,
+    detrend_sigma_clip: float = 5.0,
 ) -> tuple[PersistentCache, list[int]]:
     client = MASTClient()
     lightcurves = client.download_all_sectors(tic_id, flux_type="pdcsap", sectors=sectors)
@@ -60,8 +70,43 @@ def _build_cache_for_fpp(
     cache = PersistentCache(cache_dir=cache_dir)
     sectors_loaded: list[int] = []
     for lc_data in lightcurves:
+        staged_lc_data = lc_data
+        if bool(detrend_cache):
+            if detrend_method is None:
+                raise BtvCliError(
+                    "--detrend-cache requires --detrend",
+                    exit_code=EXIT_INPUT_ERROR,
+                )
+            lc = LightCurve.from_internal(lc_data)
+            candidate = Candidate(
+                ephemeris=Ephemeris(
+                    period_days=float(period_days),
+                    t0_btjd=float(t0_btjd),
+                    duration_hours=float(duration_hours),
+                ),
+                depth_ppm=float(depth_ppm),
+            )
+            detrended_lc, _ = _detrend_lightcurve_for_vetting(
+                lc=lc,
+                candidate=candidate,
+                method=str(detrend_method),
+                bin_hours=float(detrend_bin_hours),
+                buffer_factor=float(detrend_buffer),
+                clip_sigma=float(detrend_sigma_clip),
+            )
+            staged_lc_data = lc_data.__class__(
+                time=np.asarray(detrended_lc.time, dtype=np.float64).copy(),
+                flux=np.asarray(detrended_lc.flux, dtype=np.float64).copy(),
+                flux_err=np.asarray(detrended_lc.flux_err, dtype=np.float64).copy(),
+                quality=np.asarray(lc_data.quality, dtype=np.int32).copy(),
+                valid_mask=np.asarray(lc_data.valid_mask, dtype=bool).copy(),
+                tic_id=int(lc_data.tic_id),
+                sector=int(lc_data.sector),
+                cadence_seconds=float(lc_data.cadence_seconds),
+                provenance=lc_data.provenance,
+            )
         key = make_data_ref(int(tic_id), int(lc_data.sector), "pdcsap")
-        cache.put(key, lc_data)
+        cache.put(key, staged_lc_data)
         sectors_loaded.append(int(lc_data.sector))
     return cache, sorted(set(sectors_loaded))
 
@@ -83,11 +128,26 @@ def _execute_fpp(
     stellar_mass: float | None,
     stellar_tmag: float | None,
     contrast_curve: Any | None,
+    overrides: dict[str, Any],
+    detrend_cache: bool,
+    detrend_method: str | None,
+    detrend_bin_hours: float,
+    detrend_buffer: float,
+    detrend_sigma_clip: float,
 ) -> tuple[dict[str, Any], list[int]]:
     cache, sectors_loaded = _build_cache_for_fpp(
         tic_id=tic_id,
         sectors=sectors,
         cache_dir=cache_dir,
+        detrend_cache=bool(detrend_cache),
+        period_days=float(period_days),
+        t0_btjd=float(t0_btjd),
+        duration_hours=float(duration_hours),
+        depth_ppm=float(depth_ppm),
+        detrend_method=detrend_method,
+        detrend_bin_hours=float(detrend_bin_hours),
+        detrend_buffer=float(detrend_buffer),
+        detrend_sigma_clip=float(detrend_sigma_clip),
     )
     result = calculate_fpp(
         cache=cache,
@@ -105,6 +165,7 @@ def _execute_fpp(
         replicates=replicates,
         seed=seed,
         contrast_curve=contrast_curve,
+        overrides=overrides,
     )
     return result, sectors_loaded
 
@@ -205,6 +266,12 @@ def _load_auto_stellar_inputs(tic_id: int) -> dict[str, float | None]:
 @click.option("--detrend-buffer", type=float, default=2.0, show_default=True)
 @click.option("--detrend-sigma-clip", type=float, default=5.0, show_default=True)
 @click.option(
+    "--detrend-cache/--no-detrend-cache",
+    default=False,
+    show_default=True,
+    help="Stage detrended sector light curves in cache before FPP (tutorial-style workflow).",
+)
+@click.option(
     "--preset",
     type=click.Choice(["fast", "standard"], case_sensitive=False),
     default="fast",
@@ -213,6 +280,7 @@ def _load_auto_stellar_inputs(tic_id: int) -> dict[str, float | None]:
 )
 @click.option("--replicates", type=int, default=None, help="Replicate count for FPP aggregation.")
 @click.option("--seed", type=int, default=None, help="Base RNG seed.")
+@click.option("--override", "overrides", multiple=True, help="Repeat KEY=VALUE TRICERATOPS override entries.")
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
     "--timeout-seconds",
@@ -279,9 +347,11 @@ def fpp_command(
     detrend_bin_hours: float,
     detrend_buffer: float,
     detrend_sigma_clip: float,
+    detrend_cache: bool,
     preset: str,
     replicates: int | None,
     seed: int | None,
+    overrides: tuple[str, ...],
     sectors: tuple[int, ...],
     timeout_seconds: float | None,
     contrast_curve: Path | None,
@@ -323,6 +393,8 @@ def fpp_command(
             detrend_buffer=float(detrend_buffer),
             detrend_sigma_clip=float(detrend_sigma_clip),
         )
+    if bool(detrend_cache) and detrend_method is None:
+        raise BtvCliError("--detrend-cache requires --detrend", exit_code=EXIT_INPUT_ERROR)
     if replicates is not None and replicates < 1:
         raise BtvCliError("--replicates must be >= 1", exit_code=EXIT_INPUT_ERROR)
     if use_stellar_auto and not network_ok:
@@ -331,6 +403,7 @@ def fpp_command(
         raise BtvCliError("--timeout-seconds must be > 0", exit_code=EXIT_INPUT_ERROR)
 
     preset_name = str(preset).lower()
+    parsed_overrides = parse_extra_params(overrides)
     effective_timeout_seconds = (
         float(timeout_seconds)
         if timeout_seconds is not None
@@ -433,6 +506,12 @@ def fpp_command(
             stellar_mass=resolved_stellar.get("mass"),
             stellar_tmag=resolved_stellar.get("tmag"),
             contrast_curve=parsed_contrast_curve,
+            overrides=parsed_overrides,
+            detrend_cache=bool(detrend_cache),
+            detrend_method=detrend_method,
+            detrend_bin_hours=float(detrend_bin_hours),
+            detrend_buffer=float(detrend_buffer),
+            detrend_sigma_clip=float(detrend_sigma_clip),
         )
     except BtvCliError:
         raise
@@ -469,6 +548,8 @@ def fpp_command(
             "runtime": {
                 "preset": preset_name,
                 "replicates": replicates,
+                "overrides": parsed_overrides,
+                "detrend_cache": bool(detrend_cache),
                 "seed_requested": seed,
                 "seed_effective": result.get("base_seed", seed),
                 "timeout_seconds_requested": timeout_seconds,

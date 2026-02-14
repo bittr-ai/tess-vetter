@@ -209,6 +209,77 @@ def test_btv_fpp_contrast_curve_tbl_parsed_and_passed(monkeypatch, tmp_path: Pat
     assert payload["provenance"]["contrast_curve"]["filter"] == "Kcont"
 
 
+def test_btv_fpp_overrides_are_forwarded(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
+        return object(), [14]
+
+    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_with_overrides.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--override",
+            "mc_draws=200000",
+            "--override",
+            "use_empirical_noise_floor=true",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert seen["overrides"] == {"mc_draws": 200000, "use_empirical_noise_floor": True}
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["runtime"]["overrides"] == {
+        "mc_draws": 200000,
+        "use_empirical_noise_floor": True,
+    }
+
+
+def test_btv_fpp_detrend_cache_requires_detrend(tmp_path: Path) -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--detrend-cache",
+            "--out",
+            str(tmp_path / "fpp.json"),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "--detrend-cache requires --detrend" in result.output
+
+
 def test_btv_fpp_timeout_maps_to_exit_5(monkeypatch) -> None:
     def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
         return object(), [1]
