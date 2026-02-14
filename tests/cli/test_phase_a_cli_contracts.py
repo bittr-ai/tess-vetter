@@ -128,10 +128,36 @@ def test_cli002_summary_block_is_present_and_deduplicates_concerns(monkeypatch, 
     assert summary["n_ok"] == 1
     assert summary["n_failed"] == 1
     assert summary["n_skipped"] == 1
+    assert summary["n_network_errors"] == 0
     assert summary["n_flagged"] == 1
     assert "V16" in summary["flagged_checks"]
     assert summary["concerns"] == ["MODEL_PREFERS_NON_TRANSIT"]
     assert summary["disposition_hint"] == "needs_model_competition_review"
+
+
+def test_cli002_network_errors_counted_separately(monkeypatch, tmp_path: Path) -> None:
+    def _fake_execute_vet(**_kwargs: Any) -> dict[str, Any]:
+        return _fake_vet_payload(
+            results=[
+                {"id": "V06", "status": "skipped", "flags": ["SKIPPED:NETWORK_TIMEOUT"]},
+                {"id": "V07", "status": "skipped", "flags": ["SKIPPED:NETWORK_ERROR"]},
+                {"id": "V08", "status": "skipped", "flags": ["SKIPPED:NO_TPF"]},
+                {"id": "V09", "status": "skipped", "flags": ["SKIPPED:NETWORK_DISABLED"]},
+            ],
+            include_summary=True,
+        )
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+
+    out_path = tmp_path / "vet_network_summary.json"
+    runner = CliRunner()
+    result = runner.invoke(enrich_cli.cli, [*_base_vet_args(), "--out", str(out_path)])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    summary = payload["summary"]
+    assert summary["n_skipped"] == 4
+    assert summary["n_network_errors"] == 2
 
 
 def test_cli003_coordinate_auto_resolution_from_tic(monkeypatch, tmp_path: Path) -> None:

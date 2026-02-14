@@ -45,9 +45,21 @@ These are process exit codes for command execution, distinct from per-check
 | `4` | Light curve / TPF unavailable | No light curve found, or `--require-tpf` could not load TPF. |
 | `5` | Remote timeout | Timeout raised by remote/network operations. |
 
+## `btv vet` JSON summary counters
+
+When `btv vet` emits JSON, the top-level `summary` block includes:
+
+- `n_ok`: checks with `status="ok"`
+- `n_failed`: checks with `status="error"`
+- `n_skipped`: checks with `status="skipped"`
+- `n_flagged`: checks requiring attention despite `ok`/`skipped` status
+- `n_network_errors`: skipped checks flagged as transient network failures
+  (`SKIPPED:NETWORK_TIMEOUT` or `SKIPPED:NETWORK_ERROR`)
+
+`n_network_errors` is additive context and does not change status semantics.
+
 ## Cross-reference contract
 
 - `btv vet --help` points users to `docs/quickstart.rst` and `docs/api.rst`.
 - `docs/quickstart.rst` points back here for canonical confidence semantics and
   exit-code handling.
-

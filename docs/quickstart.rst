@@ -94,6 +94,14 @@ Use :doc:`verification/confidence_semantics` as the canonical reference for:
 - how to interpret ``CheckResult.status`` and ``CheckResult.confidence``
 - process-level ``btv vet`` exit codes (``0`` through ``5``)
 
+Useful machine-readable fields in ``btv vet`` JSON output:
+
+- ``summary.n_flagged`` and ``summary.n_network_errors`` for triage-ready counts
+- ``provenance.sectors_requested``, ``provenance.sectors_used``,
+  and ``provenance.discovered_sectors`` for sector provenance
+- ``provenance.detrend.depth_ppm`` / ``provenance.detrend.depth_err_ppm``
+  when ``--detrend`` is enabled (recommended depth handoff for ``btv fpp --depth-ppm``)
+
 Vetting Check Categories
 ------------------------
 
@@ -181,6 +189,15 @@ Enable them with ``preset="extended"``:
 - **V19 alias_diagnostics**: Alias/harmonic plausibility diagnostics
 - **V20 ghost_features**: Ghost/scattered-light features (may be skipped without pixel inputs)
 - **V21 sector_consistency**: Sector-to-sector consistency (may be skipped unless provided)
+
+If V16 indicates model-competition concern, you can pass a prior vet summary into
+``btv detrend-grid`` to preserve that context in grid output:
+
+.. code-block:: bash
+
+   uv run python -m bittr_tess_vetter.cli.enrich_cli detrend-grid \
+     --tic-id 123 --period-days 10 --t0-btjd 2000 --duration-hours 2 \
+     --vet-summary-path path/to/vet.json
 
 Using Aliases
 -------------

@@ -120,6 +120,7 @@ def _to_optional_finite_float(value: Any) -> float | None:
 
 
 _HIGH_SALIENCE_FLAGS = {"MODEL_PREFERS_NON_TRANSIT"}
+_NETWORK_ERROR_SKIP_FLAGS = {"SKIPPED:NETWORK_TIMEOUT", "SKIPPED:NETWORK_ERROR"}
 _SUPPORTED_DETREND_METHODS: tuple[str, ...] = ("transit_masked_bin_median",)
 
 
@@ -439,6 +440,7 @@ def _build_root_summary(*, payload: dict[str, Any]) -> dict[str, Any]:
     n_ok = sum(1 for row in rows if row.get("status") == "ok")
     n_skipped = sum(1 for row in rows if row.get("status") == "skipped")
     n_failed = sum(1 for row in rows if row.get("status") == "error")
+    n_network_errors = 0
 
     flagged_checks: set[str] = set()
     concerns: set[str] = set()
@@ -453,6 +455,8 @@ def _build_root_summary(*, payload: dict[str, Any]) -> dict[str, Any]:
             for flag in flags:
                 if str(flag) in _HIGH_SALIENCE_FLAGS:
                     concerns.add(str(flag))
+            if any(str(flag) in _NETWORK_ERROR_SKIP_FLAGS for flag in flags):
+                n_network_errors += 1
 
     if "MODEL_PREFERS_NON_TRANSIT" in concerns:
         disposition_hint = "needs_model_competition_review"
@@ -466,6 +470,7 @@ def _build_root_summary(*, payload: dict[str, Any]) -> dict[str, Any]:
         "n_ok": int(n_ok),
         "n_failed": int(n_failed),
         "n_skipped": int(n_skipped),
+        "n_network_errors": int(n_network_errors),
         "n_flagged": int(len(flagged_checks)),
         "flagged_checks": sorted(flagged_checks),
         "concerns": sorted(concerns),
@@ -830,6 +835,7 @@ def _execute_vet(
     provenance_raw = payload.get("provenance")
     provenance = provenance_raw if isinstance(provenance_raw, dict) else {}
     provenance["sectors_used"] = [int(s) for s in sectors_used]
+    provenance["discovered_sectors"] = [int(s) for s in sectors_used]
     provenance["sectors_requested"] = [int(s) for s in sectors] if sectors is not None else None
     payload["provenance"] = provenance
     if detrend_provenance is not None:

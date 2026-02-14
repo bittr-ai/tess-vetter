@@ -62,6 +62,7 @@ def test_btv_vet_success_writes_bundle_json(monkeypatch, tmp_path: Path) -> None
     assert payload["provenance"]["pipeline_version"] == "0.1.0"
     assert payload["provenance"]["confidence_semantics_ref"] == "docs/verification/confidence_semantics.md"
     assert payload["inputs_summary"]["confidence_semantics_ref"] == "docs/verification/confidence_semantics.md"
+    assert payload["summary"]["n_network_errors"] == 0
 
 
 def test_btv_vet_runtime_error_maps_to_exit_2(monkeypatch) -> None:
@@ -892,6 +893,7 @@ def test_btv_vet_emits_detrend_provenance_when_enabled(monkeypatch, tmp_path: Pa
         assert detrend["depth_note"] != ""
     assert payload["provenance"]["sectors_requested"] == [1]
     assert payload["provenance"]["sectors_used"] == [1]
+    assert payload["provenance"]["discovered_sectors"] == [1]
     assert not np.allclose(captured["flux"], flux)
 
 
