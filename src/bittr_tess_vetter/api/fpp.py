@@ -86,7 +86,7 @@ class ContrastCurve:
 class TriceratopsFppPreset:
     """Controls tradeoffs between runtime, stability, and fidelity."""
 
-    name: Literal["fast", "standard"]
+    name: Literal["fast", "standard", "tutorial"]
     mc_draws: int | None
     window_duration_mult: float | None
     max_points: int | None
@@ -112,6 +112,14 @@ STANDARD_PRESET = TriceratopsFppPreset(
     use_empirical_noise_floor=False,
 )
 
+TUTORIAL_PRESET_OVERRIDES: dict[str, Any] = {
+    "mc_draws": 200_000,
+    "max_points": 3000,
+    "window_duration_mult": 2.0,
+    "min_flux_err": 5e-5,
+    "use_empirical_noise_floor": True,
+}
+
 
 @cites(
     cite(GIACALONE_2021, "TRICERATOPS transit false positive probability framework"),
@@ -131,7 +139,7 @@ def calculate_fpp(
     stellar_mass: float | None = None,
     tmag: float | None = None,
     timeout_seconds: float | None = None,
-    preset: Literal["fast", "standard"] = "fast",
+    preset: Literal["fast", "standard", "tutorial"] = "fast",
     overrides: dict[str, Any] | None = None,
     external_lightcurves: list[ExternalLightCurve] | None = None,
     contrast_curve: ContrastCurve | None = None,
@@ -155,7 +163,7 @@ def calculate_fpp(
         stellar_mass: Stellar mass in solar masses.
         tmag: TESS magnitude (for saturation check).
         timeout_seconds: Overall timeout budget.
-        preset: "fast" or "standard" preset selection.
+        preset: "fast", "standard", or "tutorial" preset selection.
         overrides: Override specific preset parameters.
         external_lightcurves: Ground-based light curves for multi-band FPP
             (TRICERATOPS+ feature). Up to 4 external LCs supported.
@@ -174,7 +182,8 @@ def calculate_fpp(
         Headline ``fpp``/``nfpp`` are set to the median of the successful replicates.
     """
     base = FAST_PRESET if preset == "fast" else STANDARD_PRESET
-    extra = overrides or {}
+    preset_overrides = TUTORIAL_PRESET_OVERRIDES if preset == "tutorial" else {}
+    extra = {**preset_overrides, **(overrides or {})}
     return calculate_fpp_handler(
         cache=cache,
         tic_id=tic_id,

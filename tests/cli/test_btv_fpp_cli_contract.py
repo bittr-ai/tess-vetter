@@ -148,6 +148,147 @@ def test_btv_fpp_standard_preset_defaults_timeout_900(monkeypatch, tmp_path: Pat
     assert payload["provenance"]["runtime"]["timeout_seconds"] == 900.0
 
 
+def test_btv_fpp_tutorial_preset_plumbs_and_runtime_reflects_tutorial(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
+        return object(), [14, 15]
+
+    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"fpp": 0.02, "nfpp": 0.001, "base_seed": 7}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_tutorial_preset.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--preset",
+            "tutorial",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen["preset"] == "tutorial"
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["runtime"]["preset"] == "tutorial"
+
+
+def test_btv_fpp_standard_degenerate_emits_retry_guidance(monkeypatch, tmp_path: Path) -> None:
+    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
+        return object(), [14, 15]
+
+    def _fake_calculate_fpp(**_kwargs: Any) -> dict[str, Any]:
+        return {
+            "fpp": float("nan"),
+            "nfpp": 0.1,
+            "base_seed": 7,
+            "degenerate_reason": "fpp_not_finite,posterior_sum_not_finite,posterior_prob_nan_count=30",
+            "posterior_sum_total": float("nan"),
+            "posterior_prob_nan_count": 30,
+        }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_standard_degenerate_retry_guidance.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--preset",
+            "standard",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    guidance = payload["provenance"]["retry_guidance"]
+    assert guidance["preset"] == "tutorial"
+    assert guidance["overrides"] == {
+        "mc_draws": 200000,
+        "max_points": 3000,
+        "window_duration_mult": 2.0,
+        "min_flux_err": 5e-5,
+        "use_empirical_noise_floor": True,
+    }
+    assert guidance["reason"] == "fpp_not_finite,posterior_sum_not_finite,posterior_prob_nan_count=30"
+
+
+def test_btv_fpp_standard_non_degenerate_omits_retry_guidance(monkeypatch, tmp_path: Path) -> None:
+    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
+        return object(), [14, 15]
+
+    def _fake_calculate_fpp(**_kwargs: Any) -> dict[str, Any]:
+        return {
+            "fpp": 0.01,
+            "nfpp": 0.001,
+            "base_seed": 7,
+            "degenerate_reason": None,
+            "posterior_sum_total": 1.0,
+            "posterior_prob_nan_count": 0,
+        }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_standard_non_degenerate.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--preset",
+            "standard",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert "retry_guidance" not in payload["provenance"]
+
+
 def test_btv_fpp_contrast_curve_tbl_parsed_and_passed(monkeypatch, tmp_path: Path) -> None:
     seen: dict[str, Any] = {}
 

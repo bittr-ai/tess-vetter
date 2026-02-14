@@ -8,7 +8,7 @@ from typing import Any
 import click
 import numpy as np
 
-from bittr_tess_vetter.api.fpp import calculate_fpp
+from bittr_tess_vetter.api.fpp import TUTORIAL_PRESET_OVERRIDES, calculate_fpp
 from bittr_tess_vetter.api.fpp_helpers import load_contrast_curve_exofop_tbl
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
 from bittr_tess_vetter.api.transit_masks import get_in_transit_mask, get_out_of_transit_mask, measure_transit_depth
@@ -45,6 +45,76 @@ def _looks_like_timeout(exc: BaseException) -> bool:
     if isinstance(exc, TimeoutError):
         return True
     return "timeout" in type(exc).__name__.lower()
+
+
+def _is_degenerate_fpp_result(result: dict[str, Any]) -> bool:
+    """Mirror API helper contract checks for degenerate FPP outputs."""
+    if "error" in result:
+        return True
+
+    fpp = result.get("fpp")
+    if fpp is None or not np.isfinite(float(fpp)):
+        return True
+
+    posterior_sum_total = result.get("posterior_sum_total")
+    if posterior_sum_total is not None:
+        try:
+            pst = float(posterior_sum_total)
+            if not np.isfinite(pst) or pst <= 0:
+                return True
+        except (TypeError, ValueError):
+            return True
+
+    posterior_prob_nan_count = result.get("posterior_prob_nan_count")
+    if posterior_prob_nan_count is not None:
+        try:
+            return int(posterior_prob_nan_count) > 0
+        except (TypeError, ValueError):
+            return True
+    return False
+
+
+def _build_retry_guidance(result: dict[str, Any], preset_name: str) -> dict[str, Any] | None:
+    if preset_name != "standard" or not _is_degenerate_fpp_result(result):
+        return None
+
+    has_error_key = "error" in result
+    fpp = result.get("fpp")
+    fpp_missing_or_non_finite = fpp is None
+    if not fpp_missing_or_non_finite:
+        try:
+            fpp_missing_or_non_finite = not np.isfinite(float(fpp))
+        except (TypeError, ValueError):
+            fpp_missing_or_non_finite = True
+
+    posterior_sum_total = result.get("posterior_sum_total")
+    posterior_sum_invalid_or_non_positive = False
+    if posterior_sum_total is not None:
+        try:
+            pst = float(posterior_sum_total)
+            posterior_sum_invalid_or_non_positive = (not np.isfinite(pst)) or pst <= 0
+        except (TypeError, ValueError):
+            posterior_sum_invalid_or_non_positive = True
+
+    posterior_prob_nan_count_positive = False
+    posterior_prob_nan_count = result.get("posterior_prob_nan_count")
+    if posterior_prob_nan_count is not None:
+        try:
+            posterior_prob_nan_count_positive = int(posterior_prob_nan_count) > 0
+        except (TypeError, ValueError):
+            posterior_prob_nan_count_positive = True
+
+    return {
+        "reason": result.get("degenerate_reason") or "degenerate_fpp_result",
+        "preset": "tutorial",
+        "overrides": dict(TUTORIAL_PRESET_OVERRIDES),
+        "degenerate_checks": {
+            "has_error_key": has_error_key,
+            "fpp_missing_or_non_finite": fpp_missing_or_non_finite,
+            "posterior_sum_invalid_or_non_positive": posterior_sum_invalid_or_non_positive,
+            "posterior_prob_nan_count_positive": posterior_prob_nan_count_positive,
+        },
+    }
 
 
 def _build_cache_for_fpp(
@@ -273,7 +343,7 @@ def _load_auto_stellar_inputs(tic_id: int) -> dict[str, float | None]:
 )
 @click.option(
     "--preset",
-    type=click.Choice(["fast", "standard"], case_sensitive=False),
+    type=click.Choice(["fast", "standard", "tutorial"], case_sensitive=False),
     default="fast",
     show_default=True,
     help="TRICERATOPS runtime preset (standard typically expects a longer timeout budget).",
@@ -558,6 +628,9 @@ def fpp_command(
             },
         },
     }
+    retry_guidance = _build_retry_guidance(result=result, preset_name=preset_name)
+    if retry_guidance is not None:
+        payload["provenance"]["retry_guidance"] = retry_guidance
     dump_json_output(payload, out_path)
 
 
