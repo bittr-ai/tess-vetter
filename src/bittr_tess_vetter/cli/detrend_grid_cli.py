@@ -61,6 +61,43 @@ def _rank_sweep_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return ranked
 
 
+def _annotate_depth_semantics(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    note = (
+        "Depth is from template least-squares fitting, optimized for variant ranking. "
+        "For downstream use (e.g. FPP), measure depth with btv vet --detrend using this variant's config."
+    )
+    annotated: list[dict[str, Any]] = []
+    for row in rows:
+        annotated.append(
+            {
+                **row,
+                "depth_method": "template_ls",
+                "depth_note": note,
+            }
+        )
+    return annotated
+
+
+def _build_recommended_next_step(best_variant: dict[str, Any] | None) -> str | None:
+    if not isinstance(best_variant, dict):
+        return None
+    config = best_variant.get("config")
+    if not isinstance(config, dict):
+        return None
+    detrender = config.get("detrender")
+    if str(detrender) != "transit_masked_bin_median":
+        return None
+    bin_hours = config.get("detrender_bin_hours", 6.0)
+    buffer_factor = config.get("detrender_buffer_factor", 2.0)
+    sigma_clip = config.get("detrender_sigma_clip", 5.0)
+    return (
+        "btv vet --detrend transit_masked_bin_median "
+        f"--detrend-bin-hours {float(bin_hours):g} "
+        f"--detrend-buffer {float(buffer_factor):g} "
+        f"--detrend-sigma-clip {float(sigma_clip):g}"
+    )
+
+
 def _build_best_variant(
     *,
     best_variant_id: str | None,
@@ -185,7 +222,8 @@ def _execute_detrend_grid(
     payload = sweep.to_dict()
     raw_rows = payload.get("sweep_table")
     rows = [row for row in raw_rows if isinstance(row, dict)] if isinstance(raw_rows, list) else []
-    ranked_rows = _rank_sweep_rows(rows)
+    rows_annotated = _annotate_depth_semantics(rows)
+    ranked_rows = _rank_sweep_rows(rows_annotated)
 
     best_variant = _build_best_variant(
         best_variant_id=payload.get("best_variant_id"),
@@ -203,11 +241,13 @@ def _execute_detrend_grid(
     sectors_loaded = sorted(
         {int(lc.sector) for lc in lightcurves if getattr(lc, "sector", None) is not None}
     )
+    recommended_next_step = _build_recommended_next_step(best_variant)
     return {
         "schema_version": 1,
-        **payload,
+        **{**payload, "sweep_table": rows_annotated},
         "ranked_sweep_table": ranked_rows,
         "best_variant": best_variant,
+        "recommended_next_step": recommended_next_step,
         "variant_axes": {
             "downsample_levels": effective_downsample_levels,
             "outlier_policies": effective_outlier_policies,

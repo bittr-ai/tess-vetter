@@ -129,6 +129,7 @@ def test_detrend_grid_output_schema_keys(monkeypatch) -> None:
     }
     assert core_keys.issubset(payload.keys())
     assert "best_variant" in payload
+    assert "recommended_next_step" in payload
     assert "provenance" in payload
     assert "ranked_sweep_table" in payload
     assert payload["best_variant"]["variant_id"] == "variant_a"
@@ -156,6 +157,68 @@ def test_detrend_grid_output_schema_keys(monkeypatch) -> None:
         "sigma_clip": [3.0, 5.0],
     }
     assert payload["provenance"]["variant_counts"]["cross_product"] == 120
+    assert payload["sweep_table"][0]["depth_method"] == "template_ls"
+    assert "optimized for variant ranking" in payload["sweep_table"][0]["depth_note"]
+
+
+def test_detrend_grid_emits_recommended_next_step_for_transit_masked_best(monkeypatch) -> None:
+    rows = [
+        {
+            "variant_id": "best_tm",
+            "status": "ok",
+            "backend": "numpy",
+            "runtime_seconds": 0.01,
+            "n_points_used": 200,
+            "downsample_factor": 1,
+            "outlier_policy": "none",
+            "detrender": "transit_masked_bin_median",
+            "score": 9.0,
+            "depth_hat_ppm": 215.0,
+            "depth_err_ppm": 10.0,
+            "warnings": [],
+            "failure_reason": None,
+            "variant_config": {
+                "variant_id": "best_tm",
+                "detrender": "transit_masked_bin_median",
+                "detrender_bin_hours": 6.0,
+                "detrender_buffer_factor": 2.0,
+                "detrender_sigma_clip": 5.0,
+            },
+            "gp_hyperparams": None,
+            "gp_fit_diagnostics": None,
+        }
+    ]
+    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    class _BestTransitSweep:
+        def to_dict(self) -> dict[str, Any]:
+            return {
+                "stable": True,
+                "metric_variance": 0.05,
+                "score_spread_iqr_over_median": 0.03,
+                "depth_spread_iqr_over_median": 0.05,
+                "n_variants_total": len(rows),
+                "n_variants_ok": len(rows),
+                "n_variants_failed": 0,
+                "best_variant_id": "best_tm",
+                "worst_variant_id": "best_tm",
+                "stability_threshold": 0.2,
+                "notes": [],
+                "sweep_table": rows,
+            }
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        lambda **_kwargs: _BestTransitSweep(),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(enrich_cli.cli, _base_args())
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert (
+        payload["recommended_next_step"]
+        == "btv vet --detrend transit_masked_bin_median --detrend-bin-hours 6 --detrend-buffer 2 --detrend-sigma-clip 5"
+    )
 
 
 def test_detrend_grid_seed_is_deterministic_and_defaults_to_zero(monkeypatch) -> None:
