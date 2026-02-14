@@ -7,7 +7,7 @@ from typing import Any
 import click
 import numpy as np
 
-from bittr_tess_vetter import api
+from bittr_tess_vetter.api import ephemeris_reliability as ephemeris_reliability_api
 from bittr_tess_vetter.api.ephemeris_specificity import SmoothTemplateConfig
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
 from bittr_tess_vetter.cli.common_cli import (
@@ -156,7 +156,7 @@ def ephemeris_reliability_command(
             ingress_egress_fraction=float(ingress_egress_fraction),
             sharpness=float(sharpness),
         )
-        result = api.ephemeris_reliability.compute_reliability_regime_numpy(
+        result = ephemeris_reliability_api.compute_reliability_regime_numpy(
             time=time,
             flux=flux,
             flux_err=flux_err,
