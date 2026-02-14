@@ -20,6 +20,10 @@ from bittr_tess_vetter.cli.common_cli import (
 from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
 from bittr_tess_vetter.validation.detrend_grid_defaults import (
+    DEFAULT_TRANSIT_MASKED_BIN_HOURS,
+    DEFAULT_TRANSIT_MASKED_BUFFER_FACTORS,
+    DEFAULT_TRANSIT_MASKED_SIGMA_CLIPS,
+    expanded_detrender_count,
     resolve_detrend_grid_axes,
 )
 
@@ -156,8 +160,9 @@ def _execute_detrend_grid(
         outlier_policies=outlier_policies,
         detrenders=detrenders,
     )
-    cross_product_variant_count = (
-        len(effective_downsample_levels) * len(effective_outlier_policies) * len(effective_detrenders)
+    expanded_count = expanded_detrender_count(effective_detrenders)
+    cross_product_variant_count = len(effective_downsample_levels) * len(effective_outlier_policies) * int(
+        expanded_count
     )
 
     sweep = compute_sensitivity_sweep_numpy(
@@ -207,6 +212,11 @@ def _execute_detrend_grid(
             "downsample_levels": effective_downsample_levels,
             "outlier_policies": effective_outlier_policies,
             "detrenders": effective_detrenders,
+            "transit_masked_bin_median": {
+                "bin_hours": list(DEFAULT_TRANSIT_MASKED_BIN_HOURS),
+                "buffer_factor": list(DEFAULT_TRANSIT_MASKED_BUFFER_FACTORS),
+                "sigma_clip": list(DEFAULT_TRANSIT_MASKED_SIGMA_CLIPS),
+            },
             "include_celerite2_sho": bool(include_celerite2_sho),
         },
         "provenance": {
@@ -234,6 +244,11 @@ def _execute_detrend_grid(
                 "downsample_levels": effective_downsample_levels,
                 "outlier_policies": effective_outlier_policies,
                 "detrenders": effective_detrenders,
+                "transit_masked_bin_median": {
+                    "bin_hours": list(DEFAULT_TRANSIT_MASKED_BIN_HOURS),
+                    "buffer_factor": list(DEFAULT_TRANSIT_MASKED_BUFFER_FACTORS),
+                    "sigma_clip": list(DEFAULT_TRANSIT_MASKED_SIGMA_CLIPS),
+                },
                 "include_celerite2_sho": bool(include_celerite2_sho),
                 "stability_threshold": float(stability_threshold),
             },

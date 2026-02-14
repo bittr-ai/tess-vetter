@@ -7,9 +7,16 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from bittr_tess_vetter.api.detrend import bin_median_trend, sigma_clip
+from bittr_tess_vetter.api.transit_masks import get_out_of_transit_mask
 from bittr_tess_vetter.validation.ephemeris_specificity import (
     SmoothTemplateConfig,
     score_fixed_period_numpy,
+)
+from bittr_tess_vetter.validation.detrend_grid_defaults import (
+    DEFAULT_TRANSIT_MASKED_BIN_HOURS,
+    DEFAULT_TRANSIT_MASKED_BUFFER_FACTORS,
+    DEFAULT_TRANSIT_MASKED_SIGMA_CLIPS,
 )
 
 # Optional dependency for "deep" preset. Kept optional on purpose.
@@ -30,6 +37,9 @@ class SweepVariant:
     downsample_factor: int | None
     outlier_policy: str | None
     detrender: str | None
+    detrender_bin_hours: float | None = None
+    detrender_buffer_factor: float | None = None
+    detrender_sigma_clip: float | None = None
     is_gp: bool = False
 
     def to_dict(self) -> dict[str, Any]:
@@ -38,6 +48,9 @@ class SweepVariant:
             "downsample_factor": self.downsample_factor,
             "outlier_policy": self.outlier_policy,
             "detrender": self.detrender,
+            "detrender_bin_hours": self.detrender_bin_hours,
+            "detrender_buffer_factor": self.detrender_buffer_factor,
+            "detrender_sigma_clip": self.detrender_sigma_clip,
             "is_gp": bool(self.is_gp),
         }
 
@@ -188,11 +201,85 @@ def _apply_running_median_detrend(
     return time, flux_detrended.astype(np.float64), flux_err, meta
 
 
+def _apply_transit_masked_bin_median_detrend(
+    time: NDArray[np.float64],
+    flux: NDArray[np.float64],
+    flux_err: NDArray[np.float64],
+    *,
+    period_days: float,
+    t0_btjd: float,
+    duration_hours: float,
+    bin_hours: float,
+    buffer_factor: float,
+    sigma_clip_value: float,
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], dict[str, Any]]:
+    meta: dict[str, Any] = {
+        "detrend_name": "transit_masked_bin_median",
+        "applied": True,
+        "bin_hours": float(bin_hours),
+        "buffer_factor": float(buffer_factor),
+        "sigma_clip": float(sigma_clip_value),
+    }
+    if len(time) < 3:
+        return time, flux, flux_err, meta
+
+    finite_mask = np.isfinite(time) & np.isfinite(flux) & np.isfinite(flux_err)
+    oot_mask = get_out_of_transit_mask(
+        np.asarray(time, dtype=np.float64),
+        float(period_days),
+        float(t0_btjd),
+        float(duration_hours),
+        buffer_factor=float(buffer_factor),
+    )
+    trend_fit_mask = finite_mask & oot_mask
+
+    n_sigma_clipped = 0
+    if int(np.sum(trend_fit_mask)) >= 3:
+        clip_keep = sigma_clip(flux[trend_fit_mask], sigma=float(sigma_clip_value))
+        n_sigma_clipped = int(np.sum(trend_fit_mask)) - int(np.sum(clip_keep))
+        trend_indices = np.flatnonzero(trend_fit_mask)
+        trend_fit_mask = trend_fit_mask.copy()
+        trend_fit_mask[trend_indices[~clip_keep]] = False
+
+    fit_flux = np.asarray(flux, dtype=np.float64).copy()
+    fit_flux[~trend_fit_mask] = np.nan
+    trend = bin_median_trend(
+        np.asarray(time, dtype=np.float64),
+        fit_flux,
+        bin_hours=float(bin_hours),
+        min_bin_points=1,
+    )
+
+    trend_ref = float(np.nanmedian(trend[trend_fit_mask])) if np.any(trend_fit_mask) else float(np.nanmedian(trend))
+    if not np.isfinite(trend_ref) or trend_ref == 0.0:
+        trend_ref = 1.0
+    safe_trend = np.where(np.isfinite(trend) & (trend != 0.0), trend, trend_ref)
+
+    detrended_flux = np.asarray(flux, dtype=np.float64) / safe_trend * trend_ref
+    detrended_flux_err = np.asarray(flux_err, dtype=np.float64) / safe_trend * trend_ref
+    meta["n_points"] = int(len(time))
+    meta["n_trend_fit_points"] = int(np.sum(trend_fit_mask))
+    meta["n_sigma_clipped"] = int(n_sigma_clipped)
+    return (
+        np.asarray(time, dtype=np.float64),
+        detrended_flux.astype(np.float64),
+        detrended_flux_err.astype(np.float64),
+        meta,
+    )
+
+
 def _apply_detrend(
     time: NDArray[np.float64],
     flux: NDArray[np.float64],
     flux_err: NDArray[np.float64],
     detrend_name: str,
+    *,
+    period_days: float,
+    t0_btjd: float,
+    duration_hours: float,
+    bin_hours: float | None = None,
+    buffer_factor: float | None = None,
+    sigma_clip_value: float | None = None,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], dict[str, Any]]:
     meta: dict[str, Any] = {"detrend_name": detrend_name}
     if detrend_name == "none":
@@ -205,6 +292,18 @@ def _apply_detrend(
         except Exception:
             window_days = 0.5
         return _apply_running_median_detrend(time, flux, flux_err, window_days=float(window_days))
+    if detrend_name == "transit_masked_bin_median":
+        return _apply_transit_masked_bin_median_detrend(
+            time,
+            flux,
+            flux_err,
+            period_days=float(period_days),
+            t0_btjd=float(t0_btjd),
+            duration_hours=float(duration_hours),
+            bin_hours=float(6.0 if bin_hours is None else bin_hours),
+            buffer_factor=float(2.0 if buffer_factor is None else buffer_factor),
+            sigma_clip_value=float(5.0 if sigma_clip_value is None else sigma_clip_value),
+        )
     meta["applied"] = False
     return time, flux, flux_err, meta
 
@@ -437,15 +536,35 @@ def compute_sensitivity_sweep_numpy(
     for ds in downsample_levels:
         for ol in outlier_policies:
             for dt in detrenders:
-                variants.append(
-                    SweepVariant(
-                        variant_id=f"ds{int(ds)}|ol_{ol}|dt_{dt}",
-                        downsample_factor=int(ds),
-                        outlier_policy=str(ol),
-                        detrender=str(dt),
-                        is_gp=False,
+                if str(dt) == "transit_masked_bin_median":
+                    for bin_hours in DEFAULT_TRANSIT_MASKED_BIN_HOURS:
+                        for buffer_factor in DEFAULT_TRANSIT_MASKED_BUFFER_FACTORS:
+                            for sigma_clip_value in DEFAULT_TRANSIT_MASKED_SIGMA_CLIPS:
+                                variants.append(
+                                    SweepVariant(
+                                        variant_id=(
+                                            f"ds{int(ds)}|ol_{ol}|dt_{dt}"
+                                            f"|bh_{bin_hours:g}|bf_{buffer_factor:g}|sc_{sigma_clip_value:g}"
+                                        ),
+                                        downsample_factor=int(ds),
+                                        outlier_policy=str(ol),
+                                        detrender=str(dt),
+                                        detrender_bin_hours=float(bin_hours),
+                                        detrender_buffer_factor=float(buffer_factor),
+                                        detrender_sigma_clip=float(sigma_clip_value),
+                                        is_gp=False,
+                                    )
+                                )
+                else:
+                    variants.append(
+                        SweepVariant(
+                            variant_id=f"ds{int(ds)}|ol_{ol}|dt_{dt}",
+                            downsample_factor=int(ds),
+                            outlier_policy=str(ol),
+                            detrender=str(dt),
+                            is_gp=False,
+                        )
                     )
-                )
     if include_celerite2_sho:
         variants.append(
             SweepVariant(
@@ -517,12 +636,29 @@ def compute_sensitivity_sweep_numpy(
                     base_row["warnings"].append(f"Removed {n_removed} outliers")
             if variant.detrender:
                 t_var, f_var, fe_var, meta = _apply_detrend(
-                    t_var, f_var, fe_var, str(variant.detrender)
+                    t_var,
+                    f_var,
+                    fe_var,
+                    str(variant.detrender),
+                    period_days=float(period_days),
+                    t0_btjd=float(t0_btjd),
+                    duration_hours=float(duration_hours),
+                    bin_hours=variant.detrender_bin_hours,
+                    buffer_factor=variant.detrender_buffer_factor,
+                    sigma_clip_value=variant.detrender_sigma_clip,
                 )
                 if meta.get("applied"):
-                    base_row["warnings"].append(
-                        f"Applied {variant.detrender} (window={meta.get('window_cadences', 'N/A')} cadences)"
-                    )
+                    if str(variant.detrender) == "transit_masked_bin_median":
+                        base_row["warnings"].append(
+                            "Applied transit_masked_bin_median "
+                            f"(bin_hours={meta.get('bin_hours')}, "
+                            f"buffer_factor={meta.get('buffer_factor')}, "
+                            f"sigma_clip={meta.get('sigma_clip')})"
+                        )
+                    else:
+                        base_row["warnings"].append(
+                            f"Applied {variant.detrender} (window={meta.get('window_cadences', 'N/A')} cadences)"
+                        )
             if len(t_var) < 50:
                 base_row["status"] = "failed"
                 base_row["failure_reason"] = (

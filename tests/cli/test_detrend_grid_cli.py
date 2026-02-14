@@ -140,12 +140,22 @@ def test_detrend_grid_output_schema_keys(monkeypatch) -> None:
         "running_median_0.5d",
         "transit_masked_bin_median",
     ]
+    assert payload["provenance"]["effective_grid_config"]["transit_masked_bin_median"] == {
+        "bin_hours": [4.0, 6.0, 8.0],
+        "buffer_factor": [1.5, 2.0, 3.0],
+        "sigma_clip": [3.0, 5.0],
+    }
     assert payload["variant_axes"]["detrenders"] == [
         "none",
         "running_median_0.5d",
         "transit_masked_bin_median",
     ]
-    assert payload["provenance"]["variant_counts"]["cross_product"] == 18
+    assert payload["variant_axes"]["transit_masked_bin_median"] == {
+        "bin_hours": [4.0, 6.0, 8.0],
+        "buffer_factor": [1.5, 2.0, 3.0],
+        "sigma_clip": [3.0, 5.0],
+    }
+    assert payload["provenance"]["variant_counts"]["cross_product"] == 120
 
 
 def test_detrend_grid_seed_is_deterministic_and_defaults_to_zero(monkeypatch) -> None:

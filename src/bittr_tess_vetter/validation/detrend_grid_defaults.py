@@ -9,6 +9,9 @@ DEFAULT_DETRENDERS: tuple[str, ...] = (
     "running_median_0.5d",
     "transit_masked_bin_median",
 )
+DEFAULT_TRANSIT_MASKED_BIN_HOURS: tuple[float, ...] = (4.0, 6.0, 8.0)
+DEFAULT_TRANSIT_MASKED_BUFFER_FACTORS: tuple[float, ...] = (1.5, 2.0, 3.0)
+DEFAULT_TRANSIT_MASKED_SIGMA_CLIPS: tuple[float, ...] = (3.0, 5.0)
 
 
 def resolve_detrend_grid_axes(
@@ -24,9 +27,29 @@ def resolve_detrend_grid_axes(
     return effective_downsample, effective_outlier, effective_detrenders
 
 
+def expanded_detrender_count(detrenders: list[str]) -> int:
+    """Return expanded detrender count accounting for transit-masked sub-variants."""
+    tm_count = (
+        len(DEFAULT_TRANSIT_MASKED_BIN_HOURS)
+        * len(DEFAULT_TRANSIT_MASKED_BUFFER_FACTORS)
+        * len(DEFAULT_TRANSIT_MASKED_SIGMA_CLIPS)
+    )
+    total = 0
+    for detrender in detrenders:
+        if str(detrender) == "transit_masked_bin_median":
+            total += tm_count
+        else:
+            total += 1
+    return int(total)
+
+
 __all__ = [
     "DEFAULT_DOWNSAMPLE_LEVELS",
     "DEFAULT_OUTLIER_POLICIES",
     "DEFAULT_DETRENDERS",
+    "DEFAULT_TRANSIT_MASKED_BIN_HOURS",
+    "DEFAULT_TRANSIT_MASKED_BUFFER_FACTORS",
+    "DEFAULT_TRANSIT_MASKED_SIGMA_CLIPS",
+    "expanded_detrender_count",
     "resolve_detrend_grid_axes",
 ]
