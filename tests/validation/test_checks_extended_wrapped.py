@@ -89,6 +89,7 @@ def test_v17_uniqueness_regime_labels(monkeypatch) -> None:
     assert result.status == "ok"
     assert result.metrics["period_peak_to_next_ratio"] == 1.08
     assert result.metrics["uniqueness_regime"] == "marginal"
+    assert "V17_REGIME_MARGINAL" in result.flags
     assert "Competing period has" in str(result.metrics["interpretation_note"])
 
 
@@ -122,3 +123,9 @@ def test_v19_includes_systematic_period_proximity(monkeypatch) -> None:
     assert result.metrics["systematic_within_threshold"] is False
     assert result.raw is not None
     assert "systematic_period_proximity" in result.raw
+
+
+def test_v19_can_flag_near_systematic_harmonic() -> None:
+    out = compute_systematic_period_proximity(period_days=6.85, threshold_fraction=0.05)
+    assert out["within_threshold"] is True
+    assert "tess_orbital_half" in str(out["systematic_period_name"])

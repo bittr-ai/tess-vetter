@@ -50,6 +50,7 @@ def test_compute_sector_ephemeris_metrics_two_sectors() -> None:
     assert [m.sector for m in out] == [55, 83]
     for m in out:
         assert m.n_valid > 100
+        assert m.n_transits > 0
         assert np.isfinite(m.depth_hat_ppm)
         assert np.isfinite(m.depth_sigma_ppm)
         assert m.depth_hat_ppm > 0
@@ -98,3 +99,31 @@ def test_v21_sector_measurements_rejects_unknown_schema_version() -> None:
     }
     with pytest.raises(ValueError, match="unsupported V21 sector measurements schema_version"):
         _ = deserialize_v21_sector_measurements(bad_payload)
+
+
+def test_v21_sector_measurements_from_ephemeris_metrics_includes_n_transits() -> None:
+    rng = np.random.default_rng(7)
+    t = np.linspace(0.0, 20.0, 3000, dtype=np.float64)
+    sector = np.full(t.shape, 5, dtype=np.int32)
+    period_days = 5.0
+    t0_btjd = 1.0
+    duration_hours = 3.0
+    phase = ((t - t0_btjd) % period_days) / period_days
+    half_dur_phase = (duration_hours / 24.0) / period_days / 2.0
+    in_transit = (phase < half_dur_phase) | (phase > (1.0 - half_dur_phase))
+    flux = np.ones_like(t)
+    flux[in_transit] -= 400e-6
+    flux += rng.normal(0.0, 120e-6, size=t.shape[0])
+    flux_err = np.full_like(t, 120e-6)
+    metrics = compute_sector_ephemeris_metrics(
+        time=t,
+        flux=flux,
+        flux_err=flux_err,
+        sector=sector,
+        period_days=period_days,
+        t0_btjd=t0_btjd,
+        duration_hours=duration_hours,
+    )
+    payload = serialize_v21_sector_measurements(metrics)
+    assert payload["measurements"][0]["n_transits"] > 0
+    assert payload["measurements"][0]["quality_weight"] == 1.0

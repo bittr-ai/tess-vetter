@@ -6,12 +6,42 @@ from typing import Sequence
 
 import numpy as np
 
-_KNOWN_SYSTEMATIC_PERIODS: tuple[tuple[str, float], ...] = (
+_BASE_SYSTEMATIC_PERIODS: tuple[tuple[str, float], ...] = (
     ("tess_momentum_dump", 3.0),
     ("tess_orbital", 13.7),
-    ("tess_orbital_harmonic_2x", 27.4),
+    ("tess_sector_duration", 27.4),
 )
-_KNOWN_SYSTEMATIC_PERIODS_DAYS: tuple[float, ...] = (3.0, 13.7, 27.4)
+_HARMONIC_FACTORS: tuple[tuple[str, float], ...] = (
+    ("half", 0.5),
+    ("2x", 2.0),
+    ("3x", 3.0),
+    ("4x", 4.0),
+    ("5x", 5.0),
+)
+
+
+def _expanded_systematic_periods() -> tuple[tuple[str, float], ...]:
+    expanded: list[tuple[str, float]] = []
+    seen: set[float] = set()
+    for name, period in _BASE_SYSTEMATIC_PERIODS:
+        period_f = float(period)
+        key = round(period_f, 9)
+        if key not in seen:
+            expanded.append((name, period_f))
+            seen.add(key)
+    for name, period in _BASE_SYSTEMATIC_PERIODS:
+        for suffix, factor in _HARMONIC_FACTORS:
+            harmonic = float(period) * float(factor)
+            key = round(harmonic, 9)
+            if key in seen:
+                continue
+            expanded.append((f"{name}_{suffix}", harmonic))
+            seen.add(key)
+    return tuple(expanded)
+
+
+_KNOWN_SYSTEMATIC_PERIODS: tuple[tuple[str, float], ...] = _expanded_systematic_periods()
+_KNOWN_SYSTEMATIC_PERIODS_DAYS: tuple[float, ...] = tuple(period for _, period in _KNOWN_SYSTEMATIC_PERIODS)
 _DEFAULT_THRESHOLD_FRACTION = 0.05
 
 

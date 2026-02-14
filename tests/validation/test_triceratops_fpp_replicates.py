@@ -280,6 +280,16 @@ def make_degenerate_target() -> MockTriceratopsTarget:
     return target
 
 
+def test_vendor_triceratops_has_no_unconditional_griz_print() -> None:
+    from pathlib import Path
+
+    vendor_file = Path(
+        "src/bittr_tess_vetter/ext/triceratops_plus_vendor/triceratops/triceratops.py"
+    )
+    text = vendor_file.read_text(encoding="utf-8")
+    assert 'print("griz mags:' not in text
+
+
 def make_valid_target(fpp: float = 0.01, seed: int = 0) -> MockTriceratopsTarget:
     """Create a target that returns valid results with slight variation."""
     # Add small random variation based on seed for realistic replicate behavior

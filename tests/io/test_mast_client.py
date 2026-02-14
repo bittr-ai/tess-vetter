@@ -272,6 +272,20 @@ class TestSearchLightcurve:
             with pytest.raises(MASTClientError, match="Failed to search MAST"):
                 client.search_lightcurve(tic_id=261136679)
 
+    def test_search_error_includes_retry_guidance_for_http_502(self, mock_lightkurve):
+        class _HTTPError(Exception):
+            status_code = 502
+
+        mock_lightkurve.search_lightcurve.side_effect = _HTTPError("Bad Gateway")
+
+        with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
+            client = MASTClient()
+            client._lk = mock_lightkurve
+            client._lk_imported = True
+
+            with pytest.raises(MASTClientError, match="HTTP 502"):
+                client.search_lightcurve(tic_id=261136679)
+
 
 # -----------------------------------------------------------------------------
 # Tests for download_lightcurve()
@@ -835,6 +849,25 @@ class TestGetTargetInfo:
             assert target.stellar.teff == 5800.0
             assert target.stellar.radius is None
             assert target.stellar.mass is None
+
+    def test_get_target_info_includes_retry_guidance_for_http_502(
+        self, mock_lightkurve, mock_astroquery_modules
+    ):
+        class _HTTPError(Exception):
+            status_code = 502
+
+        with (
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve, **mock_astroquery_modules}),
+            patch("astroquery.mast.Catalogs") as mock_catalogs,
+        ):
+            mock_catalogs.query_criteria.side_effect = _HTTPError("Bad Gateway")
+
+            client = MASTClient()
+            client._lk = mock_lightkurve
+            client._lk_imported = True
+
+            with pytest.raises(MASTClientError, match="Retry shortly"):
+                client.get_target_info(tic_id=261136679)
 
 
 # -----------------------------------------------------------------------------

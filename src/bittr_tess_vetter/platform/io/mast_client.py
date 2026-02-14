@@ -35,6 +35,42 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _maybe_extract_http_status(exc: BaseException) -> int | None:
+    for attr in ("status_code", "status"):
+        value = getattr(exc, attr, None)
+        try:
+            if value is not None:
+                return int(value)
+        except Exception:
+            continue
+    response = getattr(exc, "response", None)
+    if response is not None:
+        code = getattr(response, "status_code", None)
+        try:
+            if code is not None:
+                return int(code)
+        except Exception:
+            pass
+    text = str(exc)
+    match = re.search(r"\b([45]\d{2})\b", text)
+    if match is not None:
+        try:
+            return int(match.group(1))
+        except Exception:
+            return None
+    return None
+
+
+def _mast_retry_guidance(exc: BaseException) -> str:
+    status = _maybe_extract_http_status(exc)
+    if status is not None and 500 <= status <= 599:
+        return (
+            f" MAST/TIC returned HTTP {status}; this is often transient. "
+            "Retry shortly, or use cached/local data (--local-data-path or cache_dir) if available."
+        )
+    return ""
+
+
 class DownloadPhase(Enum):
     """Phases of the light curve download process."""
 
@@ -740,7 +776,9 @@ class MASTClient:
             )
         except Exception as e:
             logger.error(f"MAST search failed for {target}: {e}")
-            raise MASTClientError(f"Failed to search MAST for TIC {tic_id}: {e}") from e
+            raise MASTClientError(
+                f"Failed to search MAST for TIC {tic_id}: {e}{_mast_retry_guidance(e)}"
+            ) from e
 
         if search_result is None or len(search_result) == 0:
             logger.info(f"No light curves found for {target}")
@@ -1226,7 +1264,9 @@ class MASTClient:
             ) from e
         except Exception as e:
             logger.error(f"TIC query failed for {tic_id}: {e}")
-            raise MASTClientError(f"Failed to query TIC for {tic_id}: {e}") from e
+            raise MASTClientError(
+                f"Failed to query TIC for {tic_id}: {e}{_mast_retry_guidance(e)}"
+            ) from e
 
     def resolve_target(self, target: str, radius_arcsec: float = 10.0) -> ResolvedTarget:
         """Resolve a target name to a TIC ID.

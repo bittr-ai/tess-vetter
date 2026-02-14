@@ -160,6 +160,30 @@ def test_cli002_network_errors_counted_separately(monkeypatch, tmp_path: Path) -
     assert summary["n_network_errors"] == 2
 
 
+def test_cli002_high_salience_flags_include_v17_and_v09(monkeypatch, tmp_path: Path) -> None:
+    def _fake_execute_vet(**_kwargs: Any) -> dict[str, Any]:
+        return _fake_vet_payload(
+            results=[
+                {"id": "V17", "status": "ok", "flags": ["V17_REGIME_MARGINAL"]},
+                {"id": "V09", "status": "ok", "flags": ["DIFFIMG_UNRELIABLE"]},
+            ],
+            include_summary=True,
+        )
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    out_path = tmp_path / "vet_salience.json"
+    runner = CliRunner()
+    result = runner.invoke(enrich_cli.cli, [*_base_vet_args(), "--out", str(out_path)])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    summary = payload["summary"]
+    assert "V17" in summary["flagged_checks"]
+    assert "V09" in summary["flagged_checks"]
+    assert "V17_REGIME_MARGINAL" in summary["concerns"]
+    assert "DIFFIMG_UNRELIABLE" in summary["concerns"]
+
+
 def test_cli003_coordinate_auto_resolution_from_tic(monkeypatch, tmp_path: Path) -> None:
     captured: dict[str, Any] = {}
 

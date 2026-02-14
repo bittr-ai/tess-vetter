@@ -22,7 +22,11 @@ from bittr_tess_vetter.api.ephemeris_specificity import (
     score_fixed_period_numpy,
 )
 from bittr_tess_vetter.api.stitch import StitchedLC, _infer_cadence_seconds
-from bittr_tess_vetter.validation.base import get_in_transit_mask, get_out_of_transit_mask
+from bittr_tess_vetter.validation.base import (
+    count_transits,
+    get_in_transit_mask,
+    get_out_of_transit_mask,
+)
 from bittr_tess_vetter.validation.sector_consistency import SectorMeasurement
 
 SECTOR_MEASUREMENTS_SCHEMA_VERSION = 1
@@ -60,6 +64,7 @@ class SectorEphemerisMetrics:
     duration_days: float
     cadence_seconds: float
     n_in_transit: int
+    n_transits: int
     n_out_of_transit: int
     depth_hat_ppm: float
     depth_sigma_ppm: float
@@ -76,6 +81,7 @@ class SectorEphemerisMetrics:
             "duration_days": float(self.duration_days),
             "cadence_seconds": float(self.cadence_seconds),
             "n_in_transit": int(self.n_in_transit),
+            "n_transits": int(self.n_transits),
             "n_out_of_transit": int(self.n_out_of_transit),
             "depth_hat_ppm": float(self.depth_hat_ppm),
             "depth_sigma_ppm": float(self.depth_sigma_ppm),
@@ -157,6 +163,7 @@ def compute_sector_ephemeris_metrics(
                     duration_days=float("nan"),
                     cadence_seconds=float("nan"),
                     n_in_transit=0,
+                    n_transits=0,
                     n_out_of_transit=0,
                     depth_hat_ppm=float("nan"),
                     depth_sigma_ppm=float("nan"),
@@ -172,6 +179,13 @@ def compute_sector_ephemeris_metrics(
         e = e[sort_idx]
 
         in_mask = get_in_transit_mask(t, float(period_days), float(t0_btjd), float(duration_hours))
+        n_transits = count_transits(
+            t,
+            float(period_days),
+            float(t0_btjd),
+            float(duration_hours),
+            min_points=3,
+        )
         out_mask = get_out_of_transit_mask(
             t,
             float(period_days),
@@ -204,6 +218,7 @@ def compute_sector_ephemeris_metrics(
                 duration_days=float(np.max(t) - np.min(t)),
                 cadence_seconds=float(cadence_seconds),
                 n_in_transit=int(np.sum(in_mask)),
+                n_transits=int(n_transits),
                 n_out_of_transit=int(np.sum(out_mask)),
                 depth_hat_ppm=float(res.depth_hat * 1e6),
                 depth_sigma_ppm=float(res.depth_sigma * 1e6),
@@ -274,9 +289,9 @@ def serialize_v21_sector_measurements(
                     "depth_err_ppm": float(m.depth_sigma_ppm),
                     "duration_hours": 0.0,
                     "duration_err_hours": 0.0,
-                    "n_transits": 0,
+                    "n_transits": int(m.n_transits),
                     "shape_metric": 0.0,
-                    "quality_weight": 1.0,
+                    "quality_weight": 1.0 if int(m.n_transits) > 0 else 0.0,
                 }
             )
     else:

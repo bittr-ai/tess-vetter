@@ -951,6 +951,56 @@ def test_btv_vet_detrend_depth_unavailable_sets_note(monkeypatch, tmp_path: Path
     assert isinstance(detrend.get("depth_note"), str)
 
 
+def test_btv_vet_warns_when_stellar_missing_with_network(monkeypatch, tmp_path: Path) -> None:
+    class _FakeLightCurveData:
+        def __init__(self) -> None:
+            n = 64
+            self.time = np.linspace(0.0, 6.3, n, dtype=np.float64)
+            self.flux = np.ones(n, dtype=np.float64)
+            self.flux_err = np.full(n, 1e-4, dtype=np.float64)
+            self.quality = np.zeros(n, dtype=np.int32)
+            self.valid_mask = np.ones(n, dtype=bool)
+            self.sector = 1
+
+    class _FakeMASTClient:
+        def download_all_sectors(self, *_args, **_kwargs):
+            return [_FakeLightCurveData()]
+
+    def _fake_vet_candidate(**_kwargs):
+        return VettingBundleResult(results=[], warnings=[], provenance={})
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
+
+    out_path = tmp_path / "vet_missing_stellar_warning.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "1.5",
+            "--t0-btjd",
+            "0.1",
+            "--duration-hours",
+            "2.0",
+            "--network-ok",
+            "--ra-deg",
+            "10.0",
+            "--dec-deg",
+            "20.0",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    warnings = payload.get("warnings", [])
+    assert any("Stellar parameters unavailable from TIC/MAST" in str(w) for w in warnings)
+
+
 def test_btv_vet_tpf_flags_forwarded(monkeypatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {}
 

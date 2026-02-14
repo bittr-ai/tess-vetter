@@ -35,14 +35,14 @@ def _metric_to_measurement(metric: SectorEphemerisMetrics, *, duration_hours: fl
     depth_err_ppm = float(metric.depth_sigma_ppm)
     valid_depth = np.isfinite(depth_ppm)
     valid_err = np.isfinite(depth_err_ppm) and depth_err_ppm > 0.0
-    quality_weight = 1.0 if valid_depth and valid_err and int(metric.n_in_transit) > 0 else 0.0
+    quality_weight = 1.0 if valid_depth and valid_err and int(metric.n_transits) > 0 else 0.0
     return {
         "sector": int(metric.sector),
         "depth_ppm": depth_ppm,
         "depth_err_ppm": depth_err_ppm,
         "duration_hours": float(duration_hours),
         "duration_err_hours": 0.0,
-        "n_transits": 0,
+        "n_transits": int(metric.n_transits),
         "shape_metric": float(metric.score),
         "quality_weight": float(quality_weight),
     }

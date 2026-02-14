@@ -119,7 +119,14 @@ def _to_optional_finite_float(value: Any) -> float | None:
     return out
 
 
-_HIGH_SALIENCE_FLAGS = {"MODEL_PREFERS_NON_TRANSIT"}
+_HIGH_SALIENCE_FLAGS = {
+    "MODEL_PREFERS_NON_TRANSIT",
+    "V17_REGIME_MARGINAL",
+    "V17_REGIME_CONFUSED",
+    "DIFFIMG_UNRELIABLE",
+    "DIFFIMG_TARGET_DEPTH_NONPOSITIVE",
+    "DIFFIMG_MAX_DEPTH_NONPOSITIVE",
+}
 _NETWORK_ERROR_SKIP_FLAGS = {"SKIPPED:NETWORK_TIMEOUT", "SKIPPED:NETWORK_ERROR"}
 _SUPPORTED_DETREND_METHODS: tuple[str, ...] = ("transit_masked_bin_median",)
 
@@ -848,6 +855,13 @@ def _execute_vet(
         provenance = provenance_raw if isinstance(provenance_raw, dict) else {}
         provenance["stellar"] = stellar_resolution
         payload["provenance"] = provenance
+    if stellar_block is not None and str(stellar_block.get("source")) == "missing" and bool(network_ok):
+        warnings_raw = payload.get("warnings")
+        warnings = warnings_raw if isinstance(warnings_raw, list) else []
+        warnings.append(
+            "Stellar parameters unavailable from TIC/MAST. Retry recommended, or provide --stellar-file / --stellar-radius / --stellar-mass."
+        )
+        payload["warnings"] = warnings
     return _apply_cli_payload_contract(
         payload=payload,
         toi=toi,

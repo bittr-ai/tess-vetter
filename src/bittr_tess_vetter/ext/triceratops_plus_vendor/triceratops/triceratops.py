@@ -743,8 +743,6 @@ class target:
             ra = filtered_stars["ra"].values[i]
             dec = filtered_stars["dec"].values[i]
 
-            print("griz mags:", gmag, rmag, imag, zmag)
-
             # get url to TRILEGAL results and save
             if self.trilegal_fname is None:
                 output_url = self.trilegal_url

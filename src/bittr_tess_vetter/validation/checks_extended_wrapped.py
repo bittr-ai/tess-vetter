@@ -356,7 +356,12 @@ class EphemerisReliabilityRegimeCheck:
                 "ingress_egress_fraction": float(stc.ingress_egress_fraction),
                 "sharpness": float(stc.sharpness),
             }
-            return ok_result(self.id, self.name, metrics=metrics, provenance=provenance, raw=raw)
+            flags: list[str] = []
+            if uniqueness_regime == "marginal":
+                flags.append("V17_REGIME_MARGINAL")
+            elif uniqueness_regime == "confused":
+                flags.append("V17_REGIME_CONFUSED")
+            return ok_result(self.id, self.name, metrics=metrics, flags=flags, provenance=provenance, raw=raw)
         except Exception as e:
             return error_result(self.id, self.name, error=type(e).__name__, notes=[str(e)])
 
