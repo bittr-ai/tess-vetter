@@ -129,6 +129,9 @@ _HIGH_SALIENCE_FLAGS = {
 }
 _NETWORK_ERROR_SKIP_FLAGS = {"SKIPPED:NETWORK_TIMEOUT", "SKIPPED:NETWORK_ERROR"}
 _SUPPORTED_DETREND_METHODS: tuple[str, ...] = ("transit_masked_bin_median",)
+_V04_CHI2_UNSTABLE_THRESHOLD = 3.0
+_V04_SCATTER_RATIO_UNSTABLE_THRESHOLD = 0.5
+_V04_DOM_RATIO_THRESHOLD = 1.5
 
 
 def _validate_detrend_args(
@@ -462,6 +465,36 @@ def _build_root_summary(*, payload: dict[str, Any]) -> dict[str, Any]:
                     concerns.add(str(flag))
             if any(str(flag) in _NETWORK_ERROR_SKIP_FLAGS for flag in flags):
                 n_network_errors += 1
+
+        # U19: surface extreme V04 depth-instability concerns in root summary.
+        if check_id == "V04":
+            metrics = row.get("metrics")
+            if isinstance(metrics, dict):
+                mean_depth = _to_optional_float(metrics.get("mean_depth_ppm"))
+                scatter = _to_optional_float(metrics.get("depth_scatter_ppm"))
+                chi2_reduced = _to_optional_float(metrics.get("chi2_reduced"))
+                dom_ratio = _to_optional_float(metrics.get("dom_ratio"))
+
+                unstable = False
+                if chi2_reduced is not None and chi2_reduced > _V04_CHI2_UNSTABLE_THRESHOLD:
+                    unstable = True
+                if (
+                    mean_depth is not None
+                    and scatter is not None
+                    and abs(mean_depth) > 0.0
+                    and (abs(scatter) / abs(mean_depth)) > _V04_SCATTER_RATIO_UNSTABLE_THRESHOLD
+                ):
+                    unstable = True
+
+                if unstable:
+                    concerns.add("DEPTH_HIGHLY_UNSTABLE")
+                    if check_id:
+                        flagged_checks.add(check_id)
+
+                if dom_ratio is not None and dom_ratio > _V04_DOM_RATIO_THRESHOLD:
+                    concerns.add("DEPTH_DOMINATED_BY_SINGLE_EPOCH")
+                    if check_id:
+                        flagged_checks.add(check_id)
 
     if "MODEL_PREFERS_NON_TRANSIT" in concerns:
         disposition_hint = "needs_model_competition_review"

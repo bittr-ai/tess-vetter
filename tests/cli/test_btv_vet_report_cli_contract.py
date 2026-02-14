@@ -1197,6 +1197,54 @@ def test_btv_vet_tpf_sector_requires_requested_strategy() -> None:
     assert result.exit_code == 1
 
 
+def test_btv_vet_summary_surfaces_v04_instability_concerns(monkeypatch, tmp_path: Path) -> None:
+    def _fake_execute_vet(**_kwargs):
+        return {
+            "results": [
+                {
+                    "id": "V04",
+                    "status": "ok",
+                    "flags": [],
+                    "metrics": {
+                        "mean_depth_ppm": 1000.0,
+                        "depth_scatter_ppm": 1100.0,
+                        "chi2_reduced": 5.4,
+                        "dom_ratio": 1.7,
+                    },
+                }
+            ],
+            "warnings": [],
+            "provenance": {},
+            "inputs_summary": {},
+        }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    out_path = tmp_path / "vet_v04_summary.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    summary = payload["summary"]
+    assert "V04" in summary["flagged_checks"]
+    assert "DEPTH_HIGHLY_UNSTABLE" in summary["concerns"]
+    assert "DEPTH_DOMINATED_BY_SINGLE_EPOCH" in summary["concerns"]
+
+
 def test_btv_vet_sector_measurements_forwarded_and_emitted(monkeypatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {}
 
