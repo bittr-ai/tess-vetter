@@ -94,6 +94,10 @@ def test_btv_timing_success_contract_payload(monkeypatch, tmp_path: Path) -> Non
             "n_transits_post": 2,
             "prealign_score_z": 3.1,
             "prealign_error": None,
+        }, {
+            "pre": {"attempted_epochs": 3, "accepted_epochs": 2, "reject_counts": {"snr_below_threshold": 1}},
+            "post": {"attempted_epochs": 3, "accepted_epochs": 2, "reject_counts": {"snr_below_threshold": 1}},
+            "selected": {"attempted_epochs": 3, "accepted_epochs": 2, "reject_counts": {"snr_below_threshold": 1}},
         }
 
     def _fake_analyze_ttvs(**kwargs: Any):
@@ -175,6 +179,7 @@ def test_btv_timing_success_contract_payload(monkeypatch, tmp_path: Path) -> Non
     assert payload["timing_series"]["n_points"] == 2
     assert payload["alignment"]["n_transits_pre"] == 2
     assert payload["alignment"]["n_transits_post"] == 2
+    assert payload["diagnostics"]["selected"]["accepted_epochs"] == 2
     assert payload["inputs_summary"]["input_resolution"]["inputs"]["tic_id"] == 123
     assert payload["provenance"]["sectors_used"] == [14, 15]
     assert payload["provenance"]["options"] == {
@@ -228,11 +233,11 @@ def test_prealign_candidate_recovers_transits_and_sets_drift_metadata(monkeypatc
 
     call_t0s: list[float] = []
 
-    def _fake_measure_transit_times(**kwargs: Any):
+    def _fake_measure_transit_times_with_diagnostics(**kwargs: Any):
         t0 = float(kwargs["candidate"].ephemeris.t0_btjd)
         call_t0s.append(t0)
         if len(call_t0s) == 1:
-            return []
+            return [], {"attempted_epochs": 4, "accepted_epochs": 0, "reject_counts": {"optimizer_failed": 4}}
         return [
             TransitTime(
                 epoch=0,
@@ -242,7 +247,7 @@ def test_prealign_candidate_recovers_transits_and_sets_drift_metadata(monkeypatc
                 duration_hours=3.1,
                 snr=4.5,
             )
-        ]
+        ], {"attempted_epochs": 4, "accepted_epochs": 1, "reject_counts": {"snr_below_threshold": 3}}
 
     monkeypatch.setattr(
         timing_cli.ephemeris_refinement_api,
@@ -251,11 +256,11 @@ def test_prealign_candidate_recovers_transits_and_sets_drift_metadata(monkeypatc
     )
     monkeypatch.setattr(
         timing_cli.api.timing,
-        "measure_transit_times",
-        _fake_measure_transit_times,
+        "measure_transit_times_with_diagnostics",
+        _fake_measure_transit_times_with_diagnostics,
     )
 
-    candidate_out, transit_times_out, metadata = timing_cli._prealign_candidate(
+    candidate_out, transit_times_out, metadata, diagnostics = timing_cli._prealign_candidate(
         lc=lc,
         candidate=candidate,
         min_snr=2.0,
@@ -273,4 +278,5 @@ def test_prealign_candidate_recovers_transits_and_sets_drift_metadata(monkeypatc
     assert metadata["n_transits_post"] == 1
     assert metadata["delta_t0_minutes"] > 0
     assert metadata["delta_period_ppm"] == 0.0
+    assert diagnostics["selected"]["accepted_epochs"] == 1
     assert candidate_out.ephemeris.t0_btjd == 2277.01

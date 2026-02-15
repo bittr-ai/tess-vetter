@@ -42,6 +42,7 @@ from bittr_tess_vetter.transit.timing import (
     build_timing_series,
     compute_ttv_statistics,
     measure_all_transit_times,
+    measure_all_transit_times_with_diagnostics,
 )
 
 # Re-export types for convenience
@@ -52,6 +53,7 @@ __all__ = [
     "TTVResult",
     "analyze_ttvs",
     "measure_transit_times",
+    "measure_transit_times_with_diagnostics",
     "timing_series",
 ]
 
@@ -133,6 +135,31 @@ def measure_transit_times(
 
     # Call internal implementation
     return measure_all_transit_times(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        period=eph.period_days,
+        t0=eph.t0_btjd,
+        duration_hours=eph.duration_hours,
+        min_snr=min_snr,
+    )
+
+
+def measure_transit_times_with_diagnostics(
+    lc: LightCurve,
+    candidate: Candidate,
+    *,
+    min_snr: float = 2.0,
+) -> tuple[list[TransitTime], dict[str, object]]:
+    """Measure transit times with per-epoch diagnostics."""
+    internal_lc = lc.to_internal()
+    mask = internal_lc.valid_mask
+    time = internal_lc.time[mask]
+    flux = internal_lc.flux[mask]
+    flux_err = internal_lc.flux_err[mask]
+
+    eph = candidate.ephemeris
+    return measure_all_transit_times_with_diagnostics(
         time=time,
         flux=flux,
         flux_err=flux_err,

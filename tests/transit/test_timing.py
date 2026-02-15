@@ -18,6 +18,7 @@ from bittr_tess_vetter.transit import (
     measure_all_transit_times,
     measure_single_transit,
 )
+from bittr_tess_vetter.transit.timing import measure_all_transit_times_with_diagnostics
 
 
 class TestMeasureSingleTransit:
@@ -213,6 +214,63 @@ class TestMeasureAllTransitTimes:
             assert isinstance(tt.depth_ppm, float)
             assert isinstance(tt.duration_hours, float)
             assert isinstance(tt.snr, float)
+
+    def test_with_diagnostics_includes_reject_reasons(self) -> None:
+        np.random.seed(7)
+        time = np.linspace(0, 100, 4000, dtype=np.float64)
+        flux = 1.0 + np.random.normal(0, 0.0015, len(time))
+        flux = flux.astype(np.float64)
+        flux_err = np.ones_like(flux) * 0.0015
+
+        transit_times, diagnostics = measure_all_transit_times_with_diagnostics(
+            time=time,
+            flux=flux,
+            flux_err=flux_err,
+            period=10.0,
+            t0=5.0,
+            duration_hours=3.0,
+            min_snr=3.0,
+        )
+
+        assert isinstance(transit_times, list)
+        assert diagnostics["attempted_epochs"] >= diagnostics["accepted_epochs"]
+        assert isinstance(diagnostics["reject_counts"], dict)
+        assert isinstance(diagnostics["epoch_details"], list)
+        if len(diagnostics["epoch_details"]) > 0:
+            row = diagnostics["epoch_details"][0]
+            assert "epoch" in row
+            assert "accepted" in row
+            assert "reject_reason" in row
+
+    def test_adaptive_windows_recover_shifted_transit(self) -> None:
+        np.random.seed(11)
+        period = 8.0
+        t0_catalog = 100.0
+        t0_observed = t0_catalog + (4.0 / 24.0)  # 4-hour offset
+        duration_hours = 2.0
+
+        time = np.linspace(95.0, 130.0, 3500, dtype=np.float64)
+        flux = 1.0 + np.random.normal(0.0, 0.0006, len(time))
+        flux = flux.astype(np.float64)
+        duration_days = duration_hours / 24.0
+        in_transit = np.abs(((time - t0_observed + 0.5 * period) % period) - 0.5 * period) < (
+            duration_days / 2.0
+        )
+        flux[in_transit] -= 0.003
+        flux_err = np.ones_like(flux) * 0.0006
+
+        transit_times, diagnostics = measure_all_transit_times_with_diagnostics(
+            time=time,
+            flux=flux,
+            flux_err=flux_err,
+            period=period,
+            t0=t0_catalog,
+            duration_hours=duration_hours,
+            min_snr=2.0,
+        )
+
+        assert len(transit_times) >= 1
+        assert diagnostics["accepted_epochs"] >= 1
 
 
 class TestComputeTTVStatistics:

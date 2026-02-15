@@ -102,8 +102,8 @@ def _prealign_candidate(
     prealign_steps: int,
     prealign_lr: float,
     prealign_window_phase: float,
-) -> tuple[Candidate, list[Any], dict[str, Any]]:
-    pre_transit_times = api.timing.measure_transit_times(
+) -> tuple[Candidate, list[Any], dict[str, Any], dict[str, Any]]:
+    pre_transit_times, pre_diag = api.timing.measure_transit_times_with_diagnostics(
         lc=lc,
         candidate=candidate,
         min_snr=float(min_snr),
@@ -121,7 +121,11 @@ def _prealign_candidate(
             prealign_score_z=None,
             prealign_error=None,
         )
-        return candidate, pre_transit_times, metadata
+        return candidate, pre_transit_times, metadata, {
+            "pre": pre_diag,
+            "post": pre_diag,
+            "selected": pre_diag,
+        }
 
     try:
         internal_lc = lc.to_internal()
@@ -155,7 +159,7 @@ def _prealign_candidate(
             depth_ppm=candidate.depth_ppm,
             depth_fraction=candidate.depth_fraction,
         )
-        post_transit_times = api.timing.measure_transit_times(
+        post_transit_times, post_diag = api.timing.measure_transit_times_with_diagnostics(
             lc=lc,
             candidate=refined_candidate,
             min_snr=float(min_snr),
@@ -173,7 +177,11 @@ def _prealign_candidate(
                 prealign_score_z=float(refined.score_z),
                 prealign_error=None,
             )
-            return refined_candidate, post_transit_times, metadata
+            return refined_candidate, post_transit_times, metadata, {
+                "pre": pre_diag,
+                "post": post_diag,
+                "selected": post_diag,
+            }
 
         metadata = _build_alignment_metadata(
             prealign_requested=True,
@@ -185,7 +193,11 @@ def _prealign_candidate(
             prealign_score_z=float(refined.score_z),
             prealign_error=None,
         )
-        return candidate, pre_transit_times, metadata
+        return candidate, pre_transit_times, metadata, {
+            "pre": pre_diag,
+            "post": post_diag,
+            "selected": pre_diag,
+        }
     except Exception as exc:
         metadata = _build_alignment_metadata(
             prealign_requested=True,
@@ -197,7 +209,11 @@ def _prealign_candidate(
             prealign_score_z=None,
             prealign_error=f"{type(exc).__name__}: {exc}",
         )
-        return candidate, pre_transit_times, metadata
+        return candidate, pre_transit_times, metadata, {
+            "pre": pre_diag,
+            "post": None,
+            "selected": pre_diag,
+        }
 
 
 @click.command("timing")
@@ -321,6 +337,7 @@ def timing_command(
             candidate_for_timing,
             transit_times,
             alignment_metadata,
+            measurement_diagnostics,
         ) = _prealign_candidate(
             lc=lc,
             candidate=candidate,
@@ -367,6 +384,7 @@ def timing_command(
         "ttv": _to_jsonable_result(ttv),
         "timing_series": _to_jsonable_result(series),
         "alignment": alignment_metadata,
+        "diagnostics": measurement_diagnostics,
         "inputs_summary": {
             "input_resolution": input_resolution,
         },
