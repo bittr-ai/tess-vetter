@@ -180,6 +180,7 @@ def test_btv_timing_success_contract_payload(monkeypatch, tmp_path: Path) -> Non
     assert payload["alignment"]["n_transits_pre"] == 2
     assert payload["alignment"]["n_transits_post"] == 2
     assert payload["diagnostics"]["selected"]["accepted_epochs"] == 2
+    assert payload["next_actions"][0]["code"] == "TIMING_MEASURABLE"
     assert payload["inputs_summary"]["input_resolution"]["inputs"]["tic_id"] == 123
     assert payload["provenance"]["sectors_used"] == [14, 15]
     assert payload["provenance"]["options"] == {
@@ -280,3 +281,37 @@ def test_prealign_candidate_recovers_transits_and_sets_drift_metadata(monkeypatc
     assert metadata["delta_period_ppm"] == 0.0
     assert diagnostics["selected"]["accepted_epochs"] == 1
     assert candidate_out.ephemeris.t0_btjd == 2277.01
+
+
+def test_build_next_actions_noise_limited_branch() -> None:
+    actions = timing_cli._build_next_actions(
+        alignment_metadata={
+            "alignment_quality": "unchanged",
+        },
+        measurement_diagnostics={
+            "selected": {
+                "attempted_epochs": 10,
+                "accepted_epochs": 0,
+                "reject_counts": {"snr_below_threshold": 10},
+            }
+        },
+    )
+    assert actions[0]["code"] == "NOISE_LIMITED"
+
+
+def test_build_next_actions_alignment_review_branch() -> None:
+    actions = timing_cli._build_next_actions(
+        alignment_metadata={
+            "alignment_quality": "degraded_rejected",
+        },
+        measurement_diagnostics={
+            "selected": {
+                "attempted_epochs": 10,
+                "accepted_epochs": 0,
+                "reject_counts": {"insufficient_points": 10},
+            }
+        },
+    )
+    codes = [a["code"] for a in actions]
+    assert "DATA_LIMITED" in codes
+    assert "ALIGNMENT_REVIEW" in codes

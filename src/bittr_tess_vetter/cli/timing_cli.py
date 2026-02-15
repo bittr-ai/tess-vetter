@@ -93,6 +93,60 @@ def _build_alignment_metadata(
     }
 
 
+def _build_next_actions(
+    *,
+    alignment_metadata: dict[str, Any],
+    measurement_diagnostics: dict[str, Any],
+) -> list[dict[str, str]]:
+    selected = measurement_diagnostics.get("selected") or {}
+    reject_counts = selected.get("reject_counts") or {}
+
+    attempted_epochs = int(selected.get("attempted_epochs") or 0)
+    accepted_epochs = int(selected.get("accepted_epochs") or 0)
+    snr_rejects = int(reject_counts.get("snr_below_threshold") or 0)
+    rejected_epochs = max(attempted_epochs - accepted_epochs, 0)
+
+    if accepted_epochs >= 2:
+        primary = {
+            "code": "TIMING_MEASURABLE",
+            "summary": "Sufficient accepted transits for timing analysis.",
+            "guidance": "Proceed with TTV interpretation and extend the baseline with new sectors when available.",
+        }
+    elif rejected_epochs > 0 and snr_rejects >= rejected_epochs:
+        primary = {
+            "code": "NOISE_LIMITED",
+            "summary": "Most rejected epochs are below the SNR threshold.",
+            "guidance": "Lower photometric noise or increase signal strength before rerunning timing fits.",
+        }
+    else:
+        primary = {
+            "code": "DATA_LIMITED",
+            "summary": "Insufficient accepted transits for stable timing constraints.",
+            "guidance": "Acquire additional cadence coverage or sectors and rerun timing diagnostics.",
+        }
+
+    next_actions: list[dict[str, str]] = [primary]
+    alignment_quality = str(alignment_metadata.get("alignment_quality") or "")
+    if alignment_quality == "improved_transit_recovery":
+        next_actions.append(
+            {
+                "code": "PREALIGNMENT_HELPFUL",
+                "summary": "Pre-alignment increased recovered transits.",
+                "guidance": "Keep pre-alignment enabled for this target.",
+            }
+        )
+    elif alignment_quality in {"degraded_rejected", "prealign_error_fallback"}:
+        next_actions.append(
+            {
+                "code": "ALIGNMENT_REVIEW",
+                "summary": "Pre-alignment did not improve usable transit fits.",
+                "guidance": "Review ephemeris inputs and pre-alignment settings before rerunning.",
+            }
+        )
+
+    return next_actions
+
+
 def _prealign_candidate(
     *,
     lc: LightCurve,
@@ -185,9 +239,9 @@ def _prealign_candidate(
 
         metadata = _build_alignment_metadata(
             prealign_requested=True,
-            prealign_applied=False,
+            prealign_applied=True,
             candidate_initial=candidate,
-            candidate_final=candidate,
+            candidate_final=refined_candidate,
             n_transits_pre=n_pre,
             n_transits_post=n_post,
             prealign_score_z=float(refined.score_z),
@@ -385,6 +439,10 @@ def timing_command(
         "timing_series": _to_jsonable_result(series),
         "alignment": alignment_metadata,
         "diagnostics": measurement_diagnostics,
+        "next_actions": _build_next_actions(
+            alignment_metadata=alignment_metadata,
+            measurement_diagnostics=measurement_diagnostics,
+        ),
         "inputs_summary": {
             "input_resolution": input_resolution,
         },
