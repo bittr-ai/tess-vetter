@@ -61,28 +61,40 @@ def test_btv_timing_success_contract_payload(monkeypatch, tmp_path: Path) -> Non
         _ = lightcurves
         return _make_lc(tic_id=tic_id, sector=-1, start=2000.0), object()
 
-    def _fake_measure_transit_times(**kwargs: Any):
-        seen["measure_kwargs"] = kwargs
-        return [
-            TransitTime(
-                epoch=0,
-                tc=2456.25,
-                tc_err=0.0003,
-                depth_ppm=650.0,
-                duration_hours=2.7,
-                snr=8.1,
-            ),
-            TransitTime(
-                epoch=1,
-                tc=2465.75,
-                tc_err=0.0004,
-                depth_ppm=630.0,
-                duration_hours=2.8,
-                snr=7.8,
-                is_outlier=True,
-                outlier_reason="timing_outlier",
-            ),
-        ]
+    prealigned_transit_times = [
+        TransitTime(
+            epoch=0,
+            tc=2456.25,
+            tc_err=0.0003,
+            depth_ppm=650.0,
+            duration_hours=2.7,
+            snr=8.1,
+        ),
+        TransitTime(
+            epoch=1,
+            tc=2465.75,
+            tc_err=0.0004,
+            depth_ppm=630.0,
+            duration_hours=2.8,
+            snr=7.8,
+            is_outlier=True,
+            outlier_reason="timing_outlier",
+        ),
+    ]
+
+    def _fake_prealign_candidate(**kwargs: Any):
+        seen["prealign_kwargs"] = kwargs
+        return kwargs["candidate"], prealigned_transit_times, {
+            "prealign_requested": True,
+            "prealign_applied": False,
+            "alignment_quality": "unchanged",
+            "delta_t0_minutes": 0.0,
+            "delta_period_ppm": 0.0,
+            "n_transits_pre": 2,
+            "n_transits_post": 2,
+            "prealign_score_z": 3.1,
+            "prealign_error": None,
+        }
 
     def _fake_analyze_ttvs(**kwargs: Any):
         seen["analyze_kwargs"] = kwargs
@@ -118,9 +130,12 @@ def test_btv_timing_success_contract_payload(monkeypatch, tmp_path: Path) -> Non
     monkeypatch.setattr("bittr_tess_vetter.cli.timing_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
     monkeypatch.setattr("bittr_tess_vetter.cli.timing_cli.MASTClient", _FakeMASTClient)
     monkeypatch.setattr("bittr_tess_vetter.cli.timing_cli.stitch_lightcurve_data", _fake_stitch)
-    monkeypatch.setattr(timing_cli.api.timing, "measure_transit_times", _fake_measure_transit_times)
     monkeypatch.setattr(timing_cli.api.timing, "analyze_ttvs", _fake_analyze_ttvs)
     monkeypatch.setattr(timing_cli.api.timing, "timing_series", _fake_timing_series)
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.timing_cli._prealign_candidate",
+        _fake_prealign_candidate,
+    )
 
     out_path = tmp_path / "timing.json"
     runner = CliRunner()
@@ -147,7 +162,7 @@ def test_btv_timing_success_contract_payload(monkeypatch, tmp_path: Path) -> Non
     assert seen["download"] == {"tic_id": 123, "flux_type": "sap", "sectors": [14, 15]}
     assert seen["stitch_called"] is True
     assert seen["stitch_tic_id"] == 123
-    assert seen["measure_kwargs"]["min_snr"] == 3.5
+    assert seen["prealign_kwargs"]["min_snr"] == 3.5
     assert seen["analyze_kwargs"]["period_days"] == 9.5
     assert seen["analyze_kwargs"]["t0_btjd"] == 2456.25
     assert seen["series_kwargs"]["min_snr"] == 3.5
@@ -158,6 +173,8 @@ def test_btv_timing_success_contract_payload(monkeypatch, tmp_path: Path) -> Non
     assert payload["transit_times"][1]["outlier_reason"] == "timing_outlier"
     assert payload["ttv"]["rms_seconds"] == 74.2
     assert payload["timing_series"]["n_points"] == 2
+    assert payload["alignment"]["n_transits_pre"] == 2
+    assert payload["alignment"]["n_transits_post"] == 2
     assert payload["inputs_summary"]["input_resolution"]["inputs"]["tic_id"] == 123
     assert payload["provenance"]["sectors_used"] == [14, 15]
     assert payload["provenance"]["options"] == {
@@ -165,6 +182,10 @@ def test_btv_timing_success_contract_payload(monkeypatch, tmp_path: Path) -> Non
         "sectors": [14, 15],
         "flux_type": "sap",
         "min_snr": 3.5,
+        "prealign": True,
+        "prealign_steps": 25,
+        "prealign_lr": 0.05,
+        "prealign_window_phase": 0.02,
     }
 
 
@@ -180,3 +201,76 @@ def test_btv_timing_missing_required_ephemeris_input_exits_1() -> None:
 
     assert result.exit_code == 1
     assert "Missing required inputs" in result.output
+
+
+def test_prealign_candidate_recovers_transits_and_sets_drift_metadata(monkeypatch) -> None:
+    lc = timing_cli.LightCurve(
+        time=np.linspace(2000.0, 2010.0, 200, dtype=np.float64),
+        flux=np.ones(200, dtype=np.float64),
+        flux_err=np.full(200, 1e-3, dtype=np.float64),
+    )
+    candidate = timing_cli.Candidate(
+        ephemeris=timing_cli.Ephemeris(
+            period_days=1.06,
+            t0_btjd=2277.0,
+            duration_hours=3.2,
+        ),
+        depth_ppm=1000.0,
+    )
+
+    class _FakeRefinementResult:
+        t0_refined_btjd = 2277.01
+        duration_refined_hours = 3.1
+        score_z = 4.2
+
+    def _fake_refine_one_candidate_numpy(**_kwargs: Any):
+        return _FakeRefinementResult()
+
+    call_t0s: list[float] = []
+
+    def _fake_measure_transit_times(**kwargs: Any):
+        t0 = float(kwargs["candidate"].ephemeris.t0_btjd)
+        call_t0s.append(t0)
+        if len(call_t0s) == 1:
+            return []
+        return [
+            TransitTime(
+                epoch=0,
+                tc=2277.01,
+                tc_err=0.0005,
+                depth_ppm=980.0,
+                duration_hours=3.1,
+                snr=4.5,
+            )
+        ]
+
+    monkeypatch.setattr(
+        timing_cli.ephemeris_refinement_api,
+        "refine_one_candidate_numpy",
+        _fake_refine_one_candidate_numpy,
+    )
+    monkeypatch.setattr(
+        timing_cli.api.timing,
+        "measure_transit_times",
+        _fake_measure_transit_times,
+    )
+
+    candidate_out, transit_times_out, metadata = timing_cli._prealign_candidate(
+        lc=lc,
+        candidate=candidate,
+        min_snr=2.0,
+        prealign_enabled=True,
+        prealign_steps=25,
+        prealign_lr=0.05,
+        prealign_window_phase=0.02,
+    )
+
+    assert len(call_t0s) == 2
+    assert len(transit_times_out) == 1
+    assert metadata["prealign_applied"] is True
+    assert metadata["alignment_quality"] == "improved_transit_recovery"
+    assert metadata["n_transits_pre"] == 0
+    assert metadata["n_transits_post"] == 1
+    assert metadata["delta_t0_minutes"] > 0
+    assert metadata["delta_period_ppm"] == 0.0
+    assert candidate_out.ephemeris.t0_btjd == 2277.01

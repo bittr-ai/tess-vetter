@@ -5,8 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 import click
+import numpy as np
 
 from bittr_tess_vetter import api
+from bittr_tess_vetter.api import ephemeris_refinement as ephemeris_refinement_api
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
 from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 from bittr_tess_vetter.cli.common_cli import (
@@ -46,6 +48,158 @@ def _transit_times_to_dicts(transit_times: list[Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _build_alignment_metadata(
+    *,
+    prealign_requested: bool,
+    prealign_applied: bool,
+    candidate_initial: Candidate,
+    candidate_final: Candidate,
+    n_transits_pre: int,
+    n_transits_post: int,
+    prealign_score_z: float | None,
+    prealign_error: str | None,
+) -> dict[str, Any]:
+    delta_t0_minutes = (
+        float(candidate_final.ephemeris.t0_btjd - candidate_initial.ephemeris.t0_btjd) * 24.0 * 60.0
+    )
+    delta_period_ppm = (
+        (float(candidate_final.ephemeris.period_days - candidate_initial.ephemeris.period_days) * 1e6)
+        / max(float(candidate_initial.ephemeris.period_days), 1e-12)
+    )
+
+    if prealign_error:
+        alignment_quality = "prealign_error_fallback"
+    elif not prealign_requested:
+        alignment_quality = "disabled"
+    elif prealign_applied and n_transits_post > n_transits_pre:
+        alignment_quality = "improved_transit_recovery"
+    elif prealign_applied and n_transits_post == n_transits_pre:
+        alignment_quality = "unchanged"
+    elif prealign_applied and n_transits_post < n_transits_pre:
+        alignment_quality = "degraded_rejected"
+    else:
+        alignment_quality = "not_applied"
+
+    return {
+        "prealign_requested": bool(prealign_requested),
+        "prealign_applied": bool(prealign_applied),
+        "alignment_quality": alignment_quality,
+        "delta_t0_minutes": float(delta_t0_minutes),
+        "delta_period_ppm": float(delta_period_ppm),
+        "n_transits_pre": int(n_transits_pre),
+        "n_transits_post": int(n_transits_post),
+        "prealign_score_z": float(prealign_score_z) if prealign_score_z is not None else None,
+        "prealign_error": prealign_error,
+    }
+
+
+def _prealign_candidate(
+    *,
+    lc: LightCurve,
+    candidate: Candidate,
+    min_snr: float,
+    prealign_enabled: bool,
+    prealign_steps: int,
+    prealign_lr: float,
+    prealign_window_phase: float,
+) -> tuple[Candidate, list[Any], dict[str, Any]]:
+    pre_transit_times = api.timing.measure_transit_times(
+        lc=lc,
+        candidate=candidate,
+        min_snr=float(min_snr),
+    )
+    n_pre = len(pre_transit_times)
+
+    if not prealign_enabled:
+        metadata = _build_alignment_metadata(
+            prealign_requested=False,
+            prealign_applied=False,
+            candidate_initial=candidate,
+            candidate_final=candidate,
+            n_transits_pre=n_pre,
+            n_transits_post=n_pre,
+            prealign_score_z=None,
+            prealign_error=None,
+        )
+        return candidate, pre_transit_times, metadata
+
+    try:
+        internal_lc = lc.to_internal()
+        valid = np.asarray(internal_lc.valid_mask, dtype=bool)
+        time = np.asarray(internal_lc.time, dtype=np.float64)[valid]
+        flux = np.asarray(internal_lc.flux, dtype=np.float64)[valid]
+        flux_err = np.asarray(internal_lc.flux_err, dtype=np.float64)[valid]
+
+        refined = ephemeris_refinement_api.refine_one_candidate_numpy(
+            time=time,
+            flux=flux,
+            flux_err=flux_err,
+            candidate=ephemeris_refinement_api.EphemerisRefinementCandidate(
+                period_days=float(candidate.ephemeris.period_days),
+                t0_btjd=float(candidate.ephemeris.t0_btjd),
+                duration_hours=float(candidate.ephemeris.duration_hours),
+            ),
+            config=ephemeris_refinement_api.EphemerisRefinementConfig(
+                steps=int(prealign_steps),
+                lr=float(prealign_lr),
+                t0_window_phase=float(prealign_window_phase),
+            ),
+        )
+
+        refined_candidate = Candidate(
+            ephemeris=Ephemeris(
+                period_days=float(candidate.ephemeris.period_days),
+                t0_btjd=float(refined.t0_refined_btjd),
+                duration_hours=float(refined.duration_refined_hours),
+            ),
+            depth_ppm=candidate.depth_ppm,
+            depth_fraction=candidate.depth_fraction,
+        )
+        post_transit_times = api.timing.measure_transit_times(
+            lc=lc,
+            candidate=refined_candidate,
+            min_snr=float(min_snr),
+        )
+        n_post = len(post_transit_times)
+
+        if n_post >= n_pre:
+            metadata = _build_alignment_metadata(
+                prealign_requested=True,
+                prealign_applied=True,
+                candidate_initial=candidate,
+                candidate_final=refined_candidate,
+                n_transits_pre=n_pre,
+                n_transits_post=n_post,
+                prealign_score_z=float(refined.score_z),
+                prealign_error=None,
+            )
+            return refined_candidate, post_transit_times, metadata
+
+        metadata = _build_alignment_metadata(
+            prealign_requested=True,
+            prealign_applied=False,
+            candidate_initial=candidate,
+            candidate_final=candidate,
+            n_transits_pre=n_pre,
+            n_transits_post=n_post,
+            prealign_score_z=float(refined.score_z),
+            prealign_error=None,
+        )
+        return candidate, pre_transit_times, metadata
+    except Exception as exc:
+        metadata = _build_alignment_metadata(
+            prealign_requested=True,
+            prealign_applied=False,
+            candidate_initial=candidate,
+            candidate_final=candidate,
+            n_transits_pre=n_pre,
+            n_transits_post=n_pre,
+            prealign_score_z=None,
+            prealign_error=f"{type(exc).__name__}: {exc}",
+        )
+        return candidate, pre_transit_times, metadata
+
+
 @click.command("timing")
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
 @click.option("--period-days", type=float, default=None, help="Orbital period in days.")
@@ -68,6 +222,33 @@ def _transit_times_to_dicts(transit_times: list[Any]) -> list[dict[str, Any]]:
 )
 @click.option("--min-snr", type=float, default=2.0, show_default=True)
 @click.option(
+    "--prealign/--no-prealign",
+    default=True,
+    show_default=True,
+    help="Apply bounded T0 pre-alignment before strict per-transit fitting.",
+)
+@click.option(
+    "--prealign-steps",
+    type=int,
+    default=25,
+    show_default=True,
+    help="Optimizer steps for ephemeris pre-alignment.",
+)
+@click.option(
+    "--prealign-lr",
+    type=float,
+    default=0.05,
+    show_default=True,
+    help="Learning rate for ephemeris pre-alignment optimizer.",
+)
+@click.option(
+    "--prealign-window-phase",
+    type=float,
+    default=0.02,
+    show_default=True,
+    help="Max fractional phase shift allowed during T0 pre-alignment.",
+)
+@click.option(
     "--out",
     "output_path_arg",
     type=str,
@@ -86,6 +267,10 @@ def timing_command(
     sectors: tuple[int, ...],
     flux_type: str,
     min_snr: float,
+    prealign: bool,
+    prealign_steps: int,
+    prealign_lr: float,
+    prealign_window_phase: float,
     output_path_arg: str,
 ) -> None:
     """Measure transit times and compute TTV diagnostics."""
@@ -132,19 +317,27 @@ def timing_command(
             depth_ppm=float(resolved_depth_ppm) if resolved_depth_ppm is not None else None,
         )
 
-        transit_times = api.timing.measure_transit_times(
+        (
+            candidate_for_timing,
+            transit_times,
+            alignment_metadata,
+        ) = _prealign_candidate(
             lc=lc,
             candidate=candidate,
             min_snr=float(min_snr),
+            prealign_enabled=bool(prealign),
+            prealign_steps=int(prealign_steps),
+            prealign_lr=float(prealign_lr),
+            prealign_window_phase=float(prealign_window_phase),
         )
         ttv = api.timing.analyze_ttvs(
             transit_times=transit_times,
-            period_days=float(resolved_period_days),
-            t0_btjd=float(resolved_t0_btjd),
+            period_days=float(candidate_for_timing.ephemeris.period_days),
+            t0_btjd=float(candidate_for_timing.ephemeris.t0_btjd),
         )
         series = api.timing.timing_series(
             lc=lc,
-            candidate=candidate,
+            candidate=candidate_for_timing,
             min_snr=float(min_snr),
         )
     except (LightCurveNotFoundError, TargetNotFoundError) as exc:
@@ -163,12 +356,17 @@ def timing_command(
         "sectors": [int(s) for s in sectors] if sectors else None,
         "flux_type": str(flux_type).lower(),
         "min_snr": float(min_snr),
+        "prealign": bool(prealign),
+        "prealign_steps": int(prealign_steps),
+        "prealign_lr": float(prealign_lr),
+        "prealign_window_phase": float(prealign_window_phase),
     }
     payload = {
         "schema_version": "cli.timing.v1",
         "transit_times": _transit_times_to_dicts(transit_times),
         "ttv": _to_jsonable_result(ttv),
         "timing_series": _to_jsonable_result(series),
+        "alignment": alignment_metadata,
         "inputs_summary": {
             "input_resolution": input_resolution,
         },
