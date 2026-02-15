@@ -11,6 +11,7 @@ def test_top_level_help_lists_new_api_addition_commands() -> None:
 
     assert result.exit_code == 0, result.output
     assert "localize" in result.output
+    assert "localize-host" in result.output
     assert "fit" in result.output
     assert "periodogram" in result.output
     assert "model-compete" in result.output

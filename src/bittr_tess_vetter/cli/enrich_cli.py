@@ -33,6 +33,7 @@ from bittr_tess_vetter.cli.dilution_cli import dilution_command
 from bittr_tess_vetter.cli.ephemeris_reliability_cli import ephemeris_reliability_command
 from bittr_tess_vetter.cli.fpp_cli import fpp_command
 from bittr_tess_vetter.cli.localize_cli import localize_command
+from bittr_tess_vetter.cli.localize_host_cli import localize_host_command
 from bittr_tess_vetter.cli.measure_sectors_cli import measure_sectors_command
 from bittr_tess_vetter.cli.model_compete_cli import model_compete_command
 from bittr_tess_vetter.cli.periodogram_cli import periodogram_command
@@ -92,6 +93,7 @@ cli.add_command(describe_checks_command)
 cli.add_command(measure_sectors_command)
 cli.add_command(detrend_grid_command)
 cli.add_command(localize_command)
+cli.add_command(localize_host_command)
 cli.add_command(fit_command)
 cli.add_command(periodogram_command)
 cli.add_command(model_compete_command)
