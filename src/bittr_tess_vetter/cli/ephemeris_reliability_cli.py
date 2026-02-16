@@ -28,6 +28,9 @@ def _derive_ephemeris_reliability_verdict(result_payload: Any) -> tuple[str | No
     interpretation_label = result_payload.get("interpretation_label")
     if interpretation_label is not None:
         return str(interpretation_label), "$.result.interpretation_label"
+    label = result_payload.get("label")
+    if label is not None:
+        return str(label), "$.result.label"
     reliability_label = result_payload.get("reliability_label")
     if reliability_label is not None:
         return str(reliability_label), "$.result.reliability_label"

@@ -37,6 +37,17 @@ def _derive_systematics_proxy_verdict(systematics_proxy_payload: Any) -> tuple[s
     interpretation_label = systematics_proxy_payload.get("interpretation_label")
     if interpretation_label is not None:
         return str(interpretation_label), "$.systematics_proxy.interpretation_label"
+    score = systematics_proxy_payload.get("score")
+    try:
+        score_value = float(score) if score is not None else None
+    except (TypeError, ValueError):
+        score_value = None
+    if score_value is not None:
+        if score_value >= 0.7:
+            return "HIGH_SYSTEMATICS_RISK", "$.systematics_proxy.score"
+        if score_value >= 0.4:
+            return "MODERATE_SYSTEMATICS_RISK", "$.systematics_proxy.score"
+        return "LOW_SYSTEMATICS_RISK", "$.systematics_proxy.score"
     return None, None
 
 

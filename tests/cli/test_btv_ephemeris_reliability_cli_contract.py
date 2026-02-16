@@ -140,6 +140,8 @@ def test_btv_ephemeris_reliability_success_contract_payload(monkeypatch, tmp_pat
     assert payload["result"]["label"] == "ok"
     assert "verdict" in payload
     assert "verdict_source" in payload
+    assert payload["verdict"] == "ok"
+    assert payload["verdict_source"] == "$.result.label"
     assert payload["result"]["verdict"] == payload["verdict"]
     assert payload["result"]["verdict_source"] == payload["verdict_source"]
     assert payload["inputs_summary"]["input_resolution"]["inputs"]["tic_id"] == 123

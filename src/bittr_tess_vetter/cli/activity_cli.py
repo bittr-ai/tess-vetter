@@ -28,6 +28,12 @@ def _derive_activity_verdict(activity_payload: Any) -> tuple[str | None, str | N
     interpretation_label = activity_payload.get("interpretation_label")
     if interpretation_label is not None:
         return str(interpretation_label), "$.activity.interpretation_label"
+    recommendation = activity_payload.get("recommendation")
+    if recommendation is not None:
+        return str(recommendation), "$.activity.recommendation"
+    variability_class = activity_payload.get("variability_class")
+    if variability_class is not None:
+        return str(variability_class), "$.activity.variability_class"
     activity_regime = activity_payload.get("activity_regime")
     if activity_regime is not None:
         return str(activity_regime), "$.activity.activity_regime"

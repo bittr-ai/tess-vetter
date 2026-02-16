@@ -94,6 +94,8 @@ def test_btv_systematics_proxy_success_payload_contract(monkeypatch, tmp_path: P
     assert payload["result"]["systematics_proxy"]["score"] == 0.35
     assert "verdict" in payload
     assert "verdict_source" in payload
+    assert payload["verdict"] == "LOW_SYSTEMATICS_RISK"
+    assert payload["verdict_source"] == "$.systematics_proxy.score"
     assert payload["result"]["systematics_proxy"] == payload["systematics_proxy"]
     assert payload["result"]["verdict"] == payload["verdict"]
     assert payload["result"]["verdict_source"] == payload["verdict_source"]

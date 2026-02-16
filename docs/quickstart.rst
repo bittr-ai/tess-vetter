@@ -122,7 +122,7 @@ Per-command legacy-to-canonical mapping:
      - Legacy verdict source fields
      - Canonical fields
    * - ``btv activity``
-     - ``activity.interpretation_label`` then ``activity.activity_regime``
+     - ``activity.interpretation_label`` then ``activity.recommendation`` then ``activity.variability_class``
      - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
    * - ``btv dilution``
      - ``physics_flags.requires_resolved_followup`` then ``physics_flags.planet_radius_inconsistent``
@@ -131,7 +131,7 @@ Per-command legacy-to-canonical mapping:
      - ``next_actions.primary_recommendation`` then ``next_actions[0].code``
      - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
    * - ``btv systematics-proxy``
-     - ``systematics_proxy.interpretation_label``
+     - ``systematics_proxy.interpretation_label`` then score-banded ``systematics_proxy.score``
      - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
    * - ``btv localize-host``
      - ``result.consensus.action_hint`` then ``result.consensus.verdict``
@@ -140,7 +140,7 @@ Per-command legacy-to-canonical mapping:
      - ``result.interpretation_label`` then ``result.model_competition.interpretation_label``
      - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
    * - ``btv ephemeris-reliability``
-     - ``result.interpretation_label`` then ``result.reliability_label``
+     - ``result.interpretation_label`` then ``result.label`` then ``result.reliability_label``
      - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
 
 Vetting Check Categories
