@@ -397,15 +397,18 @@ def localize_transit_host_single_sector(
 
     prf_fit_diagnostics: dict[str, Any] | None = None
     non_physical_reasons: list[str] = []
-    if prf_backend_used != "prf_lite" and ranked:
+    if ranked:
         best_hyp = ranked[0]
         non_physical_reasons = _collect_non_physical_prf_indicators(best_hyp)
-        prf_fit_diagnostics = {
-            "prf_backend": prf_backend_used,
-            "best_log_likelihood": best_hyp.get("log_likelihood"),
-            "best_fit_residual_rms": best_hyp.get("fit_residual_rms"),
-            "best_fitted_background": best_hyp.get("fitted_background"),
-        }
+        prf_fit_diagnostics = {"prf_backend": prf_backend_used}
+        if prf_backend_used != "prf_lite":
+            prf_fit_diagnostics.update(
+                {
+                    "best_log_likelihood": best_hyp.get("log_likelihood"),
+                    "best_fit_residual_rms": best_hyp.get("fit_residual_rms"),
+                    "best_fitted_background": best_hyp.get("fitted_background"),
+                }
+            )
         if non_physical_reasons:
             prf_fit_diagnostics["non_physical_indicators"] = list(non_physical_reasons)
 
@@ -561,6 +564,12 @@ def localize_transit_host_single_sector_with_baseline_check(
     if verdict_local == "OFF_TARGET" and inconsistent:
         local["raw_verdict"] = verdict_local
         local["verdict"] = "AMBIGUOUS"
+        flags = list(local.get("reliability_flags") or [])
+        if "BASELINE_SENSITIVE_LOCALIZATION" not in flags:
+            flags.append("BASELINE_SENSITIVE_LOCALIZATION")
+        local["reliability_flags"] = flags
+        local["reliability_flagged"] = True
+        local["interpretation_code"] = "INSUFFICIENT_DISCRIMINATION"
         local.setdefault("warnings", []).append(
             "Downgraded OFF_TARGET to AMBIGUOUS due to baseline-sensitive localization."
         )
