@@ -58,6 +58,7 @@
       "op": "fpp",
       "inputs": {
         "preset": "fast",
+        "use_stellar_auto": true,
         "report_file": {
           "report_from": "report_seed"
         }
@@ -68,6 +69,7 @@
       "op": "fpp",
       "inputs": {
         "preset": "fast",
+        "use_stellar_auto": true,
         "report_file": {
           "report_from": "report_seed"
         },
