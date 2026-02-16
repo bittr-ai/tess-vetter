@@ -195,6 +195,8 @@ def test_btv_report_success_writes_payload_and_html(monkeypatch, tmp_path: Path)
             "report_json": {
                 "schema_version": "cli.report.v3",
                 "provenance": {"vet_artifact": {"provided": False}},
+                "verdict": None,
+                "verdict_source": None,
                 "report": {"schema_version": "1.0.0", "summary": {}},
             },
             "plot_data_json": {"full_lc": {"time": [1.0], "flux": [1.0]}},
@@ -230,9 +232,73 @@ def test_btv_report_success_writes_payload_and_html(monkeypatch, tmp_path: Path)
     assert result.exit_code == 0, result.output
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == "cli.report.v3"
+    assert "verdict" in payload
+    assert "verdict_source" in payload
     assert payload["report"]["schema_version"] == "1.0.0"
     assert json.loads(plot_data_path.read_text(encoding="utf-8"))["full_lc"]["time"] == [1.0]
     assert html_path.read_text(encoding="utf-8") == "<html></html>"
+
+
+def test_btv_report_passes_through_diagnostic_json_artifacts(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _ok(**_kwargs):
+        captured.update(_kwargs)
+        return {
+            "report_json": {
+                "schema_version": "cli.report.v3",
+                "provenance": {"vet_artifact": {"provided": False}},
+                "verdict": "ALL_CHECKS_PASSED",
+                "verdict_source": "$.summary.bundle_summary",
+                "report": {"schema_version": "2.0.0", "summary": {}},
+            },
+            "plot_data_json": {"full_lc": {"time": [1.0], "flux": [1.0]}},
+            "html": None,
+        }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
+
+    diag_path = tmp_path / "activity.json"
+    diag_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "cli.activity.v1",
+                "result": {"activity": {}},
+                "verdict": "spotted_rotator",
+                "verdict_source": "$.activity.variability_class",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out_path = tmp_path / "report_with_diag.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "report",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--diagnostic-json",
+            str(diag_path),
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["verdict"] == "ALL_CHECKS_PASSED"
+    artifacts = captured["diagnostic_artifacts"]
+    assert isinstance(artifacts, list)
+    assert artifacts[0]["schema_version"] == "cli.activity.v1"
+    assert artifacts[0]["verdict"] == "spotted_rotator"
 
 
 def test_btv_report_rejects_malformed_vet_result_file(tmp_path: Path) -> None:

@@ -284,9 +284,23 @@ def build_cli_report_payload(
     *,
     report_json: dict[str, Any],
     vet_artifact: dict[str, Any],
+    diagnostic_artifacts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    report_payload = dict(report_json)
+    summary_payload = report_payload.get("summary")
+    if not isinstance(summary_payload, dict):
+        summary_payload = {}
+        report_payload["summary"] = summary_payload
+
+    if diagnostic_artifacts is not None:
+        summary_payload["diagnostic_artifacts"] = [dict(item) for item in diagnostic_artifacts]
+
+    verdict = summary_payload.get("verdict")
+    verdict_source = summary_payload.get("verdict_source")
     return {
         "schema_version": CLI_REPORT_V3_SCHEMA,
         "provenance": {"vet_artifact": dict(vet_artifact)},
-        "report": dict(report_json),
+        "verdict": verdict,
+        "verdict_source": verdict_source,
+        "report": report_payload,
     }

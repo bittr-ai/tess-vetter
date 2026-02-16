@@ -139,6 +139,7 @@ def _execute_report(
     pipeline_config: PipelineConfig,
     vet_result: dict[str, Any] | None,
     vet_result_path: str | None,
+    diagnostic_artifacts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     enrichment_cfg = EnrichmentConfig() if include_enrichment else None
     result = generate_report(
@@ -174,10 +175,29 @@ def _execute_report(
         "report_json": build_cli_report_payload(
             report_json=result.report_json,
             vet_artifact=vet_artifact,
+            diagnostic_artifacts=diagnostic_artifacts,
         ),
         "plot_data_json": result.plot_data_json,
         "html": result.html,
     }
+
+
+def _load_diagnostic_artifacts(paths: tuple[str, ...]) -> list[dict[str, Any]]:
+    artifacts: list[dict[str, Any]] = []
+    for path in paths:
+        payload = load_json_file(Path(path), label="diagnostic-json file")
+        schema_version = payload.get("schema_version")
+        result = payload.get("result")
+        artifacts.append(
+            {
+                "path": str(path),
+                "schema_version": str(schema_version) if schema_version is not None else None,
+                "verdict": payload.get("verdict"),
+                "verdict_source": payload.get("verdict_source"),
+                "has_result": isinstance(result, dict),
+            }
+        )
+    return artifacts
 
 
 @click.command("report")
@@ -210,6 +230,13 @@ def _execute_report(
 @click.option("--include-enrichment", is_flag=True, default=False, help="Include enrichment blocks.")
 @click.option("--custom-view-file", type=str, default=None, help="JSON file for custom views contract.")
 @click.option("--vet-result", type=str, default=None, help="Optional prior vet artifact JSON for check reuse.")
+@click.option(
+    "--diagnostic-json",
+    "diagnostic_json_paths",
+    multiple=True,
+    type=str,
+    help="Optional diagnostic CLI JSON artifact(s) to pass through into report summary.",
+)
 @click.option("--timeout-seconds", type=float, default=None)
 @click.option("--random-seed", type=int, default=None)
 @click.option("--extra-param", "extra_params", multiple=True, help="Repeat KEY=VALUE entries.")
@@ -248,6 +275,7 @@ def report_command(
     include_enrichment: bool,
     custom_view_file: str | None,
     vet_result: str | None,
+    diagnostic_json_paths: tuple[str, ...],
     timeout_seconds: float | None,
     random_seed: int | None,
     extra_params: tuple[str, ...],
@@ -347,6 +375,7 @@ def report_command(
         extra_params=parse_extra_params(extra_params),
     )
     vet_result_payload: dict[str, Any] | None = None
+    diagnostic_artifacts = _load_diagnostic_artifacts(diagnostic_json_paths)
     if vet_result:
         vet_result_payload = load_json_file(Path(vet_result), label="vet result file")
         try:
@@ -392,6 +421,7 @@ def report_command(
             pipeline_config=config,
             vet_result=vet_result_payload,
             vet_result_path=vet_result,
+            diagnostic_artifacts=diagnostic_artifacts,
         )
 
         dump_json_output(output["report_json"], out_path)
