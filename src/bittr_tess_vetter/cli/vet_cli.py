@@ -519,6 +519,24 @@ def _build_root_summary(*, payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _derive_vet_verdict(payload: dict[str, Any]) -> tuple[str | None, str | None]:
+    summary = payload.get("summary")
+    if isinstance(summary, dict):
+        disposition_hint = summary.get("disposition_hint")
+        if disposition_hint is not None:
+            return str(disposition_hint), "$.summary.disposition_hint"
+
+        n_failed = _to_optional_float(summary.get("n_failed"))
+        n_skipped = _to_optional_float(summary.get("n_skipped"))
+        if n_failed is not None and n_failed > 0.0:
+            return "needs_failed_checks_review", "$.summary.n_failed"
+        if n_skipped is not None and n_skipped > 0.0:
+            return "needs_additional_data", "$.summary.n_skipped"
+        if n_failed is not None and n_skipped is not None:
+            return "all_clear", "$.summary"
+    return None, None
+
+
 def _apply_cli_payload_contract(
     *,
     payload: dict[str, Any],
@@ -554,6 +572,18 @@ def _apply_cli_payload_contract(
             inputs["toi"] = effective_toi
 
     payload["summary"] = _build_root_summary(payload=payload)
+    verdict, verdict_source = _derive_vet_verdict(payload)
+    payload["verdict"] = verdict
+    payload["verdict_source"] = verdict_source
+
+    result_raw = payload.get("result")
+    if isinstance(result_raw, dict):
+        result_payload = result_raw
+    else:
+        result_payload = {}
+        payload["result"] = result_payload
+    result_payload["verdict"] = verdict
+    result_payload["verdict_source"] = verdict_source
     return payload
 
 
@@ -1070,12 +1100,14 @@ def _load_tpf_for_vetting(
 
 
 @click.command("vet")
+@click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
 @click.option("--period-days", type=float, default=None, help="Orbital period in days.")
 @click.option("--t0-btjd", type=float, default=None, help="Reference epoch in BTJD.")
 @click.option("--duration-hours", type=float, default=None, help="Transit duration in hours.")
 @click.option("--depth-ppm", type=float, default=None, help="Transit depth in ppm.")
 @click.option("--toi", type=str, default=None, help="Optional TOI label (overrides resolved value).")
+@click.option("--report-file", type=str, default=None, help="Optional report JSON path for candidate inputs.")
 @click.option("--ra-deg", type=float, default=None, help="Right ascension in degrees.")
 @click.option("--dec-deg", type=float, default=None, help="Declination in degrees.")
 @click.option(
@@ -1166,6 +1198,7 @@ def _load_tpf_for_vetting(
 @click.option("--fail-fast/--no-fail-fast", default=False, show_default=True)
 @click.option("--emit-warnings/--no-emit-warnings", default=False, show_default=True)
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,
@@ -1181,13 +1214,21 @@ def _load_tpf_for_vetting(
     default=None,
     help="Path to JSON file containing top-level sector_measurements list for V21.",
 )
+@click.option(
+    "--auto-measure-sectors/--no-auto-measure-sectors",
+    default=False,
+    show_default=True,
+    help="Inline-run measure-sectors when --sector-measurements is not provided.",
+)
 def vet_command(
+    toi_arg: str | None,
     tic_id: int | None,
     period_days: float | None,
     t0_btjd: float | None,
     duration_hours: float | None,
     depth_ppm: float | None,
     toi: str | None,
+    report_file: str | None,
     ra_deg: float | None,
     dec_deg: float | None,
     require_coordinates: bool,
@@ -1220,6 +1261,7 @@ def vet_command(
     progress_path: str | None,
     resume: bool,
     sector_measurements: str | None,
+    auto_measure_sectors: bool,
 ) -> None:
     """Run candidate vetting and emit `VettingBundleResult` JSON.
 
@@ -1227,23 +1269,71 @@ def vet_command(
     """
     out_path = resolve_optional_output_path(output_path_arg)
     progress_file = _progress_path_from_args(out_path, progress_path, resume)
+    if (
+        report_file is None
+        and toi_arg is not None
+        and toi is not None
+        and str(toi_arg).strip() != str(toi).strip()
+    ):
+        raise BtvCliError(
+            "Positional TOI argument and --toi must match when both are provided.",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    resolved_toi_arg = toi if toi is not None else toi_arg
 
-    (
-        resolved_tic_id,
-        resolved_period_days,
-        resolved_t0_btjd,
-        resolved_duration_hours,
-        resolved_depth_ppm,
-        input_resolution,
-    ) = _resolve_candidate_inputs(
-        network_ok=network_ok,
-        toi=toi,
-        tic_id=tic_id,
-        period_days=period_days,
-        t0_btjd=t0_btjd,
-        duration_hours=duration_hours,
-        depth_ppm=depth_ppm,
+    from bittr_tess_vetter.cli.diagnostics_report_inputs import (
+        choose_effective_sectors,
+        resolve_inputs_from_report_file,
     )
+
+    report_file_path: str | None = None
+    report_sectors_used: list[int] | None = None
+    if report_file is not None:
+        if resolved_toi_arg is not None:
+            click.echo(
+                "Warning: --report-file provided; ignoring --toi and using report-file candidate inputs.",
+                err=True,
+            )
+        resolved_from_report = resolve_inputs_from_report_file(str(report_file))
+        resolved_tic_id = int(resolved_from_report.tic_id)
+        resolved_period_days = float(resolved_from_report.period_days)
+        resolved_t0_btjd = float(resolved_from_report.t0_btjd)
+        resolved_duration_hours = float(resolved_from_report.duration_hours)
+        resolved_depth_ppm = (
+            float(resolved_from_report.depth_ppm)
+            if resolved_from_report.depth_ppm is not None
+            else None
+        )
+        input_resolution = dict(resolved_from_report.input_resolution)
+        report_file_path = str(resolved_from_report.report_file_path)
+        report_sectors_used = (
+            [int(s) for s in resolved_from_report.sectors_used]
+            if resolved_from_report.sectors_used is not None
+            else None
+        )
+    else:
+        (
+            resolved_tic_id,
+            resolved_period_days,
+            resolved_t0_btjd,
+            resolved_duration_hours,
+            resolved_depth_ppm,
+            input_resolution,
+        ) = _resolve_candidate_inputs(
+            network_ok=network_ok,
+            toi=resolved_toi_arg,
+            tic_id=tic_id,
+            period_days=period_days,
+            t0_btjd=t0_btjd,
+            duration_hours=duration_hours,
+            depth_ppm=depth_ppm,
+        )
+
+    effective_sectors, _sectors_explicit, sector_selection_source = choose_effective_sectors(
+        sectors_arg=sectors,
+        report_sectors_used=report_sectors_used,
+    )
+    effective_toi = None if report_file is not None else resolved_toi_arg
     resolved_ra, resolved_dec, coordinate_resolution = _resolve_coordinates(
         tic_id=resolved_tic_id,
         ra_deg=ra_deg,
@@ -1257,12 +1347,82 @@ def vet_command(
         "t0_btjd": resolved_t0_btjd,
         "duration_hours": resolved_duration_hours,
     }
+    if tpf_sectors and str(tpf_sector_strategy).lower() != "requested":
+        raise BtvCliError(
+            "--tpf-sector requires --tpf-sector-strategy=requested",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    effective_fetch_tpf = bool(fetch_tpf or require_tpf)
+    detrend_method = _normalize_detrend_method(detrend)
+    if detrend_method is not None:
+        _validate_detrend_args(
+            detrend_bin_hours=float(detrend_bin_hours),
+            detrend_buffer=float(detrend_buffer),
+            detrend_sigma_clip=float(detrend_sigma_clip),
+        )
+
     sector_measurements_rows: list[dict[str, Any]] | None = None
     sector_measurements_provenance: dict[str, Any] | None = None
+    sector_measurements_source: str | None = None
+    auto_measure_warning: str | None = None
     if sector_measurements:
         sector_measurements_rows, sector_measurements_provenance = _load_sector_measurements(
             sector_measurements
         )
+        sector_measurements_source = str(sector_measurements)
+    elif auto_measure_sectors:
+        from bittr_tess_vetter.cli.measure_sectors_cli import _execute_measure_sectors
+
+        try:
+            measured = _execute_measure_sectors(
+                tic_id=int(resolved_tic_id),
+                period_days=float(resolved_period_days),
+                t0_btjd=float(resolved_t0_btjd),
+                duration_hours=float(resolved_duration_hours),
+                sectors=[int(s) for s in effective_sectors] if effective_sectors else None,
+                flux_type=str(flux_type).lower(),
+                detrend=detrend_method,
+                detrend_bin_hours=float(detrend_bin_hours),
+                detrend_buffer=float(detrend_buffer),
+                detrend_sigma_clip=float(detrend_sigma_clip),
+                input_resolution=input_resolution,
+            )
+            measured_rows = measured.get("sector_measurements")
+            if not isinstance(measured_rows, list):
+                raise BtvCliError(
+                    "Auto sector measurements schema error: expected top-level sector_measurements list",
+                    exit_code=EXIT_RUNTIME_ERROR,
+                )
+            sector_measurements_rows = [row for row in measured_rows if isinstance(row, dict)]
+            measured_provenance = measured.get("provenance")
+            if isinstance(measured_provenance, dict):
+                sector_measurements_provenance = measured_provenance
+            sector_measurements_source = "inline:auto_measure_sectors"
+        except BtvCliError as exc:
+            if fail_fast:
+                raise
+            auto_measure_warning = (
+                "Warning: --auto-measure-sectors failed; continuing without sector measurements: "
+                f"{exc}"
+            )
+            click.echo(auto_measure_warning, err=True)
+        except (TargetNotFoundError, LightCurveNotFoundError) as exc:
+            if fail_fast:
+                raise BtvCliError(str(exc), exit_code=EXIT_DATA_UNAVAILABLE) from exc
+            auto_measure_warning = (
+                "Warning: --auto-measure-sectors failed; continuing without sector measurements: "
+                f"{exc}"
+            )
+            click.echo(auto_measure_warning, err=True)
+        except Exception as exc:
+            if fail_fast:
+                mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
+                raise BtvCliError(str(exc), exit_code=mapped) from exc
+            auto_measure_warning = (
+                "Warning: --auto-measure-sectors failed; continuing without sector measurements: "
+                f"{exc}"
+            )
+            click.echo(auto_measure_warning, err=True)
     if use_stellar_auto and not network_ok:
         raise BtvCliError("--use-stellar-auto requires --network-ok", exit_code=EXIT_DATA_UNAVAILABLE)
 
@@ -1276,8 +1436,8 @@ def vet_command(
             use_stellar_auto=use_stellar_auto,
             require_stellar=require_stellar,
             auto_loader=(
-                (lambda _tic_id: _load_auto_stellar_inputs(_tic_id, toi=toi))
-                if toi is not None
+                (lambda _tic_id: _load_auto_stellar_inputs(_tic_id, toi=effective_toi))
+                if effective_toi is not None
                 else (lambda _tic_id: _load_auto_stellar_inputs(_tic_id))
             )
             if use_stellar_auto
@@ -1302,20 +1462,6 @@ def vet_command(
         resolved_stellar=resolved_stellar,
         stellar_resolution=stellar_resolution,
     )
-
-    if tpf_sectors and str(tpf_sector_strategy).lower() != "requested":
-        raise BtvCliError(
-            "--tpf-sector requires --tpf-sector-strategy=requested",
-            exit_code=EXIT_INPUT_ERROR,
-        )
-    effective_fetch_tpf = bool(fetch_tpf or require_tpf)
-    detrend_method = _normalize_detrend_method(detrend)
-    if detrend_method is not None:
-        _validate_detrend_args(
-            detrend_bin_hours=float(detrend_bin_hours),
-            detrend_buffer=float(detrend_buffer),
-            detrend_sigma_clip=float(detrend_sigma_clip),
-        )
 
     if resume:
         existing = None
@@ -1376,7 +1522,7 @@ def vet_command(
             t0_btjd=resolved_t0_btjd,
             duration_hours=resolved_duration_hours,
             depth_ppm=resolved_depth_ppm,
-            toi=toi,
+            toi=effective_toi,
             ra_deg=resolved_ra,
             dec_deg=resolved_dec,
             preset=str(preset).lower(),
@@ -1386,7 +1532,7 @@ def vet_command(
             require_tpf=require_tpf,
             tpf_sector_strategy=str(tpf_sector_strategy).lower(),
             tpf_sectors=list(tpf_sectors) if tpf_sectors else None,
-            sectors=list(sectors) if sectors else None,
+            sectors=[int(s) for s in effective_sectors] if effective_sectors else None,
             flux_type=str(flux_type).lower(),
             pipeline_config=config,
             detrend=detrend_method,
@@ -1403,16 +1549,29 @@ def vet_command(
         )
         payload = _apply_cli_payload_contract(
             payload=payload,
-            toi=toi,
+            toi=effective_toi,
             input_resolution=input_resolution,
             coordinate_resolution=coordinate_resolution,
         )
-        if sector_measurements_rows is not None and sector_measurements is not None:
+        if auto_measure_warning is not None:
+            warnings_raw = payload.get("warnings")
+            warnings = warnings_raw if isinstance(warnings_raw, list) else []
+            warnings.append(auto_measure_warning)
+            payload["warnings"] = warnings
+        provenance_raw = payload.get("provenance")
+        provenance = provenance_raw if isinstance(provenance_raw, dict) else {}
+        provenance["inputs_source"] = (
+            "report_file" if report_file_path is not None else str(input_resolution.get("source"))
+        )
+        provenance["report_file"] = report_file_path
+        provenance["sector_selection_source"] = sector_selection_source
+        payload["provenance"] = provenance
+        if sector_measurements_rows is not None and sector_measurements_source is not None:
             payload["sector_measurements"] = sector_measurements_rows
             payload["sector_gating"] = _build_sector_gating_block(
                 payload=payload,
                 sector_measurements=sector_measurements_rows,
-                source_path=sector_measurements,
+                source_path=sector_measurements_source,
                 source_provenance=sector_measurements_provenance,
             )
         dump_json_output(payload, out_path)

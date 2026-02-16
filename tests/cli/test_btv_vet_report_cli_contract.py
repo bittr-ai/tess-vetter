@@ -1865,3 +1865,259 @@ def test_btv_vet_sector_measurements_schema_error_maps_to_exit_1(tmp_path: Path)
         ],
     )
     assert result.exit_code == 1
+
+
+def test_btv_vet_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_resolve_candidate_inputs(**kwargs):
+        captured.update(kwargs)
+        return (123, 10.5, 2000.2, 2.5, None, {"source": "toi_catalog", "inputs": {"tic_id": 123}})
+
+    def _fake_execute_vet(**_kwargs):
+        return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+
+    out_path = tmp_path / "vet_positional.json"
+    runner = CliRunner()
+    result = runner.invoke(enrich_cli.cli, ["vet", "TOI-123.01", "-o", str(out_path)])
+
+    assert result.exit_code == 0, result.output
+    assert out_path.exists()
+    assert captured["toi"] == "TOI-123.01"
+
+
+def test_btv_vet_rejects_mismatched_positional_and_option_toi() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "TOI-123.01",
+            "--toi",
+            "TOI-999.01",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "Positional TOI argument and --toi must match" in result.output
+
+
+def test_btv_vet_report_file_seeds_inputs_and_sectors(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _should_not_resolve(**_kwargs):
+        raise AssertionError("_resolve_candidate_inputs should not be used with --report-file")
+
+    def _fake_execute_vet(**kwargs):
+        captured.update(kwargs)
+        return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._resolve_candidate_inputs", _should_not_resolve)
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+
+    report_path = tmp_path / "report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "cli.report.v3",
+                "report": {
+                    "summary": {
+                        "tic_id": 123,
+                        "ephemeris": {"period_days": 10.5, "t0_btjd": 2000.2, "duration_hours": 2.5},
+                        "input_depth_ppm": 300.0,
+                    },
+                    "provenance": {"sectors_used": [14, 15]},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    out_path = tmp_path / "vet_report_seeded.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--report-file",
+            str(report_path),
+            "--toi",
+            "TOI-999.01",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Warning: --report-file provided; ignoring --toi" in result.output
+    assert captured["tic_id"] == 123
+    assert captured["period_days"] == 10.5
+    assert captured["t0_btjd"] == 2000.2
+    assert captured["duration_hours"] == 2.5
+    assert captured["depth_ppm"] == 300.0
+    assert captured["sectors"] == [14, 15]
+    assert captured["toi"] is None
+
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["inputs_source"] == "report_file"
+    assert payload["provenance"]["sector_selection_source"] == "report_file"
+    assert isinstance(payload["provenance"]["report_file"], str)
+
+
+def test_btv_vet_emits_canonical_verdict_and_result_mirror(monkeypatch, tmp_path: Path) -> None:
+    def _fake_execute_vet(**_kwargs):
+        return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+
+    out_path = tmp_path / "vet_verdict.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["verdict"] == "all_clear"
+    assert payload["verdict_source"] == "$.summary.disposition_hint"
+    assert payload["result"]["verdict"] == payload["verdict"]
+    assert payload["result"]["verdict_source"] == payload["verdict_source"]
+
+
+def test_btv_vet_auto_measure_sectors_success_wires_v21(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_measure(**_kwargs):
+        return {
+            "schema_version": 1,
+            "sector_measurements": [
+                {"sector": 4, "depth_ppm": 500.0, "depth_err_ppm": 50.0, "quality_weight": 1.0}
+            ],
+            "provenance": {"command": "measure-sectors"},
+        }
+
+    def _fake_execute_vet(**kwargs):
+        captured.update(kwargs)
+        return {
+            "results": [
+                {
+                    "id": "V21",
+                    "status": "ok",
+                    "flags": [],
+                    "raw": {"measurements": kwargs.get("sector_measurements", [])},
+                }
+            ],
+            "warnings": [],
+            "provenance": {},
+            "inputs_summary": {},
+        }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.measure_sectors_cli._execute_measure_sectors", _fake_measure)
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+
+    out_path = tmp_path / "vet_auto_measure.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--auto-measure-sectors",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert isinstance(captured.get("sector_measurements"), list)
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["sector_gating"]["source_path"] == "inline:auto_measure_sectors"
+    assert payload["sector_gating"]["used_by_v21"] is True
+
+
+def test_btv_vet_auto_measure_sectors_failure_warns_and_continues(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _boom(**_kwargs):
+        raise RuntimeError("measurement boom")
+
+    def _fake_execute_vet(**kwargs):
+        captured.update(kwargs)
+        return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.measure_sectors_cli._execute_measure_sectors", _boom)
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+
+    out_path = tmp_path / "vet_auto_measure_warn.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--auto-measure-sectors",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Warning: --auto-measure-sectors failed" in result.output
+    assert captured["sector_measurements"] is None
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert any("auto-measure-sectors failed" in str(item) for item in payload["warnings"])
+
+
+def test_btv_vet_auto_measure_sectors_failure_respects_fail_fast(monkeypatch) -> None:
+    def _boom(**_kwargs):
+        raise RuntimeError("measurement boom")
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.measure_sectors_cli._execute_measure_sectors", _boom)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--auto-measure-sectors",
+            "--fail-fast",
+        ],
+    )
+
+    assert result.exit_code == 2
