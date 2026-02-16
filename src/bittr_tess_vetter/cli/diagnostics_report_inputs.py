@@ -199,10 +199,42 @@ def load_lightcurves_with_sector_policy(
 
         return lightcurves, "cache_only_explicit_sectors"
 
+    normalized_flux_type = str(flux_type).lower()
+    if sectors:
+        requested_sectors = sorted({int(s) for s in sectors})
+        cached_lightcurves: list[Any] = []
+        missing_sectors: list[int] = []
+        for sector in requested_sectors:
+            try:
+                cached_lightcurves.append(
+                    client.download_lightcurve_cached(
+                        tic_id=int(tic_id),
+                        sector=int(sector),
+                        flux_type=normalized_flux_type,
+                    )
+                )
+            except Exception:
+                missing_sectors.append(int(sector))
+
+        if not missing_sectors:
+            return sorted(cached_lightcurves, key=lambda lc: int(getattr(lc, "sector", 0))), "cache_first_filtered"
+
+        fetched_missing = client.download_all_sectors(
+            tic_id=int(tic_id),
+            flux_type=normalized_flux_type,
+            sectors=missing_sectors,
+        )
+        lightcurves = cached_lightcurves + fetched_missing
+        if not lightcurves:
+            raise LightCurveNotFoundError(f"No sectors available for TIC {int(tic_id)}")
+        if cached_lightcurves:
+            return sorted(lightcurves, key=lambda lc: int(getattr(lc, "sector", 0))), "cache_then_mast_filtered"
+        return sorted(lightcurves, key=lambda lc: int(getattr(lc, "sector", 0))), "mast_filtered"
+
     lightcurves = client.download_all_sectors(
         tic_id=int(tic_id),
-        flux_type=str(flux_type).lower(),
-        sectors=sectors,
+        flux_type=normalized_flux_type,
+        sectors=None,
     )
     if not lightcurves:
         raise LightCurveNotFoundError(f"No sectors available for TIC {int(tic_id)}")
