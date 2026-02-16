@@ -9,6 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 import bittr_tess_vetter.cli.enrich_cli as enrich_cli
+import bittr_tess_vetter.cli.report_cli as report_cli
 from bittr_tess_vetter.cli.progress_metadata import ProgressIOError
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.pipeline import make_candidate_key
@@ -237,6 +238,53 @@ def test_btv_report_success_writes_payload_and_html(monkeypatch, tmp_path: Path)
     assert payload["report"]["schema_version"] == "1.0.0"
     assert json.loads(plot_data_path.read_text(encoding="utf-8"))["full_lc"]["time"] == [1.0]
     assert html_path.read_text(encoding="utf-8") == "<html></html>"
+
+
+def test_btv_report_execute_report_sets_wrapper_provenance_fields(monkeypatch) -> None:
+    class _FakeResult:
+        def __init__(self) -> None:
+            self.report_json = {"schema_version": "2.0.0", "summary": {"verdict": "PASS"}}
+            self.plot_data_json = {"full_lc": {"time": [1.0], "flux": [1.0]}}
+            self.html = None
+            self.sectors_used = [14, 15]
+            self.vet_artifact_reuse = None
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli.generate_report", lambda **_kwargs: _FakeResult())
+
+    output = report_cli._execute_report(
+        tic_id=123,
+        period_days=10.5,
+        t0_btjd=2000.2,
+        duration_hours=2.5,
+        depth_ppm=300.0,
+        toi="TOI-123.01",
+        sectors=[14, 15],
+        flux_type="pdcsap",
+        include_html=False,
+        include_enrichment=False,
+        custom_views=None,
+        pipeline_config=report_cli.PipelineConfig(),
+        vet_result=None,
+        vet_result_path=None,
+        resolved_inputs={
+            "tic_id": 123,
+            "period_days": 10.5,
+            "t0_btjd": 2000.2,
+            "duration_hours": 2.5,
+            "depth_ppm": 300.0,
+        },
+    )
+
+    payload = output["report_json"]
+    assert payload["schema_version"] == "cli.report.v3"
+    assert payload["provenance"]["sectors_used"] == [14, 15]
+    assert payload["provenance"]["resolved_inputs"] == {
+        "tic_id": 123,
+        "period_days": 10.5,
+        "t0_btjd": 2000.2,
+        "duration_hours": 2.5,
+        "depth_ppm": 300.0,
+    }
 
 
 def test_btv_report_passes_through_diagnostic_json_artifacts(monkeypatch, tmp_path: Path) -> None:
@@ -524,7 +572,7 @@ def test_btv_report_positional_toi_and_short_out_alias(monkeypatch, tmp_path: Pa
             "html": None,
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._resolve_report_candidate_inputs", _fake_resolve_candidate_inputs)
     monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
 
     out_path = tmp_path / "report.json"
@@ -588,7 +636,7 @@ def test_btv_report_toi_network_resolution_path(monkeypatch, tmp_path: Path) -> 
             "html": None,
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.resolve_toi_to_tic_ephemeris_depth", _resolve_toi)
+    monkeypatch.setattr("bittr_tess_vetter.cli.report_seed.resolve_toi_to_tic_ephemeris_depth", _resolve_toi)
     monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
 
     out_path = tmp_path / "report.json"
@@ -659,6 +707,64 @@ def test_btv_report_manual_ephemeris_with_toi_without_network_ok_still_runs(
     assert captured["t0_btjd"] == 2000.2
     assert captured["duration_hours"] == 2.5
     assert captured["toi"] == "TOI-123.01"
+
+
+def test_btv_report_file_seeds_inputs_and_cli_overrides_take_precedence(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _ok(**kwargs):
+        captured.update(kwargs)
+        return {
+            "report_json": {
+                "schema_version": "cli.report.v3",
+                "provenance": {"vet_artifact": {"provided": False}},
+                "report": {"schema_version": "2.0.0", "summary": {}},
+            },
+            "plot_data_json": {},
+            "html": None,
+        }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
+
+    report_file = tmp_path / "seed_report.json"
+    report_file.write_text(
+        json.dumps(
+            {
+                "provenance": {"sectors_used": [2, 3]},
+                "report": {
+                    "summary": {
+                        "tic_id": 789,
+                        "ephemeris": {"period": 12.0, "t0": 1444.5, "duration_hours": 3.25},
+                        "input_depth_ppm": 555.0,
+                        "toi": "TOI-789.01",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out_path = tmp_path / "report_from_seed.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "report",
+            "--report-file",
+            str(report_file),
+            "--period-days",
+            "11.5",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["tic_id"] == 789
+    assert captured["period_days"] == 11.5
+    assert captured["t0_btjd"] == 1444.5
+    assert captured["duration_hours"] == 3.25
+    assert captured["depth_ppm"] == 555.0
 
 
 def test_btv_report_requires_toi_or_full_ephemeris_inputs(tmp_path: Path) -> None:

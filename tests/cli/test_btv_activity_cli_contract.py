@@ -13,7 +13,7 @@ from bittr_tess_vetter.cli.activity_cli import activity_command
 def test_btv_activity_success_payload_contract(monkeypatch, tmp_path: Path) -> None:
     seen: dict[str, Any] = {}
 
-    def _fake_download_and_stitch_lightcurve(**_kwargs: Any) -> tuple[LightCurve, list[int]]:
+    def _fake_download_and_stitch_lightcurve(**_kwargs: Any) -> tuple[LightCurve, list[int], str]:
         return (
             LightCurve(
                 time=[1.0, 2.0, 3.0],
@@ -21,6 +21,7 @@ def test_btv_activity_success_payload_contract(monkeypatch, tmp_path: Path) -> N
                 flux_err=[0.001, 0.001, 0.001],
             ),
             [14, 15],
+            "mast_filtered",
         )
 
     class _FakeActivityResult:
@@ -109,7 +110,7 @@ def test_btv_activity_no_sectors_available_exits_4(monkeypatch) -> None:
             _ = tic_id, flux_type, sectors
             return []
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.activity_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -138,6 +139,7 @@ def test_btv_activity_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: 
         lambda **_kwargs: (
             LightCurve(time=[1.0, 2.0], flux=[1.0, 1.0], flux_err=[0.001, 0.001]),
             [14],
+            "mast_discovery",
         ),
     )
     monkeypatch.setattr(
@@ -157,3 +159,97 @@ def test_btv_activity_rejects_mismatched_positional_and_option_toi() -> None:
     result = runner.invoke(activity_command, ["TOI-5807.01", "--toi", "TOI-4510.01"])
     assert result.exit_code == 1
     assert "must match" in result.output
+
+
+def test_btv_activity_report_file_inputs_override_toi(monkeypatch, tmp_path: Path) -> None:
+    report_path = tmp_path / "activity.report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "report": {
+                    "summary": {
+                        "tic_id": 555,
+                        "ephemeris": {
+                            "period_days": 6.0,
+                            "t0_btjd": 2450.0,
+                            "duration_hours": 2.0,
+                        },
+                        "input_depth_ppm": 400.0,
+                    },
+                    "provenance": {"sectors_used": [13, 14]},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    seen: dict[str, Any] = {}
+
+    def _fake_download_and_stitch_lightcurve(**kwargs: Any):
+        seen.update(kwargs)
+        return (
+            LightCurve(time=[1.0, 2.0], flux=[1.0, 0.999], flux_err=[0.001, 0.001]),
+            [13, 14],
+            "mast_filtered",
+        )
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.activity_cli._download_and_stitch_lightcurve",
+        _fake_download_and_stitch_lightcurve,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.activity_cli.characterize_activity",
+        lambda **_kwargs: type("A", (), {"to_dict": lambda self: {"variability_class": "quiet"}})(),
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.activity_cli._resolve_tic_and_inputs",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve TOI with report file")),
+    )
+
+    out_path = tmp_path / "activity_report_file.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        activity_command,
+        [
+            "--report-file",
+            str(report_path),
+            "--toi",
+            "TOI-555.01",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Warning: --report-file provided; ignoring --toi" in result.output
+    assert seen["tic_id"] == 555
+    assert seen["sectors"] == [13, 14]
+    assert seen["sectors_explicit"] is False
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["inputs_summary"]["input_resolution"]["source"] == "report_file"
+    assert payload["provenance"]["inputs_source"] == "report_file"
+    assert payload["provenance"]["report_file"] == str(report_path.resolve())
+
+
+def test_btv_activity_explicit_sectors_cache_miss_exits_4(monkeypatch) -> None:
+    class _FakeMASTClient:
+        def download_lightcurve_cached(self, tic_id: int, sector: int, flux_type: str):
+            _ = tic_id, sector, flux_type
+            raise RuntimeError("cache miss")
+
+        def download_all_sectors(self, *_args: Any, **_kwargs: Any):
+            raise AssertionError("download_all_sectors should not be called when --sectors is provided")
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        activity_command,
+        [
+            "--tic-id",
+            "123",
+            "--sectors",
+            "14",
+        ],
+    )
+    assert result.exit_code == 4
+    assert "Cache-only sector load failed for TIC 123" in result.output

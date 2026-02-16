@@ -18,8 +18,13 @@ from bittr_tess_vetter.cli.common_cli import (
     dump_json_output,
     resolve_optional_output_path,
 )
+from bittr_tess_vetter.cli.diagnostics_report_inputs import (
+    choose_effective_sectors,
+    load_lightcurves_with_sector_policy,
+    resolve_inputs_from_report_file,
+)
 from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
-from bittr_tess_vetter.platform.io import LightCurveNotFoundError, MASTClient, TargetNotFoundError
+from bittr_tess_vetter.platform.io import LightCurveNotFoundError, TargetNotFoundError
 
 
 def _derive_activity_verdict(activity_payload: Any) -> tuple[str | None, str | None]:
@@ -77,16 +82,15 @@ def _download_and_stitch_lightcurve(
     *,
     tic_id: int,
     sectors: list[int] | None,
+    sectors_explicit: bool,
     flux_type: str,
-) -> tuple[LightCurve, list[int]]:
-    client = MASTClient()
-    lightcurves = client.download_all_sectors(
+) -> tuple[LightCurve, list[int], str]:
+    lightcurves, sector_load_path = load_lightcurves_with_sector_policy(
         tic_id=int(tic_id),
-        flux_type=str(flux_type).lower(),
         sectors=sectors,
+        flux_type=str(flux_type).lower(),
+        explicit_sectors=bool(sectors_explicit),
     )
-    if not lightcurves:
-        raise LightCurveNotFoundError(f"No sectors available for TIC {tic_id}")
 
     if len(lightcurves) == 1:
         stitched_lc = lightcurves[0]
@@ -113,13 +117,14 @@ def _download_and_stitch_lightcurve(
         ),
     )
     sectors_used = sorted({int(item.sector) for item in lightcurves if getattr(item, "sector", None) is not None})
-    return lc, sectors_used
+    return lc, sectors_used, sector_load_path
 
 
 @click.command("activity")
 @click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
 @click.option("--toi", type=str, default=None, help="Optional TOI label.")
+@click.option("--report-file", type=str, default=None, help="Optional report JSON path for candidate inputs.")
 @click.option(
     "--network-ok/--no-network",
     default=False,
@@ -150,6 +155,7 @@ def activity_command(
     toi_arg: str | None,
     tic_id: int | None,
     toi: str | None,
+    report_file: str | None,
     network_ok: bool,
     sectors: tuple[int, ...],
     flux_type: str,
@@ -161,22 +167,54 @@ def activity_command(
 ) -> None:
     """Characterize stellar activity and emit schema-stable JSON."""
     out_path = resolve_optional_output_path(output_path_arg)
-    if toi_arg is not None and toi is not None and str(toi_arg).strip() != str(toi).strip():
+    if (
+        report_file is None
+        and toi_arg is not None
+        and toi is not None
+        and str(toi_arg).strip() != str(toi).strip()
+    ):
         raise BtvCliError(
             "Positional TOI argument and --toi must match when both are provided.",
             exit_code=EXIT_INPUT_ERROR,
         )
     resolved_toi_arg = toi if toi is not None else toi_arg
+    report_file_path: str | None = None
+    report_sectors_used: list[int] | None = None
+    if report_file is not None:
+        if resolved_toi_arg is not None:
+            click.echo(
+                "Warning: --report-file provided; ignoring --toi and using report-file candidate inputs.",
+                err=True,
+            )
+        resolved_from_report = resolve_inputs_from_report_file(str(report_file))
+        resolved_tic_id = int(resolved_from_report.tic_id)
+        input_resolution = dict(resolved_from_report.input_resolution)
+        report_file_path = str(resolved_from_report.report_file_path)
+        report_sectors_used = (
+            [int(s) for s in resolved_from_report.sectors_used]
+            if resolved_from_report.sectors_used is not None
+            else None
+        )
+    else:
+        resolved_tic_id = 0
+        input_resolution = {}
+
+    effective_sectors, sectors_explicit, sector_selection_source = choose_effective_sectors(
+        sectors_arg=sectors,
+        report_sectors_used=report_sectors_used,
+    )
 
     try:
-        resolved_tic_id, input_resolution = _resolve_tic_and_inputs(
-            tic_id=tic_id,
-            toi=resolved_toi_arg,
-            network_ok=bool(network_ok),
-        )
-        lc, sectors_used = _download_and_stitch_lightcurve(
+        if report_file is None:
+            resolved_tic_id, input_resolution = _resolve_tic_and_inputs(
+                tic_id=tic_id,
+                toi=resolved_toi_arg,
+                network_ok=bool(network_ok),
+            )
+        lc, sectors_used, sector_load_path = _download_and_stitch_lightcurve(
             tic_id=int(resolved_tic_id),
-            sectors=list(sectors) if sectors else None,
+            sectors=effective_sectors,
+            sectors_explicit=bool(sectors_explicit),
             flux_type=str(flux_type).lower(),
         )
         activity = characterize_activity(
@@ -195,7 +233,7 @@ def activity_command(
 
     options = {
         "network_ok": bool(network_ok),
-        "sectors": [int(s) for s in sectors] if sectors else None,
+        "sectors": [int(s) for s in effective_sectors] if effective_sectors else None,
         "flux_type": str(flux_type).lower(),
         "detect_flares": bool(detect_flares),
         "flare_sigma": float(flare_sigma),
@@ -221,6 +259,10 @@ def activity_command(
         },
         "provenance": {
             "sectors_used": sectors_used,
+            "inputs_source": "report_file" if report_file_path is not None else str(input_resolution.get("source")),
+            "report_file": report_file_path,
+            "sector_selection_source": sector_selection_source,
+            "sector_load_path": sector_load_path,
             "options": options,
         },
     }

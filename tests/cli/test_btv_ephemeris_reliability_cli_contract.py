@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 from click.testing import CliRunner
 
+from bittr_tess_vetter.cli.common_cli import BtvCliError
 from bittr_tess_vetter.cli.ephemeris_reliability_cli import ephemeris_reliability_command
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 
@@ -35,17 +36,12 @@ def test_btv_ephemeris_reliability_success_contract_payload(monkeypatch, tmp_pat
     def _fake_resolve_candidate_inputs(**_kwargs: Any):
         return 123, 7.5, 2500.25, 3.0, 900.0, {"source": "cli", "inputs": {"tic_id": 123}}
 
-    class _FakeMASTClient:
-        def download_all_sectors(self, tic_id: int, flux_type: str, sectors: list[int] | None = None):
-            seen["download"] = {
-                "tic_id": tic_id,
-                "flux_type": flux_type,
-                "sectors": sectors,
-            }
-            return [
-                _make_lc(tic_id=tic_id, sector=14, start=2000.0),
-                _make_lc(tic_id=tic_id, sector=15, start=2010.0),
-            ]
+    def _fake_load_lightcurves_with_sector_policy(**kwargs: Any):
+        seen["download"] = kwargs
+        return [
+            _make_lc(tic_id=kwargs["tic_id"], sector=14, start=2000.0),
+            _make_lc(tic_id=kwargs["tic_id"], sector=15, start=2010.0),
+        ], "cache_only_explicit_sectors"
 
     def _fake_stitch(lightcurves: list[LightCurveData], *, tic_id: int):
         seen["stitch_called"] = True
@@ -65,7 +61,10 @@ def test_btv_ephemeris_reliability_success_contract_payload(monkeypatch, tmp_pat
         "bittr_tess_vetter.cli.ephemeris_reliability_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.ephemeris_reliability_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.ephemeris_reliability_cli.load_lightcurves_with_sector_policy",
+        _fake_load_lightcurves_with_sector_policy,
+    )
     monkeypatch.setattr(
         "bittr_tess_vetter.cli.ephemeris_reliability_cli.stitch_lightcurve_data",
         _fake_stitch,
@@ -119,7 +118,12 @@ def test_btv_ephemeris_reliability_success_contract_payload(monkeypatch, tmp_pat
     )
 
     assert result.exit_code == 0, result.output
-    assert seen["download"] == {"tic_id": 123, "flux_type": "sap", "sectors": [14, 15]}
+    assert seen["download"] == {
+        "tic_id": 123,
+        "flux_type": "sap",
+        "sectors": [14, 15],
+        "explicit_sectors": True,
+    }
     assert seen["stitch_called"] is True
     assert seen["stitch_tic_id"] == 123
     assert seen["compute"]["period_days"] == 7.5
@@ -148,6 +152,7 @@ def test_btv_ephemeris_reliability_success_contract_payload(monkeypatch, tmp_pat
     assert payload["provenance"]["sectors_used"] == [14, 15]
     assert payload["provenance"]["options"]["flux_type"] == "sap"
     assert payload["provenance"]["options"]["phase_shift_strategy"] == "random"
+    assert payload["provenance"]["sector_load_path"] == "cache_only_explicit_sectors"
 
 
 def test_btv_ephemeris_reliability_missing_required_ephemeris_input_exits_1() -> None:
@@ -172,26 +177,24 @@ def test_btv_ephemeris_reliability_filters_invalid_cadences(monkeypatch, tmp_pat
     def _fake_resolve_candidate_inputs(**_kwargs: Any):
         return 123, 7.5, 2500.25, 3.0, 900.0, {"source": "cli"}
 
-    class _FakeMASTClient:
-        def download_all_sectors(self, tic_id: int, flux_type: str, sectors: list[int] | None = None):
-            _ = tic_id, flux_type, sectors
-            time = np.array([1.0, 2.0, np.nan, 4.0], dtype=np.float64)
-            flux = np.array([1.0, 0.999, 1.001, 1.0], dtype=np.float64)
-            flux_err = np.array([0.001, 0.001, 0.001, np.nan], dtype=np.float64)
-            quality = np.array([0, 0, 0, 1], dtype=np.int32)
-            valid_mask = np.array([True, True, True, True], dtype=np.bool_)
-            return [
-                LightCurveData(
-                    time=time,
-                    flux=flux,
-                    flux_err=flux_err,
-                    quality=quality,
-                    valid_mask=valid_mask,
-                    tic_id=123,
-                    sector=14,
-                    cadence_seconds=120.0,
-                )
-            ]
+    def _fake_load_lightcurves_with_sector_policy(**_kwargs: Any):
+        time = np.array([1.0, 2.0, np.nan, 4.0], dtype=np.float64)
+        flux = np.array([1.0, 0.999, 1.001, 1.0], dtype=np.float64)
+        flux_err = np.array([0.001, 0.001, 0.001, np.nan], dtype=np.float64)
+        quality = np.array([0, 0, 0, 1], dtype=np.int32)
+        valid_mask = np.array([True, True, True, True], dtype=np.bool_)
+        return [
+            LightCurveData(
+                time=time,
+                flux=flux,
+                flux_err=flux_err,
+                quality=quality,
+                valid_mask=valid_mask,
+                tic_id=123,
+                sector=14,
+                cadence_seconds=120.0,
+            )
+        ], "mast_discovery"
 
     class _FakeResult:
         def to_dict(self) -> dict[str, Any]:
@@ -207,7 +210,10 @@ def test_btv_ephemeris_reliability_filters_invalid_cadences(monkeypatch, tmp_pat
         "bittr_tess_vetter.cli.ephemeris_reliability_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.ephemeris_reliability_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.ephemeris_reliability_cli.load_lightcurves_with_sector_policy",
+        _fake_load_lightcurves_with_sector_policy,
+    )
     monkeypatch.setattr(
         "bittr_tess_vetter.api.ephemeris_reliability.compute_reliability_regime_numpy",
         _fake_compute_reliability_regime_numpy,
@@ -250,16 +256,8 @@ def test_btv_ephemeris_reliability_accepts_positional_toi_and_short_o(
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.ephemeris_reliability_cli.MASTClient",
-        type(
-            "_FakeMASTClient",
-            (),
-            {
-                "download_all_sectors": staticmethod(
-                    lambda tic_id, flux_type, sectors=None: [_make_lc(tic_id=tic_id, sector=14, start=2000.0)]
-                )
-            },
-        ),
+        "bittr_tess_vetter.cli.ephemeris_reliability_cli.load_lightcurves_with_sector_policy",
+        lambda **kwargs: ([_make_lc(tic_id=kwargs["tic_id"], sector=14, start=2000.0)], "mast_discovery"),
     )
     monkeypatch.setattr(
         "bittr_tess_vetter.api.ephemeris_reliability.compute_reliability_regime_numpy",
@@ -281,3 +279,90 @@ def test_btv_ephemeris_reliability_rejects_mismatched_positional_and_option_toi(
     )
     assert result.exit_code == 1
     assert "must match" in result.output
+
+
+def test_btv_ephemeris_reliability_report_file_inputs_override_toi(monkeypatch, tmp_path: Path) -> None:
+    report_path = tmp_path / "ephem.report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "report": {
+                    "summary": {
+                        "tic_id": 222,
+                        "ephemeris": {
+                            "period_days": 2.5,
+                            "t0_btjd": 2200.0,
+                            "duration_hours": 1.5,
+                        },
+                        "input_depth_ppm": 300.0,
+                    },
+                    "provenance": {"sectors_used": [5]},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.ephemeris_reliability_cli._resolve_candidate_inputs",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve TOI with report file")),
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.ephemeris_reliability_cli.load_lightcurves_with_sector_policy",
+        lambda **kwargs: ([_make_lc(tic_id=kwargs["tic_id"], sector=5, start=2000.0)], "mast_filtered"),
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.api.ephemeris_reliability.compute_reliability_regime_numpy",
+        lambda **_kwargs: type("R", (), {"to_dict": lambda self: {"label": "ok"}})(),
+    )
+
+    out_path = tmp_path / "ephem_report_file.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        ephemeris_reliability_command,
+        [
+            "--report-file",
+            str(report_path),
+            "--toi",
+            "TOI-222.01",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Warning: --report-file provided; ignoring --toi" in result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["inputs_summary"]["input_resolution"]["source"] == "report_file"
+    assert payload["provenance"]["inputs_source"] == "report_file"
+    assert payload["provenance"]["report_file"] == str(report_path.resolve())
+
+
+def test_btv_ephemeris_reliability_explicit_sectors_cache_miss_exits_4(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.ephemeris_reliability_cli.load_lightcurves_with_sector_policy",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            BtvCliError(
+                "Cache-only sector load failed for TIC 123. Missing cached light curve for sector(s): 14.",
+                exit_code=4,
+            )
+        ),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        ephemeris_reliability_command,
+        [
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--sectors",
+            "14",
+        ],
+    )
+    assert result.exit_code == 4
+    assert "Cache-only sector load failed for TIC 123" in result.output

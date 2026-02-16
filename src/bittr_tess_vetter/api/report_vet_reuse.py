@@ -284,6 +284,8 @@ def build_cli_report_payload(
     *,
     report_json: dict[str, Any],
     vet_artifact: dict[str, Any],
+    sectors_used: list[int] | None = None,
+    resolved_inputs: dict[str, Any] | None = None,
     diagnostic_artifacts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     report_payload = dict(report_json)
@@ -297,9 +299,26 @@ def build_cli_report_payload(
 
     verdict = summary_payload.get("verdict")
     verdict_source = summary_payload.get("verdict_source")
+    provenance_payload: dict[str, Any] = {"vet_artifact": dict(vet_artifact)}
+    if sectors_used is not None:
+        provenance_payload["sectors_used"] = [int(sector) for sector in sectors_used]
+    if resolved_inputs is not None:
+        provenance_payload["resolved_inputs"] = {
+            "tic_id": int(resolved_inputs["tic_id"]) if resolved_inputs.get("tic_id") is not None else None,
+            "period_days": (
+                float(resolved_inputs["period_days"]) if resolved_inputs.get("period_days") is not None else None
+            ),
+            "t0_btjd": float(resolved_inputs["t0_btjd"]) if resolved_inputs.get("t0_btjd") is not None else None,
+            "duration_hours": (
+                float(resolved_inputs["duration_hours"])
+                if resolved_inputs.get("duration_hours") is not None
+                else None
+            ),
+            "depth_ppm": float(resolved_inputs["depth_ppm"]) if resolved_inputs.get("depth_ppm") is not None else None,
+        }
     return {
         "schema_version": CLI_REPORT_V3_SCHEMA,
-        "provenance": {"vet_artifact": dict(vet_artifact)},
+        "provenance": provenance_payload,
         "verdict": verdict,
         "verdict_source": verdict_source,
         "report": report_payload,

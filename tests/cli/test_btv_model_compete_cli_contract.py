@@ -50,28 +50,22 @@ def test_btv_model_compete_success_payload_contract(monkeypatch, tmp_path: Path)
         }
 
     class _FakeMASTClient:
-        def download_all_sectors(self, tic_id: int, flux_type: str, sectors: list[int] | None = None):
-            seen["download"] = {"tic_id": tic_id, "flux_type": flux_type, "sectors": sectors}
-            return [
-                _make_lc(
-                    tic_id=tic_id,
-                    sector=14,
-                    time=[100.0, 101.0],
-                    flux=[1.0, 0.999],
-                    flux_err=[0.001, 0.001],
-                    quality=[0, 0],
-                    valid_mask=[True, True],
-                ),
-                _make_lc(
-                    tic_id=tic_id,
-                    sector=15,
-                    time=[110.0, 111.0],
-                    flux=[1.001, 1.0],
-                    flux_err=[0.001, 0.001],
-                    quality=[0, 0],
-                    valid_mask=[True, True],
-                ),
-            ]
+        def download_lightcurve_cached(self, tic_id: int, sector: int, flux_type: str):
+            seen.setdefault("cache_calls", []).append(
+                {"tic_id": tic_id, "sector": sector, "flux_type": flux_type}
+            )
+            return _make_lc(
+                tic_id=tic_id,
+                sector=sector,
+                time=[100.0, 101.0] if sector == 14 else [110.0, 111.0],
+                flux=[1.0, 0.999] if sector == 14 else [1.001, 1.0],
+                flux_err=[0.001, 0.001],
+                quality=[0, 0],
+                valid_mask=[True, True],
+            )
+
+        def download_all_sectors(self, *_args: Any, **_kwargs: Any):
+            raise AssertionError("download_all_sectors should not be called when --sectors is provided")
 
     def _fake_stitch(lightcurves: list[LightCurveData], *, tic_id: int):
         seen["stitch_called"] = True
@@ -123,7 +117,7 @@ def test_btv_model_compete_success_payload_contract(monkeypatch, tmp_path: Path)
         "bittr_tess_vetter.cli.model_compete_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.model_compete_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
     monkeypatch.setattr("bittr_tess_vetter.cli.model_compete_cli.stitch_lightcurve_data", _fake_stitch)
     monkeypatch.setattr(model_compete_cli.model_competition_api, "run_model_competition", _fake_run_model_competition)
     monkeypatch.setattr(model_compete_cli.model_competition_api, "compute_artifact_prior", _fake_compute_artifact_prior)
@@ -154,7 +148,10 @@ def test_btv_model_compete_success_payload_contract(monkeypatch, tmp_path: Path)
     )
 
     assert result.exit_code == 0, result.output
-    assert seen["download"] == {"tic_id": 123, "flux_type": "sap", "sectors": [14, 15]}
+    assert seen["cache_calls"] == [
+        {"tic_id": 123, "sector": 14, "flux_type": "sap"},
+        {"tic_id": 123, "sector": 15, "flux_type": "sap"},
+    ]
     assert seen["stitch_called"] is True
     assert seen["stitch_tic_id"] == 123
 
@@ -192,6 +189,116 @@ def test_btv_model_compete_success_payload_contract(monkeypatch, tmp_path: Path)
         "n_harmonics": 3,
         "alias_tolerance": 0.02,
     }
+    assert payload["provenance"]["sector_load_path"] == "cache_only_explicit_sectors"
+
+
+def test_btv_model_compete_report_file_inputs_override_toi(monkeypatch, tmp_path: Path) -> None:
+    report_path = tmp_path / "candidate.report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "report": {
+                    "summary": {
+                        "tic_id": 321,
+                        "ephemeris": {
+                            "period_days": 8.2,
+                            "t0_btjd": 2501.5,
+                            "duration_hours": 4.1,
+                        },
+                        "input_depth_ppm": 750.0,
+                    },
+                    "provenance": {"sectors_used": [21, 22]},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def _unexpected_resolve(**_kwargs: Any):
+        raise AssertionError("_resolve_candidate_inputs should not be used with --report-file")
+
+    seen: dict[str, Any] = {}
+
+    def _fake_download(**kwargs: Any):
+        seen["download"] = kwargs
+        return (
+            np.array([1.0, 2.0], dtype=np.float64),
+            np.array([1.0, 0.999], dtype=np.float64),
+            np.array([0.001, 0.001], dtype=np.float64),
+            [21, 22],
+            "mast_filtered",
+        )
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.model_compete_cli._resolve_candidate_inputs",
+        _unexpected_resolve,
+    )
+    monkeypatch.setattr("bittr_tess_vetter.cli.model_compete_cli._download_and_prepare_arrays", _fake_download)
+    monkeypatch.setattr(
+        model_compete_cli.model_competition_api,
+        "run_model_competition",
+        lambda **_kwargs: type("R", (), {"to_dict": lambda self: {"interpretation_label": "TRANSIT"}})(),
+    )
+    monkeypatch.setattr(
+        model_compete_cli.model_competition_api,
+        "compute_artifact_prior",
+        lambda **_kwargs: type("P", (), {"to_dict": lambda self: {"combined_risk": 0.0}})(),
+    )
+
+    out_path = tmp_path / "model_compete_report_file.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        model_compete_command,
+        [
+            "--report-file",
+            str(report_path),
+            "--toi",
+            "TOI-123.01",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Warning: --report-file provided; ignoring --toi" in result.output
+    assert seen["download"]["tic_id"] == 321
+    assert seen["download"]["sectors"] == [21, 22]
+    assert seen["download"]["sectors_explicit"] is False
+
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["inputs_summary"]["input_resolution"]["source"] == "report_file"
+    assert payload["provenance"]["inputs_source"] == "report_file"
+    assert payload["provenance"]["report_file"] == str(report_path.resolve())
+
+
+def test_btv_model_compete_explicit_sectors_cache_miss_exits_4(monkeypatch) -> None:
+    class _FakeMASTClient:
+        def download_lightcurve_cached(self, tic_id: int, sector: int, flux_type: str):
+            _ = tic_id, sector, flux_type
+            raise RuntimeError("cache miss")
+
+        def download_all_sectors(self, *_args: Any, **_kwargs: Any):
+            raise AssertionError("download_all_sectors should not be called when --sectors is provided")
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        model_compete_command,
+        [
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--sectors",
+            "14",
+        ],
+    )
+    assert result.exit_code == 4
+    assert "Cache-only sector load failed for TIC 123" in result.output
 
 
 def test_btv_model_compete_missing_required_ephemeris_input_exits_1() -> None:
@@ -224,7 +331,7 @@ def test_btv_model_compete_no_valid_cadences_exits_4(monkeypatch) -> None:
                 )
             ]
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.model_compete_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -261,6 +368,7 @@ def test_btv_model_compete_accepts_positional_toi_and_short_o(monkeypatch, tmp_p
             np.array([1.0, 0.999], dtype=np.float64),
             np.array([0.001, 0.001], dtype=np.float64),
             [14],
+            "mast_discovery",
         ),
     )
     monkeypatch.setattr(

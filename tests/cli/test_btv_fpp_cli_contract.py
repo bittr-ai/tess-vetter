@@ -4,10 +4,30 @@ import json
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from click.testing import CliRunner
 
 import bittr_tess_vetter.cli.enrich_cli as enrich_cli
+from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
+
+
+def _make_lc(*, tic_id: int, sector: int, start: float) -> LightCurveData:
+    time = np.linspace(start, start + 1.0, 32, dtype=np.float64)
+    flux = np.ones_like(time, dtype=np.float64)
+    flux_err = np.full_like(time, 1e-3, dtype=np.float64)
+    quality = np.zeros(time.shape, dtype=np.int32)
+    valid_mask = np.ones(time.shape, dtype=np.bool_)
+    return LightCurveData(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        quality=quality,
+        valid_mask=valid_mask,
+        tic_id=int(tic_id),
+        sector=int(sector),
+        cadence_seconds=120.0,
+    )
 
 
 def test_btv_help_lists_fpp() -> None:
@@ -703,3 +723,139 @@ def test_build_cache_for_fpp_stores_requested_sector_products(monkeypatch, tmp_p
         "lc:123:14:pdcsap",
         "lc:123:15:pdcsap",
     ]
+
+
+def test_btv_fpp_report_file_precedence_and_sector_fallback(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    report_path = tmp_path / "report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "cli.vet.v2",
+                "inputs_summary": {
+                    "input_resolution": {
+                        "inputs": {
+                            "tic_id": 222,
+                            "period_days": 2.5,
+                            "t0_btjd": 1300.25,
+                            "duration_hours": 1.5,
+                            "depth_ppm": 600.0,
+                        }
+                    }
+                },
+                "provenance": {"sectors_used": [20, 21]},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def _fake_resolve_candidate_inputs(**kwargs: Any):
+        seen["resolve"] = kwargs
+        return 333, 2.5, 1300.25, 1.5, 900.0, {"source": "cli", "resolved_from": "cli"}
+
+    def _fake_build_cache_for_fpp(**kwargs: Any) -> tuple[object, list[int]]:
+        seen["build_cache"] = kwargs
+        return object(), [20, 21]
+
+    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
+        seen["fpp"] = kwargs
+        return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_report_precedence.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--report-file",
+            str(report_path),
+            "--tic-id",
+            "333",
+            "--depth-ppm",
+            "900.0",
+            "--toi",
+            "TOI-123.01",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "--report-file provided with --toi" in result.output
+    assert seen["resolve"]["toi"] is None
+    assert seen["resolve"]["tic_id"] == 333
+    assert seen["resolve"]["period_days"] == 2.5
+    assert seen["resolve"]["t0_btjd"] == 1300.25
+    assert seen["resolve"]["duration_hours"] == 1.5
+    assert seen["resolve"]["depth_ppm"] == 900.0
+    assert seen["build_cache"]["sectors"] == [20, 21]
+    assert seen["fpp"]["sectors"] == [20, 21]
+
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["inputs"]["sectors"] == [20, 21]
+
+
+def test_btv_fpp_explicit_sectors_use_cache_only_for_detrend_and_cache_build(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {"cached_calls": 0, "network_calls": 0}
+
+    class _FakeMASTClient:
+        def download_all_sectors(self, *_args: Any, **_kwargs: Any):
+            seen["network_calls"] += 1
+            raise AssertionError("download_all_sectors should not be used when --sectors is explicit")
+
+        def download_lightcurve_cached(self, tic_id: int, sector: int, flux_type: str):
+            assert flux_type == "pdcsap"
+            seen["cached_calls"] += 1
+            return _make_lc(tic_id=tic_id, sector=sector, start=2000.0 + float(sector))
+
+    def _fake_detrend_lightcurve_for_vetting(**kwargs: Any):
+        lc = kwargs["lc"]
+        return lc, {"method": kwargs["method"]}
+
+    def _fake_measure_transit_depth(*_args: Any, **_kwargs: Any):
+        return 8e-4, 1e-4
+
+    def _fake_calculate_fpp(**_kwargs: Any) -> dict[str, Any]:
+        return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli._detrend_lightcurve_for_vetting",
+        _fake_detrend_lightcurve_for_vetting,
+    )
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.measure_transit_depth", _fake_measure_transit_depth)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_explicit_sectors_cache_only.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--detrend",
+            "transit_masked_bin_median",
+            "--sectors",
+            "14",
+            "--sectors",
+            "15",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen["network_calls"] == 0
+    assert seen["cached_calls"] >= 4

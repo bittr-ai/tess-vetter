@@ -19,8 +19,13 @@ from bittr_tess_vetter.cli.common_cli import (
     dump_json_output,
     resolve_optional_output_path,
 )
+from bittr_tess_vetter.cli.diagnostics_report_inputs import (
+    choose_effective_sectors,
+    load_lightcurves_with_sector_policy,
+    resolve_inputs_from_report_file,
+)
 from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
-from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient, TargetNotFoundError
+from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, TargetNotFoundError
 
 
 def _to_jsonable_result(result: Any) -> Any:
@@ -305,6 +310,7 @@ def _prealign_candidate(
 @click.option("--duration-hours", type=float, default=None, help="Transit duration in hours.")
 @click.option("--depth-ppm", type=float, default=None, help="Transit depth in ppm.")
 @click.option("--toi", type=str, default=None, help="Optional TOI label to resolve candidate inputs.")
+@click.option("--report-file", type=str, default=None, help="Optional report JSON path for candidate inputs.")
 @click.option(
     "--network-ok/--no-network",
     default=False,
@@ -363,6 +369,7 @@ def timing_command(
     duration_hours: float | None,
     depth_ppm: float | None,
     toi: str | None,
+    report_file: str | None,
     network_ok: bool,
     sectors: tuple[int, ...],
     flux_type: str,
@@ -375,38 +382,73 @@ def timing_command(
 ) -> None:
     """Measure transit times and compute TTV diagnostics."""
     out_path = resolve_optional_output_path(output_path_arg)
-    if toi_arg is not None and toi is not None and str(toi_arg).strip() != str(toi).strip():
+    if (
+        report_file is None
+        and toi_arg is not None
+        and toi is not None
+        and str(toi_arg).strip() != str(toi).strip()
+    ):
         raise BtvCliError(
             "Positional TOI argument and --toi must match when both are provided.",
             exit_code=EXIT_INPUT_ERROR,
         )
     resolved_toi_arg = toi if toi is not None else toi_arg
 
-    (
-        resolved_tic_id,
-        resolved_period_days,
-        resolved_t0_btjd,
-        resolved_duration_hours,
-        resolved_depth_ppm,
-        input_resolution,
-    ) = _resolve_candidate_inputs(
-        network_ok=bool(network_ok),
-        toi=resolved_toi_arg,
-        tic_id=tic_id,
-        period_days=period_days,
-        t0_btjd=t0_btjd,
-        duration_hours=duration_hours,
-        depth_ppm=depth_ppm,
+    report_file_path: str | None = None
+    report_sectors_used: list[int] | None = None
+    if report_file is not None:
+        if resolved_toi_arg is not None:
+            click.echo(
+                "Warning: --report-file provided; ignoring --toi and using report-file candidate inputs.",
+                err=True,
+            )
+        resolved_from_report = resolve_inputs_from_report_file(str(report_file))
+        resolved_tic_id = int(resolved_from_report.tic_id)
+        resolved_period_days = float(resolved_from_report.period_days)
+        resolved_t0_btjd = float(resolved_from_report.t0_btjd)
+        resolved_duration_hours = float(resolved_from_report.duration_hours)
+        resolved_depth_ppm = (
+            float(resolved_from_report.depth_ppm)
+            if resolved_from_report.depth_ppm is not None
+            else None
+        )
+        input_resolution = dict(resolved_from_report.input_resolution)
+        report_file_path = str(resolved_from_report.report_file_path)
+        report_sectors_used = (
+            [int(s) for s in resolved_from_report.sectors_used]
+            if resolved_from_report.sectors_used is not None
+            else None
+        )
+    else:
+        (
+            resolved_tic_id,
+            resolved_period_days,
+            resolved_t0_btjd,
+            resolved_duration_hours,
+            resolved_depth_ppm,
+            input_resolution,
+        ) = _resolve_candidate_inputs(
+            network_ok=bool(network_ok),
+            toi=resolved_toi_arg,
+            tic_id=tic_id,
+            period_days=period_days,
+            t0_btjd=t0_btjd,
+            duration_hours=duration_hours,
+            depth_ppm=depth_ppm,
+        )
+
+    effective_sectors, sectors_explicit, sector_selection_source = choose_effective_sectors(
+        sectors_arg=sectors,
+        report_sectors_used=report_sectors_used,
     )
 
     try:
-        lightcurves = MASTClient().download_all_sectors(
+        lightcurves, sector_load_path = load_lightcurves_with_sector_policy(
             tic_id=int(resolved_tic_id),
             flux_type=str(flux_type).lower(),
-            sectors=[int(s) for s in sectors] if sectors else None,
+            sectors=effective_sectors,
+            explicit_sectors=bool(sectors_explicit),
         )
-        if not lightcurves:
-            raise LightCurveNotFoundError(f"No sectors available for TIC {resolved_tic_id}")
 
         if len(lightcurves) == 1:
             stitched_lc = lightcurves[0]
@@ -460,7 +502,7 @@ def timing_command(
 
     options = {
         "network_ok": bool(network_ok),
-        "sectors": [int(s) for s in sectors] if sectors else None,
+        "sectors": [int(s) for s in effective_sectors] if effective_sectors else None,
         "flux_type": str(flux_type).lower(),
         "min_snr": float(min_snr),
         "prealign": bool(prealign),
@@ -499,6 +541,10 @@ def timing_command(
         },
         "provenance": {
             "sectors_used": sectors_used,
+            "inputs_source": "report_file" if report_file_path is not None else str(input_resolution.get("source")),
+            "report_file": report_file_path,
+            "sector_selection_source": sector_selection_source,
+            "sector_load_path": sector_load_path,
             "options": options,
         },
     }

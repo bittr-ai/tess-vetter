@@ -35,6 +35,7 @@ def test_btv_systematics_proxy_success_payload_contract(monkeypatch, tmp_path: P
             np.array([1.0, 0.999, 1.001], dtype=np.float64),
             np.array([True, False, True], dtype=bool),
             [14, 15],
+            "mast_filtered",
         )
 
     class _FakeSystematicsProxyResult:
@@ -135,6 +136,7 @@ def test_btv_systematics_proxy_accepts_positional_toi_and_short_o(monkeypatch, t
             np.array([1.0, 0.999], dtype=np.float64),
             np.array([True, True], dtype=bool),
             [14],
+            "mast_discovery",
         ),
     )
     monkeypatch.setattr(
@@ -158,3 +160,106 @@ def test_btv_systematics_proxy_rejects_mismatched_positional_and_option_toi() ->
     )
     assert result.exit_code == 1
     assert "must match" in result.output
+
+
+def test_btv_systematics_proxy_report_file_inputs_override_toi(monkeypatch, tmp_path: Path) -> None:
+    report_path = tmp_path / "systematics.report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "report": {
+                    "summary": {
+                        "tic_id": 456,
+                        "ephemeris": {
+                            "period_days": 4.5,
+                            "t0_btjd": 2400.0,
+                            "duration_hours": 2.4,
+                        },
+                        "input_depth_ppm": 500.0,
+                    },
+                    "provenance": {"sectors_used": [9]},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    seen: dict[str, Any] = {}
+
+    def _fake_download_and_prepare_arrays(**kwargs: Any):
+        seen["download"] = kwargs
+        return (
+            np.array([1.0, 2.0], dtype=np.float64),
+            np.array([1.0, 0.999], dtype=np.float64),
+            np.array([True, True], dtype=bool),
+            [9],
+            "mast_filtered",
+        )
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.systematics_proxy_cli._resolve_candidate_inputs",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve TOI with report file")),
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.systematics_proxy_cli._download_and_prepare_arrays",
+        _fake_download_and_prepare_arrays,
+    )
+    monkeypatch.setattr(
+        systematics_proxy_cli.systematics_api,
+        "compute_systematics_proxy",
+        lambda **_kwargs: type("S", (), {"to_dict": lambda self: {"score": 0.2}})(),
+    )
+
+    out_path = tmp_path / "systematics_report_file.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        systematics_proxy_command,
+        [
+            "--report-file",
+            str(report_path),
+            "--toi",
+            "TOI-456.01",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Warning: --report-file provided; ignoring --toi" in result.output
+    assert seen["download"]["tic_id"] == 456
+    assert seen["download"]["sectors"] == [9]
+    assert seen["download"]["sectors_explicit"] is False
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["inputs_summary"]["input_resolution"]["source"] == "report_file"
+    assert payload["provenance"]["inputs_source"] == "report_file"
+    assert payload["provenance"]["report_file"] == str(report_path.resolve())
+
+
+def test_btv_systematics_proxy_explicit_sectors_cache_miss_exits_4(monkeypatch) -> None:
+    class _FakeMASTClient:
+        def download_lightcurve_cached(self, tic_id: int, sector: int, flux_type: str):
+            _ = tic_id, sector, flux_type
+            raise RuntimeError("cache miss")
+
+        def download_all_sectors(self, *_args: Any, **_kwargs: Any):
+            raise AssertionError("download_all_sectors should not be called when --sectors is provided")
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        systematics_proxy_command,
+        [
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--sectors",
+            "14",
+        ],
+    )
+    assert result.exit_code == 4
+    assert "Cache-only sector load failed for TIC 123" in result.output

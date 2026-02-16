@@ -36,7 +36,10 @@ from bittr_tess_vetter.cli.progress_metadata import (
     read_progress_metadata,
     write_progress_metadata_atomic,
 )
-from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
+from bittr_tess_vetter.cli.report_seed import (
+    load_report_seed,
+    resolve_candidate_inputs_with_report_seed,
+)
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
 
 
@@ -73,6 +76,7 @@ def _load_custom_views(custom_view_file: str | None) -> dict[str, Any] | None:
 def _resolve_report_candidate_inputs(
     *,
     network_ok: bool,
+    report_file: str | None,
     toi: str | None,
     tic_id: int | None,
     period_days: float | None,
@@ -86,33 +90,8 @@ def _resolve_report_candidate_inputs(
     ephemeris inputs were already provided. Preserve that path without requiring
     network lookups.
     """
-    has_manual_ephemeris = all(
-        value is not None for value in (tic_id, period_days, t0_btjd, duration_hours)
-    )
-    if toi is not None and not network_ok and has_manual_ephemeris:
-        return (
-            int(tic_id),
-            float(period_days),
-            float(t0_btjd),
-            float(duration_hours),
-            float(depth_ppm) if depth_ppm is not None else None,
-            {
-                "source": "cli",
-                "resolved_from": "cli",
-                "inputs": {
-                    "tic_id": int(tic_id),
-                    "period_days": float(period_days),
-                    "t0_btjd": float(t0_btjd),
-                    "duration_hours": float(duration_hours),
-                    "depth_ppm": float(depth_ppm) if depth_ppm is not None else None,
-                    "toi": str(toi),
-                },
-                "overrides": [],
-                "errors": [],
-            },
-        )
-
-    return _resolve_candidate_inputs(
+    report_seed = load_report_seed(report_file) if report_file is not None else None
+    return resolve_candidate_inputs_with_report_seed(
         network_ok=network_ok,
         toi=toi,
         tic_id=tic_id,
@@ -120,6 +99,7 @@ def _resolve_report_candidate_inputs(
         t0_btjd=t0_btjd,
         duration_hours=duration_hours,
         depth_ppm=depth_ppm,
+        report_seed=report_seed,
     )
 
 
@@ -139,6 +119,7 @@ def _execute_report(
     pipeline_config: PipelineConfig,
     vet_result: dict[str, Any] | None,
     vet_result_path: str | None,
+    resolved_inputs: dict[str, Any],
     diagnostic_artifacts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     enrichment_cfg = EnrichmentConfig() if include_enrichment else None
@@ -175,6 +156,8 @@ def _execute_report(
         "report_json": build_cli_report_payload(
             report_json=result.report_json,
             vet_artifact=vet_artifact,
+            sectors_used=result.sectors_used,
+            resolved_inputs=resolved_inputs,
             diagnostic_artifacts=diagnostic_artifacts,
         ),
         "plot_data_json": result.plot_data_json,
@@ -230,6 +213,7 @@ def _load_diagnostic_artifacts(paths: tuple[str, ...]) -> list[dict[str, Any]]:
 @click.option("--include-enrichment", is_flag=True, default=False, help="Include enrichment blocks.")
 @click.option("--custom-view-file", type=str, default=None, help="JSON file for custom views contract.")
 @click.option("--vet-result", type=str, default=None, help="Optional prior vet artifact JSON for check reuse.")
+@click.option("--report-file", type=str, default=None, help="Optional prior report JSON to seed candidate inputs.")
 @click.option(
     "--diagnostic-json",
     "diagnostic_json_paths",
@@ -275,6 +259,7 @@ def report_command(
     include_enrichment: bool,
     custom_view_file: str | None,
     vet_result: str | None,
+    report_file: str | None,
     diagnostic_json_paths: tuple[str, ...],
     timeout_seconds: float | None,
     random_seed: int | None,
@@ -303,6 +288,7 @@ def report_command(
         _input_resolution,
     ) = _resolve_report_candidate_inputs(
         network_ok=network_ok,
+        report_file=report_file,
         toi=resolved_toi,
         tic_id=tic_id,
         period_days=period_days,
@@ -421,6 +407,13 @@ def report_command(
             pipeline_config=config,
             vet_result=vet_result_payload,
             vet_result_path=vet_result,
+            resolved_inputs={
+                "tic_id": int(resolved_tic_id),
+                "period_days": float(resolved_period_days),
+                "t0_btjd": float(resolved_t0_btjd),
+                "duration_hours": float(resolved_duration_hours),
+                "depth_ppm": float(resolved_depth_ppm) if resolved_depth_ppm is not None else None,
+            },
             diagnostic_artifacts=diagnostic_artifacts,
         )
 

@@ -20,6 +20,7 @@ from bittr_tess_vetter.cli.common_cli import (
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
+    load_json_file,
     parse_extra_params,
     resolve_optional_output_path,
 )
@@ -131,9 +132,24 @@ def _build_cache_for_fpp(
     detrend_bin_hours: float = 6.0,
     detrend_buffer: float = 2.0,
     detrend_sigma_clip: float = 5.0,
+    cache_only_sectors: bool = False,
 ) -> tuple[PersistentCache, list[int]]:
     client = MASTClient()
-    lightcurves = client.download_all_sectors(tic_id, flux_type="pdcsap", sectors=sectors)
+    if bool(cache_only_sectors) and sectors is not None:
+        lightcurves = []
+        for sector in sectors:
+            try:
+                lightcurves.append(
+                    client.download_lightcurve_cached(
+                        tic_id=int(tic_id),
+                        sector=int(sector),
+                        flux_type="pdcsap",
+                    )
+                )
+            except Exception:
+                continue
+    else:
+        lightcurves = client.download_all_sectors(tic_id, flux_type="pdcsap", sectors=sectors)
     if not lightcurves:
         raise LightCurveNotFoundError(f"No sectors available for TIC {tic_id}")
 
@@ -204,6 +220,7 @@ def _execute_fpp(
     detrend_bin_hours: float,
     detrend_buffer: float,
     detrend_sigma_clip: float,
+    cache_only_sectors: bool = False,
 ) -> tuple[dict[str, Any], list[int]]:
     cache, sectors_loaded = _build_cache_for_fpp(
         tic_id=tic_id,
@@ -218,6 +235,7 @@ def _execute_fpp(
         detrend_bin_hours=float(detrend_bin_hours),
         detrend_buffer=float(detrend_buffer),
         detrend_sigma_clip=float(detrend_sigma_clip),
+        cache_only_sectors=bool(cache_only_sectors),
     )
     result = calculate_fpp(
         cache=cache,
@@ -252,9 +270,24 @@ def _estimate_detrended_depth_ppm(
     detrend_bin_hours: float,
     detrend_buffer: float,
     detrend_sigma_clip: float,
+    cache_only_sectors: bool = False,
 ) -> tuple[float | None, dict[str, Any]]:
     client = MASTClient()
-    lightcurves = client.download_all_sectors(tic_id=int(tic_id), flux_type="pdcsap", sectors=sectors)
+    if bool(cache_only_sectors) and sectors is not None:
+        lightcurves = []
+        for sector in sectors:
+            try:
+                lightcurves.append(
+                    client.download_lightcurve_cached(
+                        tic_id=int(tic_id),
+                        sector=int(sector),
+                        flux_type="pdcsap",
+                    )
+                )
+            except Exception:
+                continue
+    else:
+        lightcurves = client.download_all_sectors(tic_id=int(tic_id), flux_type="pdcsap", sectors=sectors)
     if not lightcurves:
         raise LightCurveNotFoundError(f"No sectors available for TIC {tic_id}")
 
@@ -309,6 +342,66 @@ def _estimate_detrended_depth_ppm(
     }
 
 
+def _extract_report_candidate_inputs(payload: dict[str, Any]) -> tuple[dict[str, Any], list[int] | None]:
+    def _dig(root: Any, *path: str) -> Any:
+        cur = root
+        for key in path:
+            if not isinstance(cur, dict):
+                return None
+            cur = cur.get(key)
+        return cur
+
+    candidate_blocks = [
+        _dig(payload, "inputs_summary", "input_resolution", "inputs"),
+        _dig(payload, "inputs_summary", "input_resolution", "resolved"),
+        _dig(payload, "report", "inputs_summary", "input_resolution", "inputs"),
+        _dig(payload, "report", "inputs_summary", "input_resolution", "resolved"),
+        _dig(payload, "provenance", "inputs"),
+        _dig(payload, "report", "provenance", "inputs"),
+        _dig(payload, "report", "candidate"),
+        _dig(payload, "candidate"),
+    ]
+
+    candidate: dict[str, Any] = {}
+    for block in candidate_blocks:
+        if not isinstance(block, dict):
+            continue
+        for key in ("tic_id", "period_days", "t0_btjd", "duration_hours", "depth_ppm", "toi"):
+            value = block.get(key)
+            if value is not None and key not in candidate:
+                candidate[key] = value
+
+    sectors_candidates = [
+        _dig(payload, "provenance", "sectors_used"),
+        _dig(payload, "report", "provenance", "sectors_used"),
+        _dig(payload, "inputs_summary", "sectors_used"),
+        _dig(payload, "report", "inputs_summary", "sectors_used"),
+        _dig(payload, "provenance", "inputs", "sectors_loaded"),
+        _dig(payload, "provenance", "inputs", "sectors"),
+        _dig(payload, "report", "provenance", "inputs", "sectors_loaded"),
+        _dig(payload, "report", "provenance", "inputs", "sectors"),
+    ]
+    sectors_used: list[int] | None = None
+    for raw in sectors_candidates:
+        if not isinstance(raw, list):
+            continue
+        parsed: list[int] = []
+        for item in raw:
+            try:
+                parsed.append(int(item))
+            except Exception:
+                continue
+        if parsed:
+            sectors_used = list(dict.fromkeys(parsed))
+            break
+    return candidate, sectors_used
+
+
+def _load_report_inputs(report_file: Path) -> tuple[dict[str, Any], list[int] | None]:
+    payload = load_json_file(report_file, label="report-file")
+    return _extract_report_candidate_inputs(payload)
+
+
 def _load_auto_stellar_inputs(
     tic_id: int,
     toi: str | None = None,
@@ -323,6 +416,12 @@ def _load_auto_stellar_inputs(
 @click.option("--duration-hours", type=float, default=None, help="Transit duration in hours.")
 @click.option("--depth-ppm", type=float, default=None, help="Transit depth in ppm.")
 @click.option("--toi", type=str, default=None, help="Optional TOI label (overrides resolved value).")
+@click.option(
+    "--report-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Optional prior CLI report/vet JSON to seed candidate inputs and sectors_used.",
+)
 @click.option(
     "--detrend",
     type=str,
@@ -411,6 +510,7 @@ def fpp_command(
     duration_hours: float | None,
     depth_ppm: float | None,
     toi: str | None,
+    report_file: Path | None,
     detrend: str | None,
     detrend_bin_hours: float,
     detrend_buffer: float,
@@ -437,6 +537,40 @@ def fpp_command(
     """Calculate candidate FPP and emit schema-stable JSON."""
     out_path = resolve_optional_output_path(output_path_arg)
 
+    report_candidate: dict[str, Any] = {}
+    report_sectors_used: list[int] | None = None
+    if report_file is not None:
+        report_candidate, report_sectors_used = _load_report_inputs(report_file)
+        if toi is not None:
+            click.echo(
+                "--report-file provided with --toi; preferring report candidate values and using --toi only for missing fields.",
+                err=True,
+            )
+
+    candidate_tic_id = tic_id if tic_id is not None else report_candidate.get("tic_id")
+    candidate_period_days = period_days if period_days is not None else report_candidate.get("period_days")
+    candidate_t0_btjd = t0_btjd if t0_btjd is not None else report_candidate.get("t0_btjd")
+    candidate_duration_hours = (
+        duration_hours if duration_hours is not None else report_candidate.get("duration_hours")
+    )
+    candidate_depth_ppm = depth_ppm if depth_ppm is not None else report_candidate.get("depth_ppm")
+
+    should_use_toi_resolver = any(
+        value is None
+        for value in (
+            candidate_tic_id,
+            candidate_period_days,
+            candidate_t0_btjd,
+            candidate_duration_hours,
+        )
+    )
+    if candidate_depth_ppm is None and detrend is None:
+        should_use_toi_resolver = True
+    toi_for_resolution = toi if should_use_toi_resolver else None
+
+    requested_sectors = [int(s) for s in sectors] if sectors else None
+    effective_sectors = requested_sectors if requested_sectors is not None else report_sectors_used
+
     (
         resolved_tic_id,
         resolved_period_days,
@@ -446,12 +580,12 @@ def fpp_command(
         input_resolution,
     ) = _resolve_candidate_inputs(
         network_ok=network_ok,
-        toi=toi,
-        tic_id=tic_id,
-        period_days=period_days,
-        t0_btjd=t0_btjd,
-        duration_hours=duration_hours,
-        depth_ppm=depth_ppm,
+        toi=toi_for_resolution,
+        tic_id=int(candidate_tic_id) if candidate_tic_id is not None else None,
+        period_days=float(candidate_period_days) if candidate_period_days is not None else None,
+        t0_btjd=float(candidate_t0_btjd) if candidate_t0_btjd is not None else None,
+        duration_hours=float(candidate_duration_hours) if candidate_duration_hours is not None else None,
+        depth_ppm=float(candidate_depth_ppm) if candidate_depth_ppm is not None else None,
     )
 
     detrend_method = _normalize_detrend_method(detrend)
@@ -535,11 +669,12 @@ def fpp_command(
                 t0_btjd=resolved_t0_btjd,
                 duration_hours=resolved_duration_hours,
                 catalog_depth_ppm=resolved_depth_ppm,
-                sectors=list(sectors) if sectors else None,
+                sectors=effective_sectors,
                 detrend_method=detrend_method,
                 detrend_bin_hours=float(detrend_bin_hours),
                 detrend_buffer=float(detrend_buffer),
                 detrend_sigma_clip=float(detrend_sigma_clip),
+                cache_only_sectors=bool(sectors),
             )
             if detrended_depth is not None:
                 depth_ppm_used = float(detrended_depth)
@@ -570,7 +705,7 @@ def fpp_command(
             t0_btjd=resolved_t0_btjd,
             duration_hours=resolved_duration_hours,
             depth_ppm=float(depth_ppm_used),
-            sectors=list(sectors) if sectors else None,
+            sectors=effective_sectors,
             preset=preset_name,
             replicates=replicates,
             seed=seed,
@@ -586,6 +721,7 @@ def fpp_command(
             detrend_bin_hours=float(detrend_bin_hours),
             detrend_buffer=float(detrend_buffer),
             detrend_sigma_clip=float(detrend_sigma_clip),
+            cache_only_sectors=bool(sectors),
         )
     except BtvCliError:
         raise
@@ -608,7 +744,7 @@ def fpp_command(
                 "duration_hours": resolved_duration_hours,
                 "depth_ppm": float(depth_ppm_used),
                 "depth_ppm_catalog": resolved_depth_ppm,
-                "sectors": list(sectors) if sectors else None,
+                "sectors": effective_sectors,
                 "sectors_loaded": sectors_loaded,
             },
             "resolved_source": input_resolution.get("source"),
