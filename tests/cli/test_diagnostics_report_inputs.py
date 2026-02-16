@@ -64,3 +64,65 @@ def test_load_lightcurves_with_sector_policy_cache_first_partial_fallback(monkey
     assert path == "cache_then_mast_filtered"
     assert [int(lc.sector) for lc in lightcurves] == [21, 22]
     assert seen["download_all"] == {"tic_id": 123, "flux_type": "pdcsap", "sectors": [22]}
+
+
+def test_load_lightcurves_with_sector_policy_cache_discovery_without_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {"download_all_called": False}
+
+    class _FakeMASTClient:
+        def search_lightcurve_cached(self, tic_id: int) -> list[Any]:
+            _ = tic_id
+            return [SimpleNamespace(sector=14), SimpleNamespace(sector=15)]
+
+        def download_lightcurve_cached(self, tic_id: int, sector: int, flux_type: str) -> Any:
+            _ = tic_id, flux_type
+            return _lc(sector)
+
+        def download_all_sectors(self, *_args: Any, **_kwargs: Any) -> list[Any]:
+            seen["download_all_called"] = True
+            return []
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+
+    lightcurves, path = load_lightcurves_with_sector_policy(
+        tic_id=123,
+        sectors=None,
+        flux_type="pdcsap",
+        explicit_sectors=False,
+    )
+
+    assert path == "cache_discovery"
+    assert [int(lc.sector) for lc in lightcurves] == [14, 15]
+    assert seen["download_all_called"] is False
+
+
+def test_load_lightcurves_with_sector_policy_cache_discovery_falls_back_to_mast(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict[str, Any] = {}
+
+    class _FakeMASTClient:
+        def search_lightcurve_cached(self, tic_id: int) -> list[Any]:
+            _ = tic_id
+            return [SimpleNamespace(sector=14), SimpleNamespace(sector=15)]
+
+        def download_lightcurve_cached(self, tic_id: int, sector: int, flux_type: str) -> Any:
+            _ = tic_id, sector, flux_type
+            raise RuntimeError("cache parse failed")
+
+        def download_all_sectors(self, tic_id: int, flux_type: str, sectors: list[int] | None = None) -> list[Any]:
+            seen["download_all"] = {"tic_id": tic_id, "flux_type": flux_type, "sectors": sectors}
+            return [_lc(21)]
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+
+    lightcurves, path = load_lightcurves_with_sector_policy(
+        tic_id=123,
+        sectors=None,
+        flux_type="pdcsap",
+        explicit_sectors=False,
+    )
+
+    assert path == "mast_discovery"
+    assert [int(lc.sector) for lc in lightcurves] == [21]
+    assert seen["download_all"] == {"tic_id": 123, "flux_type": "pdcsap", "sectors": None}

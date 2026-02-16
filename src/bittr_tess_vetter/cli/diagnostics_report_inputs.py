@@ -231,6 +231,37 @@ def load_lightcurves_with_sector_policy(
             return sorted(lightcurves, key=lambda lc: int(getattr(lc, "sector", 0))), "cache_then_mast_filtered"
         return sorted(lightcurves, key=lambda lc: int(getattr(lc, "sector", 0))), "mast_filtered"
 
+    search_cached = getattr(client, "search_lightcurve_cached", None)
+    if callable(search_cached):
+        cached_results: list[Any] = []
+        try:
+            cached_results = list(search_cached(tic_id=int(tic_id)))
+        except Exception:
+            cached_results = []
+
+        cached_sectors = sorted(
+            {
+                int(getattr(row, "sector"))
+                for row in cached_results
+                if getattr(row, "sector", None) is not None
+            }
+        )
+        if cached_sectors:
+            cached_lightcurves: list[Any] = []
+            for sector in cached_sectors:
+                try:
+                    cached_lightcurves.append(
+                        client.download_lightcurve_cached(
+                            tic_id=int(tic_id),
+                            sector=int(sector),
+                            flux_type=normalized_flux_type,
+                        )
+                    )
+                except Exception:
+                    continue
+            if cached_lightcurves:
+                return sorted(cached_lightcurves, key=lambda lc: int(getattr(lc, "sector", 0))), "cache_discovery"
+
     lightcurves = client.download_all_sectors(
         tic_id=int(tic_id),
         flux_type=normalized_flux_type,
