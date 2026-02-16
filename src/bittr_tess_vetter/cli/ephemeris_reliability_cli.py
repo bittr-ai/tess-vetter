@@ -12,6 +12,7 @@ from bittr_tess_vetter.api.ephemeris_specificity import SmoothTemplateConfig
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
 from bittr_tess_vetter.cli.common_cli import (
     EXIT_DATA_UNAVAILABLE,
+    EXIT_INPUT_ERROR,
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
@@ -22,6 +23,7 @@ from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, M
 
 
 @click.command("ephemeris-reliability")
+@click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
 @click.option("--period-days", type=float, default=None, help="Orbital period in days.")
 @click.option("--t0-btjd", type=float, default=None, help="Reference epoch in BTJD.")
@@ -56,6 +58,7 @@ from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, M
 @click.option("--t0-scan-n", type=int, default=81, show_default=True)
 @click.option("--t0-scan-half-span-minutes", type=float, default=None)
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,
@@ -64,6 +67,7 @@ from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, M
     help="JSON output path; '-' writes to stdout.",
 )
 def ephemeris_reliability_command(
+    toi_arg: str | None,
     tic_id: int | None,
     period_days: float | None,
     t0_btjd: float | None,
@@ -86,6 +90,12 @@ def ephemeris_reliability_command(
 ) -> None:
     """Compute ephemeris reliability regime diagnostics and emit JSON."""
     out_path = resolve_optional_output_path(output_path_arg)
+    if toi_arg is not None and toi is not None and str(toi_arg).strip() != str(toi).strip():
+        raise BtvCliError(
+            "Positional TOI argument and --toi must match when both are provided.",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    resolved_toi_arg = toi if toi is not None else toi_arg
 
     (
         resolved_tic_id,
@@ -96,7 +106,7 @@ def ephemeris_reliability_command(
         input_resolution,
     ) = _resolve_candidate_inputs(
         network_ok=bool(network_ok),
-        toi=toi,
+        toi=resolved_toi_arg,
         tic_id=tic_id,
         period_days=period_days,
         t0_btjd=t0_btjd,

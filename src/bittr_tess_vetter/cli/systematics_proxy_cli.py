@@ -11,6 +11,7 @@ from bittr_tess_vetter.api import systematics as systematics_api
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
 from bittr_tess_vetter.cli.common_cli import (
     EXIT_DATA_UNAVAILABLE,
+    EXIT_INPUT_ERROR,
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
@@ -71,6 +72,7 @@ def _download_and_prepare_arrays(
 
 
 @click.command("systematics-proxy")
+@click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
 @click.option("--period-days", type=float, default=None, help="Orbital period in days.")
 @click.option("--t0-btjd", type=float, default=None, help="Reference epoch in BTJD.")
@@ -91,6 +93,7 @@ def _download_and_prepare_arrays(
     show_default=True,
 )
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,
@@ -99,6 +102,7 @@ def _download_and_prepare_arrays(
     help="JSON output path; '-' writes to stdout.",
 )
 def systematics_proxy_command(
+    toi_arg: str | None,
     tic_id: int | None,
     period_days: float | None,
     t0_btjd: float | None,
@@ -112,6 +116,12 @@ def systematics_proxy_command(
 ) -> None:
     """Compute LC-only systematics proxy diagnostics and emit JSON."""
     out_path = resolve_optional_output_path(output_path_arg)
+    if toi_arg is not None and toi is not None and str(toi_arg).strip() != str(toi).strip():
+        raise BtvCliError(
+            "Positional TOI argument and --toi must match when both are provided.",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    resolved_toi_arg = toi if toi is not None else toi_arg
 
     (
         resolved_tic_id,
@@ -122,7 +132,7 @@ def systematics_proxy_command(
         input_resolution,
     ) = _resolve_candidate_inputs(
         network_ok=bool(network_ok),
-        toi=toi,
+        toi=resolved_toi_arg,
         tic_id=tic_id,
         period_days=period_days,
         t0_btjd=t0_btjd,

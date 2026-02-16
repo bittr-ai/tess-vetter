@@ -107,3 +107,46 @@ def test_btv_systematics_proxy_missing_required_ephemeris_input_exits_1() -> Non
     )
     assert result.exit_code == 1
     assert "Missing required inputs" in result.output
+
+
+def test_btv_systematics_proxy_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_resolve_candidate_inputs(**kwargs: Any):
+        seen.update(kwargs)
+        return 123, 7.25, 2450.1, 3.5, None, {"source": "toi", "inputs": {"toi": kwargs.get("toi")}}
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.systematics_proxy_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.systematics_proxy_cli._download_and_prepare_arrays",
+        lambda **_kwargs: (
+            np.array([1.0, 2.0], dtype=np.float64),
+            np.array([1.0, 0.999], dtype=np.float64),
+            np.array([True, True], dtype=bool),
+            [14],
+        ),
+    )
+    monkeypatch.setattr(
+        systematics_proxy_cli.systematics_api,
+        "compute_systematics_proxy",
+        lambda **_kwargs: type("S", (), {"to_dict": lambda self: {"score": 0.1}})(),
+    )
+
+    out_path = tmp_path / "systematics_positional.json"
+    runner = CliRunner()
+    result = runner.invoke(systematics_proxy_command, ["TOI-5807.01", "-o", str(out_path)])
+    assert result.exit_code == 0, result.output
+    assert seen["toi"] == "TOI-5807.01"
+
+
+def test_btv_systematics_proxy_rejects_mismatched_positional_and_option_toi() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        systematics_proxy_command,
+        ["TOI-5807.01", "--toi", "TOI-4510.01"],
+    )
+    assert result.exit_code == 1
+    assert "must match" in result.output

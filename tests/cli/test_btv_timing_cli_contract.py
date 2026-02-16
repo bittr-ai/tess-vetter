@@ -181,6 +181,7 @@ def test_btv_timing_success_contract_payload(monkeypatch, tmp_path: Path) -> Non
     assert payload["alignment"]["n_transits_post"] == 2
     assert payload["diagnostics"]["selected"]["accepted_epochs"] == 2
     assert payload["next_actions"][0]["code"] == "TIMING_MEASURABLE"
+    assert payload["result"]["next_actions"][0]["code"] == "TIMING_MEASURABLE"
     assert payload["inputs_summary"]["input_resolution"]["inputs"]["tic_id"] == 123
     assert payload["provenance"]["sectors_used"] == [14, 15]
     assert payload["provenance"]["options"] == {
@@ -317,3 +318,70 @@ def test_build_next_actions_alignment_review_branch() -> None:
     codes = [a["code"] for a in actions]
     assert "DATA_LIMITED" in codes
     assert "ALIGNMENT_REVIEW" in codes
+
+
+def test_btv_timing_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_resolve_candidate_inputs(**kwargs: Any):
+        seen.update(kwargs)
+        return 123, 9.5, 2456.25, 2.75, 640.0, {"source": "toi", "inputs": {"toi": kwargs.get("toi")}}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.timing_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.timing_cli.MASTClient",
+        type(
+            "_FakeMASTClient",
+            (),
+            {
+                "download_all_sectors": staticmethod(
+                    lambda tic_id, flux_type, sectors=None: [_make_lc(tic_id=tic_id, sector=14, start=2000.0)]
+                )
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.timing_cli._prealign_candidate",
+        lambda **kwargs: (
+            kwargs["candidate"],
+            [],
+            {
+                "prealign_requested": False,
+                "prealign_applied": False,
+                "alignment_quality": "disabled",
+                "delta_t0_minutes": 0.0,
+                "delta_period_ppm": 0.0,
+                "n_transits_pre": 0,
+                "n_transits_post": 0,
+                "prealign_score_z": None,
+                "prealign_error": None,
+            },
+            {"selected": {"attempted_epochs": 0, "accepted_epochs": 0, "reject_counts": {}}},
+        ),
+    )
+    monkeypatch.setattr(
+        timing_cli.api.timing,
+        "analyze_ttvs",
+        lambda **_kwargs: type("R", (), {"to_dict": lambda self: {"n_transits": 0}})(),
+    )
+    monkeypatch.setattr(
+        timing_cli.api.timing,
+        "timing_series",
+        lambda **_kwargs: type("S", (), {"to_dict": lambda self: {"n_points": 0}})(),
+    )
+
+    out_path = tmp_path / "timing_positional.json"
+    runner = CliRunner()
+    result = runner.invoke(timing_command, ["TOI-5807.01", "-o", str(out_path)])
+    assert result.exit_code == 0, result.output
+    assert seen["toi"] == "TOI-5807.01"
+
+
+def test_btv_timing_rejects_mismatched_positional_and_option_toi() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        timing_command,
+        ["TOI-5807.01", "--toi", "TOI-4510.01"],
+    )
+    assert result.exit_code == 1
+    assert "must match" in result.output

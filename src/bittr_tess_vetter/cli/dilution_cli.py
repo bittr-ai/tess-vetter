@@ -341,6 +341,7 @@ def _resolve_observed_depth(
 
 
 @click.command("dilution")
+@click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier for candidate input resolution.")
 @click.option("--period-days", type=float, default=None, help="Orbital period in days for candidate input resolution.")
 @click.option("--t0-btjd", type=float, default=None, help="Reference epoch in BTJD for candidate input resolution.")
@@ -366,6 +367,7 @@ def _resolve_observed_depth(
     help="JSON file with schema_version=reference_sources.v1 for companion hypotheses.",
 )
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,
@@ -374,6 +376,7 @@ def _resolve_observed_depth(
     help="JSON output path; '-' writes to stdout.",
 )
 def dilution_command(
+    toi_arg: str | None,
     tic_id: int | None,
     period_days: float | None,
     t0_btjd: float | None,
@@ -387,6 +390,12 @@ def dilution_command(
 ) -> None:
     """Compute host-dilution scenarios and implied-size physics flags."""
     out_path = resolve_optional_output_path(output_path_arg)
+    if toi_arg is not None and toi is not None and str(toi_arg).strip() != str(toi).strip():
+        raise BtvCliError(
+            "Positional TOI argument and --toi must match when both are provided.",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    resolved_toi_arg = toi if toi is not None else toi_arg
     if not host_profile_file and not reference_sources_file:
         raise BtvCliError(
             "Provide at least one: --host-profile-file or --reference-sources-file",
@@ -417,7 +426,7 @@ def dilution_command(
         observed_depth_ppm, input_resolution = _resolve_observed_depth(
             depth_ppm=depth_ppm,
             network_ok=bool(network_ok),
-            toi=toi,
+            toi=resolved_toi_arg,
             tic_id=tic_id,
             period_days=period_days,
             t0_btjd=t0_btjd,

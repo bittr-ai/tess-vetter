@@ -357,8 +357,67 @@ def test_btv_dilution_accepts_resolve_neighbors_style_source_ids(monkeypatch, tm
             str(out_path),
         ],
     )
-
     assert result.exit_code == 0, result.output
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == "cli.dilution.v1"
     assert len(payload["scenarios"]) == 2
+
+
+def test_btv_dilution_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: Path) -> None:
+    def _fake_resolve_candidate_inputs(**kwargs: Any):
+        return 123, 8.2, 2100.5, 3.1, 420.0, {
+            "source": "toi_catalog",
+            "resolved_from": "exofop_toi_table",
+            "inputs": {"tic_id": 123, "depth_ppm": 420.0, "toi": kwargs.get("toi")},
+        }
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+
+    host_profile_path = tmp_path / "host_profile_positional.json"
+    host_profile_path.write_text(
+        json.dumps({"primary": {"tic_id": 123, "g_mag": 10.2, "radius_rsun": 1.0}, "companions": []}),
+        encoding="utf-8",
+    )
+
+    out_path = tmp_path / "dilution_positional.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        dilution_command,
+        [
+            "TOI-5807.01",
+            "--network-ok",
+            "--host-profile-file",
+            str(host_profile_path),
+            "-o",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "cli.dilution.v1"
+
+
+def test_btv_dilution_rejects_mismatched_positional_and_option_toi(tmp_path: Path) -> None:
+    host_profile_path = tmp_path / "host_profile_mismatch.json"
+    host_profile_path.write_text(
+        json.dumps({"primary": {"tic_id": 123, "g_mag": 10.2, "radius_rsun": 1.0}, "companions": []}),
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        dilution_command,
+        [
+            "TOI-5807.01",
+            "--toi",
+            "TOI-4510.01",
+            "--host-profile-file",
+            str(host_profile_path),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "must match" in result.output

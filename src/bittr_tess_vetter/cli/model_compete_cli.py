@@ -11,6 +11,7 @@ from bittr_tess_vetter.api import model_competition as model_competition_api
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
 from bittr_tess_vetter.cli.common_cli import (
     EXIT_DATA_UNAVAILABLE,
+    EXIT_INPUT_ERROR,
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
@@ -83,6 +84,7 @@ def _download_and_prepare_arrays(
 
 
 @click.command("model-compete")
+@click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
 @click.option("--period-days", type=float, default=None, help="Orbital period in days.")
 @click.option("--t0-btjd", type=float, default=None, help="Reference epoch in BTJD.")
@@ -106,6 +108,7 @@ def _download_and_prepare_arrays(
 @click.option("--n-harmonics", type=int, default=2, show_default=True)
 @click.option("--alias-tolerance", type=float, default=0.01, show_default=True)
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,
@@ -114,6 +117,7 @@ def _download_and_prepare_arrays(
     help="JSON output path; '-' writes to stdout.",
 )
 def model_compete_command(
+    toi_arg: str | None,
     tic_id: int | None,
     period_days: float | None,
     t0_btjd: float | None,
@@ -130,6 +134,12 @@ def model_compete_command(
 ) -> None:
     """Run model competition + artifact prior and emit schema-stable JSON."""
     out_path = resolve_optional_output_path(output_path_arg)
+    if toi_arg is not None and toi is not None and str(toi_arg).strip() != str(toi).strip():
+        raise BtvCliError(
+            "Positional TOI argument and --toi must match when both are provided.",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    resolved_toi_arg = toi if toi is not None else toi_arg
 
     (
         resolved_tic_id,
@@ -140,7 +150,7 @@ def model_compete_command(
         input_resolution,
     ) = _resolve_candidate_inputs(
         network_ok=bool(network_ok),
-        toi=toi,
+        toi=resolved_toi_arg,
         tic_id=tic_id,
         period_days=period_days,
         t0_btjd=t0_btjd,
@@ -184,12 +194,28 @@ def model_compete_command(
         "n_harmonics": int(n_harmonics),
         "alias_tolerance": float(alias_tolerance),
     }
+    model_competition_dict = _to_jsonable_result(model_competition)
+    artifact_prior_dict = _to_jsonable_result(artifact_prior)
+    result_payload = {
+        "model_competition": model_competition_dict,
+        "artifact_prior": artifact_prior_dict,
+    }
+    if isinstance(model_competition_dict, dict):
+        for key in (
+            "winner",
+            "winner_margin",
+            "model_competition_label",
+            "interpretation_label",
+            "interpretation_metrics",
+            "artifact_risk",
+            "warnings",
+        ):
+            if key in model_competition_dict:
+                result_payload[key] = model_competition_dict[key]
+
     payload = {
         "schema_version": "cli.model_compete.v1",
-        "result": {
-            "model_competition": _to_jsonable_result(model_competition),
-            "artifact_prior": _to_jsonable_result(artifact_prior),
-        },
+        "result": result_payload,
         "inputs_summary": {
             "input_resolution": input_resolution,
         },

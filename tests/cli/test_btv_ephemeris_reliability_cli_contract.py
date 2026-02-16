@@ -228,3 +228,50 @@ def test_btv_ephemeris_reliability_filters_invalid_cadences(monkeypatch, tmp_pat
     np.testing.assert_allclose(seen["time"], np.array([1.0, 2.0], dtype=np.float64))
     np.testing.assert_allclose(seen["flux"], np.array([1.0, 0.999], dtype=np.float64))
     np.testing.assert_allclose(seen["flux_err"], np.array([0.001, 0.001], dtype=np.float64))
+
+
+def test_btv_ephemeris_reliability_accepts_positional_toi_and_short_o(
+    monkeypatch, tmp_path: Path
+) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_resolve_candidate_inputs(**kwargs: Any):
+        seen.update(kwargs)
+        return 123, 7.5, 2500.25, 3.0, 900.0, {"source": "toi", "inputs": {"toi": kwargs.get("toi")}}
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.ephemeris_reliability_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.ephemeris_reliability_cli.MASTClient",
+        type(
+            "_FakeMASTClient",
+            (),
+            {
+                "download_all_sectors": staticmethod(
+                    lambda tic_id, flux_type, sectors=None: [_make_lc(tic_id=tic_id, sector=14, start=2000.0)]
+                )
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.api.ephemeris_reliability.compute_reliability_regime_numpy",
+        lambda **_kwargs: type("R", (), {"to_dict": lambda self: {"label": "ok"}})(),
+    )
+
+    out_path = tmp_path / "ephem_positional.json"
+    runner = CliRunner()
+    result = runner.invoke(ephemeris_reliability_command, ["TOI-5807.01", "-o", str(out_path)])
+    assert result.exit_code == 0, result.output
+    assert seen["toi"] == "TOI-5807.01"
+
+
+def test_btv_ephemeris_reliability_rejects_mismatched_positional_and_option_toi() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        ephemeris_reliability_command,
+        ["TOI-5807.01", "--toi", "TOI-4510.01"],
+    )
+    assert result.exit_code == 1
+    assert "must match" in result.output

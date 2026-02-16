@@ -13,6 +13,7 @@ from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
 from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 from bittr_tess_vetter.cli.common_cli import (
     EXIT_DATA_UNAVAILABLE,
+    EXIT_INPUT_ERROR,
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
@@ -280,6 +281,7 @@ def _prealign_candidate(
 
 
 @click.command("timing")
+@click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
 @click.option("--period-days", type=float, default=None, help="Orbital period in days.")
 @click.option("--t0-btjd", type=float, default=None, help="Reference epoch in BTJD.")
@@ -328,6 +330,7 @@ def _prealign_candidate(
     help="Max fractional phase shift allowed during T0 pre-alignment.",
 )
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,
@@ -336,6 +339,7 @@ def _prealign_candidate(
     help="JSON output path; '-' writes to stdout.",
 )
 def timing_command(
+    toi_arg: str | None,
     tic_id: int | None,
     period_days: float | None,
     t0_btjd: float | None,
@@ -354,6 +358,12 @@ def timing_command(
 ) -> None:
     """Measure transit times and compute TTV diagnostics."""
     out_path = resolve_optional_output_path(output_path_arg)
+    if toi_arg is not None and toi is not None and str(toi_arg).strip() != str(toi).strip():
+        raise BtvCliError(
+            "Positional TOI argument and --toi must match when both are provided.",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    resolved_toi_arg = toi if toi is not None else toi_arg
 
     (
         resolved_tic_id,
@@ -364,7 +374,7 @@ def timing_command(
         input_resolution,
     ) = _resolve_candidate_inputs(
         network_ok=bool(network_ok),
-        toi=toi,
+        toi=resolved_toi_arg,
         tic_id=tic_id,
         period_days=period_days,
         t0_btjd=t0_btjd,
@@ -441,8 +451,7 @@ def timing_command(
         "prealign_lr": float(prealign_lr),
         "prealign_window_phase": float(prealign_window_phase),
     }
-    payload = {
-        "schema_version": "cli.timing.v1",
+    result_payload = {
         "transit_times": _transit_times_to_dicts(transit_times),
         "ttv": _to_jsonable_result(ttv),
         "timing_series": _to_jsonable_result(series),
@@ -453,6 +462,16 @@ def timing_command(
             measurement_diagnostics=measurement_diagnostics,
             min_snr=float(min_snr),
         ),
+    }
+    payload = {
+        "schema_version": "cli.timing.v1",
+        "result": result_payload,
+        "transit_times": result_payload["transit_times"],
+        "ttv": result_payload["ttv"],
+        "timing_series": result_payload["timing_series"],
+        "alignment": result_payload["alignment"],
+        "diagnostics": result_payload["diagnostics"],
+        "next_actions": result_payload["next_actions"],
         "inputs_summary": {
             "input_resolution": input_resolution,
         },

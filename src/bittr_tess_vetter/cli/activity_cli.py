@@ -99,6 +99,7 @@ def _download_and_stitch_lightcurve(
 
 
 @click.command("activity")
+@click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
 @click.option("--toi", type=str, default=None, help="Optional TOI label.")
 @click.option(
@@ -119,6 +120,7 @@ def _download_and_stitch_lightcurve(
 @click.option("--rotation-min-period", type=float, default=0.5, show_default=True)
 @click.option("--rotation-max-period", type=float, default=30.0, show_default=True)
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,
@@ -127,6 +129,7 @@ def _download_and_stitch_lightcurve(
     help="JSON output path; '-' writes to stdout.",
 )
 def activity_command(
+    toi_arg: str | None,
     tic_id: int | None,
     toi: str | None,
     network_ok: bool,
@@ -140,11 +143,17 @@ def activity_command(
 ) -> None:
     """Characterize stellar activity and emit schema-stable JSON."""
     out_path = resolve_optional_output_path(output_path_arg)
+    if toi_arg is not None and toi is not None and str(toi_arg).strip() != str(toi).strip():
+        raise BtvCliError(
+            "Positional TOI argument and --toi must match when both are provided.",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    resolved_toi_arg = toi if toi is not None else toi_arg
 
     try:
         resolved_tic_id, input_resolution = _resolve_tic_and_inputs(
             tic_id=tic_id,
-            toi=toi,
+            toi=resolved_toi_arg,
             network_ok=bool(network_ok),
         )
         lc, sectors_used = _download_and_stitch_lightcurve(

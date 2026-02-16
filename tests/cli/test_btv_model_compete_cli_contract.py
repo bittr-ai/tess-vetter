@@ -98,6 +98,7 @@ def test_btv_model_compete_success_payload_contract(monkeypatch, tmp_path: Path)
                     "winner": "transit_only",
                     "winner_margin": 12.3,
                     "model_competition_label": "TRANSIT",
+                    "interpretation_label": "TRANSIT",
                     "artifact_risk": 0.0,
                     "warnings": [],
                 }
@@ -173,6 +174,8 @@ def test_btv_model_compete_success_payload_contract(monkeypatch, tmp_path: Path)
 
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == "cli.model_compete.v1"
+    assert payload["result"]["model_competition_label"] == "TRANSIT"
+    assert payload["result"]["interpretation_label"] == "TRANSIT"
     assert payload["result"]["model_competition"]["model_competition_label"] == "TRANSIT"
     assert payload["result"]["artifact_prior"]["combined_risk"] == 0.05
     assert payload["inputs_summary"]["input_resolution"]["inputs"]["tic_id"] == 123
@@ -234,3 +237,51 @@ def test_btv_model_compete_no_valid_cadences_exits_4(monkeypatch) -> None:
         ],
     )
     assert result.exit_code == 4
+
+
+def test_btv_model_compete_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_resolve_candidate_inputs(**kwargs: Any):
+        seen.update(kwargs)
+        return 123, 7.25, 2450.1, 3.5, None, {"source": "toi", "inputs": {"toi": kwargs.get("toi")}}
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.model_compete_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.model_compete_cli._download_and_prepare_arrays",
+        lambda **_kwargs: (
+            np.array([1.0, 2.0], dtype=np.float64),
+            np.array([1.0, 0.999], dtype=np.float64),
+            np.array([0.001, 0.001], dtype=np.float64),
+            [14],
+        ),
+    )
+    monkeypatch.setattr(
+        model_compete_cli.model_competition_api,
+        "run_model_competition",
+        lambda **_kwargs: type("R", (), {"to_dict": lambda self: {"model_competition_label": "TRANSIT"}})(),
+    )
+    monkeypatch.setattr(
+        model_compete_cli.model_competition_api,
+        "compute_artifact_prior",
+        lambda **_kwargs: type("P", (), {"to_dict": lambda self: {"combined_risk": 0.0}})(),
+    )
+
+    out_path = tmp_path / "model_compete_positional.json"
+    runner = CliRunner()
+    result = runner.invoke(model_compete_command, ["TOI-5807.01", "-o", str(out_path)])
+    assert result.exit_code == 0, result.output
+    assert seen["toi"] == "TOI-5807.01"
+
+
+def test_btv_model_compete_rejects_mismatched_positional_and_option_toi() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        model_compete_command,
+        ["TOI-5807.01", "--toi", "TOI-4510.01"],
+    )
+    assert result.exit_code == 1
+    assert "must match" in result.output

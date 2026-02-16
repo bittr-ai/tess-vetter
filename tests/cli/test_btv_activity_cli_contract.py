@@ -112,3 +112,40 @@ def test_btv_activity_no_sectors_available_exits_4(monkeypatch) -> None:
         ],
     )
     assert result.exit_code == 4
+
+
+def test_btv_activity_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_resolve_tic_and_inputs(**kwargs: Any):
+        seen.update(kwargs)
+        return 123, {"source": "toi", "inputs": {"toi": kwargs.get("toi")}}
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.activity_cli._resolve_tic_and_inputs",
+        _fake_resolve_tic_and_inputs,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.activity_cli._download_and_stitch_lightcurve",
+        lambda **_kwargs: (
+            LightCurve(time=[1.0, 2.0], flux=[1.0, 1.0], flux_err=[0.001, 0.001]),
+            [14],
+        ),
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.activity_cli.characterize_activity",
+        lambda **_kwargs: type("A", (), {"to_dict": lambda self: {"rotation_period": 5.0}})(),
+    )
+
+    out_path = tmp_path / "activity_positional.json"
+    runner = CliRunner()
+    result = runner.invoke(activity_command, ["TOI-5807.01", "-o", str(out_path)])
+    assert result.exit_code == 0, result.output
+    assert seen["toi"] == "TOI-5807.01"
+
+
+def test_btv_activity_rejects_mismatched_positional_and_option_toi() -> None:
+    runner = CliRunner()
+    result = runner.invoke(activity_command, ["TOI-5807.01", "--toi", "TOI-4510.01"])
+    assert result.exit_code == 1
+    assert "must match" in result.output
