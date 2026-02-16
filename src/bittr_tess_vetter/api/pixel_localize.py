@@ -338,6 +338,36 @@ def _apply_brightness_prior(
     return adjusted, ranking_changed
 
 
+def _summarize_prior_effect(
+    *,
+    n_sectors_total: int,
+    n_sectors_changed: int,
+) -> str:
+    if n_sectors_total <= 0 or n_sectors_changed <= 0:
+        return "none"
+    frac_changed = float(n_sectors_changed) / float(n_sectors_total)
+    if n_sectors_changed >= 2 or frac_changed >= 0.5:
+        return "major"
+    return "minor"
+
+
+def _derive_action_hint(
+    *,
+    consensus_best_source_id: str | None,
+    consensus_margin: float | None,
+    reliability_flagged: bool,
+    interpretation_code: str | None,
+    target_source_id: str,
+) -> str:
+    if reliability_flagged or interpretation_code == "INSUFFICIENT_DISCRIMINATION":
+        return "DEFER_HOST_ASSIGNMENT"
+    if consensus_margin is None or float(consensus_margin) < float(MARGIN_RESOLVE_THRESHOLD):
+        return "REVIEW_WITH_DILUTION"
+    if consensus_best_source_id in {target_source_id, "target"}:
+        return "HOST_ON_TARGET_SUPPORTED"
+    return "HOST_OFF_TARGET_CANDIDATE_REVIEW"
+
+
 @cites(
     cite(BRYSON_2013, "difference-image centroid offsets and localization diagnostics"),
     cite(TWICKEN_2018, "difference image centroiding / DV-like diagnostics"),
@@ -814,6 +844,24 @@ def localize_transit_host_multi_sector(
     consensus["brightness_prior_enabled"] = bool(brightness_prior_enabled)
     consensus["ranking_changed_by_prior"] = prior_changed_count > 0
     consensus["n_sectors_ranking_changed_by_prior"] = int(prior_changed_count)
+    consensus["prior_effect"] = _summarize_prior_effect(
+        n_sectors_total=len(per_sector_results),
+        n_sectors_changed=int(prior_changed_count),
+    )
+    target_source_id = (
+        f"tic:{int(getattr(tpf_fits_list[0].ref, 'tic_id', -1))}" if len(tpf_fits_list) > 0 else "target"
+    )
+    consensus["action_hint"] = _derive_action_hint(
+        consensus_best_source_id=str(consensus.get("consensus_best_source_id"))
+        if consensus.get("consensus_best_source_id") is not None
+        else None,
+        consensus_margin=consensus_margin,
+        reliability_flagged=consensus_reliability_flagged,
+        interpretation_code=str(consensus.get("interpretation_code"))
+        if consensus.get("interpretation_code") is not None
+        else None,
+        target_source_id=target_source_id,
+    )
     if consensus_reliability_flags:
         consensus["reliability_flags"] = consensus_reliability_flags
     return PixelLocalizeMultiSectorResult(
