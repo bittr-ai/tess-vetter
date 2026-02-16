@@ -54,6 +54,7 @@ from bittr_tess_vetter.report import build_vet_lc_summary_blocks
 from bittr_tess_vetter.validation.result_schema import VettingBundleResult
 
 CLI_VET_SCHEMA_VERSION = "cli.vet.v2"
+CLI_VET_PLOT_DATA_SCHEMA_VERSION = "cli.vet.plot_data.v1"
 CONFIDENCE_SEMANTICS_DOC = "docs/verification/confidence_semantics.md"
 
 
@@ -585,6 +586,35 @@ def _apply_cli_payload_contract(
     result_payload["verdict"] = verdict
     result_payload["verdict_source"] = verdict_source
     return payload
+
+
+def _split_vet_plot_data_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    core_payload = dict(payload)
+    results_raw = core_payload.get("results")
+    if not isinstance(results_raw, list):
+        return core_payload, {"schema_version": CLI_VET_PLOT_DATA_SCHEMA_VERSION, "checks": []}
+
+    split_checks: list[dict[str, Any]] = []
+    updated_results: list[dict[str, Any]] = []
+    for row in results_raw:
+        if not isinstance(row, dict):
+            updated_results.append(row)
+            continue
+        row_copy = dict(row)
+        if "plot_data" in row_copy:
+            check_id = row_copy.get("id")
+            split_checks.append(
+                {
+                    "id": str(check_id) if check_id is not None else None,
+                    "plot_data": row_copy.pop("plot_data"),
+                }
+            )
+            row_copy["plot_data_ref"] = {
+                "check_id": str(check_id) if check_id is not None else None,
+            }
+        updated_results.append(row_copy)
+    core_payload["results"] = updated_results
+    return core_payload, {"schema_version": CLI_VET_PLOT_DATA_SCHEMA_VERSION, "checks": split_checks}
 
 
 def _resolution_error_to_exit(status: LookupStatus) -> int:
@@ -1206,6 +1236,12 @@ def _load_tpf_for_vetting(
     show_default=True,
     help="JSON output path; '-' writes to stdout.",
 )
+@click.option(
+    "--split-plot-data/--no-split-plot-data",
+    default=True,
+    show_default=True,
+    help="Write per-check plot_data into <out>.plot_data.json sidecar for file outputs.",
+)
 @click.option("--progress-path", type=str, default=None, help="Optional progress metadata path.")
 @click.option("--resume", is_flag=True, default=False, help="Skip when completed output already exists.")
 @click.option(
@@ -1258,6 +1294,7 @@ def vet_command(
     fail_fast: bool,
     emit_warnings: bool,
     output_path_arg: str,
+    split_plot_data: bool,
     progress_path: str | None,
     resume: bool,
     sector_measurements: str | None,
@@ -1574,7 +1611,26 @@ def vet_command(
                 source_path=sector_measurements_source,
                 source_provenance=sector_measurements_provenance,
             )
-        dump_json_output(payload, out_path)
+        payload_to_write = payload
+        plot_data_sidecar_path: Path | None = None
+        if bool(split_plot_data) and out_path is not None:
+            payload_to_write, plot_data_payload = _split_vet_plot_data_payload(payload)
+            plot_data_sidecar_path = out_path.with_suffix(out_path.suffix + ".plot_data.json")
+            dump_json_output(plot_data_payload, plot_data_sidecar_path)
+
+            provenance_raw = payload_to_write.get("provenance")
+            provenance = provenance_raw if isinstance(provenance_raw, dict) else {}
+            provenance["plot_data_split"] = True
+            provenance["plot_data_path"] = str(plot_data_sidecar_path)
+            payload_to_write["provenance"] = provenance
+        else:
+            provenance_raw = payload_to_write.get("provenance")
+            provenance = provenance_raw if isinstance(provenance_raw, dict) else {}
+            provenance["plot_data_split"] = False
+            provenance["plot_data_path"] = None
+            payload_to_write["provenance"] = provenance
+
+        dump_json_output(payload_to_write, out_path)
 
         if progress_file is not None:
             completed = build_single_candidate_progress(

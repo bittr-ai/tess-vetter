@@ -1835,6 +1835,98 @@ def test_btv_vet_sector_measurements_forwarded_and_emitted(monkeypatch, tmp_path
     assert payload["sector_gating"]["used_by_v21"] is True
 
 
+def test_btv_vet_splits_plot_data_to_sidecar_for_file_output(monkeypatch, tmp_path: Path) -> None:
+    def _fake_execute_vet(**_kwargs):
+        return {
+            "results": [
+                {
+                    "id": "V01",
+                    "status": "ok",
+                    "flags": [],
+                    "plot_data": {"time": [1.0, 2.0], "flux": [0.99, 1.01]},
+                    "metrics": {"depth_ppm": 100.0},
+                }
+            ],
+            "warnings": [],
+            "provenance": {},
+            "inputs_summary": {},
+        }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+
+    out_path = tmp_path / "vet.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    core_payload = json.loads(out_path.read_text(encoding="utf-8"))
+    plot_path = tmp_path / "vet.json.plot_data.json"
+    plot_payload = json.loads(plot_path.read_text(encoding="utf-8"))
+
+    assert "plot_data" not in core_payload["results"][0]
+    assert core_payload["results"][0]["plot_data_ref"]["check_id"] == "V01"
+    assert core_payload["provenance"]["plot_data_split"] is True
+    assert core_payload["provenance"]["plot_data_path"] == str(plot_path)
+
+    assert plot_payload["schema_version"] == "cli.vet.plot_data.v1"
+    assert plot_payload["checks"][0]["id"] == "V01"
+    assert plot_payload["checks"][0]["plot_data"]["time"] == [1.0, 2.0]
+
+
+def test_btv_vet_stdout_keeps_plot_data_inline(monkeypatch) -> None:
+    def _fake_execute_vet(**_kwargs):
+        return {
+            "results": [
+                {
+                    "id": "V01",
+                    "status": "ok",
+                    "flags": [],
+                    "plot_data": {"time": [1.0], "flux": [1.0]},
+                }
+            ],
+            "warnings": [],
+            "provenance": {},
+            "inputs_summary": {},
+        }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert "plot_data" in payload["results"][0]
+    assert payload["provenance"]["plot_data_split"] is False
+
+
 def test_btv_vet_sector_measurements_schema_error_maps_to_exit_1(tmp_path: Path) -> None:
     sector_path = tmp_path / "broken_sector_measurements.json"
     sector_path.write_text(
