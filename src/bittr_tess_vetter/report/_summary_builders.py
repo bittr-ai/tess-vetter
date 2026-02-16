@@ -114,6 +114,7 @@ def _build_noise_summary(
 def _build_variability_summary(
     lc_summary: LCSummary | None,
     timing_series: TransitTimingPlotData | None,
+    alias_summary: AliasHarmonicSummaryData | None = None,
 ) -> dict[str, Any]:
     """Build deterministic variability summary block."""
     variability_index: float | None = None
@@ -125,14 +126,46 @@ def _build_variability_summary(
     ):
         variability_index = float(lc_summary.flux_std_ppm / lc_summary.flux_mad_ppm)
     periodicity_score = timing_series.periodicity_score if timing_series is not None else None
+    alias_classification = (
+        str(alias_summary.classification).upper()
+        if alias_summary is not None and alias_summary.classification is not None
+        else None
+    )
+    phase_shift_peak_sigma = (
+        _coerce_finite_float(alias_summary.phase_shift_peak_sigma)
+        if alias_summary is not None
+        else None
+    )
+    phase_shift_event_count = (
+        int(alias_summary.phase_shift_event_count)
+        if alias_summary is not None and alias_summary.phase_shift_event_count is not None
+        else None
+    )
+    secondary_significance = (
+        _coerce_finite_float(alias_summary.secondary_significance)
+        if alias_summary is not None
+        else None
+    )
+    periodic_signal_present = bool(
+        (periodicity_score is not None and periodicity_score >= 3.0)
+        or alias_classification in {"ALIAS_WEAK", "ALIAS_STRONG"}
+        or (phase_shift_peak_sigma is not None and phase_shift_peak_sigma >= 3.0)
+        or (phase_shift_event_count is not None and phase_shift_event_count > 0)
+        or (secondary_significance is not None and secondary_significance >= 3.0)
+    )
 
     classification = "unknown"
     if variability_index is not None or periodicity_score is not None:
         var_level = variability_index if variability_index is not None else 1.0
         per_level = periodicity_score if periodicity_score is not None else 0.0
-        if var_level >= 1.5 or per_level >= 3.0:
+        if var_level >= 1.5 or per_level >= 3.0 or alias_classification == "ALIAS_STRONG":
             classification = "high_variability"
-        elif var_level >= 1.2 or per_level >= 1.5:
+        elif (
+            var_level >= 1.2
+            or per_level >= 1.5
+            or periodic_signal_present
+            or alias_classification == "ALIAS_WEAK"
+        ):
             classification = "moderate_variability"
         else:
             classification = "low_variability"
@@ -142,6 +175,8 @@ def _build_variability_summary(
         flags.append("ELEVATED_SCATTER")
     if periodicity_score is not None and periodicity_score >= 3.0:
         flags.append("PERIODIC_SIGNAL")
+    if periodic_signal_present:
+        flags.append("PERIODIC_SIGNAL_PRESENT")
 
     return {
         "variability_index": variability_index,
@@ -152,6 +187,8 @@ def _build_variability_summary(
         "semantics": {
             "variability_index_source": "lc_summary.flux_std_ppm/flux_mad_ppm",
             "periodicity_source": "timing_series.periodicity_score",
+            "periodic_signal_present": periodic_signal_present,
+            "alias_classification_source": "alias_summary.classification",
         },
     }
 
@@ -172,6 +209,7 @@ def _build_alias_scalar_summary(
             "phase_shift_event_count": None,
             "phase_shift_peak_sigma": None,
             "secondary_significance": None,
+            "alias_interpretation": None,
         }
 
     score_by_label: dict[str, float] = {}
@@ -192,6 +230,22 @@ def _build_alias_scalar_summary(
     # Do not backfill this with harmonic scores; keep ppm semantics strict.
     depth_ppm_peak: float | None = float(max(depths)) if depths else None
 
+    alias_classification = (
+        str(alias_summary.classification).upper() if alias_summary.classification is not None else None
+    )
+    phase_shift_peak_sigma = _coerce_finite_float(alias_summary.phase_shift_peak_sigma)
+    secondary_significance = _coerce_finite_float(alias_summary.secondary_significance)
+    alias_interpretation = "no_alias_evidence"
+    if alias_classification == "ALIAS_STRONG":
+        alias_interpretation = "strong_alias_preferred"
+    elif alias_classification == "ALIAS_WEAK":
+        alias_interpretation = "weak_alias_candidate"
+    elif (
+        (phase_shift_peak_sigma is not None and phase_shift_peak_sigma >= 3.0)
+        or (secondary_significance is not None and secondary_significance >= 3.0)
+    ):
+        alias_interpretation = "phase_shift_or_secondary_caution"
+
     return {
         "best_harmonic": str(alias_summary.best_harmonic) if alias_summary.best_harmonic else None,
         "best_ratio_over_p": _coerce_finite_float(alias_summary.best_ratio_over_p),
@@ -205,15 +259,24 @@ def _build_alias_scalar_summary(
             if alias_summary.phase_shift_event_count is not None
             else None
         ),
-        "phase_shift_peak_sigma": _coerce_finite_float(alias_summary.phase_shift_peak_sigma),
-        "secondary_significance": _coerce_finite_float(alias_summary.secondary_significance),
+        "phase_shift_peak_sigma": phase_shift_peak_sigma,
+        "secondary_significance": secondary_significance,
+        "alias_interpretation": alias_interpretation,
     }
 
 
 def _build_timing_summary(
     timing_series: TransitTimingPlotData | None,
+    checks: dict[str, CheckResult] | None = None,
 ) -> dict[str, Any]:
     """Build scalar timing rollup from existing per-epoch timing series."""
+    v04_metrics = {}
+    if checks is not None and checks.get("V04") is not None:
+        v04_metrics = checks["V04"].metrics
+    n_transits_measured = _coerce_int(v04_metrics.get("n_transits_measured"))
+    depth_scatter_ppm = _coerce_finite_float(v04_metrics.get("depth_scatter_ppm"))
+    chi2_reduced = _coerce_finite_float(v04_metrics.get("chi2_reduced"))
+
     if timing_series is None:
         return {
             "n_epochs_measured": 0,
@@ -227,6 +290,9 @@ def _build_timing_summary(
             "outlier_count": 0,
             "outlier_fraction": None,
             "deepest_epoch": None,
+            "n_transits_measured": n_transits_measured,
+            "depth_scatter_ppm": depth_scatter_ppm,
+            "chi2_reduced": chi2_reduced,
         }
 
     epochs = [int(e) for e in timing_series.epochs]
@@ -283,6 +349,9 @@ def _build_timing_summary(
         "outlier_count": int(outlier_count),
         "outlier_fraction": outlier_fraction,
         "deepest_epoch": deepest_epoch,
+        "n_transits_measured": n_transits_measured,
+        "depth_scatter_ppm": depth_scatter_ppm,
+        "chi2_reduced": chi2_reduced,
     }
 
 

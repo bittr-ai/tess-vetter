@@ -67,6 +67,7 @@ def test_report_to_json_has_no_unknown_summary_or_plot_data_keys() -> None:
     allowed_summary_keys = {
         "alias_scalar_summary",
         "bundle_summary",
+        "caveats",
         "check_execution",
         "checks",
         "checks_run",
@@ -85,6 +86,8 @@ def test_report_to_json_has_no_unknown_summary_or_plot_data_keys() -> None:
         "timing_summary",
         "toi",
         "variability_summary",
+        "verdict",
+        "verdict_source",
     }
     allowed_plot_data_keys = {
         "check_overlays",
@@ -198,14 +201,22 @@ def test_report_payload_schema_includes_new_deterministic_summary_blocks() -> No
     schema = report_payload_json_schema()
     summary_props = schema["$defs"]["ReportSummaryModel"]["properties"]
     timing_props = schema["$defs"]["TimingSummaryModel"]["properties"]
+    alias_props = schema["$defs"]["AliasScalarSummaryModel"]["properties"]
     secondary_props = schema["$defs"]["SecondaryScanSummaryModel"]["properties"]
     assert "alias_scalar_summary" in summary_props
+    assert "verdict" in summary_props
+    assert "verdict_source" in summary_props
+    assert "caveats" in summary_props
     assert "timing_summary" in summary_props
     assert "secondary_scan_summary" in summary_props
     assert "data_gap_summary" in summary_props
     assert "check_execution" in summary_props
     assert "snr_median" in timing_props
     assert "oc_median" in timing_props
+    assert "n_transits_measured" in timing_props
+    assert "depth_scatter_ppm" in timing_props
+    assert "chi2_reduced" in timing_props
+    assert "alias_interpretation" in alias_props
     assert "n_raw_points" in secondary_props
     assert "n_bins" in secondary_props
 

@@ -289,6 +289,9 @@ def test_json_schema_keys_and_types() -> None:
     assert s.get("toi") is None
     assert isinstance(s["checks_run"], list)
     assert isinstance(s["checks"], dict)
+    assert isinstance(s["verdict"], str)
+    assert isinstance(s["verdict_source"], str)
+    assert isinstance(s["caveats"], list)
     assert isinstance(s["references"], list)
     assert isinstance(s["odd_even_summary"], dict)
     assert isinstance(s["noise_summary"], dict)
@@ -547,6 +550,7 @@ def test_alias_scalar_summary_regression_deterministic_and_scalar_only() -> None
             "phase_shift_event_count",
             "phase_shift_peak_sigma",
             "secondary_significance",
+            "alias_interpretation",
         }
     )
     # `depth_ppm_peak` may be absent when no harmonic depth values are available.
@@ -559,6 +563,7 @@ def test_alias_scalar_summary_regression_deterministic_and_scalar_only() -> None
         "classification",
         "phase_shift_event_count",
         "secondary_significance",
+        "alias_interpretation",
     }
     assert block_a["best_harmonic"] == "P"
     assert block_a["best_ratio_over_p"] == pytest.approx(1.0)
@@ -573,6 +578,7 @@ def test_alias_scalar_summary_regression_deterministic_and_scalar_only() -> None
         or block_a["phase_shift_peak_sigma"] is None
     )
     assert block_a["secondary_significance"] == pytest.approx(0.0)
+    assert block_a["alias_interpretation"] == "no_alias_evidence"
 
     _assert_scalar_only_summary_block(block_a, block_name="alias_scalar_summary")
 
@@ -641,19 +647,39 @@ def test_timing_summary_regression_rules_and_scalar_only() -> None:
     block_b = payload_b["summary"]["timing_summary"]
     assert block_a == block_b, "timing_summary must be deterministic"
 
-    assert set(block_a.keys()) == {
-        "n_epochs_measured",
-        "rms_seconds",
-        "periodicity_score",
-        "linear_trend_sec_per_epoch",
-        "max_abs_oc_seconds",
-        "max_snr",
-        "snr_median",
-        "oc_median",
-        "outlier_count",
-        "outlier_fraction",
-        "deepest_epoch",
-    }
+    assert set(block_a.keys()).issuperset(
+        {
+            "n_epochs_measured",
+            "rms_seconds",
+            "periodicity_score",
+            "linear_trend_sec_per_epoch",
+            "max_abs_oc_seconds",
+            "max_snr",
+            "snr_median",
+            "oc_median",
+            "outlier_count",
+            "outlier_fraction",
+            "deepest_epoch",
+        }
+    )
+    assert set(block_a.keys()).issubset(
+        {
+            "n_epochs_measured",
+            "rms_seconds",
+            "periodicity_score",
+            "linear_trend_sec_per_epoch",
+            "max_abs_oc_seconds",
+            "max_snr",
+            "snr_median",
+            "oc_median",
+            "outlier_count",
+            "outlier_fraction",
+            "deepest_epoch",
+            "n_transits_measured",
+            "depth_scatter_ppm",
+            "chi2_reduced",
+        }
+    )
     if block_a["n_epochs_measured"] > 0 and block_a["outlier_fraction"] is not None:
         expected_fraction = block_a["outlier_count"] / block_a["n_epochs_measured"]
         assert block_a["outlier_fraction"] == pytest.approx(expected_fraction)

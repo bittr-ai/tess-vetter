@@ -24,7 +24,11 @@ def build_vet_lc_summary_blocks(report: ReportData) -> dict[str, Any]:
     return {
         "lc_summary": asdict(report.lc_summary) if report.lc_summary is not None else None,
         "noise_summary": _build_noise_summary(report.lc_summary, report.lc_robustness),
-        "variability_summary": _build_variability_summary(report.lc_summary, report.timing_series),
+        "variability_summary": _build_variability_summary(
+            report.lc_summary,
+            report.timing_series,
+            report.alias_summary,
+        ),
         "lc_robustness_summary": _build_lc_robustness_summary(report.lc_robustness),
         "odd_even_summary": _build_odd_even_summary(report.checks),
         "alias_scalar_summary": _build_alias_scalar_summary(report.alias_summary),

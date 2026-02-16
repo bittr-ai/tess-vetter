@@ -22,6 +22,7 @@ from bittr_tess_vetter.report._summary_builders import (
     _build_variability_summary,
     _model_dump_like,
 )
+from bittr_tess_vetter.report._summary_verdict import build_summary_verdict
 from bittr_tess_vetter.validation.result_schema import CheckResult, VettingBundleResult
 
 
@@ -70,7 +71,7 @@ def _block_noise(ctx: ReportAssemblyContext) -> dict[str, Any]:
 
 
 def _block_variability(ctx: ReportAssemblyContext) -> dict[str, Any]:
-    return _build_variability_summary(ctx.lc_summary, ctx.timing_series)
+    return _build_variability_summary(ctx.lc_summary, ctx.timing_series, ctx.alias_summary)
 
 
 def _block_alias(ctx: ReportAssemblyContext) -> dict[str, Any]:
@@ -79,7 +80,7 @@ def _block_alias(ctx: ReportAssemblyContext) -> dict[str, Any]:
 
 def _block_timing(ctx: ReportAssemblyContext) -> dict[str, Any]:
     timing_source = ctx.timing_summary_series or ctx.timing_series
-    return _build_timing_summary(timing_source)
+    return _build_timing_summary(timing_source, ctx.checks)
 
 
 def _block_secondary_scan(ctx: ReportAssemblyContext) -> dict[str, Any]:
@@ -167,6 +168,14 @@ def assemble_summary(ctx: ReportAssemblyContext) -> tuple[dict[str, Any], dict[s
             "n_skipped": ctx.bundle.n_unknown,
             "failed_ids": ctx.bundle.failed_check_ids,
         }
+
+    summary.update(
+        build_summary_verdict(
+            bundle=ctx.bundle,
+            checks=ctx.checks,
+            noise_summary=summary.get("noise_summary"),
+        )
+    )
 
     if ctx.enrichment is not None:
         summary["enrichment"] = asdict(ctx.enrichment)

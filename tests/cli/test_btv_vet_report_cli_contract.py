@@ -12,6 +12,7 @@ import bittr_tess_vetter.cli.enrich_cli as enrich_cli
 from bittr_tess_vetter.cli.progress_metadata import ProgressIOError
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.pipeline import make_candidate_key
+from bittr_tess_vetter.platform.catalogs.toi_resolution import LookupStatus
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
 from bittr_tess_vetter.validation.result_schema import CheckResult, VettingBundleResult
 
@@ -437,6 +438,177 @@ def test_btv_report_stdout_requires_plot_data_out() -> None:
     )
     assert result.exit_code == 1
     assert "--out - requires --plot-data-out" in result.output
+
+
+def test_btv_report_positional_toi_and_short_out_alias(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_resolve_candidate_inputs(**_kwargs):
+        return (123, 10.5, 2000.2, 2.5, None, {"source": "toi_catalog"})
+
+    def _ok(**kwargs):
+        captured.update(kwargs)
+        return {
+            "report_json": {
+                "schema_version": "cli.report.v3",
+                "provenance": {"vet_artifact": {"provided": False}},
+                "report": {"schema_version": "2.0.0", "summary": {}},
+            },
+            "plot_data_json": {},
+            "html": None,
+        }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
+
+    out_path = tmp_path / "report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "report",
+            "TOI-123.01",
+            "--network-ok",
+            "-o",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert out_path.exists()
+    assert captured["toi"] == "TOI-123.01"
+
+
+def test_btv_report_rejects_mismatched_positional_toi_and_flag() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "report",
+            "TOI-123.01",
+            "--toi",
+            "TOI-999.01",
+            "--plot-data-out",
+            "plot.json",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "Positional TOI argument and --toi must match" in result.output
+
+
+def test_btv_report_toi_network_resolution_path(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _resolve_toi(_toi: str):
+        return SimpleNamespace(
+            status=LookupStatus.OK,
+            tic_id=888,
+            period_days=12.0,
+            t0_btjd=1550.25,
+            duration_hours=4.5,
+            depth_ppm=410.0,
+            message=None,
+        )
+
+    def _ok(**kwargs):
+        captured.update(kwargs)
+        return {
+            "report_json": {
+                "schema_version": "cli.report.v3",
+                "provenance": {"vet_artifact": {"provided": False}},
+                "report": {"schema_version": "2.0.0", "summary": {}},
+            },
+            "plot_data_json": {},
+            "html": None,
+        }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.resolve_toi_to_tic_ephemeris_depth", _resolve_toi)
+    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
+
+    out_path = tmp_path / "report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "report",
+            "--toi",
+            "TOI-888.01",
+            "--network-ok",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["tic_id"] == 888
+    assert captured["period_days"] == 12.0
+    assert captured["t0_btjd"] == 1550.25
+    assert captured["duration_hours"] == 4.5
+    assert captured["depth_ppm"] == 410.0
+
+
+def test_btv_report_manual_ephemeris_with_toi_without_network_ok_still_runs(
+    monkeypatch, tmp_path: Path
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _ok(**kwargs):
+        captured.update(kwargs)
+        return {
+            "report_json": {
+                "schema_version": "cli.report.v3",
+                "provenance": {"vet_artifact": {"provided": False}},
+                "report": {"schema_version": "2.0.0", "summary": {}},
+            },
+            "plot_data_json": {},
+            "html": None,
+        }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
+
+    out_path = tmp_path / "report_manual_toi.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "report",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--toi",
+            "TOI-123.01",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["tic_id"] == 123
+    assert captured["period_days"] == 10.5
+    assert captured["t0_btjd"] == 2000.2
+    assert captured["duration_hours"] == 2.5
+    assert captured["toi"] == "TOI-123.01"
+
+
+def test_btv_report_requires_toi_or_full_ephemeris_inputs(tmp_path: Path) -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "report",
+            "--tic-id",
+            "123",
+            "--plot-data-out",
+            str(tmp_path / "plot_data.json"),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "Missing required inputs" in result.output
 
 
 def test_btv_vet_invalid_extra_param_maps_to_exit_1() -> None:

@@ -75,6 +75,9 @@ def test_assemble_summary_adds_check_method_refs_and_references() -> None:
     assert summary["checks"]["V01"]["method_refs"] == refs_for_check("V01")
     assert isinstance(summary["references"], list)
     assert summary["odd_even_summary"]["depth_diff_ppm"] == 100.0
+    assert summary["verdict"] == "ALL_CHECKS_PASSED"
+    assert summary["verdict_source"] == "$.summary.checks"
+    assert summary["caveats"] == []
     assert check_overlays == {"V01": {"example": [1, 2, 3]}}
 
 

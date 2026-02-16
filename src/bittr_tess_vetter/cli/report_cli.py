@@ -36,6 +36,7 @@ from bittr_tess_vetter.cli.progress_metadata import (
     read_progress_metadata,
     write_progress_metadata_atomic,
 )
+from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
 
 
@@ -67,6 +68,59 @@ def _load_custom_views(custom_view_file: str | None) -> dict[str, Any] | None:
     if not custom_view_file:
         return None
     return load_json_file(Path(custom_view_file), label="custom-view-file")
+
+
+def _resolve_report_candidate_inputs(
+    *,
+    network_ok: bool,
+    toi: str | None,
+    tic_id: int | None,
+    period_days: float | None,
+    t0_btjd: float | None,
+    duration_hours: float | None,
+    depth_ppm: float | None,
+) -> tuple[int, float, float, float, float | None, dict[str, Any]]:
+    """Resolve report candidate inputs with backward-compatible TOI label behavior.
+
+    Legacy behavior allowed `--toi` as a display-only label when explicit numeric
+    ephemeris inputs were already provided. Preserve that path without requiring
+    network lookups.
+    """
+    has_manual_ephemeris = all(
+        value is not None for value in (tic_id, period_days, t0_btjd, duration_hours)
+    )
+    if toi is not None and not network_ok and has_manual_ephemeris:
+        return (
+            int(tic_id),
+            float(period_days),
+            float(t0_btjd),
+            float(duration_hours),
+            float(depth_ppm) if depth_ppm is not None else None,
+            {
+                "source": "cli",
+                "resolved_from": "cli",
+                "inputs": {
+                    "tic_id": int(tic_id),
+                    "period_days": float(period_days),
+                    "t0_btjd": float(t0_btjd),
+                    "duration_hours": float(duration_hours),
+                    "depth_ppm": float(depth_ppm) if depth_ppm is not None else None,
+                    "toi": str(toi),
+                },
+                "overrides": [],
+                "errors": [],
+            },
+        )
+
+    return _resolve_candidate_inputs(
+        network_ok=network_ok,
+        toi=toi,
+        tic_id=tic_id,
+        period_days=period_days,
+        t0_btjd=t0_btjd,
+        duration_hours=duration_hours,
+        depth_ppm=depth_ppm,
+    )
 
 
 def _execute_report(
@@ -127,12 +181,24 @@ def _execute_report(
 
 
 @click.command("report")
-@click.option("--tic-id", type=int, required=True, help="TIC identifier.")
-@click.option("--period-days", type=float, required=True, help="Orbital period in days.")
-@click.option("--t0-btjd", type=float, required=True, help="Reference epoch in BTJD.")
-@click.option("--duration-hours", type=float, required=True, help="Transit duration in hours.")
+@click.argument("toi_arg", required=False)
+@click.option("--tic-id", type=int, default=None, help="TIC identifier.")
+@click.option("--period-days", type=float, default=None, help="Orbital period in days.")
+@click.option("--t0-btjd", type=float, default=None, help="Reference epoch in BTJD.")
+@click.option("--duration-hours", type=float, default=None, help="Transit duration in hours.")
 @click.option("--depth-ppm", type=float, default=None, help="Transit depth in ppm.")
-@click.option("--toi", type=str, default=None, help="Optional TOI label for report display.")
+@click.option(
+    "--toi",
+    type=str,
+    default=None,
+    help="Optional TOI label; with --network-ok resolves missing candidate inputs from ExoFOP.",
+)
+@click.option(
+    "--network-ok/--no-network",
+    default=False,
+    show_default=True,
+    help="Allow network-dependent TOI resolution.",
+)
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
     "--flux-type",
@@ -150,6 +216,7 @@ def _execute_report(
 @click.option("--fail-fast/--no-fail-fast", default=False, show_default=True)
 @click.option("--emit-warnings/--no-emit-warnings", default=False, show_default=True)
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,
@@ -167,12 +234,14 @@ def _execute_report(
 @click.option("--progress-path", type=str, default=None, help="Optional progress metadata path.")
 @click.option("--resume", is_flag=True, default=False, help="Skip when completed output already exists.")
 def report_command(
-    tic_id: int,
-    period_days: float,
-    t0_btjd: float,
-    duration_hours: float,
+    toi_arg: str | None,
+    tic_id: int | None,
+    period_days: float | None,
+    t0_btjd: float | None,
+    duration_hours: float | None,
     depth_ppm: float | None,
     toi: str | None,
+    network_ok: bool,
     sectors: tuple[int, ...],
     flux_type: str,
     include_html: bool,
@@ -191,6 +260,29 @@ def report_command(
     resume: bool,
 ) -> None:
     """Generate report payload JSON and optional HTML from candidate inputs."""
+    if toi_arg is not None and toi is not None and str(toi_arg).strip() != str(toi).strip():
+        raise BtvCliError(
+            "Positional TOI argument and --toi must match when both are provided.",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    resolved_toi = toi if toi is not None else toi_arg
+    (
+        resolved_tic_id,
+        resolved_period_days,
+        resolved_t0_btjd,
+        resolved_duration_hours,
+        resolved_depth_ppm,
+        _input_resolution,
+    ) = _resolve_report_candidate_inputs(
+        network_ok=network_ok,
+        toi=resolved_toi,
+        tic_id=tic_id,
+        period_days=period_days,
+        t0_btjd=t0_btjd,
+        duration_hours=duration_hours,
+        depth_ppm=depth_ppm,
+    )
+
     out_path = resolve_optional_output_path(output_path_arg)
     progress_file = _progress_path_from_args(out_path, progress_path, resume)
     if plot_data_out:
@@ -205,10 +297,10 @@ def report_command(
     html_path = Path(html_out) if html_out else None
 
     candidate_meta = {
-        "tic_id": tic_id,
-        "period_days": period_days,
-        "t0_btjd": t0_btjd,
-        "duration_hours": duration_hours,
+        "tic_id": resolved_tic_id,
+        "period_days": resolved_period_days,
+        "t0_btjd": resolved_t0_btjd,
+        "duration_hours": resolved_duration_hours,
     }
 
     if include_html and html_path is None and out_path is not None:
@@ -261,10 +353,10 @@ def report_command(
             vet_bundle = coerce_vetting_bundle(vet_result_payload)
             validate_vet_artifact_candidate_match(
                 vet_bundle=vet_bundle,
-                tic_id=tic_id,
-                period_days=period_days,
-                t0_btjd=t0_btjd,
-                duration_hours=duration_hours,
+                tic_id=resolved_tic_id,
+                period_days=resolved_period_days,
+                t0_btjd=resolved_t0_btjd,
+                duration_hours=resolved_duration_hours,
             )
         except ValidationError as exc:
             raise BtvCliError(
@@ -286,12 +378,12 @@ def report_command(
             write_progress_metadata_atomic(progress_file, running)
 
         output = _execute_report(
-            tic_id=tic_id,
-            period_days=period_days,
-            t0_btjd=t0_btjd,
-            duration_hours=duration_hours,
-            depth_ppm=depth_ppm,
-            toi=toi,
+            tic_id=resolved_tic_id,
+            period_days=resolved_period_days,
+            t0_btjd=resolved_t0_btjd,
+            duration_hours=resolved_duration_hours,
+            depth_ppm=resolved_depth_ppm,
+            toi=resolved_toi,
             sectors=list(sectors) if sectors else None,
             flux_type=str(flux_type).lower(),
             include_html=include_html,

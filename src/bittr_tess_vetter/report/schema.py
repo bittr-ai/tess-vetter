@@ -105,6 +105,7 @@ class AliasScalarSummaryModel(BaseModel):
     phase_shift_event_count: int | None = None
     phase_shift_peak_sigma: float | None = None
     secondary_significance: float | None = None
+    alias_interpretation: str | None = None
 
 
 class TimingSummaryModel(BaseModel):
@@ -123,6 +124,9 @@ class TimingSummaryModel(BaseModel):
     outlier_count: int = 0
     outlier_fraction: float | None = None
     deepest_epoch: int | None = None
+    n_transits_measured: int | None = None
+    depth_scatter_ppm: float | None = None
+    chi2_reduced: float | None = None
 
 
 class SecondaryScanSummaryModel(BaseModel):
@@ -188,6 +192,9 @@ class ReportSummaryModel(BaseModel):
     stellar: dict[str, Any] | None = None
     lc_summary: dict[str, Any] | None = None
     checks: dict[str, CheckSummaryModel] = Field(default_factory=dict)
+    verdict: str | None = None
+    verdict_source: str | None = None
+    caveats: list[str] = Field(default_factory=list)
     check_execution: CheckExecutionSummaryModel | None = None
     bundle_summary: BundleSummaryModel | None = None
     odd_even_summary: OddEvenSummaryModel | None = None
