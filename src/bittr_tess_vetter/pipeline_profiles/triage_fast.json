@@ -1,0 +1,50 @@
+{
+  "schema_version": "pipeline.composition.v1",
+  "id": "triage_fast",
+  "description": "Fast triage profile using report-seeded diagnostics.",
+  "defaults": {
+    "retry_max_attempts": 3,
+    "retry_initial_seconds": 1.0
+  },
+  "steps": [
+    {
+      "id": "report_seed",
+      "op": "report"
+    },
+    {
+      "id": "activity",
+      "op": "activity",
+      "inputs": {
+        "report_file": {"report_from": "report_seed"}
+      }
+    },
+    {
+      "id": "model_compete",
+      "op": "model_compete",
+      "inputs": {
+        "report_file": {"report_from": "report_seed"}
+      }
+    },
+    {
+      "id": "systematics_proxy",
+      "op": "systematics_proxy",
+      "inputs": {
+        "report_file": {"report_from": "report_seed"}
+      }
+    },
+    {
+      "id": "ephemeris_reliability",
+      "op": "ephemeris_reliability",
+      "inputs": {
+        "report_file": {"report_from": "report_seed"}
+      }
+    },
+    {
+      "id": "timing",
+      "op": "timing",
+      "inputs": {
+        "report_file": {"report_from": "report_seed"}
+      }
+    }
+  ]
+}

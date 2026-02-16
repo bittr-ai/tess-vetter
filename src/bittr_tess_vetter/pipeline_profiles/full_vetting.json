@@ -1,0 +1,110 @@
+{
+  "schema_version": "pipeline.composition.v1",
+  "id": "full_vetting",
+  "description": "End-to-end paper workflow profile over explicit TOIs.",
+  "defaults": {
+    "retry_max_attempts": 4,
+    "retry_initial_seconds": 1.0
+  },
+  "steps": [
+    {
+      "id": "report_seed",
+      "op": "report"
+    },
+    {
+      "id": "measure_sectors",
+      "op": "measure_sectors"
+    },
+    {
+      "id": "vet",
+      "op": "vet",
+      "inputs": {
+        "include_lc_summary": true,
+        "report_file": {"report_from": "report_seed"}
+      }
+    },
+    {
+      "id": "fit",
+      "op": "fit"
+    },
+    {
+      "id": "activity",
+      "op": "activity",
+      "inputs": {
+        "report_file": {"report_from": "report_seed"}
+      }
+    },
+    {
+      "id": "model_compete",
+      "op": "model_compete",
+      "inputs": {
+        "report_file": {"report_from": "report_seed"}
+      }
+    },
+    {
+      "id": "systematics_proxy",
+      "op": "systematics_proxy",
+      "inputs": {
+        "report_file": {"report_from": "report_seed"}
+      }
+    },
+    {
+      "id": "ephemeris_reliability",
+      "op": "ephemeris_reliability",
+      "inputs": {
+        "report_file": {"report_from": "report_seed"}
+      }
+    },
+    {
+      "id": "timing",
+      "op": "timing",
+      "inputs": {
+        "report_file": {"report_from": "report_seed"}
+      }
+    },
+    {
+      "id": "resolve_stellar",
+      "op": "resolve_stellar"
+    },
+    {
+      "id": "resolve_neighbors",
+      "op": "resolve_neighbors",
+      "ports": {
+        "reference_sources_file": "artifact_path"
+      }
+    },
+    {
+      "id": "localize_host",
+      "op": "localize_host",
+      "inputs": {
+        "reference_sources_file": {"port": "resolve_neighbors.reference_sources_file"}
+      }
+    },
+    {
+      "id": "dilution",
+      "op": "dilution",
+      "inputs": {
+        "reference_sources_file": {"port": "resolve_neighbors.reference_sources_file"}
+      }
+    },
+    {
+      "id": "detrend_grid",
+      "op": "detrend_grid"
+    },
+    {
+      "id": "fpp",
+      "op": "fpp",
+      "inputs": {
+        "preset": "fast",
+        "report_file": {"report_from": "report_seed"}
+      }
+    },
+    {
+      "id": "report_final",
+      "op": "report",
+      "inputs": {
+        "report_file": {"report_from": "report_seed"}
+      }
+    }
+  ]
+}

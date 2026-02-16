@@ -1,0 +1,36 @@
+{
+  "schema_version": "pipeline.composition.v1",
+  "id": "host_localization",
+  "description": "Neighbor-resolution host localization and dilution chain.",
+  "defaults": {
+    "retry_max_attempts": 3,
+    "retry_initial_seconds": 1.0
+  },
+  "steps": [
+    {
+      "id": "resolve_neighbors",
+      "op": "resolve_neighbors",
+      "ports": {
+        "reference_sources_file": "artifact_path"
+      }
+    },
+    {
+      "id": "localize_host",
+      "op": "localize_host",
+      "inputs": {
+        "reference_sources_file": {"port": "resolve_neighbors.reference_sources_file"}
+      }
+    },
+    {
+      "id": "dilution",
+      "op": "dilution",
+      "inputs": {
+        "reference_sources_file": {"port": "resolve_neighbors.reference_sources_file"}
+      }
+    },
+    {
+      "id": "report",
+      "op": "report"
+    }
+  ]
+}

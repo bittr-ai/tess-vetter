@@ -1,0 +1,34 @@
+{
+  "schema_version": "pipeline.composition.v1",
+  "id": "fpp_validation_fast",
+  "description": "Fast FPP workflow with report-seeded inputs.",
+  "defaults": {
+    "retry_max_attempts": 3,
+    "retry_initial_seconds": 1.0
+  },
+  "steps": [
+    {
+      "id": "report_seed",
+      "op": "report"
+    },
+    {
+      "id": "resolve_stellar",
+      "op": "resolve_stellar"
+    },
+    {
+      "id": "fpp",
+      "op": "fpp",
+      "inputs": {
+        "preset": "fast",
+        "report_file": {"report_from": "report_seed"}
+      }
+    },
+    {
+      "id": "report_final",
+      "op": "report",
+      "inputs": {
+        "report_file": {"report_from": "report_seed"}
+      }
+    }
+  ]
+}

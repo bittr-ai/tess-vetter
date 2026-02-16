@@ -37,6 +37,7 @@ from bittr_tess_vetter.cli.localize_host_cli import localize_host_command
 from bittr_tess_vetter.cli.measure_sectors_cli import measure_sectors_command
 from bittr_tess_vetter.cli.model_compete_cli import model_compete_command
 from bittr_tess_vetter.cli.periodogram_cli import periodogram_command
+from bittr_tess_vetter.cli.pipeline_run_cli import pipeline_group
 from bittr_tess_vetter.cli.resolve_stellar_cli import resolve_stellar_command
 from bittr_tess_vetter.cli.report_cli import report_command
 from bittr_tess_vetter.cli.resolve_neighbors_cli import resolve_neighbors_command
@@ -104,6 +105,7 @@ cli.add_command(activity_command)
 cli.add_command(timing_command)
 cli.add_command(systematics_proxy_command)
 cli.add_command(dilution_command)
+cli.add_command(pipeline_group)
 
 
 @cli.command()
