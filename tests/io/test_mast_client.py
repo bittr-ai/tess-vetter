@@ -1109,6 +1109,36 @@ class TestDownloadAllSectors:
 
             assert len(light_curves) == 2
 
+    def test_download_all_sectors_specific_sectors_reuses_single_search(
+        self, mock_lightkurve, mock_lightcurve
+    ):
+        """download_all_sectors() should avoid per-sector MAST searches when sectors are explicit."""
+        rows = []
+        for sector in [1, 5]:
+            row = MagicMock()
+            row.mission = [f"TESS Sector {sector}"]
+            row.sequence_number = sector
+            row.author = "SPOC"
+            row.exptime = 120.0
+            row.distance = None
+            row.download = MagicMock(return_value=mock_lightcurve)
+            rows.append(row)
+
+        mock_multi_result = MagicMock()
+        mock_multi_result.__len__ = MagicMock(return_value=2)
+        mock_multi_result.__getitem__ = lambda self, i: rows[i]
+        mock_lightkurve.search_lightcurve.return_value = mock_multi_result
+
+        with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
+            client = MASTClient()
+            client._lk = mock_lightkurve
+            client._lk_imported = True
+
+            light_curves = client.download_all_sectors(tic_id=261136679, sectors=[1, 5])
+
+            assert len(light_curves) == 2
+            assert mock_lightkurve.search_lightcurve.call_count == 1
+
 
 # -----------------------------------------------------------------------------
 # Tests for exptime filtering

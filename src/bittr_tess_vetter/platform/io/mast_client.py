@@ -844,6 +844,7 @@ class MASTClient:
         exptime: float | None = None,
         author: str | None = None,
         progress_callback: Callable[[DownloadProgress], None] | None = None,
+        presearched_rows: list[Any] | None = None,
     ) -> LightCurveData:
         """Download and process a TESS light curve.
 
@@ -928,25 +929,28 @@ class MASTClient:
             f"Downloading light curve for {target}, sector {sector}, flux={flux_type}{exptime_str}"
         )
 
-        # Step 1: Search for the specific sector
-        _report_progress(
-            DownloadPhase.SEARCHING,
-            1,
-            f"Searching MAST for TIC {tic_id} sector {sector}...",
-        )
-        try:
-            search_author = author if author is not None else self.author
-            search_result = lk.search_lightcurve(
-                target,
-                mission="TESS",
-                sector=sector,
-                author=search_author,
+        # Step 1: Search for the specific sector (or reuse pre-fetched rows).
+        search_author = author if author is not None else self.author
+        if presearched_rows is not None:
+            search_result = list(presearched_rows)
+        else:
+            _report_progress(
+                DownloadPhase.SEARCHING,
+                1,
+                f"Searching MAST for TIC {tic_id} sector {sector}...",
             )
-        except Exception as e:
-            logger.error(f"MAST search failed for {target} sector {sector}: {e}")
-            raise MASTClientError(
-                f"Failed to search MAST for TIC {tic_id} sector {sector}: {e}"
-            ) from e
+            try:
+                search_result = lk.search_lightcurve(
+                    target,
+                    mission="TESS",
+                    sector=sector,
+                    author=search_author,
+                )
+            except Exception as e:
+                logger.error(f"MAST search failed for {target} sector {sector}: {e}")
+                raise MASTClientError(
+                    f"Failed to search MAST for TIC {tic_id} sector {sector}: {e}"
+                ) from e
 
         if search_result is None or len(search_result) == 0:
             raise LightCurveNotFoundError(f"No light curve found for TIC {tic_id} sector {sector}")
@@ -1551,6 +1555,44 @@ class MASTClient:
             progress_callback(progress)
 
         light_curves = []
+        pre_rows_by_sector: dict[int, list[Any]] = {}
+        if sectors is not None and len(sorted_sectors) > 0:
+            # Query once for all sectors and reuse rows to avoid repeated MAST search calls.
+            try:
+                lk = self._ensure_lightkurve()
+                target = f"TIC {tic_id}"
+                search_author = self.author
+                search_all = lk.search_lightcurve(
+                    target,
+                    mission="TESS",
+                    author=search_author,
+                )
+                if search_all is not None and len(search_all) > 0:
+                    requested_set = set(int(s) for s in sorted_sectors)
+                    for idx in range(len(search_all)):
+                        row = search_all[idx]
+                        sec: int | None = None
+                        try:
+                            if hasattr(row, "sequence_number"):
+                                seq = getattr(row, "sequence_number")
+                                if seq is not None:
+                                    sec = int(seq)
+                        except Exception:
+                            sec = None
+                        if sec is None:
+                            try:
+                                if hasattr(row, "observation") and row.observation:
+                                    match = re.search(r"sector\s*(\d+)", str(row.observation), re.IGNORECASE)
+                                    if match:
+                                        sec = int(match.group(1))
+                            except Exception:
+                                sec = None
+                        if sec is None or sec not in requested_set:
+                            continue
+                        pre_rows_by_sector.setdefault(int(sec), []).append(row)
+            except Exception:
+                pre_rows_by_sector = {}
+
         for i, sector in enumerate(sorted_sectors):
             _report_batch_progress(
                 DownloadPhase.DOWNLOADING,
@@ -1559,7 +1601,12 @@ class MASTClient:
                 f"Downloading sector {sector} ({i + 1}/{n_sectors}) for TIC {tic_id}...",
             )
             try:
-                lc = self.download_lightcurve(tic_id, sector, flux_type)
+                lc = self.download_lightcurve(
+                    tic_id,
+                    sector,
+                    flux_type,
+                    presearched_rows=pre_rows_by_sector.get(int(sector)) or None,
+                )
                 light_curves.append(lc)
                 sectors_completed.append(sector)
                 sectors_remaining.remove(sector)
