@@ -227,3 +227,106 @@ def test_execute_localize_host_uses_cache_only_when_no_network(monkeypatch) -> N
     assert payload["schema_version"] == "cli.localize_host.v1"
     assert payload["provenance"]["network_ok"] is False
     assert payload["provenance"]["selected_sectors"] == [14]
+
+
+def test_btv_localize_host_loads_reference_sources_file(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_resolve_candidate_inputs(**_kwargs: Any):
+        return 123, 10.5, 2000.2, 2.5, None, {"source": "cli", "inputs": {"tic_id": 123}}
+
+    def _fake_execute_localize_host(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {
+            "schema_version": "cli.localize_host.v1",
+            "result": {"consensus_label": "ON_TARGET"},
+            "inputs_summary": {"input_resolution": {"source": "cli", "inputs": {"tic_id": 123}}},
+            "provenance": {
+                "selected_sectors": [14],
+                "requested_sectors": None,
+                "tpf_sector_strategy": "best",
+                "network_ok": False,
+                "coordinate_source": "reference_sources_file",
+            },
+        }
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.localize_host_cli._execute_localize_host",
+        _fake_execute_localize_host,
+    )
+
+    reference_sources_path = tmp_path / "reference_sources.json"
+    reference_sources_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "reference_sources.v1",
+                "reference_sources": [
+                    {"name": "Target TIC 123", "source_id": "tic:123", "ra": 120.0, "dec": -30.0},
+                    {"name": "Gaia 111", "source_id": "gaia:111", "ra": 120.01, "dec": -30.01},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out_path = tmp_path / "localize_host.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        localize_host_command,
+        [
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--reference-sources-file",
+            str(reference_sources_path),
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen["reference_sources_override"][0]["source_id"] == "tic:123"
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "cli.localize_host.v1"
+
+
+def test_btv_localize_host_rejects_invalid_reference_sources_file(tmp_path: Path) -> None:
+    reference_sources_path = tmp_path / "invalid_reference_sources.json"
+    reference_sources_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "wrong.v1",
+                "reference_sources": [{"name": "bad", "ra": 120.0, "dec": -30.0}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        localize_host_command,
+        [
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--reference-sources-file",
+            str(reference_sources_path),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "schema_version='reference_sources.v1'" in result.output

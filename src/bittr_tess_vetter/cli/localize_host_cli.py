@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import click
@@ -20,6 +21,7 @@ from bittr_tess_vetter.cli.common_cli import (
     resolve_optional_output_path,
 )
 from bittr_tess_vetter.cli.localize_cli import _build_reference_sources, _extract_tpf_meta
+from bittr_tess_vetter.cli.reference_sources import load_reference_sources_file
 from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
 from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
@@ -94,6 +96,7 @@ def _execute_localize_host(
     baseline_shift_threshold: float,
     random_seed: int,
     input_resolution: dict[str, Any] | None,
+    reference_sources_override: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     client = MASTClient()
     if not network_ok:
@@ -164,13 +167,17 @@ def _execute_localize_host(
     if not tpf_fits_list:
         raise LightCurveNotFoundError(f"TPF unavailable for TIC {tic_id}")
 
-    reference_sources, coordinate_source = _build_reference_sources(
-        tic_id=int(tic_id),
-        tpf_meta=dict(tpf_fits_list[0].meta or {}),
-        ra_deg=ra_deg,
-        dec_deg=dec_deg,
-        network_ok=bool(network_ok),
-    )
+    if reference_sources_override is not None:
+        reference_sources = [dict(src) for src in reference_sources_override]
+        coordinate_source = "reference_sources_file"
+    else:
+        reference_sources, coordinate_source = _build_reference_sources(
+            tic_id=int(tic_id),
+            tpf_meta=dict(tpf_fits_list[0].meta or {}),
+            ra_deg=ra_deg,
+            dec_deg=dec_deg,
+            network_ok=bool(network_ok),
+        )
 
     result = localize_transit_host_multi_sector(
         tpf_fits_list=tpf_fits_list,
@@ -219,6 +226,12 @@ def _execute_localize_host(
 @click.option("--ra-deg", type=float, default=None, help="Fallback target right ascension in degrees.")
 @click.option("--dec-deg", type=float, default=None, help="Fallback target declination in degrees.")
 @click.option(
+    "--reference-sources-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=str),
+    default=None,
+    help="Optional standardized reference sources JSON file (schema_version=reference_sources.v1).",
+)
+@click.option(
     "--network-ok/--no-network",
     default=False,
     show_default=True,
@@ -266,6 +279,7 @@ def localize_host_command(
     toi: str | None,
     ra_deg: float | None,
     dec_deg: float | None,
+    reference_sources_file: str | None,
     network_ok: bool,
     sectors: tuple[int, ...],
     tpf_sector_strategy: str,
@@ -294,6 +308,9 @@ def localize_host_command(
         )
     if (ra_deg is None) != (dec_deg is None):
         raise BtvCliError("Provide both --ra-deg and --dec-deg together.", exit_code=EXIT_INPUT_ERROR)
+    reference_sources_override = None
+    if reference_sources_file is not None:
+        reference_sources_override = load_reference_sources_file(Path(reference_sources_file))
 
     (
         resolved_tic_id,
@@ -331,6 +348,7 @@ def localize_host_command(
             baseline_shift_threshold=float(baseline_shift_threshold),
             random_seed=int(random_seed),
             input_resolution=input_resolution,
+            reference_sources_override=reference_sources_override,
         )
     except LightCurveNotFoundError as exc:
         raise BtvCliError(str(exc), exit_code=EXIT_DATA_UNAVAILABLE) from exc

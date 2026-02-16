@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+from click.testing import CliRunner
+
+from bittr_tess_vetter.cli.resolve_neighbors_cli import resolve_neighbors_command
+from bittr_tess_vetter.platform.catalogs.models import SourceRecord
+
+
+class _FakeSource:
+    def __init__(
+        self,
+        *,
+        source_id: int,
+        ra: float,
+        dec: float,
+        phot_g_mean_mag: float | None = None,
+        ruwe: float | None = None,
+    ) -> None:
+        self.source_id = source_id
+        self.ra = ra
+        self.dec = dec
+        self.phot_g_mean_mag = phot_g_mean_mag
+        self.ruwe = ruwe
+
+
+class _FakeNeighbor(_FakeSource):
+    def __init__(
+        self,
+        *,
+        source_id: int,
+        ra: float,
+        dec: float,
+        separation_arcsec: float,
+        phot_g_mean_mag: float | None = None,
+        delta_mag: float | None = None,
+        ruwe: float | None = None,
+    ) -> None:
+        super().__init__(
+            source_id=source_id,
+            ra=ra,
+            dec=dec,
+            phot_g_mean_mag=phot_g_mean_mag,
+            ruwe=ruwe,
+        )
+        self.separation_arcsec = separation_arcsec
+        self.delta_mag = delta_mag
+
+
+class _FakeGaiaResult:
+    def __init__(self, *, source: _FakeSource | None, neighbors: list[_FakeNeighbor]) -> None:
+        self.source = source
+        self.neighbors = neighbors
+        self.source_record = SourceRecord(
+            name="gaia_dr3",
+            version="dr3",
+            retrieved_at=datetime.now(UTC),
+            query="fake",
+        )
+
+
+def test_btv_resolve_neighbors_success_payload_contract(monkeypatch, tmp_path: Path) -> None:
+    def _fake_query_gaia_by_position_sync(ra: float, dec: float, radius_arcsec: float) -> _FakeGaiaResult:
+        _ = ra, dec, radius_arcsec
+        return _FakeGaiaResult(
+            source=_FakeSource(source_id=9001, ra=120.001, dec=-30.002, phot_g_mean_mag=10.0, ruwe=1.1),
+            neighbors=[
+                _FakeNeighbor(
+                    source_id=9002,
+                    ra=120.01,
+                    dec=-30.01,
+                    separation_arcsec=4.2,
+                    phot_g_mean_mag=12.0,
+                    delta_mag=2.0,
+                    ruwe=1.0,
+                ),
+                _FakeNeighbor(
+                    source_id=9003,
+                    ra=120.02,
+                    dec=-30.02,
+                    separation_arcsec=8.4,
+                    phot_g_mean_mag=13.0,
+                    delta_mag=3.0,
+                    ruwe=1.3,
+                ),
+            ],
+        )
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.resolve_neighbors_cli.query_gaia_by_position_sync",
+        _fake_query_gaia_by_position_sync,
+    )
+
+    out_path = tmp_path / "reference_sources.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        resolve_neighbors_command,
+        [
+            "--tic-id",
+            "123",
+            "--ra-deg",
+            "120.0",
+            "--dec-deg",
+            "-30.0",
+            "--network-ok",
+            "--max-neighbors",
+            "1",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "reference_sources.v1"
+    assert payload["target"]["tic_id"] == 123
+    assert len(payload["reference_sources"]) == 2
+    assert payload["reference_sources"][0]["name"] == "Target TIC 123"
+    assert payload["reference_sources"][0]["role"] == "target"
+    assert payload["reference_sources"][0]["tic_id"] == 123
+    assert payload["reference_sources"][0]["meta"]["source"] == "gaia_dr3_primary"
+    assert payload["reference_sources"][1]["source_id"] == "gaia:9002"
+    assert payload["reference_sources"][1]["role"] == "companion"
+    assert payload["reference_sources"][1]["separation_arcsec"] == 4.2
+    assert payload["provenance"]["gaia_resolution"]["n_neighbors_added"] == 1
+
+
+def test_btv_resolve_neighbors_gaia_error_falls_back_to_target_only(monkeypatch, tmp_path: Path) -> None:
+    def _fake_query_gaia_by_position_sync(ra: float, dec: float, radius_arcsec: float) -> Any:
+        _ = ra, dec, radius_arcsec
+        raise RuntimeError("Gaia down")
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.resolve_neighbors_cli.query_gaia_by_position_sync",
+        _fake_query_gaia_by_position_sync,
+    )
+
+    out_path = tmp_path / "reference_sources_fallback.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        resolve_neighbors_command,
+        [
+            "--tic-id",
+            "123",
+            "--ra-deg",
+            "120.0",
+            "--dec-deg",
+            "-30.0",
+            "--network-ok",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "reference_sources.v1"
+    assert len(payload["reference_sources"]) == 1
+    assert payload["reference_sources"][0]["source_id"] == "tic:123"
+    assert payload["provenance"]["gaia_resolution"]["status"] == "error_fallback_target_only"

@@ -39,6 +39,7 @@ from bittr_tess_vetter.cli.model_compete_cli import model_compete_command
 from bittr_tess_vetter.cli.periodogram_cli import periodogram_command
 from bittr_tess_vetter.cli.resolve_stellar_cli import resolve_stellar_command
 from bittr_tess_vetter.cli.report_cli import report_command
+from bittr_tess_vetter.cli.resolve_neighbors_cli import resolve_neighbors_command
 from bittr_tess_vetter.cli.systematics_proxy_cli import systematics_proxy_command
 from bittr_tess_vetter.cli.timing_cli import timing_command
 from bittr_tess_vetter.cli.transit_fit_cli import fit_command
@@ -89,6 +90,7 @@ cli.add_command(vet_command)
 cli.add_command(fpp_command)
 cli.add_command(report_command)
 cli.add_command(resolve_stellar_command)
+cli.add_command(resolve_neighbors_command)
 cli.add_command(describe_checks_command)
 cli.add_command(measure_sectors_command)
 cli.add_command(detrend_grid_command)
