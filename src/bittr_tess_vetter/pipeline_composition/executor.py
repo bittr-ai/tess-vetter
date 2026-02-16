@@ -36,6 +36,7 @@ _OP_TO_COMMAND = {
 }
 
 _RETRYABLE_TOKENS = ("429", "timeout", "timed out", "temporarily unavailable", "connection reset")
+_EXECUTOR_DEFAULT_KEYS = {"retry_max_attempts", "retry_initial_seconds"}
 
 
 def _flag_name(key: str) -> str:
@@ -313,8 +314,12 @@ def _run_one_toi(
         stderr_path = logs_dir / f"{step.id}.stderr.log"
         marker_path = checkpoints_dir / f"{step_name}.done.json"
 
+        step_inputs_with_defaults = {
+            k: v for k, v in composition.defaults.items() if k not in _EXECUTOR_DEFAULT_KEYS
+        }
+        step_inputs_with_defaults.update(step.inputs)
         resolved_inputs = resolve_value(
-            {**composition.defaults, **step.inputs},
+            step_inputs_with_defaults,
             step_outputs=step_outputs,
             step_ports=step_ports,
         )

@@ -261,3 +261,61 @@ def test_run_composition_multi_toi_aggregation_includes_partial(monkeypatch, tmp
     evidence_json = json.loads((out_dir / "evidence_table.json").read_text(encoding="utf-8"))
     toi_rows = [row["toi"] for row in evidence_json["rows"]]
     assert toi_rows == ["TOI-A.01", "TOI-B.01"]
+
+
+def test_run_composition_does_not_forward_retry_defaults_to_step_inputs(monkeypatch, tmp_path: Path) -> None:
+    payload = {
+        "schema_version": "pipeline.composition.v1",
+        "id": "test_retry_defaults_not_forwarded",
+        "defaults": {"retry_max_attempts": 5, "retry_initial_seconds": 2.0, "preset": "fast"},
+        "steps": [
+            {"id": "fpp_step", "op": "fpp"},
+        ],
+    }
+    comp = validate_composition_payload(payload, source="test")
+
+    seen: dict[str, dict] = {}
+
+    def _fake_run_step_with_retries(
+        *,
+        step,
+        toi,
+        inputs,
+        output_path,
+        stderr_path,
+        network_ok,
+        max_attempts,
+        initial_backoff_seconds,
+    ):
+        seen["inputs"] = dict(inputs)
+        seen["retry"] = {
+            "max_attempts": max_attempts,
+            "initial_backoff_seconds": initial_backoff_seconds,
+        }
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        stderr_path.parent.mkdir(parents=True, exist_ok=True)
+        stderr_path.write_text("", encoding="utf-8")
+        row = {"schema_version": "test.v1", "fpp": 0.01}
+        output_path.write_text(json.dumps(row), encoding="utf-8")
+        return row, 1
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.pipeline_composition.executor._run_step_with_retries",
+        _fake_run_step_with_retries,
+    )
+
+    out_dir = tmp_path / "run_retry_defaults"
+    result = run_composition(
+        composition=comp,
+        tois=["TOI-RETRY.01"],
+        out_dir=out_dir,
+        network_ok=False,
+        continue_on_error=False,
+        max_workers=1,
+        resume=False,
+    )
+    assert result["manifest"]["counts"]["n_ok"] == 1
+    assert seen["inputs"]["preset"] == "fast"
+    assert "retry_max_attempts" not in seen["inputs"]
+    assert "retry_initial_seconds" not in seen["inputs"]
+    assert seen["retry"] == {"max_attempts": 5, "initial_backoff_seconds": 2.0}

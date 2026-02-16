@@ -70,6 +70,21 @@ def test_build_cli_args_supports_raw_flags_and_args_passthrough(tmp_path: Path) 
     assert "2" in args
 
 
+def test_build_cli_args_does_not_require_or_emit_retry_flags_from_executor_defaults(tmp_path: Path) -> None:
+    args = _build_cli_args(
+        step=_step(),
+        toi="TOI-123.01",
+        inputs={
+            "preset": "fast",
+        },
+        output_path=tmp_path / "out.json",
+        network_ok=True,
+    )
+
+    assert "--retry-max-attempts" not in args
+    assert "--retry-initial-seconds" not in args
+
+
 def test_run_step_with_retries_uses_backoff_jitter_for_retryable_errors(monkeypatch, tmp_path: Path) -> None:
     attempts = {"count": 0}
     sleep_calls: list[float] = []
