@@ -143,14 +143,22 @@ def _execute_measure_sectors(
     sector_measurements = [
         _metric_to_measurement(metric, duration_hours=float(duration_hours)) for metric in metrics
     ]
+    consistency = _build_consistency_enrichment(sector_measurements)
+    recommended_sectors = _recommended_sectors(sector_measurements, consistency=consistency)
+    routing = _build_gating_routing(
+        sector_measurements=sector_measurements,
+        recommended_sectors=recommended_sectors,
+        consistency=consistency,
+    )
+    consistency.update(routing)
     sectors_loaded = sorted(
         {int(lc.sector) for lc in lightcurves if getattr(lc, "sector", None) is not None}
     )
     return {
         "schema_version": 1,
         "sector_measurements": sector_measurements,
-        "consistency": _build_consistency_enrichment(sector_measurements),
-        "recommended_sectors": _recommended_sectors(sector_measurements),
+        "consistency": consistency,
+        "recommended_sectors": recommended_sectors,
         "recommended_sector_criterion": (
             "quality_weight > 0, n_transits > 0, finite depth/error, and not flagged as outlier "
             "(|depth - weighted_mean| / depth_err_ppm <= 3.0); fallback: all measured sectors."
@@ -411,8 +419,12 @@ def _build_consistency_enrichment(sector_measurements: list[dict[str, Any]]) -> 
     }
 
 
-def _recommended_sectors(sector_measurements: list[dict[str, Any]]) -> list[int]:
-    consistency = _build_consistency_enrichment(sector_measurements)
+def _recommended_sectors(
+    sector_measurements: list[dict[str, Any]],
+    *,
+    consistency: dict[str, Any] | None = None,
+) -> list[int]:
+    consistency = consistency if consistency is not None else _build_consistency_enrichment(sector_measurements)
     outlier_set = {int(s) for s in consistency.get("outlier_sectors", [])}
     recommended: list[int] = []
     all_sectors: list[int] = []
@@ -437,6 +449,43 @@ def _recommended_sectors(sector_measurements: list[dict[str, Any]]) -> list[int]
             recommended.append(sector)
     chosen = recommended if recommended else all_sectors
     return sorted({int(s) for s in chosen})
+
+
+def _build_gating_routing(
+    *,
+    sector_measurements: list[dict[str, Any]],
+    recommended_sectors: list[int],
+    consistency: dict[str, Any],
+) -> dict[str, Any]:
+    n_total = len(sector_measurements)
+    n_recommended = len(recommended_sectors)
+    verdict = str(consistency.get("verdict") or "")
+
+    if n_recommended < 2:
+        return {
+            "gating_actionable": False,
+            "action_hint": "DETREND_RECOMMENDED",
+            "reason": "recommended_sector_count_lt_2",
+            "n_sectors_total": int(n_total),
+            "n_sectors_recommended": int(n_recommended),
+        }
+
+    if verdict == "CONSISTENT":
+        return {
+            "gating_actionable": True,
+            "action_hint": "USE_ALL_SECTORS",
+            "reason": "sector_depths_consistent",
+            "n_sectors_total": int(n_total),
+            "n_sectors_recommended": int(n_recommended),
+        }
+
+    return {
+        "gating_actionable": True,
+        "action_hint": "SECTOR_GATING_RECOMMENDED",
+        "reason": "sector_depths_inconsistent",
+        "n_sectors_total": int(n_total),
+        "n_sectors_recommended": int(n_recommended),
+    }
 
 
 __all__ = ["measure_sectors_command"]

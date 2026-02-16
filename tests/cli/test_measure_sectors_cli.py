@@ -26,6 +26,11 @@ def _payload() -> dict[str, Any]:
             "depth_std_ppm": 0.0,
             "outlier_sectors": [],
             "outlier_criterion": "|depth - weighted_mean| / depth_err_ppm > 3.0",
+            "gating_actionable": False,
+            "action_hint": "DETREND_RECOMMENDED",
+            "reason": "recommended_sector_count_lt_2",
+            "n_sectors_total": 1,
+            "n_sectors_recommended": 1,
         },
         "recommended_sectors": [1],
         "recommended_sector_criterion": "test",
@@ -223,8 +228,70 @@ def test_measure_sectors_enrichment_fields_and_recommended_sectors() -> None:
     assert consistency["chi2_dof"] == 2
     assert consistency["verdict"] == "INCONSISTENT"
     assert consistency["outlier_sectors"] == [12]
-    recommended = measure_sectors_cli._recommended_sectors(rows)
+    recommended = measure_sectors_cli._recommended_sectors(rows, consistency=consistency)
     assert recommended == [10, 11]
+    routing = measure_sectors_cli._build_gating_routing(
+        sector_measurements=rows,
+        recommended_sectors=recommended,
+        consistency=consistency,
+    )
+    assert routing["gating_actionable"] is True
+    assert routing["action_hint"] == "SECTOR_GATING_RECOMMENDED"
+
+
+def test_measure_sectors_gating_routing_not_actionable_when_recommended_lt_two() -> None:
+    rows = [
+        {
+            "sector": 55,
+            "depth_ppm": 169.0,
+            "depth_err_ppm": 30.0,
+            "duration_hours": 2.0,
+            "duration_err_hours": 0.0,
+            "n_transits": 2,
+            "shape_metric": 1.0,
+            "quality_weight": 1.0,
+        },
+        {
+            "sector": 75,
+            "depth_ppm": 309.0,
+            "depth_err_ppm": 25.0,
+            "duration_hours": 2.0,
+            "duration_err_hours": 0.0,
+            "n_transits": 2,
+            "shape_metric": 1.0,
+            "quality_weight": 1.0,
+        },
+        {
+            "sector": 82,
+            "depth_ppm": 225.0,
+            "depth_err_ppm": 20.0,
+            "duration_hours": 2.0,
+            "duration_err_hours": 0.0,
+            "n_transits": 2,
+            "shape_metric": 1.0,
+            "quality_weight": 1.0,
+        },
+        {
+            "sector": 83,
+            "depth_ppm": 309.0,
+            "depth_err_ppm": 25.0,
+            "duration_hours": 2.0,
+            "duration_err_hours": 0.0,
+            "n_transits": 2,
+            "shape_metric": 1.0,
+            "quality_weight": 1.0,
+        },
+    ]
+    consistency = measure_sectors_cli._build_consistency_enrichment(rows)
+    recommended = [82]
+    routing = measure_sectors_cli._build_gating_routing(
+        sector_measurements=rows,
+        recommended_sectors=recommended,
+        consistency=consistency,
+    )
+    assert routing["gating_actionable"] is False
+    assert routing["action_hint"] == "DETREND_RECOMMENDED"
+    assert routing["n_sectors_recommended"] == 1
 
 
 def test_metric_to_measurement_uses_n_transits_for_quality_weight() -> None:
