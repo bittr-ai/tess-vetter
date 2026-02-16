@@ -229,6 +229,75 @@ def test_execute_localize_host_uses_cache_only_when_no_network(monkeypatch) -> N
     assert payload["provenance"]["selected_sectors"] == [14]
 
 
+def test_execute_localize_host_passes_brightness_prior_settings(monkeypatch) -> None:
+    class _FakeWCS:
+        def to_header(self, relax: bool = True):
+            _ = relax
+            return {"RA_OBJ": 120.123, "DEC_OBJ": -21.456}
+
+    class _FakeMASTClient:
+        def download_all_sectors(self, *_args: Any, **_kwargs: Any):
+            raise AssertionError("download_all_sectors should not be called when network_ok=False")
+
+        def download_lightcurve_cached(self, tic_id: int, sector: int, flux_type: str):
+            _ = flux_type
+            return _make_lc_data(tic_id=tic_id, sector=sector)
+
+        def download_tpf_cached(self, tic_id: int, sector: int):
+            _ = tic_id, sector
+            n = 16
+            time = np.linspace(2000.0, 2001.0, n, dtype=np.float64)
+            flux = np.ones((n, 3, 3), dtype=np.float64)
+            flux_err = np.full((n, 3, 3), 1e-3, dtype=np.float64)
+            aperture = np.ones((3, 3), dtype=np.int32)
+            quality = np.zeros(n, dtype=np.int32)
+            return time, flux, flux_err, _FakeWCS(), aperture, quality
+
+    seen: dict[str, Any] = {}
+
+    def _fake_localize_transit_host_multi_sector(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"per_sector_results": [], "consensus": {"consensus_label": "AMBIGUOUS"}}
+
+    monkeypatch.setattr(localize_host_cli, "MASTClient", _FakeMASTClient)
+    monkeypatch.setattr(localize_host_cli, "_select_tpf_sectors", lambda **_kwargs: [14])
+    monkeypatch.setattr(
+        localize_host_cli,
+        "localize_transit_host_multi_sector",
+        _fake_localize_transit_host_multi_sector,
+    )
+
+    payload = localize_host_cli._execute_localize_host(
+        tic_id=123,
+        period_days=10.5,
+        t0_btjd=2000.2,
+        duration_hours=2.5,
+        ra_deg=None,
+        dec_deg=None,
+        network_ok=False,
+        sectors=[14],
+        tpf_sector_strategy="requested",
+        tpf_sectors=[14],
+        oot_margin_mult=1.5,
+        oot_window_mult=10.0,
+        centroid_method="centroid",
+        prf_backend="prf_lite",
+        baseline_shift_threshold=0.5,
+        random_seed=42,
+        input_resolution={"source": "cli"},
+        brightness_prior_enabled=True,
+        brightness_prior_weight=12.0,
+        brightness_prior_softening_mag=2.0,
+    )
+
+    assert seen["brightness_prior_enabled"] is True
+    assert seen["brightness_prior_weight"] == 12.0
+    assert seen["brightness_prior_softening_mag"] == 2.0
+    assert payload["provenance"]["brightness_prior_enabled"] is True
+    assert payload["provenance"]["brightness_prior_weight"] == 12.0
+    assert payload["provenance"]["brightness_prior_softening_mag"] == 2.0
+
+
 def test_execute_localize_host_contract_includes_reliability_and_interpretation_fields(
     monkeypatch,
 ) -> None:

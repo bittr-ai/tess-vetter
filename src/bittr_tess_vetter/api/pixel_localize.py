@@ -84,6 +84,8 @@ class PixelLocalizeSectorResult(TypedDict, total=False):
     reliability_flagged: bool
     reliability_flags: list[str]
     interpretation_code: str | None
+    ranking_changed_by_prior: bool
+    brightness_prior_enabled: bool
 
     diagnostics: dict[str, Any]
     baseline_consistency: BaselineConsistencyResult
@@ -205,6 +207,137 @@ def _collect_non_physical_prf_indicators(
     return out
 
 
+def _extract_delta_mag_for_source(
+    *,
+    source: ReferenceSource,
+    source_id: str,
+    target_source_id: str,
+    target_g_mag: float | None,
+) -> float | None:
+    if source_id == target_source_id or source_id == "target":
+        return 0.0
+    direct_delta = source.get("delta_mag")
+    try:
+        if direct_delta is not None:
+            out = float(direct_delta)
+            if np.isfinite(out):
+                return out
+    except Exception:
+        pass
+
+    meta = source.get("meta")
+    if isinstance(meta, dict):
+        meta_delta = meta.get("delta_mag")
+        try:
+            if meta_delta is not None:
+                out = float(meta_delta)
+                if np.isfinite(out):
+                    return out
+        except Exception:
+            pass
+
+    g_mag = source.get("g_mag")
+    try:
+        if g_mag is not None and target_g_mag is not None:
+            out = float(g_mag) - float(target_g_mag)
+            if np.isfinite(out):
+                return out
+    except Exception:
+        pass
+    return None
+
+
+def _apply_brightness_prior(
+    *,
+    ranked: list[dict[str, Any]],
+    reference_sources: list[ReferenceSource],
+    target_source_id: str,
+    weight: float,
+    softening_delta_mag: float,
+) -> tuple[list[dict[str, Any]], bool]:
+    by_source_id: dict[str, ReferenceSource] = {}
+    target_g_mag: float | None = None
+    for src in reference_sources:
+        sid = str(src.get("source_id") or src.get("name") or "").strip()
+        if sid:
+            by_source_id[sid] = src
+            if sid == target_source_id:
+                try:
+                    g_val = src.get("g_mag")
+                    if g_val is not None:
+                        g_f = float(g_val)
+                        if np.isfinite(g_f):
+                            target_g_mag = g_f
+                except Exception:
+                    pass
+
+    scored_rows: list[dict[str, Any]] = []
+    for idx, row in enumerate(ranked):
+        src_id = str(row.get("source_id") or "")
+        src = by_source_id.get(src_id, {})
+        delta_mag = _extract_delta_mag_for_source(
+            source=src,
+            source_id=src_id,
+            target_source_id=target_source_id,
+            target_g_mag=target_g_mag,
+        )
+        fit_loss_raw = row.get("fit_loss")
+        try:
+            fit_loss_f = float(fit_loss_raw)
+            if not np.isfinite(fit_loss_f):
+                fit_loss_f = float("inf")
+        except Exception:
+            fit_loss_f = float("inf")
+        prior_penalty = 0.0
+        if (
+            src_id not in {target_source_id, "target"}
+            and delta_mag is not None
+            and np.isfinite(delta_mag)
+            and delta_mag > float(softening_delta_mag)
+        ):
+            prior_penalty = float(weight) * float(delta_mag - float(softening_delta_mag)) ** 2
+        combined_loss = fit_loss_f + prior_penalty
+        scored_rows.append(
+            {
+                "row": dict(row),
+                "src_id": src_id,
+                "fit_loss_raw": fit_loss_f,
+                "prior_penalty": float(prior_penalty),
+                "combined_loss": float(combined_loss),
+                "delta_mag": float(delta_mag) if delta_mag is not None and np.isfinite(delta_mag) else None,
+                "rank_raw": int(idx + 1),
+                "delta_loss_raw": row.get("delta_loss"),
+            }
+        )
+
+    if not scored_rows:
+        return ranked, False
+
+    raw_best_source_id = str(ranked[0].get("source_id") or "")
+    scored_rows.sort(key=lambda r: (r["combined_loss"], r["fit_loss_raw"], r["rank_raw"]))
+    adjusted_best_loss = float(scored_rows[0]["combined_loss"])
+    adjusted: list[dict[str, Any]] = []
+    for rank_idx, item in enumerate(scored_rows, start=1):
+        row = dict(item["row"])
+        combined_loss = float(item["combined_loss"])
+        row["fit_loss_raw"] = float(item["fit_loss_raw"])
+        row["brightness_prior_penalty"] = float(item["prior_penalty"])
+        row["combined_loss"] = combined_loss
+        row["brightness_delta_mag"] = item["delta_mag"]
+        row["rank_raw"] = int(item["rank_raw"])
+        row["delta_loss_raw"] = item["delta_loss_raw"]
+        row["rank"] = int(rank_idx)
+        row["delta_loss"] = (
+            float(combined_loss - adjusted_best_loss)
+            if np.isfinite(combined_loss) and np.isfinite(adjusted_best_loss)
+            else 0.0
+        )
+        adjusted.append(row)
+
+    ranking_changed = raw_best_source_id != str(adjusted[0].get("source_id") or "")
+    return adjusted, ranking_changed
+
+
 @cites(
     cite(BRYSON_2013, "difference-image centroid offsets and localization diagnostics"),
     cite(TWICKEN_2018, "difference image centroiding / DV-like diagnostics"),
@@ -225,6 +358,9 @@ def localize_transit_host_single_sector(
     prf_backend: Literal["prf_lite", "parametric", "instrument"] = "prf_lite",
     prf_params: dict[str, Any] | None = None,
     random_seed: int = 42,
+    brightness_prior_enabled: bool = True,
+    brightness_prior_weight: float = 40.0,
+    brightness_prior_softening_mag: float = 2.5,
 ) -> PixelLocalizeSectorResult:
     start = _time.perf_counter()
 
@@ -355,6 +491,16 @@ def localize_transit_host_single_sector(
             )
         )
 
+    ranking_changed_by_prior = False
+    if ranked and bool(brightness_prior_enabled):
+        ranked, ranking_changed_by_prior = _apply_brightness_prior(
+            ranked=ranked,
+            reference_sources=reference_sources,
+            target_source_id=f"tic:{int(getattr(tpf_fits.ref, 'tic_id', -1))}",
+            weight=float(brightness_prior_weight),
+            softening_delta_mag=float(brightness_prior_softening_mag),
+        )
+
     warnings: list[str] = []
     reliability_flags: list[str] = []
     best_source_id: str | None = None
@@ -455,6 +601,8 @@ def localize_transit_host_single_sector(
         reliability_flagged=reliability_flagged,
         reliability_flags=reliability_flags,
         interpretation_code=interpretation_code,
+        ranking_changed_by_prior=bool(ranking_changed_by_prior),
+        brightness_prior_enabled=bool(brightness_prior_enabled),
         diagnostics=dict(diff_diag),
     )
 
@@ -477,6 +625,9 @@ def localize_transit_host_single_sector_with_baseline_check(
     prf_params: dict[str, Any] | None = None,
     random_seed: int = 42,
     centroid_shift_threshold_pixels: float = 0.5,
+    brightness_prior_enabled: bool = True,
+    brightness_prior_weight: float = 40.0,
+    brightness_prior_softening_mag: float = 2.5,
 ) -> PixelLocalizeSectorResult:
     local = localize_transit_host_single_sector(
         tpf_fits=tpf_fits,
@@ -490,6 +641,9 @@ def localize_transit_host_single_sector_with_baseline_check(
         prf_backend=prf_backend,
         prf_params=prf_params,
         random_seed=random_seed,
+        brightness_prior_enabled=brightness_prior_enabled,
+        brightness_prior_weight=brightness_prior_weight,
+        brightness_prior_softening_mag=brightness_prior_softening_mag,
     )
 
     checked = oot_window_mult is not None and local.get("status") == "ok"
@@ -516,6 +670,9 @@ def localize_transit_host_single_sector_with_baseline_check(
         prf_backend=prf_backend,
         prf_params=prf_params,
         random_seed=random_seed,
+        brightness_prior_enabled=brightness_prior_enabled,
+        brightness_prior_weight=brightness_prior_weight,
+        brightness_prior_softening_mag=brightness_prior_softening_mag,
     )
 
     if global_res.get("status") != "ok":
@@ -597,6 +754,9 @@ def localize_transit_host_multi_sector(
     prf_params: dict[str, Any] | None = None,
     random_seed: int = 42,
     centroid_shift_threshold_pixels: float = 0.5,
+    brightness_prior_enabled: bool = True,
+    brightness_prior_weight: float = 40.0,
+    brightness_prior_softening_mag: float = 2.5,
 ) -> PixelLocalizeMultiSectorResult:
     """Localize the transit host across multiple sectors and build a consensus."""
     per_sector_results: list[PixelLocalizeSectorResult] = []
@@ -615,6 +775,9 @@ def localize_transit_host_multi_sector(
             prf_params=prf_params,
             random_seed=random_seed,
             centroid_shift_threshold_pixels=centroid_shift_threshold_pixels,
+            brightness_prior_enabled=brightness_prior_enabled,
+            brightness_prior_weight=brightness_prior_weight,
+            brightness_prior_softening_mag=brightness_prior_softening_mag,
         )
         # Attach lightweight metadata so callers don't need to loop just to label sectors.
         try:
@@ -635,6 +798,7 @@ def localize_transit_host_multi_sector(
         }
     )
     consensus_reliability_flagged = bool(consensus_reliability_flags)
+    prior_changed_count = sum(1 for r in per_sector_results if bool(r.get("ranking_changed_by_prior")))
     consensus_margin_raw = consensus.get("consensus_margin")
     consensus_margin = (
         float(consensus_margin_raw)
@@ -647,6 +811,9 @@ def localize_transit_host_multi_sector(
     if low_discrimination or consensus_reliability_flagged:
         consensus["interpretation_code"] = "INSUFFICIENT_DISCRIMINATION"
     consensus["reliability_flagged"] = consensus_reliability_flagged
+    consensus["brightness_prior_enabled"] = bool(brightness_prior_enabled)
+    consensus["ranking_changed_by_prior"] = prior_changed_count > 0
+    consensus["n_sectors_ranking_changed_by_prior"] = int(prior_changed_count)
     if consensus_reliability_flags:
         consensus["reliability_flags"] = consensus_reliability_flags
     return PixelLocalizeMultiSectorResult(

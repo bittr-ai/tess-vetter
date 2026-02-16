@@ -97,6 +97,9 @@ def _execute_localize_host(
     random_seed: int,
     input_resolution: dict[str, Any] | None,
     reference_sources_override: list[dict[str, Any]] | None = None,
+    brightness_prior_enabled: bool = True,
+    brightness_prior_weight: float = 40.0,
+    brightness_prior_softening_mag: float = 2.5,
 ) -> dict[str, Any]:
     client = MASTClient()
     if not network_ok:
@@ -191,6 +194,9 @@ def _execute_localize_host(
         prf_backend=str(prf_backend).lower(),  # type: ignore[arg-type]
         random_seed=int(random_seed),
         centroid_shift_threshold_pixels=float(baseline_shift_threshold),
+        brightness_prior_enabled=bool(brightness_prior_enabled),
+        brightness_prior_weight=float(brightness_prior_weight),
+        brightness_prior_softening_mag=float(brightness_prior_softening_mag),
     )
 
     selected_sectors = [int(getattr(tpf.ref, "sector", -1)) for tpf in tpf_fits_list]
@@ -212,6 +218,9 @@ def _execute_localize_host(
             "prf_backend": str(prf_backend).lower(),
             "baseline_shift_threshold": float(baseline_shift_threshold),
             "random_seed": int(random_seed),
+            "brightness_prior_enabled": bool(brightness_prior_enabled),
+            "brightness_prior_weight": float(brightness_prior_weight),
+            "brightness_prior_softening_mag": float(brightness_prior_softening_mag),
         },
     }
 
@@ -263,6 +272,26 @@ def _execute_localize_host(
 @click.option("--baseline-shift-threshold", type=float, default=0.5, show_default=True)
 @click.option("--random-seed", type=int, default=42, show_default=True)
 @click.option(
+    "--brightness-prior/--no-brightness-prior",
+    default=True,
+    show_default=True,
+    help="Apply a soft brightness prior that penalizes implausibly faint host hypotheses.",
+)
+@click.option(
+    "--brightness-prior-weight",
+    type=float,
+    default=40.0,
+    show_default=True,
+    help="Penalty scale for brightness prior (higher => stronger down-weighting of faint neighbors).",
+)
+@click.option(
+    "--brightness-prior-softening-mag",
+    type=float,
+    default=2.5,
+    show_default=True,
+    help="Delta-mag below which no brightness prior penalty is applied.",
+)
+@click.option(
     "--out",
     "output_path_arg",
     type=str,
@@ -290,6 +319,9 @@ def localize_host_command(
     prf_backend: str,
     baseline_shift_threshold: float,
     random_seed: int,
+    brightness_prior: bool,
+    brightness_prior_weight: float,
+    brightness_prior_softening_mag: float,
     output_path_arg: str,
 ) -> None:
     """Run multi-sector host localization for a single transit candidate."""
@@ -349,6 +381,9 @@ def localize_host_command(
             random_seed=int(random_seed),
             input_resolution=input_resolution,
             reference_sources_override=reference_sources_override,
+            brightness_prior_enabled=bool(brightness_prior),
+            brightness_prior_weight=float(brightness_prior_weight),
+            brightness_prior_softening_mag=float(brightness_prior_softening_mag),
         )
     except LightCurveNotFoundError as exc:
         raise BtvCliError(str(exc), exit_code=EXIT_DATA_UNAVAILABLE) from exc

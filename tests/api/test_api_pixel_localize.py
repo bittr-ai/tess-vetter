@@ -100,6 +100,7 @@ def test_localize_single_sector_downgrades_non_physical_prf_best_fit(monkeypatch
         prf_backend="parametric",
         prf_params={"sigma_row": 1.5, "sigma_col": 1.5},
         oot_window_mult=None,
+        brightness_prior_enabled=False,
     )
 
     assert res["raw_verdict"] == "ON_TARGET"
@@ -167,6 +168,7 @@ def test_localize_single_sector_flags_non_physical_best_fit_with_prf_lite(
         ],
         prf_backend="prf_lite",
         oot_window_mult=None,
+        brightness_prior_enabled=False,
     )
 
     assert res["raw_verdict"] == "OFF_TARGET"
@@ -270,3 +272,93 @@ def test_baseline_sensitive_downgrade_sets_interpretation_and_reliability(
     assert out["interpretation_code"] == "INSUFFICIENT_DISCRIMINATION"
     assert out["reliability_flagged"] is True
     assert "BASELINE_SENSITIVE_LOCALIZATION" in out["reliability_flags"]
+
+
+def test_brightness_prior_reorders_faint_neighbor_artifact(monkeypatch) -> None:
+    from bittr_tess_vetter.api import pixel_localize as px
+    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+
+    def _fake_diff_diag(**_kwargs):
+        return (
+            np.array([2.0, 2.0], dtype=np.float64),
+            np.ones((5, 5), dtype=np.float64),
+            {"n_in_transit": 6, "n_out_of_transit": 6},
+        )
+
+    def _fake_score_lite(_diff, _hypotheses, **_kwargs):
+        return [
+            {
+                "source_id": "gaia:2",
+                "source_name": "Gaia 2",
+                "fit_loss": 10.0,
+                "delta_loss": 0.0,
+                "rank": 1,
+                "fit_amplitude": 0.3,
+            },
+            {
+                "source_id": "tic:1",
+                "source_name": "Target TIC 1",
+                "fit_loss": 11.0,
+                "delta_loss": 1.0,
+                "rank": 2,
+                "fit_amplitude": 0.3,
+            },
+        ]
+
+    monkeypatch.setattr(px, "compute_difference_image_centroid_diagnostics", _fake_diff_diag)
+    monkeypatch.setattr(px, "score_hypotheses_prf_lite", _fake_score_lite)
+
+    n = 32
+    tpf = TPFFitsData(
+        ref=TPFFitsRef(tic_id=1, sector=1, author="spoc"),
+        time=np.linspace(0.0, 4.0, n, dtype=np.float64),
+        flux=np.ones((n, 5, 5), dtype=np.float64),
+        flux_err=None,
+        wcs=None,
+        aperture_mask=None,
+        quality=np.zeros(n, dtype=np.int32),
+        camera=None,
+        ccd=None,
+        meta={},
+    )
+
+    reference_sources = [
+        {"name": "Target TIC 1", "source_id": "tic:1", "row": 2.0, "col": 2.0},
+        {
+            "name": "Gaia 2",
+            "source_id": "gaia:2",
+            "row": 1.0,
+            "col": 1.0,
+            "meta": {"delta_mag": 8.0},
+        },
+    ]
+
+    with_prior = px.localize_transit_host_single_sector(
+        tpf_fits=tpf,
+        period_days=2.0,
+        t0_btjd=0.5,
+        duration_hours=2.0,
+        reference_sources=reference_sources,
+        oot_window_mult=None,
+        brightness_prior_enabled=True,
+        brightness_prior_weight=40.0,
+        brightness_prior_softening_mag=2.5,
+    )
+    without_prior = px.localize_transit_host_single_sector(
+        tpf_fits=tpf,
+        period_days=2.0,
+        t0_btjd=0.5,
+        duration_hours=2.0,
+        reference_sources=reference_sources,
+        oot_window_mult=None,
+        brightness_prior_enabled=False,
+    )
+
+    assert with_prior["best_source_id"] == "tic:1"
+    assert with_prior["verdict"] == "ON_TARGET"
+    assert with_prior["ranking_changed_by_prior"] is True
+    assert with_prior["hypotheses_ranked"][0]["brightness_prior_penalty"] == 0.0
+    assert with_prior["hypotheses_ranked"][1]["brightness_prior_penalty"] > 0.0
+    assert without_prior["best_source_id"] == "gaia:2"
+    assert without_prior["verdict"] == "AMBIGUOUS"
+    assert without_prior["ranking_changed_by_prior"] is False
