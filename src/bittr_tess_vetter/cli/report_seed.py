@@ -222,6 +222,11 @@ def resolve_candidate_inputs_with_report_seed(
         resolved[key] = value
 
     if resolved["tic_id"] is None:
+        if toi is not None and not network_ok and report_seed is None and tic_id is None:
+            raise BtvCliError(
+                "--toi requires --network-ok to resolve TIC/ephemeris when --tic-id or --report-file is not provided",
+                exit_code=EXIT_DATA_UNAVAILABLE,
+            )
         raise BtvCliError(
             "Missing TIC identifier. Provide --tic-id, --report-file, or --toi.",
             exit_code=EXIT_INPUT_ERROR,

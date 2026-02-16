@@ -43,6 +43,8 @@ def test_build_cli_args_omits_false_bool_and_supports_explicit_paired_bool_form(
     assert "--no-include-lc-summary" not in args
     assert "--no-download" in args
     assert "--download" not in args
+    toi_idx = args.index("--toi")
+    assert args[toi_idx + 1] == "TOI-123.01"
 
 
 def test_build_cli_args_supports_raw_flags_and_args_passthrough(tmp_path: Path) -> None:
