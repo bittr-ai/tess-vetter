@@ -61,6 +61,12 @@ def test_btv_dilution_success_payload_contract(monkeypatch, tmp_path: Path) -> N
     assert isinstance(payload["scenarios"], list)
     assert len(payload["scenarios"]) == 2
     assert isinstance(payload["physics_flags"], dict)
+    assert "n_plausible_scenarios" in payload["physics_flags"]
+    assert isinstance(payload["n_plausible_scenarios"], int)
+    assert isinstance(payload["result"]["scenarios"], list)
+    assert len(payload["result"]["scenarios"]) == 2
+    assert isinstance(payload["result"]["physics_flags"], dict)
+    assert isinstance(payload["result"]["n_plausible_scenarios"], int)
     assert payload["inputs_summary"]["input_resolution"]["source"] == "toi_catalog"
     assert payload["provenance"]["host_profile_path"] == str(host_profile_path)
     assert payload["provenance"]["host_ambiguous"] is True
@@ -421,3 +427,129 @@ def test_btv_dilution_rejects_mismatched_positional_and_option_toi(tmp_path: Pat
     )
     assert result.exit_code == 1
     assert "must match" in result.output
+
+
+def test_btv_dilution_autoresolves_primary_radius_when_missing_and_network_ok(monkeypatch, tmp_path: Path) -> None:
+    def _fake_resolve_candidate_inputs(**_kwargs: Any):
+        return 123, 8.2, 2100.5, 3.1, 420.0, {
+            "source": "toi_catalog",
+            "resolved_from": "exofop_toi_table",
+            "inputs": {"tic_id": 123, "depth_ppm": 420.0},
+        }
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.dilution_cli.load_auto_stellar_with_fallback",
+        lambda **_kwargs: (
+            {"radius": 0.93, "mass": 0.85, "tmag": 10.8},
+            {"selected_source": "exofop_toi_table"},
+        ),
+    )
+
+    host_profile_path = tmp_path / "host_profile_missing_radius.json"
+    host_profile_path.write_text(
+        json.dumps({"primary": {"tic_id": 123, "g_mag": 10.2}, "companions": []}),
+        encoding="utf-8",
+    )
+
+    out_path = tmp_path / "dilution_missing_radius.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        dilution_command,
+        [
+            "--toi",
+            "123.01",
+            "--network-ok",
+            "--host-profile-file",
+            str(host_profile_path),
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["scenarios"][0]["host"]["radius_rsun"] == 0.93
+    assert payload["provenance"]["primary_radius_resolution"]["attempted"] is True
+    assert payload["provenance"]["primary_radius_resolution"]["resolved_from"] == "auto_stellar_fallback"
+    assert payload["provenance"]["primary_radius_resolution"]["radius_rsun"] == 0.93
+
+
+def test_btv_dilution_auto_radius_resolution_fail_open(monkeypatch, tmp_path: Path) -> None:
+    def _fake_resolve_candidate_inputs(**_kwargs: Any):
+        return 123, 8.2, 2100.5, 3.1, 420.0, {
+            "source": "toi_catalog",
+            "resolved_from": "exofop_toi_table",
+            "inputs": {"tic_id": 123, "depth_ppm": 420.0},
+        }
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+
+    def _raise_auto_stellar(**_kwargs: Any):
+        raise RuntimeError("upstream stellar lookup timeout")
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.dilution_cli.load_auto_stellar_with_fallback",
+        _raise_auto_stellar,
+    )
+
+    host_profile_path = tmp_path / "host_profile_missing_radius_with_auto_error.json"
+    host_profile_path.write_text(
+        json.dumps({"primary": {"tic_id": 123, "g_mag": 10.2}, "companions": []}),
+        encoding="utf-8",
+    )
+
+    out_path = tmp_path / "dilution_auto_error.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        dilution_command,
+        [
+            "--toi",
+            "123.01",
+            "--network-ok",
+            "--host-profile-file",
+            str(host_profile_path),
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["primary_radius_resolution"]["attempted"] is True
+    assert payload["provenance"]["primary_radius_resolution"]["resolved_from"] is None
+    assert payload["provenance"]["primary_radius_resolution"]["radius_rsun"] is None
+    assert payload["provenance"]["primary_radius_resolution"]["error"] == "upstream stellar lookup timeout"
+    assert payload["scenarios"][0]["scenario_plausibility"] == "unevaluated"
+
+
+def test_btv_dilution_marks_implausible_depth_without_host_radius(tmp_path: Path) -> None:
+    host_profile_path = tmp_path / "host_profile_depth_impossible.json"
+    host_profile_path.write_text(
+        json.dumps({"primary": {"tic_id": 123}, "companions": []}),
+        encoding="utf-8",
+    )
+
+    out_path = tmp_path / "dilution_depth_impossible.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        dilution_command,
+        [
+            "--depth-ppm",
+            "1200000",
+            "--host-profile-file",
+            str(host_profile_path),
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    scenario = payload["scenarios"][0]
+    assert scenario["true_depth_ppm"] > 1_000_000.0
+    assert scenario["scenario_plausibility"] == "implausible_depth"
+    assert scenario["physically_impossible"] is True

@@ -166,9 +166,13 @@ def systematics_proxy_command(
         "sectors": [int(s) for s in sectors] if sectors else None,
         "flux_type": str(flux_type).lower(),
     }
+    systematics_proxy_payload = _to_jsonable_result(systematics_proxy)
     payload = {
         "schema_version": "cli.systematics_proxy.v1",
-        "systematics_proxy": _to_jsonable_result(systematics_proxy),
+        "result": {
+            "systematics_proxy": systematics_proxy_payload,
+        },
+        "systematics_proxy": systematics_proxy_payload,
         "inputs_summary": {
             "input_resolution": input_resolution,
         },

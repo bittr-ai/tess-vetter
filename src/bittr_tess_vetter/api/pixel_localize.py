@@ -35,6 +35,8 @@ from bittr_tess_vetter.api.wcs_localization import compute_difference_image_cent
 from bittr_tess_vetter.api.wcs_utils import compute_pixel_scale, pixel_to_world, world_to_pixel
 from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData
 
+ACTION_HINT_REVIEW_MARGIN_THRESHOLD = 10.0
+
 
 class ReferenceSource(TypedDict, total=False):
     name: str
@@ -361,11 +363,25 @@ def _derive_action_hint(
 ) -> str:
     if reliability_flagged or interpretation_code == "INSUFFICIENT_DISCRIMINATION":
         return "DEFER_HOST_ASSIGNMENT"
-    if consensus_margin is None or float(consensus_margin) < float(MARGIN_RESOLVE_THRESHOLD):
+    if consensus_margin is None or float(consensus_margin) < float(
+        ACTION_HINT_REVIEW_MARGIN_THRESHOLD
+    ):
         return "REVIEW_WITH_DILUTION"
     if consensus_best_source_id in {target_source_id, "target"}:
         return "HOST_ON_TARGET_SUPPORTED"
     return "HOST_OFF_TARGET_CANDIDATE_REVIEW"
+
+
+def _annotate_fit_physical(hypotheses: list[dict[str, Any]]) -> None:
+    for row in hypotheses:
+        if "fit_amplitude" not in row:
+            continue
+        try:
+            fit_amplitude = float(row.get("fit_amplitude"))
+        except Exception:
+            continue
+        if np.isfinite(fit_amplitude):
+            row["fit_physical"] = bool(fit_amplitude >= 0.0)
 
 
 @cites(
@@ -530,6 +546,8 @@ def localize_transit_host_single_sector(
             weight=float(brightness_prior_weight),
             softening_delta_mag=float(brightness_prior_softening_mag),
         )
+    if ranked:
+        _annotate_fit_physical(ranked)
 
     warnings: list[str] = []
     reliability_flags: list[str] = []
@@ -815,7 +833,27 @@ def localize_transit_host_multi_sector(
             r["tpf_fits_ref"] = str(tpf.ref.to_string())
         except Exception:
             pass
-        r["cadence_summary"] = _compute_tpf_cadence_summary(tpf, r.get("diagnostics"))
+        cadence_summary = _compute_tpf_cadence_summary(tpf, r.get("diagnostics"))
+        r["cadence_summary"] = cadence_summary
+        dropped_fraction_raw = cadence_summary.get("dropped_fraction")
+        dropped_fraction = (
+            float(dropped_fraction_raw)
+            if isinstance(dropped_fraction_raw, (int, float))
+            else float("nan")
+        )
+        if np.isfinite(dropped_fraction) and dropped_fraction > 0.2:
+            warnings = list(r.get("warnings") or [])
+            warnings.append(
+                "High cadence dropout; localization reliability reduced "
+                f"(dropped_fraction={dropped_fraction:.3f})."
+            )
+            r["warnings"] = warnings
+            flags = list(r.get("reliability_flags") or [])
+            if "HIGH_CADENCE_DROPOUT" not in flags:
+                flags.append("HIGH_CADENCE_DROPOUT")
+            r["reliability_flags"] = flags
+            r["reliability_flagged"] = True
+            r["interpretation_code"] = "INSUFFICIENT_DISCRIMINATION"
         per_sector_results.append(r)
 
     consensus = aggregate_multi_sector(per_sector_results)

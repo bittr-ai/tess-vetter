@@ -444,8 +444,14 @@ def test_execute_localize_host_contract_includes_reliability_and_interpretation_
                     "status": "ok",
                     "verdict": "AMBIGUOUS",
                     "best_source_id": "gaia:111",
-                    "warnings": ["Potential faint-neighbor artifact; centroid instability detected."],
+                    "warnings": [
+                        "Potential faint-neighbor artifact; centroid instability detected.",
+                        "High cadence dropout; localization reliability reduced (dropped_fraction=0.250).",
+                    ],
                     "baseline_consistency": {"checked": True, "inconsistent": True},
+                    "reliability_flagged": True,
+                    "reliability_flags": ["HIGH_CADENCE_DROPOUT"],
+                    "cadence_summary": {"dropped_fraction": 0.25},
                 }
             ],
             "consensus": {
@@ -508,6 +514,8 @@ def test_execute_localize_host_contract_includes_reliability_and_interpretation_
     assert payload_1["result"]["consensus"]["interpretation"]["action"] == "defer_host_assignment"
     assert payload_1["result"]["consensus"]["raw_consensus_label"] == "OFF_TARGET"
     assert payload_1["result"]["consensus"]["consensus_label"] == "AMBIGUOUS"
+    assert payload_1["result"]["per_sector_results"][0]["reliability_flagged"] is True
+    assert "HIGH_CADENCE_DROPOUT" in payload_1["result"]["per_sector_results"][0]["reliability_flags"]
 
 
 def test_btv_localize_host_toi5807_style_faint_neighbor_artifact_suppresses_off_target(

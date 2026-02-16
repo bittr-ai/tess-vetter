@@ -162,3 +162,61 @@ def test_btv_resolve_neighbors_gaia_error_falls_back_to_target_only(monkeypatch,
     assert len(payload["reference_sources"]) == 1
     assert payload["reference_sources"][0]["source_id"] == "tic:123"
     assert payload["provenance"]["gaia_resolution"]["status"] == "error_fallback_target_only"
+
+
+def test_btv_resolve_neighbors_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_resolve_tic_id(*, tic_id: int | None, toi: str | None, network_ok: bool):
+        seen["tic_id"] = tic_id
+        seen["toi"] = toi
+        seen["network_ok"] = network_ok
+        return 123, None
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.resolve_neighbors_cli._resolve_tic_id",
+        _fake_resolve_tic_id,
+    )
+
+    out_path = tmp_path / "reference_sources_positional.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        resolve_neighbors_command,
+        [
+            "TOI-5807.01",
+            "--ra-deg",
+            "120.0",
+            "--dec-deg",
+            "-30.0",
+            "--max-neighbors",
+            "0",
+            "-o",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen["tic_id"] is None
+    assert seen["toi"] == "TOI-5807.01"
+    assert seen["network_ok"] is False
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "reference_sources.v1"
+    assert payload["target"]["toi"] == "TOI-5807.01"
+
+
+def test_btv_resolve_neighbors_rejects_mismatched_positional_and_option_toi() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        resolve_neighbors_command,
+        [
+            "TOI-5807.01",
+            "--toi",
+            "TOI-4510.01",
+            "--ra-deg",
+            "120.0",
+            "--dec-deg",
+            "-30.0",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "must match" in result.output

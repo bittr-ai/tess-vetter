@@ -18,6 +18,7 @@ from bittr_tess_vetter.cli.common_cli import (
     load_json_file,
     resolve_optional_output_path,
 )
+from bittr_tess_vetter.cli.stellar_inputs import load_auto_stellar_with_fallback
 from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
 
 
@@ -421,6 +422,13 @@ def dilution_command(
         reference_sources=reference_source_inputs,
         cli_tic_id=tic_id,
     )
+    stellar_radius_resolution: dict[str, Any] = {
+        "attempted": False,
+        "resolved_from": None,
+        "radius_rsun": primary_radius_rsun,
+        "meta": None,
+        "error": None,
+    }
 
     try:
         observed_depth_ppm, input_resolution = _resolve_observed_depth(
@@ -432,6 +440,23 @@ def dilution_command(
             t0_btjd=t0_btjd,
             duration_hours=duration_hours,
         )
+        if primary_radius_rsun is None and bool(network_ok):
+            stellar_radius_resolution["attempted"] = True
+            try:
+                auto_stellar_values, auto_stellar_meta = load_auto_stellar_with_fallback(
+                    tic_id=int(profile_tic_id),
+                    toi=resolved_toi_arg,
+                )
+                stellar_radius_resolution["meta"] = auto_stellar_meta
+                auto_radius = auto_stellar_values.get("radius")
+                if auto_radius is not None:
+                    primary_radius_rsun = float(auto_radius)
+                    stellar_radius_resolution["resolved_from"] = "auto_stellar_fallback"
+                    stellar_radius_resolution["radius_rsun"] = float(auto_radius)
+            except Exception as exc:
+                # Fail open: dilution depth plausibility remains meaningful even
+                # when radius auto-resolution is unavailable.
+                stellar_radius_resolution["error"] = str(exc)
 
         companion_hypothesis_inputs: list[tuple[int, float, float | None, float | None, float | None]] = []
         for source_id, separation_arcsec, g_mag, radius_rsun in companions_profile:
@@ -469,10 +494,18 @@ def dilution_command(
     except Exception as exc:
         raise BtvCliError(str(exc), exit_code=EXIT_RUNTIME_ERROR) from exc
 
+    scenarios_payload = [scenario.to_dict() for scenario in scenarios]
+    physics_flags_payload = physics_flags.to_dict()
     payload = {
         "schema_version": "cli.dilution.v1",
-        "scenarios": [scenario.to_dict() for scenario in scenarios],
-        "physics_flags": physics_flags.to_dict(),
+        "result": {
+            "scenarios": scenarios_payload,
+            "physics_flags": physics_flags_payload,
+            "n_plausible_scenarios": int(physics_flags.n_plausible_scenarios),
+        },
+        "scenarios": scenarios_payload,
+        "physics_flags": physics_flags_payload,
+        "n_plausible_scenarios": int(physics_flags.n_plausible_scenarios),
         "inputs_summary": {
             "input_resolution": input_resolution,
         },
@@ -483,6 +516,7 @@ def dilution_command(
             ),
             "host_ambiguous": bool(host_ambiguous),
             "observed_depth_ppm": float(observed_depth_ppm),
+            "primary_radius_resolution": stellar_radius_resolution,
         },
     }
     dump_json_output(payload, out_path)

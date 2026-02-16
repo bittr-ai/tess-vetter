@@ -200,6 +200,7 @@ def _execute_resolve_neighbors(
 
 
 @click.command("resolve-neighbors")
+@click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
 @click.option("--toi", type=str, default=None, help="Optional TOI label to resolve TIC.")
 @click.option("--ra-deg", type=float, default=None, help="Optional target right ascension in degrees.")
@@ -213,6 +214,7 @@ def _execute_resolve_neighbors(
     help="Allow network-dependent TOI, coordinate, and Gaia lookups.",
 )
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,
@@ -221,6 +223,7 @@ def _execute_resolve_neighbors(
     help="JSON output path; '-' writes to stdout.",
 )
 def resolve_neighbors_command(
+    toi_arg: str | None,
     tic_id: int | None,
     toi: str | None,
     ra_deg: float | None,
@@ -232,24 +235,30 @@ def resolve_neighbors_command(
 ) -> None:
     """Resolve target and nearby Gaia sources into ``reference_sources.v1`` payload."""
     out_path = resolve_optional_output_path(output_path_arg)
+    if toi_arg is not None and toi is not None and str(toi_arg).strip() != str(toi).strip():
+        raise BtvCliError(
+            "Positional TOI argument and --toi must match when both are provided.",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    resolved_toi_arg = toi if toi is not None else toi_arg
     if (ra_deg is None) != (dec_deg is None):
         raise BtvCliError("Provide both --ra-deg and --dec-deg together.", exit_code=EXIT_INPUT_ERROR)
     if float(radius_arcsec) <= 0.0:
         raise BtvCliError("--radius-arcsec must be > 0", exit_code=EXIT_INPUT_ERROR)
     if int(max_neighbors) < 0:
         raise BtvCliError("--max-neighbors must be >= 0", exit_code=EXIT_INPUT_ERROR)
-    if tic_id is not None and toi is not None:
+    if tic_id is not None and resolved_toi_arg is not None:
         raise BtvCliError("Provide either --tic-id or --toi, not both.", exit_code=EXIT_INPUT_ERROR)
 
     resolved_tic, toi_resolution = _resolve_tic_id(
         tic_id=tic_id,
-        toi=toi,
+        toi=resolved_toi_arg,
         network_ok=bool(network_ok),
     )
 
     payload = _execute_resolve_neighbors(
         tic_id=int(resolved_tic),
-        toi=toi,
+        toi=resolved_toi_arg,
         ra_deg=ra_deg,
         dec_deg=dec_deg,
         radius_arcsec=float(radius_arcsec),

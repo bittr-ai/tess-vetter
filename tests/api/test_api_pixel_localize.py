@@ -109,6 +109,8 @@ def test_localize_single_sector_downgrades_non_physical_prf_best_fit(monkeypatch
     assert "NON_PHYSICAL_PRF_BEST_FIT" in res["reliability_flags"]
     assert res["interpretation_code"] == "INSUFFICIENT_DISCRIMINATION"
     assert any("Non-physical PRF best-fit indicators detected" in w for w in res["warnings"])
+    assert res["hypotheses_ranked"][0]["fit_physical"] is False
+    assert res["hypotheses_ranked"][1]["fit_physical"] is True
 
 
 def test_localize_single_sector_flags_non_physical_best_fit_with_prf_lite(
@@ -176,6 +178,8 @@ def test_localize_single_sector_flags_non_physical_best_fit_with_prf_lite(
     assert res["reliability_flagged"] is True
     assert "NON_PHYSICAL_PRF_BEST_FIT" in res["reliability_flags"]
     assert res["interpretation_code"] == "INSUFFICIENT_DISCRIMINATION"
+    assert res["hypotheses_ranked"][0]["fit_physical"] is False
+    assert res["hypotheses_ranked"][1]["fit_physical"] is True
 
 
 def test_baseline_sensitive_downgrade_sets_interpretation_and_reliability(

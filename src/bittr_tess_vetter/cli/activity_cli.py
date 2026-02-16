@@ -184,9 +184,13 @@ def activity_command(
         "rotation_min_period": float(rotation_min_period),
         "rotation_max_period": float(rotation_max_period),
     }
+    activity_payload = activity.to_dict()
     payload = {
         "schema_version": "cli.activity.v1",
-        "activity": activity.to_dict(),
+        "result": {
+            "activity": activity_payload,
+        },
+        "activity": activity_payload,
         "inputs_summary": {
             "tic_id": int(resolved_tic_id),
             "toi": toi,

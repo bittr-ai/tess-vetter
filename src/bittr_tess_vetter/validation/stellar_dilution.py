@@ -79,6 +79,8 @@ class DilutionScenario:
     implied_companion_radius_rsun: float | None = None
     planet_radius_inconsistent: bool = False
     stellar_companion_likely: bool = False
+    physically_impossible: bool = False
+    scenario_plausibility: str = "unevaluated"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -91,6 +93,8 @@ class DilutionScenario:
             "implied_companion_radius_rsun": self.implied_companion_radius_rsun,
             "planet_radius_inconsistent": bool(self.planet_radius_inconsistent),
             "stellar_companion_likely": bool(self.stellar_companion_likely),
+            "physically_impossible": bool(self.physically_impossible),
+            "scenario_plausibility": str(self.scenario_plausibility),
         }
 
 
@@ -101,12 +105,14 @@ class PhysicsFlags:
     planet_radius_inconsistent: bool
     requires_resolved_followup: bool
     rationale: str
+    n_plausible_scenarios: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "planet_radius_inconsistent": bool(self.planet_radius_inconsistent),
             "requires_resolved_followup": bool(self.requires_resolved_followup),
             "rationale": str(self.rationale),
+            "n_plausible_scenarios": int(self.n_plausible_scenarios),
         }
 
 
@@ -203,11 +209,21 @@ def compute_dilution_scenarios(
         r_sun: float | None = None
         planet_inconsistent = False
         stellar_likely = False
+        physically_impossible = bool(true_depth_ppm > 1_000_000.0)
+        scenario_plausibility = "unevaluated"
 
         if host.radius_rsun is not None and host.radius_rsun > 0:
             r_earth, r_jup, r_sun = compute_implied_radius(true_depth_frac, float(host.radius_rsun))
             planet_inconsistent = bool(r_jup > PLANET_MAX_RADIUS_RJUP)
             stellar_likely = bool(r_sun > STELLAR_MIN_RADIUS_RSUN)
+            if physically_impossible:
+                scenario_plausibility = "implausible_depth"
+            elif planet_inconsistent or stellar_likely:
+                scenario_plausibility = "implausible_radius"
+            else:
+                scenario_plausibility = "plausible"
+        elif physically_impossible:
+            scenario_plausibility = "implausible_depth"
 
         scenarios.append(
             DilutionScenario(
@@ -220,6 +236,8 @@ def compute_dilution_scenarios(
                 implied_companion_radius_rsun=r_sun,
                 planet_radius_inconsistent=planet_inconsistent,
                 stellar_companion_likely=stellar_likely,
+                physically_impossible=physically_impossible,
+                scenario_plausibility=scenario_plausibility,
             )
         )
 
@@ -237,15 +255,17 @@ def evaluate_physics_flags(scenarios: list[DilutionScenario], host_ambiguous: bo
                 if not host_ambiguous
                 else "Host ambiguous; requires resolved imaging"
             ),
+            n_plausible_scenarios=0,
         )
 
     primary = scenarios[0]
-    primary_inconsistent = bool(primary.planet_radius_inconsistent)
+    # Preserve historical contract: this flag tracks radius-based inconsistency,
+    # not the separate depth>100% physical-impossibility condition.
+    primary_inconsistent = bool(primary.planet_radius_inconsistent or primary.stellar_companion_likely)
     primary_stellar = bool(primary.stellar_companion_likely)
+    n_plausible_scenarios = int(sum(1 for s in scenarios if s.scenario_plausibility == "plausible"))
 
-    any_planet_consistent = any(
-        (not s.planet_radius_inconsistent) and (not s.stellar_companion_likely) for s in scenarios
-    )
+    any_planet_consistent = bool(n_plausible_scenarios > 0)
 
     rationale_parts: list[str] = []
     if host_ambiguous:
@@ -253,7 +273,9 @@ def evaluate_physics_flags(scenarios: list[DilutionScenario], host_ambiguous: bo
             "Host ambiguous within 1 TESS pixel; cannot determine true transit source"
         )
 
-    if primary_inconsistent:
+    if primary.physically_impossible:
+        rationale_parts.append("Primary host scenario implies true depth > 100% (physically impossible)")
+    elif primary_inconsistent:
         r_jup = primary.implied_companion_radius_rjup
         r_str = f"{r_jup:.2f}" if r_jup is not None else "unknown"
         rationale_parts.append(
@@ -277,6 +299,7 @@ def evaluate_physics_flags(scenarios: list[DilutionScenario], host_ambiguous: bo
         planet_radius_inconsistent=primary_inconsistent,
         requires_resolved_followup=bool(host_ambiguous),
         rationale="; ".join(rationale_parts),
+        n_plausible_scenarios=n_plausible_scenarios,
     )
 
 

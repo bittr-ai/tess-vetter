@@ -75,6 +75,7 @@ def test_btv_activity_success_payload_contract(monkeypatch, tmp_path: Path) -> N
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == "cli.activity.v1"
     assert payload["activity"]["rotation_period"] == 6.25
+    assert payload["result"]["activity"]["rotation_period"] == 6.25
     assert payload["inputs_summary"]["tic_id"] == 123
     assert payload["inputs_summary"]["input_resolution"]["source"] == "cli"
     assert payload["provenance"]["sectors_used"] == [14, 15]

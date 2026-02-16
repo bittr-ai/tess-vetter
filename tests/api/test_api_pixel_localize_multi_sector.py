@@ -202,6 +202,140 @@ def test_localize_multi_sector_sets_action_hint_when_on_target_supported(monkeyp
     assert out["consensus"]["action_hint"] == "HOST_ON_TARGET_SUPPORTED"
 
 
+def test_localize_multi_sector_low_absolute_margin_sets_review_with_dilution(monkeypatch) -> None:
+    from bittr_tess_vetter.api import pixel_localize as px
+    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+
+    def _fake_single_sector(*, tpf_fits: TPFFitsData, **_kwargs):
+        _ = tpf_fits
+        return {
+            "status": "ok",
+            "verdict": "ON_TARGET",
+            "raw_verdict": "ON_TARGET",
+            "best_source_id": "tic:1",
+            "best_source_name": "target",
+            "margin": 2.6,
+            "warnings": [],
+            "hypotheses_ranked": [],
+            "n_in_transit": 5,
+            "n_out_of_transit": 5,
+            "runtime_seconds": 0.01,
+            "prf_backend": "prf_lite",
+            "prf_fit_diagnostics": None,
+            "reliability_flagged": False,
+            "reliability_flags": [],
+            "ranking_changed_by_prior": False,
+            "diagnostics": {"n_cadences_used": 10, "n_cadences_dropped": 0},
+        }
+
+    monkeypatch.setattr(px, "localize_transit_host_single_sector_with_baseline_check", _fake_single_sector)
+
+    n = 32
+    time = np.linspace(0.0, 4.0, n, dtype=np.float64)
+    flux = np.ones((n, 5, 5), dtype=np.float64)
+
+    tpf1 = TPFFitsData(
+        ref=TPFFitsRef(tic_id=1, sector=1, author="spoc"),
+        time=time,
+        flux=flux,
+        flux_err=None,
+        wcs=None,
+        aperture_mask=None,
+        quality=np.zeros(n, dtype=np.int32),
+        camera=None,
+        ccd=None,
+        meta={},
+    )
+    tpf2 = TPFFitsData(
+        ref=TPFFitsRef(tic_id=1, sector=2, author="spoc"),
+        time=time,
+        flux=flux,
+        flux_err=None,
+        wcs=None,
+        aperture_mask=None,
+        quality=np.zeros(n, dtype=np.int32),
+        camera=None,
+        ccd=None,
+        meta={},
+    )
+
+    out = px.localize_transit_host_multi_sector(
+        tpf_fits_list=[tpf1, tpf2],
+        period_days=2.0,
+        t0_btjd=0.5,
+        duration_hours=2.0,
+        reference_sources=[{"name": "target", "source_id": "tic:1", "row": 2.0, "col": 2.0}],
+        oot_window_mult=None,
+    )
+
+    assert out["consensus"]["interpretation_code"] is None
+    assert out["consensus"]["consensus_margin"] == 5.2
+    assert out["consensus"]["action_hint"] == "REVIEW_WITH_DILUTION"
+
+
+def test_localize_multi_sector_flags_high_cadence_dropout(monkeypatch) -> None:
+    from bittr_tess_vetter.api import pixel_localize as px
+    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+
+    def _fake_single_sector(*, tpf_fits: TPFFitsData, **_kwargs):
+        _ = tpf_fits
+        return {
+            "status": "ok",
+            "verdict": "ON_TARGET",
+            "raw_verdict": "ON_TARGET",
+            "best_source_id": "tic:1",
+            "best_source_name": "target",
+            "margin": 20.0,
+            "warnings": [],
+            "hypotheses_ranked": [],
+            "n_in_transit": 5,
+            "n_out_of_transit": 5,
+            "runtime_seconds": 0.01,
+            "prf_backend": "prf_lite",
+            "prf_fit_diagnostics": None,
+            "reliability_flagged": False,
+            "reliability_flags": [],
+            "ranking_changed_by_prior": False,
+            "diagnostics": {"n_cadences_used": 24, "n_cadences_dropped": 8},
+        }
+
+    monkeypatch.setattr(px, "localize_transit_host_single_sector_with_baseline_check", _fake_single_sector)
+
+    n = 32
+    time = np.linspace(0.0, 4.0, n, dtype=np.float64)
+    flux = np.ones((n, 5, 5), dtype=np.float64)
+
+    tpf = TPFFitsData(
+        ref=TPFFitsRef(tic_id=1, sector=1, author="spoc"),
+        time=time,
+        flux=flux,
+        flux_err=None,
+        wcs=None,
+        aperture_mask=None,
+        quality=np.zeros(n, dtype=np.int32),
+        camera=None,
+        ccd=None,
+        meta={},
+    )
+
+    out = px.localize_transit_host_multi_sector(
+        tpf_fits_list=[tpf],
+        period_days=2.0,
+        t0_btjd=0.5,
+        duration_hours=2.0,
+        reference_sources=[{"name": "target", "source_id": "tic:1", "row": 2.0, "col": 2.0}],
+        oot_window_mult=None,
+    )
+
+    per_sector = out["per_sector_results"][0]
+    assert per_sector["reliability_flagged"] is True
+    assert "HIGH_CADENCE_DROPOUT" in per_sector["reliability_flags"]
+    assert per_sector["interpretation_code"] == "INSUFFICIENT_DISCRIMINATION"
+    assert any("High cadence dropout" in w for w in per_sector["warnings"])
+    assert out["consensus"]["reliability_flagged"] is True
+    assert "HIGH_CADENCE_DROPOUT" in out["consensus"]["reliability_flags"]
+
+
 def test_localize_multi_sector_prior_effect_minor_when_one_sector_changes(monkeypatch) -> None:
     from bittr_tess_vetter.api import pixel_localize as px
     from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
