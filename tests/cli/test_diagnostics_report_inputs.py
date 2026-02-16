@@ -126,3 +126,47 @@ def test_load_lightcurves_with_sector_policy_cache_discovery_falls_back_to_mast(
     assert path == "mast_discovery"
     assert [int(lc.sector) for lc in lightcurves] == [21]
     assert seen["download_all"] == {"tic_id": 123, "flux_type": "pdcsap", "sectors": None}
+
+
+def test_load_lightcurves_with_sector_policy_no_network_fails_on_partial_cache_miss(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeMASTClient:
+        def download_lightcurve_cached(self, tic_id: int, sector: int, flux_type: str) -> Any:
+            _ = tic_id, flux_type
+            if int(sector) == 21:
+                return _lc(21)
+            raise RuntimeError("cache miss")
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+
+    with pytest.raises(Exception) as excinfo:
+        load_lightcurves_with_sector_policy(
+            tic_id=123,
+            sectors=[21, 22],
+            flux_type="pdcsap",
+            explicit_sectors=False,
+            network_ok=False,
+        )
+    assert "Cache-only load failed for TIC 123 with --no-network" in str(excinfo.value)
+
+
+def test_load_lightcurves_with_sector_policy_no_network_fails_without_cached_discovery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeMASTClient:
+        def search_lightcurve_cached(self, tic_id: int) -> list[Any]:
+            _ = tic_id
+            return []
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+
+    with pytest.raises(Exception) as excinfo:
+        load_lightcurves_with_sector_policy(
+            tic_id=123,
+            sectors=None,
+            flux_type="pdcsap",
+            explicit_sectors=False,
+            network_ok=False,
+        )
+    assert "No cached sectors available for TIC 123 with --no-network" in str(excinfo.value)

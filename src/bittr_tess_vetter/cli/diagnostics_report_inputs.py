@@ -165,6 +165,7 @@ def load_lightcurves_with_sector_policy(
     sectors: list[int] | None,
     flux_type: str,
     explicit_sectors: bool,
+    network_ok: bool = True,
 ) -> tuple[list[Any], str]:
     client = MASTClient()
 
@@ -219,6 +220,16 @@ def load_lightcurves_with_sector_policy(
         if not missing_sectors:
             return sorted(cached_lightcurves, key=lambda lc: int(getattr(lc, "sector", 0))), "cache_first_filtered"
 
+        if not bool(network_ok):
+            missing = ", ".join(str(s) for s in sorted(set(missing_sectors)))
+            raise BtvCliError(
+                (
+                    f"Cache-only load failed for TIC {int(tic_id)} with --no-network. "
+                    f"Missing cached light curve for sector(s): {missing}."
+                ),
+                exit_code=EXIT_DATA_UNAVAILABLE,
+            )
+
         fetched_missing = client.download_all_sectors(
             tic_id=int(tic_id),
             flux_type=normalized_flux_type,
@@ -261,6 +272,15 @@ def load_lightcurves_with_sector_policy(
                     continue
             if cached_lightcurves:
                 return sorted(cached_lightcurves, key=lambda lc: int(getattr(lc, "sector", 0))), "cache_discovery"
+
+    if not bool(network_ok):
+        raise BtvCliError(
+            (
+                f"No cached sectors available for TIC {int(tic_id)} with --no-network. "
+                "Provide --sectors for known cached sectors or enable --network-ok."
+            ),
+            exit_code=EXIT_DATA_UNAVAILABLE,
+        )
 
     lightcurves = client.download_all_sectors(
         tic_id=int(tic_id),

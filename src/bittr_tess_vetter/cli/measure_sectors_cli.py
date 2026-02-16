@@ -66,6 +66,7 @@ def _execute_measure_sectors(
     sectors_explicit: bool,
     sector_selection_source: str,
     flux_type: str,
+    network_ok: bool,
     detrend: str | None,
     detrend_bin_hours: float,
     detrend_buffer: float,
@@ -78,6 +79,7 @@ def _execute_measure_sectors(
         flux_type=str(flux_type).lower(),
         sectors=sectors,
         explicit_sectors=bool(sectors_explicit),
+        network_ok=bool(network_ok),
     )
 
     if len(lightcurves) == 1:
@@ -327,6 +329,7 @@ def measure_sectors_command(
             sectors_explicit=bool(sectors_explicit),
             sector_selection_source=sector_selection_source,
             flux_type=str(flux_type).lower(),
+            network_ok=bool(network_ok),
             detrend=detrend_method,
             detrend_bin_hours=float(detrend_bin_hours),
             detrend_buffer=float(detrend_buffer),

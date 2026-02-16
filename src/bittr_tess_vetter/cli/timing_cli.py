@@ -448,6 +448,7 @@ def timing_command(
             flux_type=str(flux_type).lower(),
             sectors=effective_sectors,
             explicit_sectors=bool(sectors_explicit),
+            network_ok=bool(network_ok),
         )
 
         if len(lightcurves) == 1:

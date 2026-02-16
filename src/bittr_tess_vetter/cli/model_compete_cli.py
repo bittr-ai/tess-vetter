@@ -155,12 +155,14 @@ def _download_and_prepare_arrays(
     sectors: list[int] | None,
     sectors_explicit: bool,
     flux_type: str,
+    network_ok: bool,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[int], str]:
     lightcurves, sector_load_path = load_lightcurves_with_sector_policy(
         tic_id=int(tic_id),
         sectors=sectors,
         flux_type=str(flux_type).lower(),
         explicit_sectors=bool(sectors_explicit),
+        network_ok=bool(network_ok),
     )
 
     if len(lightcurves) == 1:
@@ -340,6 +342,7 @@ def model_compete_command(
             sectors=effective_sectors,
             sectors_explicit=bool(sectors_explicit),
             flux_type=str(flux_type).lower(),
+            network_ok=bool(network_ok),
         )
         time, flux, flux_err, detrend_provenance = _maybe_detrend_lightcurve(
             time=time,
