@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time as time_module
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -33,6 +34,49 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_SEARCH_TIMEOUT_SECONDS = 60.0
+
+
+def _search_timeout_seconds() -> float:
+    raw = os.getenv("BTV_MAST_SEARCH_TIMEOUT_SECONDS")
+    if raw is None:
+        raw = os.getenv("BTV_MAST_TIMEOUT_SECONDS", str(_DEFAULT_SEARCH_TIMEOUT_SECONDS))
+    try:
+        value = float(raw)
+    except Exception:
+        return _DEFAULT_SEARCH_TIMEOUT_SECONDS
+    if not np.isfinite(value) or value <= 0.0:
+        return _DEFAULT_SEARCH_TIMEOUT_SECONDS
+    return value
+
+
+def _search_lightcurve_with_timeout(lk: Any, **kwargs: Any) -> Any:
+    """Run lightkurve.search_lightcurve with a hard timeout.
+
+    lightkurve/astroquery requests can occasionally hang indefinitely on MAST.
+    This wrapper bounds wall-time and raises TimeoutError if exceeded.
+    """
+    timeout_s = _search_timeout_seconds()
+    out: dict[str, Any] = {"done": False, "result": None, "error": None}
+
+    def _run() -> None:
+        try:
+            out["result"] = lk.search_lightcurve(**kwargs)
+        except Exception as exc:  # pragma: no cover - exercised through caller path
+            out["error"] = exc
+        finally:
+            out["done"] = True
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    thread.join(timeout=timeout_s)
+    if thread.is_alive() or not out["done"]:
+        target = kwargs.get("target")
+        raise TimeoutError(f"MAST search_lightcurve timed out after {timeout_s:.1f}s for {target}")
+    if out["error"] is not None:
+        raise out["error"]
+    return out["result"]
 
 
 def _maybe_extract_http_status(exc: BaseException) -> int | None:
@@ -768,8 +812,9 @@ class MASTClient:
         logger.info(f"Searching MAST for {target}, sector={sector}, author={search_author}")
 
         try:
-            search_result = lk.search_lightcurve(
-                target,
+            search_result = _search_lightcurve_with_timeout(
+                lk,
+                target=target,
                 mission="TESS",
                 sector=sector,
                 author=search_author,
@@ -940,8 +985,9 @@ class MASTClient:
                 f"Searching MAST for TIC {tic_id} sector {sector}...",
             )
             try:
-                search_result = lk.search_lightcurve(
-                    target,
+                search_result = _search_lightcurve_with_timeout(
+                    lk,
+                    target=target,
                     mission="TESS",
                     sector=sector,
                     author=search_author,
@@ -1562,8 +1608,9 @@ class MASTClient:
                 lk = self._ensure_lightkurve()
                 target = f"TIC {tic_id}"
                 search_author = self.author
-                search_all = lk.search_lightcurve(
-                    target,
+                search_all = _search_lightcurve_with_timeout(
+                    lk,
+                    target=target,
                     mission="TESS",
                     author=search_author,
                 )
