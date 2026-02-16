@@ -197,7 +197,7 @@ def test_localize_multi_sector_sets_action_hint_when_on_target_supported(monkeyp
         oot_window_mult=None,
     )
 
-    assert "interpretation_code" not in out["consensus"]
+    assert out["consensus"]["interpretation_code"] is None
     assert out["consensus"]["prior_effect"] == "none"
     assert out["consensus"]["action_hint"] == "HOST_ON_TARGET_SUPPORTED"
 

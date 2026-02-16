@@ -90,6 +90,114 @@ def test_btv_localize_host_success_writes_contract_json(monkeypatch, tmp_path: P
     assert payload["provenance"]["network_ok"] is False
 
 
+def test_btv_localize_host_accepts_short_o_alias(monkeypatch, tmp_path: Path) -> None:
+    def _fake_resolve_candidate_inputs(**_kwargs: Any):
+        return 123, 10.5, 2000.2, 2.5, None, {"source": "cli", "inputs": {"tic_id": 123}}
+
+    def _fake_execute_localize_host(**_kwargs: Any) -> dict[str, Any]:
+        return {
+            "schema_version": "cli.localize_host.v1",
+            "result": {"consensus_label": "ON_TARGET"},
+            "inputs_summary": {"input_resolution": {"source": "cli", "inputs": {"tic_id": 123}}},
+            "provenance": {"selected_sectors": [14], "tpf_sector_strategy": "best", "network_ok": False},
+        }
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.localize_host_cli._execute_localize_host",
+        _fake_execute_localize_host,
+    )
+
+    out_path = tmp_path / "localize_host_short_o.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        localize_host_command,
+        [
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "-o",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "cli.localize_host.v1"
+
+
+def test_btv_localize_host_accepts_positional_toi(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_resolve_candidate_inputs(**kwargs: Any):
+        seen.update(kwargs)
+        return 123, 10.5, 2000.2, 2.5, None, {"source": "toi", "inputs": {"toi": kwargs.get("toi")}}
+
+    def _fake_execute_localize_host(**_kwargs: Any) -> dict[str, Any]:
+        return {
+            "schema_version": "cli.localize_host.v1",
+            "result": {"consensus_label": "ON_TARGET"},
+            "inputs_summary": {"input_resolution": {"source": "toi"}},
+            "provenance": {"selected_sectors": [14], "tpf_sector_strategy": "best", "network_ok": False},
+        }
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.localize_host_cli._execute_localize_host",
+        _fake_execute_localize_host,
+    )
+
+    out_path = tmp_path / "localize_host_positional_toi.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        localize_host_command,
+        [
+            "TOI-5807.01",
+            "-o",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen["toi"] == "TOI-5807.01"
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "cli.localize_host.v1"
+
+
+def test_btv_localize_host_rejects_mismatched_positional_and_option_toi(monkeypatch) -> None:
+    def _fake_resolve_candidate_inputs(**_kwargs: Any):
+        raise AssertionError("should fail before resolving candidate inputs")
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        localize_host_command,
+        [
+            "TOI-5807.01",
+            "--toi",
+            "TOI-4510.01",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "must match" in result.output
+
+
 def test_btv_localize_host_data_unavailable_when_tpf_missing_exits_4(monkeypatch) -> None:
     def _fake_resolve_candidate_inputs(**_kwargs: Any):
         return 123, 10.5, 2000.2, 2.5, None, {"source": "cli"}

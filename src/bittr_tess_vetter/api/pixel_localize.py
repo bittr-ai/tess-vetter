@@ -840,6 +840,8 @@ def localize_transit_host_multi_sector(
     )
     if low_discrimination or consensus_reliability_flagged:
         consensus["interpretation_code"] = "INSUFFICIENT_DISCRIMINATION"
+    else:
+        consensus["interpretation_code"] = None
     consensus["reliability_flagged"] = consensus_reliability_flagged
     consensus["brightness_prior_enabled"] = bool(brightness_prior_enabled)
     consensus["ranking_changed_by_prior"] = prior_changed_count > 0

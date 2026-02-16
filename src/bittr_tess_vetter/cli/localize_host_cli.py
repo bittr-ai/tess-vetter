@@ -226,6 +226,7 @@ def _execute_localize_host(
 
 
 @click.command("localize-host")
+@click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
 @click.option("--period-days", type=float, default=None, help="Orbital period in days.")
 @click.option("--t0-btjd", type=float, default=None, help="Reference epoch in BTJD.")
@@ -292,6 +293,7 @@ def _execute_localize_host(
     help="Delta-mag below which no brightness prior penalty is applied.",
 )
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,
@@ -300,6 +302,7 @@ def _execute_localize_host(
     help="JSON output path; '-' writes to stdout.",
 )
 def localize_host_command(
+    toi_arg: str | None,
     tic_id: int | None,
     period_days: float | None,
     t0_btjd: float | None,
@@ -327,6 +330,12 @@ def localize_host_command(
     """Run multi-sector host localization for a single transit candidate."""
     out_path = resolve_optional_output_path(output_path_arg)
     strategy = str(tpf_sector_strategy).lower()
+    if toi_arg is not None and toi is not None and str(toi_arg).strip() != str(toi).strip():
+        raise BtvCliError(
+            "Positional TOI argument and --toi must match when both are provided.",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    resolved_toi_arg = toi if toi is not None else toi_arg
 
     if tpf_sectors and strategy != "requested":
         raise BtvCliError(
@@ -353,7 +362,7 @@ def localize_host_command(
         input_resolution,
     ) = _resolve_candidate_inputs(
         network_ok=network_ok,
-        toi=toi,
+        toi=resolved_toi_arg,
         tic_id=tic_id,
         period_days=period_days,
         t0_btjd=t0_btjd,
