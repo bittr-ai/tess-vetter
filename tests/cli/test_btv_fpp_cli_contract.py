@@ -800,7 +800,70 @@ def test_btv_fpp_report_file_precedence_and_sector_fallback(monkeypatch, tmp_pat
     assert payload["provenance"]["inputs"]["sectors"] == [20, 21]
 
 
-def test_btv_fpp_explicit_sectors_use_cache_only_for_detrend_and_cache_build(monkeypatch, tmp_path: Path) -> None:
+def test_btv_fpp_explicit_sectors_use_network_download_by_default(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {"cached_calls": 0, "network_calls": 0}
+
+    class _FakeMASTClient:
+        def download_all_sectors(self, *_args: Any, **_kwargs: Any):
+            seen["network_calls"] += 1
+            return [
+                _make_lc(tic_id=123, sector=14, start=2014.0),
+                _make_lc(tic_id=123, sector=15, start=2015.0),
+            ]
+
+        def download_lightcurve_cached(self, *_args: Any, **_kwargs: Any):
+            seen["cached_calls"] += 1
+            raise AssertionError("cached loader should not be used by default")
+
+    def _fake_detrend_lightcurve_for_vetting(**kwargs: Any):
+        lc = kwargs["lc"]
+        return lc, {"method": kwargs["method"]}
+
+    def _fake_measure_transit_depth(*_args: Any, **_kwargs: Any):
+        return 8e-4, 1e-4
+
+    def _fake_calculate_fpp(**_kwargs: Any) -> dict[str, Any]:
+        return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli._detrend_lightcurve_for_vetting",
+        _fake_detrend_lightcurve_for_vetting,
+    )
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.measure_transit_depth", _fake_measure_transit_depth)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_explicit_sectors_download_default.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--detrend",
+            "transit_masked_bin_median",
+            "--sectors",
+            "14",
+            "--sectors",
+            "15",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen["network_calls"] >= 2
+    assert seen["cached_calls"] == 0
+
+
+def test_btv_fpp_explicit_sectors_cache_only_when_requested(monkeypatch, tmp_path: Path) -> None:
     seen: dict[str, Any] = {"cached_calls": 0, "network_calls": 0}
 
     class _FakeMASTClient:
@@ -851,6 +914,7 @@ def test_btv_fpp_explicit_sectors_use_cache_only_for_detrend_and_cache_build(mon
             "14",
             "--sectors",
             "15",
+            "--cache-only-sectors",
             "--out",
             str(out_path),
         ],
@@ -859,3 +923,40 @@ def test_btv_fpp_explicit_sectors_use_cache_only_for_detrend_and_cache_build(mon
     assert result.exit_code == 0, result.output
     assert seen["network_calls"] == 0
     assert seen["cached_calls"] >= 4
+
+
+def test_btv_fpp_supports_positional_toi_and_short_o(monkeypatch, tmp_path: Path) -> None:
+    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
+        return object(), [14, 15]
+
+    def _fake_calculate_fpp(**_kwargs: Any) -> dict[str, Any]:
+        return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_positional_toi_short_o.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "TOI-123.01",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "-o",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "cli.fpp.v2"

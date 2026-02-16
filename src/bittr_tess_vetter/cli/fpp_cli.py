@@ -410,6 +410,7 @@ def _load_auto_stellar_inputs(
 
 
 @click.command("fpp")
+@click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
 @click.option("--period-days", type=float, default=None, help="Orbital period in days.")
 @click.option("--t0-btjd", type=float, default=None, help="Reference epoch in BTJD.")
@@ -449,6 +450,12 @@ def _load_auto_stellar_inputs(
 @click.option("--seed", type=int, default=None, help="Base RNG seed.")
 @click.option("--override", "overrides", multiple=True, help="Repeat KEY=VALUE TRICERATOPS override entries.")
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
+@click.option(
+    "--cache-only-sectors/--allow-sector-download",
+    default=False,
+    show_default=True,
+    help="When true, sector loading uses cache-only for selected/report sectors.",
+)
 @click.option(
     "--timeout-seconds",
     type=float,
@@ -496,6 +503,7 @@ def _load_auto_stellar_inputs(
     help="Fail unless stellar radius and mass resolve.",
 )
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,
@@ -504,6 +512,7 @@ def _load_auto_stellar_inputs(
     help="JSON output path; '-' writes to stdout.",
 )
 def fpp_command(
+    toi_arg: str | None,
     tic_id: int | None,
     period_days: float | None,
     t0_btjd: float | None,
@@ -521,6 +530,7 @@ def fpp_command(
     seed: int | None,
     overrides: tuple[str, ...],
     sectors: tuple[int, ...],
+    cache_only_sectors: bool,
     timeout_seconds: float | None,
     contrast_curve: Path | None,
     contrast_curve_filter: str | None,
@@ -536,12 +546,23 @@ def fpp_command(
 ) -> None:
     """Calculate candidate FPP and emit schema-stable JSON."""
     out_path = resolve_optional_output_path(output_path_arg)
+    if (
+        report_file is None
+        and toi_arg is not None
+        and toi is not None
+        and str(toi_arg).strip() != str(toi).strip()
+    ):
+        raise BtvCliError(
+            "Positional TOI argument and --toi must match when both are provided.",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    resolved_toi_arg = toi if toi is not None else toi_arg
 
     report_candidate: dict[str, Any] = {}
     report_sectors_used: list[int] | None = None
     if report_file is not None:
         report_candidate, report_sectors_used = _load_report_inputs(report_file)
-        if toi is not None:
+        if resolved_toi_arg is not None:
             click.echo(
                 "--report-file provided with --toi; preferring report candidate values and using --toi only for missing fields.",
                 err=True,
@@ -566,10 +587,11 @@ def fpp_command(
     )
     if candidate_depth_ppm is None and detrend is None:
         should_use_toi_resolver = True
-    toi_for_resolution = toi if should_use_toi_resolver else None
+    toi_for_resolution = resolved_toi_arg if should_use_toi_resolver else None
 
     requested_sectors = [int(s) for s in sectors] if sectors else None
     effective_sectors = requested_sectors if requested_sectors is not None else report_sectors_used
+    cache_only_sector_load = bool(cache_only_sectors) and effective_sectors is not None
 
     (
         resolved_tic_id,
@@ -639,12 +661,12 @@ def fpp_command(
             stellar_file=stellar_file,
             use_stellar_auto=use_stellar_auto,
             require_stellar=require_stellar,
-            auto_loader=(
-                (lambda _tic_id: _load_auto_stellar_inputs(_tic_id, toi=toi))
-                if toi is not None
-                else (lambda _tic_id: _load_auto_stellar_inputs(_tic_id))
-            )
-            if use_stellar_auto
+        auto_loader=(
+            (lambda _tic_id: _load_auto_stellar_inputs(_tic_id, toi=resolved_toi_arg))
+            if resolved_toi_arg is not None
+            else (lambda _tic_id: _load_auto_stellar_inputs(_tic_id))
+        )
+        if use_stellar_auto
             else None,
         )
     except (TargetNotFoundError, LightCurveNotFoundError) as exc:
@@ -674,7 +696,7 @@ def fpp_command(
                 detrend_bin_hours=float(detrend_bin_hours),
                 detrend_buffer=float(detrend_buffer),
                 detrend_sigma_clip=float(detrend_sigma_clip),
-                cache_only_sectors=bool(sectors),
+                cache_only_sectors=cache_only_sector_load,
             )
             if detrended_depth is not None:
                 depth_ppm_used = float(detrended_depth)
@@ -692,7 +714,7 @@ def fpp_command(
             }
 
     if depth_ppm_used is None:
-        exit_code = EXIT_DATA_UNAVAILABLE if toi is not None else EXIT_INPUT_ERROR
+        exit_code = EXIT_DATA_UNAVAILABLE if resolved_toi_arg is not None else EXIT_INPUT_ERROR
         raise BtvCliError(
             "Missing transit depth. Provide --depth-ppm, enable --detrend, or use --toi with depth metadata.",
             exit_code=exit_code,
@@ -721,7 +743,7 @@ def fpp_command(
             detrend_bin_hours=float(detrend_bin_hours),
             detrend_buffer=float(detrend_buffer),
             detrend_sigma_clip=float(detrend_sigma_clip),
-            cache_only_sectors=bool(sectors),
+            cache_only_sectors=cache_only_sector_load,
         )
     except BtvCliError:
         raise
