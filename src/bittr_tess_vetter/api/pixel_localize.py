@@ -81,6 +81,9 @@ class PixelLocalizeSectorResult(TypedDict, total=False):
 
     prf_backend: str
     prf_fit_diagnostics: dict[str, Any] | None
+    reliability_flagged: bool
+    reliability_flags: list[str]
+    interpretation_code: str | None
 
     diagnostics: dict[str, Any]
     baseline_consistency: BaselineConsistencyResult
@@ -149,6 +152,57 @@ def _compute_tpf_cadence_summary(
         "cadence_days": cadence_days,
         "cadence_label": _cadence_label(cadence_seconds),
     }
+
+
+_NEGATIVE_NON_PHYSICAL_KEYS = {
+    "fit_amplitude",
+    "amplitude",
+    "flux_contribution",
+    "fit_flux",
+    "fitted_flux",
+    "host_flux_contribution",
+}
+_BOOLEAN_NON_PHYSICAL_KEYS = {
+    "non_physical",
+    "non_physical_fit",
+    "is_non_physical",
+    "negative_amplitude",
+    "negative_flux_contribution",
+}
+
+
+def _collect_non_physical_prf_indicators(
+    payload: Any,
+    *,
+    path: str = "",
+    out: list[str] | None = None,
+) -> list[str]:
+    if out is None:
+        out = []
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            key_str = str(key)
+            key_l = key_str.lower()
+            key_path = f"{path}.{key_str}" if path else key_str
+            if key_l in _BOOLEAN_NON_PHYSICAL_KEYS and bool(value):
+                out.append(f"{key_path}=true")
+            if key_l in _NEGATIVE_NON_PHYSICAL_KEYS:
+                try:
+                    val = float(value)
+                    if np.isfinite(val) and val < 0.0:
+                        out.append(f"{key_path}={val:.6g}")
+                except Exception:
+                    pass
+            if isinstance(value, (dict, list, tuple)):
+                _collect_non_physical_prf_indicators(value, path=key_path, out=out)
+        return out
+    if isinstance(payload, (list, tuple)):
+        for idx, value in enumerate(payload):
+            idx_path = f"{path}[{idx}]"
+            if isinstance(value, (dict, list, tuple)):
+                _collect_non_physical_prf_indicators(value, path=idx_path, out=out)
+        return out
+    return out
 
 
 @cites(
@@ -302,10 +356,12 @@ def localize_transit_host_single_sector(
         )
 
     warnings: list[str] = []
+    reliability_flags: list[str] = []
     best_source_id: str | None = None
     best_source_name: str | None = None
     margin: float | None = None
     verdict = "AMBIGUOUS"
+    raw_verdict = verdict
 
     if ranked:
         best_source_id = ranked[0].get("source_id")
@@ -333,25 +389,49 @@ def localize_transit_host_single_sector(
             verdict = "AMBIGUOUS"
             if margin is not None and float(margin) < float(MARGIN_RESOLVE_THRESHOLD):
                 warnings.append(f"Low margin ({float(margin):.3f}) between hypotheses")
+        raw_verdict = verdict
 
     # Uncertainty estimate (kept intentionally simple for parity)
     sigma_pix = 1.0
     sigma_arcsec = sigma_pix * float(pixel_scale_arcsec)
 
     prf_fit_diagnostics: dict[str, Any] | None = None
+    non_physical_reasons: list[str] = []
     if prf_backend_used != "prf_lite" and ranked:
         best_hyp = ranked[0]
+        non_physical_reasons = _collect_non_physical_prf_indicators(best_hyp)
         prf_fit_diagnostics = {
             "prf_backend": prf_backend_used,
             "best_log_likelihood": best_hyp.get("log_likelihood"),
             "best_fit_residual_rms": best_hyp.get("fit_residual_rms"),
             "best_fitted_background": best_hyp.get("fitted_background"),
         }
+        if non_physical_reasons:
+            prf_fit_diagnostics["non_physical_indicators"] = list(non_physical_reasons)
+
+    if non_physical_reasons:
+        reliability_flags.append("NON_PHYSICAL_PRF_BEST_FIT")
+        if verdict != "AMBIGUOUS":
+            # Preserve pre-gate decision for auditability.
+            raw_verdict = verdict
+            verdict = "AMBIGUOUS"
+            warnings.append(
+                "Non-physical PRF best-fit indicators detected; downgraded verdict to AMBIGUOUS."
+            )
+        else:
+            warnings.append("Non-physical PRF best-fit indicators detected.")
+
+    reliability_flagged = bool(reliability_flags)
+    interpretation_code: str | None = None
+    low_margin = margin is None or float(margin) < float(MARGIN_RESOLVE_THRESHOLD)
+    if low_margin or reliability_flagged:
+        interpretation_code = "INSUFFICIENT_DISCRIMINATION"
 
     end = _time.perf_counter()
     return PixelLocalizeSectorResult(
         status="ok",
         verdict=verdict,
+        raw_verdict=raw_verdict,
         best_source_id=best_source_id,
         best_source_name=best_source_name,
         margin=margin,
@@ -369,6 +449,9 @@ def localize_transit_host_single_sector(
         runtime_seconds=float(end - start),
         prf_backend=prf_backend_used,
         prf_fit_diagnostics=prf_fit_diagnostics,
+        reliability_flagged=reliability_flagged,
+        reliability_flags=reliability_flags,
+        interpretation_code=interpretation_code,
         diagnostics=dict(diff_diag),
     )
 
@@ -534,6 +617,29 @@ def localize_transit_host_multi_sector(
         per_sector_results.append(r)
 
     consensus = aggregate_multi_sector(per_sector_results)
+    consensus_reliability_flags = sorted(
+        {
+            str(flag)
+            for r in per_sector_results
+            for flag in (r.get("reliability_flags") or [])
+            if flag is not None
+        }
+    )
+    consensus_reliability_flagged = bool(consensus_reliability_flags)
+    consensus_margin_raw = consensus.get("consensus_margin")
+    consensus_margin = (
+        float(consensus_margin_raw)
+        if isinstance(consensus_margin_raw, (int, float)) and np.isfinite(consensus_margin_raw)
+        else None
+    )
+    low_discrimination = (
+        consensus_margin is None or consensus_margin < float(MARGIN_RESOLVE_THRESHOLD)
+    )
+    if low_discrimination or consensus_reliability_flagged:
+        consensus["interpretation_code"] = "INSUFFICIENT_DISCRIMINATION"
+    consensus["reliability_flagged"] = consensus_reliability_flagged
+    if consensus_reliability_flags:
+        consensus["reliability_flags"] = consensus_reliability_flags
     return PixelLocalizeMultiSectorResult(
         per_sector_results=per_sector_results, consensus=dict(consensus)
     )
