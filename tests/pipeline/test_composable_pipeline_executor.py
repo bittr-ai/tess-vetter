@@ -135,3 +135,117 @@ def test_run_composition_report_from_and_ports_and_resume(monkeypatch, tmp_path:
         resume=True,
     )
     assert result_resume["manifest"]["counts"]["n_ok"] == 1
+
+
+def test_run_composition_step_failure_respects_on_error_continue(monkeypatch, tmp_path: Path) -> None:
+    payload = {
+        "schema_version": "pipeline.composition.v1",
+        "id": "test_fail_continue",
+        "defaults": {"retry_max_attempts": 1, "retry_initial_seconds": 0.01},
+        "steps": [
+            {"id": "report_seed", "op": "report"},
+            {"id": "bad_step", "op": "timing", "on_error": "continue"},
+            {"id": "final_step", "op": "model_compete"},
+        ],
+    }
+    comp = validate_composition_payload(payload, source="test")
+
+    calls: list[str] = []
+
+    def _fake_run_step_with_retries(
+        *,
+        step,
+        toi,
+        inputs,
+        output_path,
+        stderr_path,
+        network_ok,
+        max_attempts,
+        initial_backoff_seconds,
+    ):
+        calls.append(step.id)
+        if step.id == "bad_step":
+            raise RuntimeError("simulated timeout")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        stderr_path.parent.mkdir(parents=True, exist_ok=True)
+        stderr_path.write_text("", encoding="utf-8")
+        row = {"schema_version": "test.v1", "verdict": f"{step.id}_ok"}
+        output_path.write_text(json.dumps(row), encoding="utf-8")
+        return row, 1
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.pipeline_composition.executor._run_step_with_retries",
+        _fake_run_step_with_retries,
+    )
+
+    out_dir = tmp_path / "run_continue"
+    result = run_composition(
+        composition=comp,
+        tois=["TOI-CONTINUE.01"],
+        out_dir=out_dir,
+        network_ok=False,
+        continue_on_error=False,
+        max_workers=1,
+        resume=False,
+    )
+    assert result["manifest"]["counts"]["n_partial"] == 1
+    assert result["manifest"]["counts"]["n_failed"] == 0
+    assert calls == ["report_seed", "bad_step", "final_step"]
+
+
+def test_run_composition_multi_toi_aggregation_includes_partial(monkeypatch, tmp_path: Path) -> None:
+    payload = {
+        "schema_version": "pipeline.composition.v1",
+        "id": "test_multi",
+        "defaults": {"retry_max_attempts": 1, "retry_initial_seconds": 0.01},
+        "steps": [
+            {"id": "report_seed", "op": "report"},
+            {"id": "model", "op": "model_compete"},
+        ],
+    }
+    comp = validate_composition_payload(payload, source="test")
+
+    def _fake_run_step_with_retries(
+        *,
+        step,
+        toi,
+        inputs,
+        output_path,
+        stderr_path,
+        network_ok,
+        max_attempts,
+        initial_backoff_seconds,
+    ):
+        if toi == "TOI-B.01" and step.id == "model":
+            raise RuntimeError("429 rate limit")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        stderr_path.parent.mkdir(parents=True, exist_ok=True)
+        stderr_path.write_text("", encoding="utf-8")
+        row = {"schema_version": "test.v1", "verdict": "OK"}
+        output_path.write_text(json.dumps(row), encoding="utf-8")
+        return row, 1
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.pipeline_composition.executor._run_step_with_retries",
+        _fake_run_step_with_retries,
+    )
+
+    out_dir = tmp_path / "run_multi"
+    result = run_composition(
+        composition=comp,
+        tois=["TOI-B.01", "TOI-A.01"],
+        out_dir=out_dir,
+        network_ok=False,
+        continue_on_error=True,
+        max_workers=2,
+        resume=False,
+    )
+    counts = result["manifest"]["counts"]
+    assert counts["n_tois"] == 2
+    assert counts["n_ok"] == 1
+    assert counts["n_partial"] == 1
+    assert counts["n_failed"] == 0
+
+    evidence_json = json.loads((out_dir / "evidence_table.json").read_text(encoding="utf-8"))
+    toi_rows = [row["toi"] for row in evidence_json["rows"]]
+    assert toi_rows == ["TOI-A.01", "TOI-B.01"]

@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import random
 import subprocess
 import sys
 import time
@@ -131,24 +132,66 @@ def _build_cli_args(
     args.extend(["--toi", str(toi)])
     args.append("--network-ok" if network_ok else "--no-network")
 
-    raw_args = inputs.get("args")
+    raw_flags = inputs.get("_flags")
+    if raw_flags is not None and not isinstance(raw_flags, list):
+        raise BtvCliError(
+            f"Step '{step.id}' inputs._flags must be a list of CLI flags.",
+            exit_code=EXIT_RUNTIME_ERROR,
+        )
+
+    raw_args = inputs.get("_args")
     if raw_args is not None and not isinstance(raw_args, list):
+        raise BtvCliError(
+            f"Step '{step.id}' inputs._args must be a list of CLI tokens.",
+            exit_code=EXIT_RUNTIME_ERROR,
+        )
+
+    legacy_raw_args = inputs.get("args")
+    if legacy_raw_args is not None and not isinstance(legacy_raw_args, list):
         raise BtvCliError(
             f"Step '{step.id}' inputs.args must be a list of CLI tokens.",
             exit_code=EXIT_RUNTIME_ERROR,
         )
 
     for key, value in inputs.items():
-        if key in {"args"}:
+        if key in {"args", "_flags", "_args"}:
             continue
         flag = _flag_name(key)
         if value is None:
             continue
+        if isinstance(value, dict) and any(
+            k in value for k in {"_value", "_flag_true", "_flag_false"}
+        ):
+            bool_value = value.get("_value")
+            true_flag = value.get("_flag_true")
+            false_flag = value.get("_flag_false")
+            if not isinstance(bool_value, bool):
+                raise BtvCliError(
+                    f"Step '{step.id}' input '{key}' must set boolean _value for paired flag form.",
+                    exit_code=EXIT_RUNTIME_ERROR,
+                )
+            if true_flag is None and false_flag is None:
+                raise BtvCliError(
+                    f"Step '{step.id}' input '{key}' paired flag form must provide _flag_true and/or _flag_false.",
+                    exit_code=EXIT_RUNTIME_ERROR,
+                )
+            if true_flag is not None and not isinstance(true_flag, str):
+                raise BtvCliError(
+                    f"Step '{step.id}' input '{key}' _flag_true must be a string.",
+                    exit_code=EXIT_RUNTIME_ERROR,
+                )
+            if false_flag is not None and not isinstance(false_flag, str):
+                raise BtvCliError(
+                    f"Step '{step.id}' input '{key}' _flag_false must be a string.",
+                    exit_code=EXIT_RUNTIME_ERROR,
+                )
+            selected = true_flag if bool_value else false_flag
+            if selected:
+                args.append(selected)
+            continue
         if isinstance(value, bool):
             if value:
                 args.append(flag)
-            else:
-                args.append("--no-" + key.replace("_", "-"))
             continue
         if isinstance(value, (list, tuple)):
             for item in value:
@@ -156,8 +199,14 @@ def _build_cli_args(
             continue
         args.extend([flag, str(value)])
 
+    if raw_flags:
+        args.extend(str(token) for token in raw_flags)
+
     if raw_args:
         args.extend(str(token) for token in raw_args)
+
+    if legacy_raw_args:
+        args.extend(str(token) for token in legacy_raw_args)
 
     if "--out" not in args and "-o" not in args:
         args.extend(["--out", str(output_path)])
@@ -218,7 +267,9 @@ def _run_step_with_retries(
             if attempt >= max_attempts or not _is_retryable_error(str(exc)):
                 break
             sleep_s = initial_backoff_seconds * (2 ** (attempt - 1))
-            time.sleep(max(0.1, float(sleep_s)))
+            jitter_upper = min(0.25, max(0.0, float(sleep_s) * 0.1))
+            jitter = random.uniform(0.0, jitter_upper) if jitter_upper > 0 else 0.0
+            time.sleep(max(0.1, float(sleep_s) + float(jitter)))
 
     assert last_error is not None
     raise last_error
@@ -375,23 +426,45 @@ def _run_one_toi(
 
 def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[str, Any]:
     toi = str(toi_result.get("toi"))
-    toi_dir = out_dir / toi
 
-    def _maybe_load_step(op: str) -> dict[str, Any] | None:
+    def _load_step_payloads() -> dict[str, dict[str, Any]]:
+        payloads_by_op: dict[str, dict[str, Any]] = {}
         for row in toi_result.get("steps", []):
-            if row.get("op") == op and row.get("status") == "ok":
-                path = row.get("step_output_path")
-                if path and Path(path).exists():
-                    return _load_json(Path(path))
+            if row.get("status") != "ok":
+                continue
+            op = str(row.get("op") or "")
+            if op in payloads_by_op:
+                continue
+            path = row.get("step_output_path")
+            if path and Path(path).exists():
+                payload = _load_json(Path(path))
+                if isinstance(payload, dict):
+                    payloads_by_op[op] = payload
+        return payloads_by_op
+
+    def _maybe_load_step(op: str, *, payloads_by_op: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+        return payloads_by_op.get(op)
+
+    def _extract_verdict(payload: dict[str, Any] | None) -> Any:
+        if not isinstance(payload, dict):
+            return None
+        verdict = payload.get("verdict")
+        if verdict is not None:
+            return verdict
+        result = payload.get("result")
+        if isinstance(result, dict):
+            return result.get("verdict")
         return None
 
-    model_compete = _maybe_load_step("model_compete")
-    systematics = _maybe_load_step("systematics_proxy")
-    ephemeris = _maybe_load_step("ephemeris_reliability")
-    timing = _maybe_load_step("timing")
-    localize_host = _maybe_load_step("localize_host")
-    dilution = _maybe_load_step("dilution")
-    fpp = _maybe_load_step("fpp")
+    payloads_by_op = _load_step_payloads()
+
+    model_compete = _maybe_load_step("model_compete", payloads_by_op=payloads_by_op)
+    systematics = _maybe_load_step("systematics_proxy", payloads_by_op=payloads_by_op)
+    ephemeris = _maybe_load_step("ephemeris_reliability", payloads_by_op=payloads_by_op)
+    timing = _maybe_load_step("timing", payloads_by_op=payloads_by_op)
+    localize_host = _maybe_load_step("localize_host", payloads_by_op=payloads_by_op)
+    dilution = _maybe_load_step("dilution", payloads_by_op=payloads_by_op)
+    fpp = _maybe_load_step("fpp", payloads_by_op=payloads_by_op)
 
     localize_action_hint = None
     if isinstance(localize_host, dict):
@@ -412,17 +485,25 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
     fpp_value = None
     if isinstance(fpp, dict):
         fpp_value = fpp.get("fpp")
+        if fpp_value is None:
+            result = fpp.get("result")
+            if isinstance(result, dict):
+                fpp_value = result.get("fpp")
+
+    concern_flags = set(str(x) for x in (toi_result.get("concern_flags") or []) if x is not None)
+    for payload in payloads_by_op.values():
+        concern_flags.update(_extract_concern_flags(payload))
 
     row = {
         "toi": toi,
-        "model_compete_verdict": model_compete.get("verdict") if isinstance(model_compete, dict) else None,
-        "systematics_verdict": systematics.get("verdict") if isinstance(systematics, dict) else None,
-        "ephemeris_verdict": ephemeris.get("verdict") if isinstance(ephemeris, dict) else None,
-        "timing_verdict": timing.get("verdict") if isinstance(timing, dict) else None,
+        "model_compete_verdict": _extract_verdict(model_compete),
+        "systematics_verdict": _extract_verdict(systematics),
+        "ephemeris_verdict": _extract_verdict(ephemeris),
+        "timing_verdict": _extract_verdict(timing),
         "localize_host_action_hint": localize_action_hint,
         "dilution_n_plausible_scenarios": dilution_n_plausible,
         "fpp": fpp_value,
-        "concern_flags": list(toi_result.get("concern_flags") or []),
+        "concern_flags": sorted(concern_flags),
     }
     return row
 
@@ -450,7 +531,8 @@ def _write_evidence_table(*, out_dir: Path, toi_results: list[dict[str, Any]]) -
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows:
-            writer.writerow({**row, "concern_flags": ";".join(row.get("concern_flags", []))})
+            flags = sorted(str(x) for x in (row.get("concern_flags") or []) if x is not None)
+            writer.writerow({**row, "concern_flags": ";".join(flags)})
 
     return rows
 
