@@ -22,6 +22,18 @@ from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
 from bittr_tess_vetter.platform.io import LightCurveNotFoundError, MASTClient, TargetNotFoundError
 
 
+def _derive_activity_verdict(activity_payload: Any) -> tuple[str | None, str | None]:
+    if not isinstance(activity_payload, dict):
+        return None, None
+    interpretation_label = activity_payload.get("interpretation_label")
+    if interpretation_label is not None:
+        return str(interpretation_label), "$.activity.interpretation_label"
+    activity_regime = activity_payload.get("activity_regime")
+    if activity_regime is not None:
+        return str(activity_regime), "$.activity.activity_regime"
+    return None, None
+
+
 def _resolve_tic_and_inputs(
     *,
     tic_id: int | None,
@@ -185,12 +197,17 @@ def activity_command(
         "rotation_max_period": float(rotation_max_period),
     }
     activity_payload = activity.to_dict()
+    verdict, verdict_source = _derive_activity_verdict(activity_payload)
     payload = {
         "schema_version": "cli.activity.v1",
         "result": {
             "activity": activity_payload,
+            "verdict": verdict,
+            "verdict_source": verdict_source,
         },
         "activity": activity_payload,
+        "verdict": verdict,
+        "verdict_source": verdict_source,
         "inputs_summary": {
             "tic_id": int(resolved_tic_id),
             "toi": toi,

@@ -341,6 +341,21 @@ def _resolve_observed_depth(
     return float(resolved_depth_ppm), input_resolution
 
 
+def _derive_dilution_verdict(physics_flags_payload: Any) -> tuple[str | None, str | None]:
+    if not isinstance(physics_flags_payload, dict):
+        return None, None
+    requires_resolved_followup = bool(physics_flags_payload.get("requires_resolved_followup"))
+    if requires_resolved_followup:
+        return "REVIEW_WITH_DILUTION", "$.physics_flags.requires_resolved_followup"
+    planet_radius_inconsistent = bool(physics_flags_payload.get("planet_radius_inconsistent"))
+    if planet_radius_inconsistent:
+        return "IMPLAUSIBLE_PRIMARY_SCENARIO", "$.physics_flags.planet_radius_inconsistent"
+    return (
+        "DILUTION_PRIMARY_PLAUSIBLE",
+        "$.physics_flags.requires_resolved_followup|$.physics_flags.planet_radius_inconsistent",
+    )
+
+
 @click.command("dilution")
 @click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier for candidate input resolution.")
@@ -496,16 +511,21 @@ def dilution_command(
 
     scenarios_payload = [scenario.to_dict() for scenario in scenarios]
     physics_flags_payload = physics_flags.to_dict()
+    verdict, verdict_source = _derive_dilution_verdict(physics_flags_payload)
     payload = {
         "schema_version": "cli.dilution.v1",
         "result": {
             "scenarios": scenarios_payload,
             "physics_flags": physics_flags_payload,
             "n_plausible_scenarios": int(physics_flags.n_plausible_scenarios),
+            "verdict": verdict,
+            "verdict_source": verdict_source,
         },
         "scenarios": scenarios_payload,
         "physics_flags": physics_flags_payload,
         "n_plausible_scenarios": int(physics_flags.n_plausible_scenarios),
+        "verdict": verdict,
+        "verdict_source": verdict_source,
         "inputs_summary": {
             "input_resolution": input_resolution,
         },

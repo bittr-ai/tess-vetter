@@ -138,6 +138,10 @@ def test_btv_ephemeris_reliability_success_contract_payload(monkeypatch, tmp_pat
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == "cli.ephemeris_reliability.v1"
     assert payload["result"]["label"] == "ok"
+    assert "verdict" in payload
+    assert "verdict_source" in payload
+    assert payload["result"]["verdict"] == payload["verdict"]
+    assert payload["result"]["verdict_source"] == payload["verdict_source"]
     assert payload["inputs_summary"]["input_resolution"]["inputs"]["tic_id"] == 123
     assert payload["provenance"]["sectors_used"] == [14, 15]
     assert payload["provenance"]["options"]["flux_type"] == "sap"

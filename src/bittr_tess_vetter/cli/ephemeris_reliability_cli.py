@@ -22,6 +22,18 @@ from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
 
 
+def _derive_ephemeris_reliability_verdict(result_payload: Any) -> tuple[str | None, str | None]:
+    if not isinstance(result_payload, dict):
+        return None, None
+    interpretation_label = result_payload.get("interpretation_label")
+    if interpretation_label is not None:
+        return str(interpretation_label), "$.result.interpretation_label"
+    reliability_label = result_payload.get("reliability_label")
+    if reliability_label is not None:
+        return str(reliability_label), "$.result.reliability_label"
+    return None, None
+
+
 @click.command("ephemeris-reliability")
 @click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
@@ -214,9 +226,15 @@ def ephemeris_reliability_command(
             else None
         ),
     }
+    result_payload = result.to_dict()
+    verdict, verdict_source = _derive_ephemeris_reliability_verdict(result_payload)
+    result_payload["verdict"] = verdict
+    result_payload["verdict_source"] = verdict_source
     payload = {
         "schema_version": "cli.ephemeris_reliability.v1",
-        "result": result.to_dict(),
+        "result": result_payload,
+        "verdict": verdict,
+        "verdict_source": verdict_source,
         "inputs_summary": {
             "input_resolution": input_resolution,
         },

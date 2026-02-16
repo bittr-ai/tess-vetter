@@ -31,6 +31,23 @@ def _to_jsonable_result(result: Any) -> Any:
     return result
 
 
+def _derive_timing_verdict(next_actions: Any) -> tuple[str | None, str | None]:
+    if isinstance(next_actions, dict):
+        primary_recommendation = next_actions.get("primary_recommendation")
+        if primary_recommendation is not None:
+            return str(primary_recommendation), "$.next_actions.primary_recommendation"
+    if isinstance(next_actions, list) and next_actions:
+        first_action = next_actions[0]
+        if isinstance(first_action, dict):
+            code = first_action.get("code")
+            if code is not None:
+                return str(code), "$.next_actions[0].code"
+            action = first_action.get("action")
+            if action is not None:
+                return str(action), "$.next_actions[0].action"
+    return None, None
+
+
 def _transit_times_to_dicts(transit_times: list[Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for transit in transit_times:
@@ -463,6 +480,9 @@ def timing_command(
             min_snr=float(min_snr),
         ),
     }
+    verdict, verdict_source = _derive_timing_verdict(result_payload["next_actions"])
+    result_payload["verdict"] = verdict
+    result_payload["verdict_source"] = verdict_source
     payload = {
         "schema_version": "cli.timing.v1",
         "result": result_payload,
@@ -472,6 +492,8 @@ def timing_command(
         "alignment": result_payload["alignment"],
         "diagnostics": result_payload["diagnostics"],
         "next_actions": result_payload["next_actions"],
+        "verdict": verdict,
+        "verdict_source": verdict_source,
         "inputs_summary": {
             "input_resolution": input_resolution,
         },

@@ -31,6 +31,15 @@ def _to_jsonable_result(result: Any) -> Any:
     return result
 
 
+def _derive_systematics_proxy_verdict(systematics_proxy_payload: Any) -> tuple[str | None, str | None]:
+    if not isinstance(systematics_proxy_payload, dict):
+        return None, None
+    interpretation_label = systematics_proxy_payload.get("interpretation_label")
+    if interpretation_label is not None:
+        return str(interpretation_label), "$.systematics_proxy.interpretation_label"
+    return None, None
+
+
 def _download_and_prepare_arrays(
     *,
     tic_id: int,
@@ -167,12 +176,17 @@ def systematics_proxy_command(
         "flux_type": str(flux_type).lower(),
     }
     systematics_proxy_payload = _to_jsonable_result(systematics_proxy)
+    verdict, verdict_source = _derive_systematics_proxy_verdict(systematics_proxy_payload)
     payload = {
         "schema_version": "cli.systematics_proxy.v1",
         "result": {
             "systematics_proxy": systematics_proxy_payload,
+            "verdict": verdict,
+            "verdict_source": verdict_source,
         },
         "systematics_proxy": systematics_proxy_payload,
+        "verdict": verdict,
+        "verdict_source": verdict_source,
         "inputs_summary": {
             "input_resolution": input_resolution,
         },

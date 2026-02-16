@@ -67,6 +67,13 @@ def test_btv_dilution_success_payload_contract(monkeypatch, tmp_path: Path) -> N
     assert len(payload["result"]["scenarios"]) == 2
     assert isinstance(payload["result"]["physics_flags"], dict)
     assert isinstance(payload["result"]["n_plausible_scenarios"], int)
+    assert payload["result"]["scenarios"] == payload["scenarios"]
+    assert payload["result"]["physics_flags"] == payload["physics_flags"]
+    assert payload["result"]["n_plausible_scenarios"] == payload["n_plausible_scenarios"]
+    assert "verdict" in payload
+    assert "verdict_source" in payload
+    assert payload["result"]["verdict"] == payload["verdict"]
+    assert payload["result"]["verdict_source"] == payload["verdict_source"]
     assert payload["inputs_summary"]["input_resolution"]["source"] == "toi_catalog"
     assert payload["provenance"]["host_profile_path"] == str(host_profile_path)
     assert payload["provenance"]["host_ambiguous"] is True

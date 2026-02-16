@@ -92,6 +92,11 @@ def test_btv_systematics_proxy_success_payload_contract(monkeypatch, tmp_path: P
     assert payload["schema_version"] == "cli.systematics_proxy.v1"
     assert payload["systematics_proxy"]["score"] == 0.35
     assert payload["result"]["systematics_proxy"]["score"] == 0.35
+    assert "verdict" in payload
+    assert "verdict_source" in payload
+    assert payload["result"]["systematics_proxy"] == payload["systematics_proxy"]
+    assert payload["result"]["verdict"] == payload["verdict"]
+    assert payload["result"]["verdict_source"] == payload["verdict_source"]
     assert payload["inputs_summary"]["input_resolution"]["source"] == "toi_catalog"
     assert payload["provenance"]["sectors_used"] == [14, 15]
     assert payload["provenance"]["options"]["flux_type"] == "sap"

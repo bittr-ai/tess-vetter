@@ -76,6 +76,11 @@ def test_btv_activity_success_payload_contract(monkeypatch, tmp_path: Path) -> N
     assert payload["schema_version"] == "cli.activity.v1"
     assert payload["activity"]["rotation_period"] == 6.25
     assert payload["result"]["activity"]["rotation_period"] == 6.25
+    assert "verdict" in payload
+    assert "verdict_source" in payload
+    assert payload["result"]["activity"] == payload["activity"]
+    assert payload["result"]["verdict"] == payload["verdict"]
+    assert payload["result"]["verdict_source"] == payload["verdict_source"]
     assert payload["inputs_summary"]["tic_id"] == 123
     assert payload["inputs_summary"]["input_resolution"]["source"] == "cli"
     assert payload["provenance"]["sectors_used"] == [14, 15]

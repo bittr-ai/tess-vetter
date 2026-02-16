@@ -29,6 +29,18 @@ def _to_jsonable_result(result: Any) -> Any:
     return result
 
 
+def _derive_model_compete_verdict(result_payload: dict[str, Any]) -> tuple[str | None, str | None]:
+    interpretation_label = result_payload.get("interpretation_label")
+    if interpretation_label is not None:
+        return str(interpretation_label), "$.result.interpretation_label"
+    model_competition = result_payload.get("model_competition")
+    if isinstance(model_competition, dict):
+        nested_label = model_competition.get("interpretation_label")
+        if nested_label is not None:
+            return str(nested_label), "$.result.model_competition.interpretation_label"
+    return None, None
+
+
 def _download_and_prepare_arrays(
     *,
     tic_id: int,
@@ -212,10 +224,15 @@ def model_compete_command(
         ):
             if key in model_competition_dict:
                 result_payload[key] = model_competition_dict[key]
+    verdict, verdict_source = _derive_model_compete_verdict(result_payload)
+    result_payload["verdict"] = verdict
+    result_payload["verdict_source"] = verdict_source
 
     payload = {
         "schema_version": "cli.model_compete.v1",
         "result": result_payload,
+        "verdict": verdict,
+        "verdict_source": verdict_source,
         "inputs_summary": {
             "input_resolution": input_resolution,
         },

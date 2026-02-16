@@ -182,6 +182,18 @@ def test_btv_timing_success_contract_payload(monkeypatch, tmp_path: Path) -> Non
     assert payload["diagnostics"]["selected"]["accepted_epochs"] == 2
     assert payload["next_actions"][0]["code"] == "TIMING_MEASURABLE"
     assert payload["result"]["next_actions"][0]["code"] == "TIMING_MEASURABLE"
+    assert payload["result"]["transit_times"] == payload["transit_times"]
+    assert payload["result"]["ttv"] == payload["ttv"]
+    assert payload["result"]["timing_series"] == payload["timing_series"]
+    assert payload["result"]["alignment"] == payload["alignment"]
+    assert payload["result"]["diagnostics"] == payload["diagnostics"]
+    assert payload["result"]["next_actions"] == payload["next_actions"]
+    assert "verdict" in payload
+    assert "verdict_source" in payload
+    assert payload["verdict"] == "TIMING_MEASURABLE"
+    assert payload["verdict_source"] == "$.next_actions[0].code"
+    assert payload["result"]["verdict"] == payload["verdict"]
+    assert payload["result"]["verdict_source"] == payload["verdict_source"]
     assert payload["inputs_summary"]["input_resolution"]["inputs"]["tic_id"] == 123
     assert payload["provenance"]["sectors_used"] == [14, 15]
     assert payload["provenance"]["options"] == {

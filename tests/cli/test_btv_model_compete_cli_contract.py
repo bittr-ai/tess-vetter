@@ -178,6 +178,10 @@ def test_btv_model_compete_success_payload_contract(monkeypatch, tmp_path: Path)
     assert payload["result"]["interpretation_label"] == "TRANSIT"
     assert payload["result"]["model_competition"]["model_competition_label"] == "TRANSIT"
     assert payload["result"]["artifact_prior"]["combined_risk"] == 0.05
+    assert payload["verdict"] == "TRANSIT"
+    assert payload["verdict_source"] == "$.result.interpretation_label"
+    assert payload["result"]["verdict"] == payload["verdict"]
+    assert payload["result"]["verdict_source"] == payload["verdict_source"]
     assert payload["inputs_summary"]["input_resolution"]["inputs"]["tic_id"] == 123
     assert payload["provenance"]["sectors_used"] == [14, 15]
     assert payload["provenance"]["options"] == {

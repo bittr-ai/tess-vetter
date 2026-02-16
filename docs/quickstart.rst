@@ -102,6 +102,47 @@ Useful machine-readable fields in ``btv vet`` JSON output:
 - ``provenance.detrend.depth_ppm`` / ``provenance.detrend.depth_err_ppm``
   when ``--detrend`` is enabled (recommended depth handoff for ``btv fpp --depth-ppm``)
 
+Canonical CLI Verdict Contract (machine consumers)
+--------------------------------------------------
+
+For machine consumers, the canonical verdict fields across diagnostic CLI commands are:
+
+- top-level: ``verdict`` and ``verdict_source``
+- nested: ``result.verdict`` and ``result.verdict_source``
+
+Backward compatibility: legacy command-specific fields are still emitted and remain supported.
+Use the canonical fields for new integrations.
+
+Per-command legacy-to-canonical mapping:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Command
+     - Legacy verdict source fields
+     - Canonical fields
+   * - ``btv activity``
+     - ``activity.interpretation_label`` then ``activity.activity_regime``
+     - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
+   * - ``btv dilution``
+     - ``physics_flags.requires_resolved_followup`` then ``physics_flags.planet_radius_inconsistent``
+     - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
+   * - ``btv timing``
+     - ``next_actions.primary_recommendation`` then ``next_actions[0].code``
+     - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
+   * - ``btv systematics-proxy``
+     - ``systematics_proxy.interpretation_label``
+     - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
+   * - ``btv localize-host``
+     - ``result.consensus.action_hint`` then ``result.consensus.verdict``
+     - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
+   * - ``btv model-compete``
+     - ``result.interpretation_label`` then ``result.model_competition.interpretation_label``
+     - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
+   * - ``btv ephemeris-reliability``
+     - ``result.interpretation_label`` then ``result.reliability_label``
+     - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
+
 Vetting Check Categories
 ------------------------
 

@@ -29,6 +29,20 @@ from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, M
 CLI_LOCALIZE_HOST_SCHEMA_VERSION = "cli.localize_host.v1"
 
 
+def _derive_localize_host_verdict(result_payload: Any) -> tuple[str | None, str | None]:
+    if not isinstance(result_payload, dict):
+        return None, None
+    consensus = result_payload.get("consensus")
+    if isinstance(consensus, dict):
+        action_hint = consensus.get("action_hint")
+        if action_hint is not None:
+            return str(action_hint), "$.result.consensus.action_hint"
+        verdict = consensus.get("verdict")
+        if verdict is not None:
+            return str(verdict), "$.result.consensus.verdict"
+    return None, None
+
+
 def _download_tpf_fits(
     *,
     client: MASTClient,
@@ -200,9 +214,15 @@ def _execute_localize_host(
     )
 
     selected_sectors = [int(getattr(tpf.ref, "sector", -1)) for tpf in tpf_fits_list]
+    result_payload = dict(result)
+    verdict, verdict_source = _derive_localize_host_verdict(result_payload)
+    result_payload["verdict"] = verdict
+    result_payload["verdict_source"] = verdict_source
     return {
         "schema_version": CLI_LOCALIZE_HOST_SCHEMA_VERSION,
-        "result": dict(result),
+        "result": result_payload,
+        "verdict": verdict,
+        "verdict_source": verdict_source,
         "inputs_summary": {
             "input_resolution": input_resolution,
         },

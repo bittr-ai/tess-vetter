@@ -40,7 +40,13 @@ def test_btv_localize_host_success_writes_contract_json(monkeypatch, tmp_path: P
     def _fake_execute_localize_host(**_kwargs: Any) -> dict[str, Any]:
         return {
             "schema_version": "cli.localize_host.v1",
-            "result": {"consensus_label": "ON_TARGET"},
+            "result": {
+                "consensus_label": "ON_TARGET",
+                "verdict": "ON_TARGET",
+                "verdict_source": "$.result.consensus_label",
+            },
+            "verdict": "ON_TARGET",
+            "verdict_source": "$.result.consensus_label",
             "inputs_summary": {"input_resolution": {"source": "cli", "inputs": {"tic_id": 123}}},
             "provenance": {
                 "selected_sectors": [14],
@@ -83,6 +89,8 @@ def test_btv_localize_host_success_writes_contract_json(monkeypatch, tmp_path: P
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == "cli.localize_host.v1"
     assert payload["result"]["consensus_label"] == "ON_TARGET"
+    assert payload["result"]["verdict"] == payload["verdict"]
+    assert payload["result"]["verdict_source"] == payload["verdict_source"]
     assert payload["inputs_summary"]["input_resolution"]["source"] == "cli"
     assert payload["provenance"]["selected_sectors"] == [14]
     assert payload["provenance"]["requested_sectors"] is None
