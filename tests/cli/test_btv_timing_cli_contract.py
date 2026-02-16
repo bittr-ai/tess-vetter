@@ -295,8 +295,10 @@ def test_build_next_actions_noise_limited_branch() -> None:
                 "reject_counts": {"snr_below_threshold": 10},
             }
         },
+        min_snr=2.0,
     )
     assert actions[0]["code"] == "NOISE_LIMITED"
+    assert "--min-snr 1.5" in actions[0]["guidance"]
 
 
 def test_build_next_actions_alignment_review_branch() -> None:

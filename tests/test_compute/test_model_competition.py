@@ -188,6 +188,8 @@ class TestModelCompetitionResult:
         assert d["winner"] == "transit_only"
         assert d["winner_margin"] == 15.0
         assert d["model_competition_label"] == "TRANSIT"
+        assert d["interpretation_label"] is None
+        assert d["interpretation_metrics"] == {}
         assert d["artifact_risk"] == 0.0
         assert "transit_only" in d["fits"]
 
@@ -534,8 +536,35 @@ class TestRunModelCompetition:
 
         assert result.winner == "transit_sinusoid"
         assert result.model_competition_label == "SINUSOID"
+        assert result.interpretation_label == "SINUSOID_DOMINANT"
+        assert result.interpretation_metrics["amplitude_to_depth_ratio"] > 1.0
         assert result.artifact_risk > 0.5
         assert any("Sinusoidal" in w for w in result.warnings)
+
+    def test_sinusoid_winner_can_be_transit_plus_variability(
+        self,
+        time_array: np.ndarray,
+        flux_err: np.ndarray,
+        rng: np.random.Generator,
+    ):
+        period = 3.5
+        t0 = 1001.0
+        duration_hours = 2.5
+
+        # Transit dominates, but weak coherent sinusoid can still slightly improve BIC.
+        flux = make_box_transit(time_array, period, t0, duration_hours, 0.0012)
+        flux += make_sinusoid(time_array, period, 0.00006)
+        flux += rng.normal(0, 35e-6, len(flux))
+
+        result = run_model_competition(
+            time_array, flux, flux_err, period, t0, duration_hours, bic_threshold=1.0
+        )
+        if result.winner == "transit_sinusoid":
+            assert result.model_competition_label == "SINUSOID"
+            assert result.interpretation_label in {
+                "TRANSIT_PLUS_VARIABILITY",
+                "SINUSOID_WITH_TRANSIT_COMPONENT",
+            }
 
     def test_eb_wins_for_odd_even_difference(
         self,

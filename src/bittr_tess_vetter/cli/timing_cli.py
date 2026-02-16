@@ -97,6 +97,7 @@ def _build_next_actions(
     *,
     alignment_metadata: dict[str, Any],
     measurement_diagnostics: dict[str, Any],
+    min_snr: float | None = None,
 ) -> list[dict[str, str]]:
     selected = measurement_diagnostics.get("selected") or {}
     reject_counts = selected.get("reject_counts") or {}
@@ -113,10 +114,18 @@ def _build_next_actions(
             "guidance": "Proceed with TTV interpretation and extend the baseline with new sectors when available.",
         }
     elif rejected_epochs > 0 and snr_rejects >= rejected_epochs:
+        suggested_min_snr = (
+            max(1.0, min(float(min_snr), 1.5))
+            if min_snr is not None and np.isfinite(float(min_snr))
+            else 1.0
+        )
         primary = {
             "code": "NOISE_LIMITED",
             "summary": "Most rejected epochs are below the SNR threshold.",
-            "guidance": "Lower photometric noise or increase signal strength before rerunning timing fits.",
+            "guidance": (
+                "Lower photometric noise or rerun with a lower acceptance threshold "
+                f"(for example --min-snr {suggested_min_snr:.1f}) to inspect tentative per-epoch fits."
+            ),
         }
     else:
         primary = {
@@ -442,6 +451,7 @@ def timing_command(
         "next_actions": _build_next_actions(
             alignment_metadata=alignment_metadata,
             measurement_diagnostics=measurement_diagnostics,
+            min_snr=float(min_snr),
         ),
         "inputs_summary": {
             "input_resolution": input_resolution,

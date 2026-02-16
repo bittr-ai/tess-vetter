@@ -112,6 +112,8 @@ class ModelCompetitionResult:
     winner_margin: float
     model_competition_label: str  # "TRANSIT" | "SINUSOID" | "EB_LIKE" | "AMBIGUOUS"
     artifact_risk: float
+    interpretation_label: str | None = None
+    interpretation_metrics: dict[str, float] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -121,6 +123,8 @@ class ModelCompetitionResult:
             "winner": self.winner,
             "winner_margin": self.winner_margin,
             "model_competition_label": self.model_competition_label,
+            "interpretation_label": self.interpretation_label,
+            "interpretation_metrics": self.interpretation_metrics,
             "artifact_risk": self.artifact_risk,
             "warnings": self.warnings,
         }
@@ -565,9 +569,12 @@ def run_model_competition(
     winner_margin = bic_values[second_best] - bic_values[winner]
 
     # Determine label and artifact risk
+    interpretation_label: str | None = None
+    interpretation_metrics: dict[str, float] = {}
     if winner_margin < bic_threshold:
         # No clear winner
         label = "AMBIGUOUS"
+        interpretation_label = "AMBIGUOUS"
         # Artifact risk is moderate if non-transit models are competitive
         artifact_risk = 0.5
         warnings.append(
@@ -575,15 +582,34 @@ def run_model_competition(
         )
     elif winner == "transit_only":
         label = "TRANSIT"
+        interpretation_label = "TRANSIT"
         artifact_risk = 0.0
     elif winner == "transit_sinusoid":
         label = "SINUSOID"
         artifact_risk = 0.8
+        depth_ppm = abs(float(fit_sinusoid.fitted_params.get("depth_ppm", 0.0)))
+        amplitude_k1_ppm = abs(float(fit_sinusoid.fitted_params.get("amplitude_k1", 0.0))) * 1e6
+        amp_to_depth_ratio = float(amplitude_k1_ppm / max(depth_ppm, 1e-6))
+        interpretation_metrics = {
+            "depth_ppm": float(depth_ppm),
+            "amplitude_k1_ppm": float(amplitude_k1_ppm),
+            "amplitude_to_depth_ratio": float(amp_to_depth_ratio),
+        }
+        if amp_to_depth_ratio < 0.25:
+            interpretation_label = "TRANSIT_PLUS_VARIABILITY"
+            warnings.append(
+                "Transit + weak variability regime: sinusoid term improves fit but is sub-dominant to transit depth."
+            )
+        elif amp_to_depth_ratio < 1.0:
+            interpretation_label = "SINUSOID_WITH_TRANSIT_COMPONENT"
+        else:
+            interpretation_label = "SINUSOID_DOMINANT"
         warnings.append(
             "Sinusoidal variability model preferred - signal may be stellar rotation or pulsation"
         )
     else:  # eb_like
         label = "EB_LIKE"
+        interpretation_label = "EB_LIKE"
         artifact_risk = 0.9
         # Check for significant odd/even difference
         depth_diff_frac = fit_eb.fitted_params.get("odd_even_diff_frac", 0.0)
@@ -599,6 +625,8 @@ def run_model_competition(
         winner=winner,
         winner_margin=winner_margin,
         model_competition_label=label,
+        interpretation_label=interpretation_label,
+        interpretation_metrics=interpretation_metrics,
         artifact_risk=artifact_risk,
         warnings=warnings,
     )
