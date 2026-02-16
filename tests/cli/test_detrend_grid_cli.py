@@ -435,3 +435,119 @@ def test_detrend_grid_accepts_summary_at_payload_root(monkeypatch, tmp_path) -> 
     payload = json.loads(result.output)
     assert payload["check_resolution_note"]["check_id"] == "V16"
     assert payload["provenance"]["vet_summary"]["summary_source"] == "payload_root"
+
+
+def test_detrend_grid_supports_report_file_inputs(monkeypatch, tmp_path) -> None:
+    rows = [
+        {
+            "variant_id": "variant_a",
+            "status": "ok",
+            "backend": "numpy",
+            "runtime_seconds": 0.01,
+            "n_points_used": 200,
+            "downsample_factor": 1,
+            "outlier_policy": "none",
+            "detrender": "none",
+            "score": 5.0,
+            "depth_hat_ppm": 250.0,
+            "depth_err_ppm": 10.0,
+            "warnings": [],
+            "failure_reason": None,
+            "variant_config": {"variant_id": "variant_a"},
+            "gp_hyperparams": None,
+            "gp_fit_diagnostics": None,
+        }
+    ]
+    report_payload = {
+        "summary": {
+            "tic_id": 321,
+            "input_depth_ppm": 225.0,
+            "ephemeris": {
+                "period_days": 9.0,
+                "t0_btjd": 2500.25,
+                "duration_hours": 3.0,
+            },
+            "sectors_used": [21, 22],
+        }
+    }
+    report_path = tmp_path / "report.json"
+    report_path.write_text(json.dumps(report_payload), encoding="utf-8")
+
+    seen: dict[str, Any] = {}
+
+    def _fake_download_all_sectors(self, tic_id: int, flux_type: str, sectors: list[int] | None = None):
+        seen["download"] = {"tic_id": tic_id, "flux_type": flux_type, "sectors": sectors}
+        return [_FakeLightCurve()]
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient.download_all_sectors", _fake_download_all_sectors)
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        lambda **_kwargs: _FakeSweepResult(rows),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(enrich_cli.cli, ["detrend-grid", "--report-file", str(report_path)])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert seen["download"] == {"tic_id": 321, "flux_type": "pdcsap", "sectors": [21, 22]}
+    assert payload["provenance"]["inputs_source"] == "report_file"
+    assert payload["provenance"]["sector_selection_source"] == "report_file"
+
+
+def test_detrend_grid_best_variant_fallback_when_all_variants_fail(monkeypatch) -> None:
+    rows = [
+        {
+            "variant_id": "variant_fail",
+            "status": "failed",
+            "backend": "numpy",
+            "runtime_seconds": 0.01,
+            "n_points_used": 200,
+            "downsample_factor": 1,
+            "outlier_policy": "none",
+            "detrender": "transit_masked_bin_median",
+            "score": None,
+            "depth_hat_ppm": None,
+            "depth_err_ppm": None,
+            "warnings": [],
+            "failure_reason": "mock failure",
+            "variant_config": {
+                "variant_id": "variant_fail",
+                "detrender": "transit_masked_bin_median",
+                "detrender_bin_hours": 6.0,
+                "detrender_buffer_factor": 2.0,
+                "detrender_sigma_clip": 5.0,
+            },
+            "gp_hyperparams": None,
+            "gp_fit_diagnostics": None,
+        }
+    ]
+
+    class _AllFailSweep:
+        def to_dict(self) -> dict[str, Any]:
+            return {
+                "stable": False,
+                "metric_variance": None,
+                "score_spread_iqr_over_median": None,
+                "depth_spread_iqr_over_median": None,
+                "n_variants_total": 1,
+                "n_variants_ok": 0,
+                "n_variants_failed": 1,
+                "best_variant_id": None,
+                "worst_variant_id": None,
+                "stability_threshold": 0.2,
+                "notes": [],
+                "sweep_table": rows,
+            }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        lambda **_kwargs: _AllFailSweep(),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(enrich_cli.cli, _base_args())
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["best_variant"]["variant_id"] == "variant_fail"
+    assert payload["best_variant"]["config"]["detrender"] == "transit_masked_bin_median"

@@ -4,6 +4,8 @@ import csv
 import json
 from pathlib import Path
 
+import pytest
+
 from bittr_tess_vetter.pipeline_composition.executor import _write_evidence_table
 
 
@@ -83,3 +85,49 @@ def test_evidence_table_concern_flags_are_deduped_and_csv_sorted(tmp_path: Path)
         csv_rows = list(csv.DictReader(fh))
     assert csv_rows[0]["concern_flags"] == "alpha;beta;delta;gamma;zeta"
 
+
+def test_evidence_table_extracts_robustness_fields_by_step_id(tmp_path: Path) -> None:
+    toi = "TOI-ROBUST.01"
+    toi_dir = tmp_path / toi / "steps"
+    model_raw_path = _write_step(toi_dir / "03_model_compete_raw.json", {"verdict": "SINUSOID_DOMINANT"})
+    model_detrended_path = _write_step(
+        toi_dir / "04_model_compete_detrended.json",
+        {"result": {"verdict": "TRANSIT_PLUS_VARIABILITY"}},
+    )
+    fpp_raw_path = _write_step(toi_dir / "05_fpp_raw.json", {"result": {"fpp": 0.03}})
+    fpp_detrended_path = _write_step(toi_dir / "06_fpp_detrended.json", {"fpp": 0.01})
+
+    toi_result = {
+        "toi": toi,
+        "concern_flags": [],
+        "steps": [
+            {
+                "step_id": "model_compete_raw",
+                "op": "model_compete",
+                "status": "ok",
+                "step_output_path": model_raw_path,
+            },
+            {
+                "step_id": "model_compete_detrended",
+                "op": "model_compete",
+                "status": "ok",
+                "step_output_path": model_detrended_path,
+            },
+            {"step_id": "fpp_raw", "op": "fpp", "status": "ok", "step_output_path": fpp_raw_path},
+            {
+                "step_id": "fpp_detrended",
+                "op": "fpp",
+                "status": "ok",
+                "step_output_path": fpp_detrended_path,
+            },
+        ],
+    }
+
+    rows = _write_evidence_table(out_dir=tmp_path, toi_results=[toi_result])
+    row = rows[0]
+    assert row["model_compete_raw_verdict"] == "SINUSOID_DOMINANT"
+    assert row["model_compete_detrended_verdict"] == "TRANSIT_PLUS_VARIABILITY"
+    assert row["fpp_raw"] == 0.03
+    assert row["fpp_detrended"] == 0.01
+    assert row["fpp_delta_detrended_minus_raw"] == pytest.approx(-0.02)
+    assert row["robustness_recommended_variant"] == "detrended"

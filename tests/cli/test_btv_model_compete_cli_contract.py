@@ -10,6 +10,7 @@ from click.testing import CliRunner
 import bittr_tess_vetter.cli.model_compete_cli as model_compete_cli
 from bittr_tess_vetter.cli.model_compete_cli import model_compete_command
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
+from bittr_tess_vetter.api.types import LightCurve
 
 
 def _make_lc(
@@ -188,6 +189,10 @@ def test_btv_model_compete_success_payload_contract(monkeypatch, tmp_path: Path)
         "bic_threshold": 8.5,
         "n_harmonics": 3,
         "alias_tolerance": 0.02,
+        "detrend": None,
+        "detrend_bin_hours": 6.0,
+        "detrend_buffer": 2.0,
+        "detrend_sigma_clip": 5.0,
     }
     assert payload["provenance"]["sector_load_path"] == "cache_only_explicit_sectors"
 
@@ -397,3 +402,102 @@ def test_btv_model_compete_rejects_mismatched_positional_and_option_toi() -> Non
     )
     assert result.exit_code == 1
     assert "must match" in result.output
+
+
+def test_btv_model_compete_detrend_wiring_and_provenance(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.model_compete_cli._resolve_candidate_inputs",
+        lambda **_kwargs: (
+            123,
+            7.25,
+            2450.1,
+            3.5,
+            None,
+            {"source": "manual", "inputs": {"tic_id": 123}},
+        ),
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.model_compete_cli._download_and_prepare_arrays",
+        lambda **_kwargs: (
+            np.array([1.0, 2.0, 3.0], dtype=np.float64),
+            np.array([1.0, 0.999, 1.001], dtype=np.float64),
+            np.array([0.001, 0.001, 0.001], dtype=np.float64),
+            [14],
+            "mast_discovery",
+        ),
+    )
+
+    def _fake_detrend_lightcurve_for_vetting(**kwargs: Any):
+        seen["detrend_kwargs"] = kwargs
+        lc = kwargs["lc"]
+        detrended_lc = LightCurve(
+            time=np.asarray(lc.time, dtype=np.float64),
+            flux=np.asarray(lc.flux, dtype=np.float64) * 0.9995,
+            flux_err=np.asarray(lc.flux_err, dtype=np.float64),
+            quality=lc.quality,
+            valid_mask=lc.valid_mask,
+        )
+        return detrended_lc, {
+            "applied": True,
+            "method": kwargs["method"],
+            "bin_hours": kwargs["bin_hours"],
+            "buffer_factor": kwargs["buffer_factor"],
+            "sigma_clip": kwargs["clip_sigma"],
+        }
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.model_compete_cli._detrend_lightcurve_for_vetting",
+        _fake_detrend_lightcurve_for_vetting,
+    )
+    monkeypatch.setattr(
+        model_compete_cli.model_competition_api,
+        "run_model_competition",
+        lambda **_kwargs: type("R", (), {"to_dict": lambda self: {"interpretation_label": "TRANSIT"}})(),
+    )
+    monkeypatch.setattr(
+        model_compete_cli.model_competition_api,
+        "compute_artifact_prior",
+        lambda **_kwargs: type("P", (), {"to_dict": lambda self: {"combined_risk": 0.1}})(),
+    )
+
+    out_path = tmp_path / "model_compete_detrended.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        model_compete_command,
+        [
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.25",
+            "--t0-btjd",
+            "2450.1",
+            "--duration-hours",
+            "3.5",
+            "--detrend",
+            "transit_masked_bin_median",
+            "--detrend-bin-hours",
+            "4",
+            "--detrend-buffer",
+            "1.5",
+            "--detrend-sigma-clip",
+            "3",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    detrend_kwargs = seen["detrend_kwargs"]
+    assert detrend_kwargs["method"] == "transit_masked_bin_median"
+    assert detrend_kwargs["bin_hours"] == 4.0
+    assert detrend_kwargs["buffer_factor"] == 1.5
+    assert detrend_kwargs["clip_sigma"] == 3.0
+
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["options"]["detrend"] == "transit_masked_bin_median"
+    assert payload["provenance"]["options"]["detrend_bin_hours"] == 4.0
+    assert payload["provenance"]["options"]["detrend_buffer"] == 1.5
+    assert payload["provenance"]["options"]["detrend_sigma_clip"] == 3.0
+    assert payload["provenance"]["detrend"]["method"] == "transit_masked_bin_median"

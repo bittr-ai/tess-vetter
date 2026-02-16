@@ -1,0 +1,89 @@
+{
+  "schema_version": "pipeline.composition.v1",
+  "id": "robustness_composition",
+  "description": "Robustness composition comparing raw vs detrended model-compete and FPP outputs.",
+  "defaults": {
+    "retry_max_attempts": 3,
+    "retry_initial_seconds": 1.0
+  },
+  "steps": [
+    {
+      "id": "report_seed",
+      "op": "report"
+    },
+    {
+      "id": "detrend_grid",
+      "op": "detrend_grid",
+      "inputs": {
+        "detrender": [
+          "transit_masked_bin_median"
+        ],
+        "report_file": {
+          "report_from": "report_seed"
+        }
+      }
+    },
+    {
+      "id": "model_compete_raw",
+      "op": "model_compete",
+      "inputs": {
+        "report_file": {
+          "report_from": "report_seed"
+        }
+      }
+    },
+    {
+      "id": "model_compete_detrended",
+      "op": "model_compete",
+      "inputs": {
+        "report_file": {
+          "report_from": "report_seed"
+        },
+        "detrend": {
+          "$ref": "steps.detrend_grid.best_variant.config.detrender"
+        },
+        "detrend_bin_hours": {
+          "$ref": "steps.detrend_grid.best_variant.config.detrender_bin_hours"
+        },
+        "detrend_buffer": {
+          "$ref": "steps.detrend_grid.best_variant.config.detrender_buffer_factor"
+        },
+        "detrend_sigma_clip": {
+          "$ref": "steps.detrend_grid.best_variant.config.detrender_sigma_clip"
+        }
+      }
+    },
+    {
+      "id": "fpp_raw",
+      "op": "fpp",
+      "inputs": {
+        "preset": "fast",
+        "report_file": {
+          "report_from": "report_seed"
+        }
+      }
+    },
+    {
+      "id": "fpp_detrended",
+      "op": "fpp",
+      "inputs": {
+        "preset": "fast",
+        "report_file": {
+          "report_from": "report_seed"
+        },
+        "detrend": {
+          "$ref": "steps.detrend_grid.best_variant.config.detrender"
+        },
+        "detrend_bin_hours": {
+          "$ref": "steps.detrend_grid.best_variant.config.detrender_bin_hours"
+        },
+        "detrend_buffer": {
+          "$ref": "steps.detrend_grid.best_variant.config.detrender_buffer_factor"
+        },
+        "detrend_sigma_clip": {
+          "$ref": "steps.detrend_grid.best_variant.config.detrender_sigma_clip"
+        }
+      }
+    }
+  ]
+}

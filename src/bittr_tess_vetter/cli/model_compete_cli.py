@@ -7,8 +7,10 @@ from typing import Any
 import click
 import numpy as np
 
+from bittr_tess_vetter.api.detrend import median_detrend
 from bittr_tess_vetter.api import model_competition as model_competition_api
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
+from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 from bittr_tess_vetter.cli.common_cli import (
     EXIT_DATA_UNAVAILABLE,
     EXIT_INPUT_ERROR,
@@ -23,7 +25,13 @@ from bittr_tess_vetter.cli.diagnostics_report_inputs import (
     resolve_inputs_from_report_file,
 )
 from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
+from bittr_tess_vetter.cli.vet_cli import _detrend_lightcurve_for_vetting, _validate_detrend_args
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, TargetNotFoundError
+
+_SUPPORTED_DETREND_METHODS: tuple[str, ...] = (
+    "running_median_0p5d",
+    "transit_masked_bin_median",
+)
 
 
 def _to_jsonable_result(result: Any) -> Any:
@@ -44,6 +52,101 @@ def _derive_model_compete_verdict(result_payload: dict[str, Any]) -> tuple[str |
         if nested_label is not None:
             return str(nested_label), "$.result.model_competition.interpretation_label"
     return None, None
+
+
+def _normalize_detrend_method(detrend: str | None) -> str | None:
+    if detrend is None:
+        return None
+    method = str(detrend).strip().lower()
+    if method == "":
+        return None
+    if method == "running_median_0.5d":
+        return "running_median_0p5d"
+    if method not in _SUPPORTED_DETREND_METHODS:
+        choices = ", ".join(_SUPPORTED_DETREND_METHODS)
+        raise BtvCliError(
+            f"--detrend must be one of: {choices}",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    return method
+
+
+def _running_median_window_cadences(time: np.ndarray, *, window_days: float) -> int:
+    if len(time) < 3:
+        return 3
+    cadence_days = float(np.nanmedian(np.diff(time)))
+    if not np.isfinite(cadence_days) or cadence_days <= 0.0:
+        return 3
+    window_cadences = max(3, int(float(window_days) / cadence_days))
+    if window_cadences % 2 == 0:
+        window_cadences += 1
+    return int(window_cadences)
+
+
+def _maybe_detrend_lightcurve(
+    *,
+    time: np.ndarray,
+    flux: np.ndarray,
+    flux_err: np.ndarray,
+    period_days: float,
+    t0_btjd: float,
+    duration_hours: float,
+    detrend_method: str | None,
+    detrend_bin_hours: float,
+    detrend_buffer: float,
+    detrend_sigma_clip: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, Any] | None]:
+    if detrend_method is None:
+        return time, flux, flux_err, None
+
+    if detrend_method == "running_median_0p5d":
+        window_days = 0.5
+        window_cadences = _running_median_window_cadences(time, window_days=window_days)
+        detrended_flux = np.asarray(median_detrend(flux, window=window_cadences), dtype=np.float64)
+        return (
+            np.asarray(time, dtype=np.float64),
+            detrended_flux,
+            np.asarray(flux_err, dtype=np.float64),
+            {
+                "applied": True,
+                "method": "running_median_0p5d",
+                "window_days": float(window_days),
+                "window_cadences": int(window_cadences),
+                "bin_hours": float(detrend_bin_hours),
+                "buffer_factor": float(detrend_buffer),
+                "sigma_clip": float(detrend_sigma_clip),
+            },
+        )
+
+    lc = LightCurve(
+        time=np.asarray(time, dtype=np.float64),
+        flux=np.asarray(flux, dtype=np.float64),
+        flux_err=np.asarray(flux_err, dtype=np.float64),
+        quality=None,
+        valid_mask=np.ones_like(flux, dtype=bool),
+    )
+    candidate = Candidate(
+        ephemeris=Ephemeris(
+            period_days=float(period_days),
+            t0_btjd=float(t0_btjd),
+            duration_hours=float(duration_hours),
+        ),
+        depth_ppm=100.0,
+    )
+    detrended_lc, detrend_provenance = _detrend_lightcurve_for_vetting(
+        lc=lc,
+        candidate=candidate,
+        method=str(detrend_method),
+        bin_hours=float(detrend_bin_hours),
+        buffer_factor=float(detrend_buffer),
+        clip_sigma=float(detrend_sigma_clip),
+    )
+    return (
+        np.asarray(detrended_lc.time, dtype=np.float64),
+        np.asarray(detrended_lc.flux, dtype=np.float64),
+        np.asarray(detrended_lc.flux_err, dtype=np.float64),
+        detrend_provenance,
+    )
 
 
 def _download_and_prepare_arrays(
@@ -125,6 +228,18 @@ def _download_and_prepare_arrays(
 @click.option("--n-harmonics", type=int, default=2, show_default=True)
 @click.option("--alias-tolerance", type=float, default=0.01, show_default=True)
 @click.option(
+    "--detrend",
+    type=str,
+    default=None,
+    help=(
+        "Optional pre-model-competition detrend method. "
+        "Supported: running_median_0p5d, transit_masked_bin_median."
+    ),
+)
+@click.option("--detrend-bin-hours", type=float, default=6.0, show_default=True)
+@click.option("--detrend-buffer", type=float, default=2.0, show_default=True)
+@click.option("--detrend-sigma-clip", type=float, default=5.0, show_default=True)
+@click.option(
     "-o",
     "--out",
     "output_path_arg",
@@ -148,6 +263,10 @@ def model_compete_command(
     bic_threshold: float,
     n_harmonics: int,
     alias_tolerance: float,
+    detrend: str | None,
+    detrend_bin_hours: float,
+    detrend_buffer: float,
+    detrend_sigma_clip: float,
     output_path_arg: str,
 ) -> None:
     """Run model competition + artifact prior and emit schema-stable JSON."""
@@ -206,6 +325,14 @@ def model_compete_command(
         sectors_arg=sectors,
         report_sectors_used=report_sectors_used,
     )
+    detrend_method = _normalize_detrend_method(detrend)
+    if detrend_method is not None:
+        _validate_detrend_args(
+            detrend_bin_hours=float(detrend_bin_hours),
+            detrend_buffer=float(detrend_buffer),
+            detrend_sigma_clip=float(detrend_sigma_clip),
+        )
+    detrend_provenance: dict[str, Any] | None = None
 
     try:
         time, flux, flux_err, sectors_used, sector_load_path = _download_and_prepare_arrays(
@@ -213,6 +340,18 @@ def model_compete_command(
             sectors=effective_sectors,
             sectors_explicit=bool(sectors_explicit),
             flux_type=str(flux_type).lower(),
+        )
+        time, flux, flux_err, detrend_provenance = _maybe_detrend_lightcurve(
+            time=time,
+            flux=flux,
+            flux_err=flux_err,
+            period_days=float(resolved_period_days),
+            t0_btjd=float(resolved_t0_btjd),
+            duration_hours=float(resolved_duration_hours),
+            detrend_method=detrend_method,
+            detrend_bin_hours=float(detrend_bin_hours),
+            detrend_buffer=float(detrend_buffer),
+            detrend_sigma_clip=float(detrend_sigma_clip),
         )
 
         model_competition = model_competition_api.run_model_competition(
@@ -243,6 +382,10 @@ def model_compete_command(
         "bic_threshold": float(bic_threshold),
         "n_harmonics": int(n_harmonics),
         "alias_tolerance": float(alias_tolerance),
+        "detrend": detrend_method,
+        "detrend_bin_hours": float(detrend_bin_hours),
+        "detrend_buffer": float(detrend_buffer),
+        "detrend_sigma_clip": float(detrend_sigma_clip),
     }
     model_competition_dict = _to_jsonable_result(model_competition)
     artifact_prior_dict = _to_jsonable_result(artifact_prior)
@@ -280,6 +423,7 @@ def model_compete_command(
             "report_file": report_file_path,
             "sector_selection_source": sector_selection_source,
             "sector_load_path": sector_load_path,
+            "detrend": detrend_provenance,
             "options": options,
         },
     }

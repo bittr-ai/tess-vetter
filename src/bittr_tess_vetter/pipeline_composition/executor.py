@@ -427,22 +427,50 @@ def _run_one_toi(
 def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[str, Any]:
     toi = str(toi_result.get("toi"))
 
-    def _load_step_payloads() -> dict[str, dict[str, Any]]:
+    def _load_step_payloads() -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+        payloads_by_step_id: dict[str, dict[str, Any]] = {}
         payloads_by_op: dict[str, dict[str, Any]] = {}
         for row in toi_result.get("steps", []):
             if row.get("status") != "ok":
                 continue
+            step_id = str(row.get("step_id") or "")
             op = str(row.get("op") or "")
-            if op in payloads_by_op:
-                continue
             path = row.get("step_output_path")
             if path and Path(path).exists():
                 payload = _load_json(Path(path))
                 if isinstance(payload, dict):
-                    payloads_by_op[op] = payload
-        return payloads_by_op
+                    if step_id and step_id not in payloads_by_step_id:
+                        payloads_by_step_id[step_id] = payload
+                    if op and op not in payloads_by_op:
+                        payloads_by_op[op] = payload
+        return payloads_by_step_id, payloads_by_op
 
-    def _maybe_load_step(op: str, *, payloads_by_op: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    def _is_finite_number(value: Any) -> bool:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return False
+        return number == number and number not in {float("inf"), float("-inf")}
+
+    def _is_transit_like_verdict(verdict: Any) -> bool:
+        if verdict is None:
+            return False
+        label = str(verdict).strip().upper()
+        if label == "":
+            return False
+        return "TRANSIT" in label and "NON_TRANSIT" not in label
+
+    def _maybe_load_step(
+        op: str,
+        *,
+        payloads_by_op: dict[str, dict[str, Any]],
+        payloads_by_step_id: dict[str, dict[str, Any]],
+        step_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        if step_id is not None:
+            payload = payloads_by_step_id.get(step_id)
+            if payload is not None:
+                return payload
         return payloads_by_op.get(op)
 
     def _extract_verdict(payload: dict[str, Any] | None) -> Any:
@@ -456,15 +484,55 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
             return result.get("verdict")
         return None
 
-    payloads_by_op = _load_step_payloads()
+    payloads_by_step_id, payloads_by_op = _load_step_payloads()
 
-    model_compete = _maybe_load_step("model_compete", payloads_by_op=payloads_by_op)
-    systematics = _maybe_load_step("systematics_proxy", payloads_by_op=payloads_by_op)
-    ephemeris = _maybe_load_step("ephemeris_reliability", payloads_by_op=payloads_by_op)
-    timing = _maybe_load_step("timing", payloads_by_op=payloads_by_op)
-    localize_host = _maybe_load_step("localize_host", payloads_by_op=payloads_by_op)
-    dilution = _maybe_load_step("dilution", payloads_by_op=payloads_by_op)
-    fpp = _maybe_load_step("fpp", payloads_by_op=payloads_by_op)
+    model_compete = _maybe_load_step(
+        "model_compete",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+    )
+    systematics = _maybe_load_step(
+        "systematics_proxy",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+    )
+    ephemeris = _maybe_load_step(
+        "ephemeris_reliability",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+    )
+    timing = _maybe_load_step("timing", payloads_by_op=payloads_by_op, payloads_by_step_id=payloads_by_step_id)
+    localize_host = _maybe_load_step(
+        "localize_host",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+    )
+    dilution = _maybe_load_step("dilution", payloads_by_op=payloads_by_op, payloads_by_step_id=payloads_by_step_id)
+    fpp = _maybe_load_step("fpp", payloads_by_op=payloads_by_op, payloads_by_step_id=payloads_by_step_id)
+    model_compete_raw = _maybe_load_step(
+        "model_compete",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+        step_id="model_compete_raw",
+    )
+    model_compete_detrended = _maybe_load_step(
+        "model_compete",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+        step_id="model_compete_detrended",
+    )
+    fpp_raw_payload = _maybe_load_step(
+        "fpp",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+        step_id="fpp_raw",
+    )
+    fpp_detrended_payload = _maybe_load_step(
+        "fpp",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+        step_id="fpp_detrended",
+    )
 
     localize_action_hint = None
     if isinstance(localize_host, dict):
@@ -490,19 +558,64 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
             if isinstance(result, dict):
                 fpp_value = result.get("fpp")
 
+    fpp_raw = None
+    if isinstance(fpp_raw_payload, dict):
+        fpp_raw = fpp_raw_payload.get("fpp")
+        if fpp_raw is None:
+            result = fpp_raw_payload.get("result")
+            if isinstance(result, dict):
+                fpp_raw = result.get("fpp")
+
+    fpp_detrended = None
+    if isinstance(fpp_detrended_payload, dict):
+        fpp_detrended = fpp_detrended_payload.get("fpp")
+        if fpp_detrended is None:
+            result = fpp_detrended_payload.get("result")
+            if isinstance(result, dict):
+                fpp_detrended = result.get("fpp")
+
+    fpp_delta_detrended_minus_raw = None
+    if _is_finite_number(fpp_raw) and _is_finite_number(fpp_detrended):
+        fpp_delta_detrended_minus_raw = float(fpp_detrended) - float(fpp_raw)
+
+    model_compete_raw_verdict = _extract_verdict(model_compete_raw)
+    model_compete_detrended_verdict = _extract_verdict(model_compete_detrended)
+    robustness_recommended_variant = None
+    robustness_present = any(
+        payload is not None
+        for payload in (model_compete_raw, model_compete_detrended, fpp_raw_payload, fpp_detrended_payload)
+    )
+    if robustness_present:
+        robustness_recommended_variant = "raw"
+        if (
+            _is_finite_number(fpp_raw)
+            and _is_finite_number(fpp_detrended)
+            and float(fpp_detrended) < float(fpp_raw)
+            and _is_transit_like_verdict(model_compete_detrended_verdict)
+        ):
+            robustness_recommended_variant = "detrended"
+
     concern_flags = set(str(x) for x in (toi_result.get("concern_flags") or []) if x is not None)
+    for payload in payloads_by_step_id.values():
+        concern_flags.update(_extract_concern_flags(payload))
     for payload in payloads_by_op.values():
         concern_flags.update(_extract_concern_flags(payload))
 
     row = {
         "toi": toi,
         "model_compete_verdict": _extract_verdict(model_compete),
+        "model_compete_raw_verdict": model_compete_raw_verdict,
+        "model_compete_detrended_verdict": model_compete_detrended_verdict,
         "systematics_verdict": _extract_verdict(systematics),
         "ephemeris_verdict": _extract_verdict(ephemeris),
         "timing_verdict": _extract_verdict(timing),
         "localize_host_action_hint": localize_action_hint,
         "dilution_n_plausible_scenarios": dilution_n_plausible,
         "fpp": fpp_value,
+        "fpp_raw": fpp_raw,
+        "fpp_detrended": fpp_detrended,
+        "fpp_delta_detrended_minus_raw": fpp_delta_detrended_minus_raw,
+        "robustness_recommended_variant": robustness_recommended_variant,
         "concern_flags": sorted(concern_flags),
     }
     return row
@@ -519,12 +632,18 @@ def _write_evidence_table(*, out_dir: Path, toi_results: list[dict[str, Any]]) -
     fieldnames = [
         "toi",
         "model_compete_verdict",
+        "model_compete_raw_verdict",
+        "model_compete_detrended_verdict",
         "systematics_verdict",
         "ephemeris_verdict",
         "timing_verdict",
         "localize_host_action_hint",
         "dilution_n_plausible_scenarios",
         "fpp",
+        "fpp_raw",
+        "fpp_detrended",
+        "fpp_delta_detrended_minus_raw",
+        "robustness_recommended_variant",
         "concern_flags",
     ]
     with csv_path.open("w", encoding="utf-8", newline="") as fh:

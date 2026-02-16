@@ -14,10 +14,22 @@ def test_profile_registry_contains_mvp_profiles() -> None:
     assert "host_localization" in profiles
     assert "fpp_validation_fast" in profiles
     assert "full_vetting" in profiles
+    assert "robustness_composition" in profiles
 
     full = get_profile("full_vetting")
     assert full.id == "full_vetting"
     assert len(full.steps) >= 10
+
+    robust = get_profile("robustness_composition")
+    assert robust.id == "robustness_composition"
+    assert [step.id for step in robust.steps] == [
+        "report_seed",
+        "detrend_grid",
+        "model_compete_raw",
+        "model_compete_detrended",
+        "fpp_raw",
+        "fpp_detrended",
+    ]
 
 
 def test_run_composition_report_from_and_ports_and_resume(monkeypatch, tmp_path: Path) -> None:

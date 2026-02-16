@@ -17,6 +17,22 @@ def test_pipeline_validate_cli_valid_profile_human_summary() -> None:
     assert "valid profile=triage_fast composition_id=triage_fast step_count=" in result.output
 
 
+def test_pipeline_validate_and_profiles_include_robustness_composition() -> None:
+    runner = CliRunner()
+
+    profiles_result = runner.invoke(cli, ["pipeline", "profiles"])
+    assert profiles_result.exit_code == 0, profiles_result.output
+    profile_names = [line.strip() for line in profiles_result.output.splitlines() if line.strip()]
+    assert "robustness_composition" in profile_names
+
+    validate_result = runner.invoke(cli, ["pipeline", "validate", "--profile", "robustness_composition"])
+    assert validate_result.exit_code == 0, validate_result.output
+    assert (
+        "valid profile=robustness_composition composition_id=robustness_composition step_count=6"
+        in validate_result.output
+    )
+
+
 def test_pipeline_validate_cli_rejects_mutually_exclusive_profile_and_composition_file(tmp_path: Path) -> None:
     composition_file = tmp_path / "composition.json"
     composition_file.write_text('{"schema_version":"pipeline.composition.v1","id":"x","steps":[{"id":"s1","op":"report"}]}')
@@ -56,4 +72,3 @@ def test_pipeline_validate_cli_invalid_schema_json_output(tmp_path: Path) -> Non
     assert payload["composition_id"] is None
     assert payload["step_count"] == 0
     assert payload["errors"]
-

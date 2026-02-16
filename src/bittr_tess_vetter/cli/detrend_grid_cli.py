@@ -19,6 +19,7 @@ from bittr_tess_vetter.cli.common_cli import (
     load_json_file,
     resolve_optional_output_path,
 )
+from bittr_tess_vetter.cli.diagnostics_report_inputs import choose_effective_sectors, resolve_inputs_from_report_file
 from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
 from bittr_tess_vetter.validation.detrend_grid_defaults import (
@@ -147,15 +148,22 @@ def _build_best_variant(
             if str(row.get("variant_id")) == str(best_variant_id):
                 best_row = row
                 break
+    fallback_selected = False
     if best_row is None:
         for row in ranked_rows:
             if row.get("rank") == 1:
                 best_row = row
                 break
     if best_row is None:
-        return None
+        # Keep downstream composition refs stable even when all variants fail.
+        best_row = ranked_rows[0]
+        fallback_selected = True
+        notes.append("No successful variants; using first ranked row as fallback best_variant for wiring.")
 
-    rationale: list[str] = ["Selected highest absolute sensitivity-sweep score among successful variants."]
+    if fallback_selected:
+        rationale = ["Fallback selection: no successful variants were available."]
+    else:
+        rationale = ["Selected highest absolute sensitivity-sweep score among successful variants."]
     if metric_variance is not None:
         relation = "<=" if stable else ">"
         rationale.append(
@@ -353,6 +361,7 @@ def _execute_detrend_grid(
 @click.option("--duration-hours", type=float, default=None, help="Transit duration in hours.")
 @click.option("--depth-ppm", type=float, default=None, help="Transit depth in ppm.")
 @click.option("--toi", type=str, default=None, help="Optional TOI label to resolve candidate inputs.")
+@click.option("--report-file", type=str, default=None, help="Optional report JSON path for candidate inputs.")
 @click.option(
     "--network-ok/--no-network",
     default=False,
@@ -443,6 +452,7 @@ def detrend_grid_command(
     duration_hours: float | None,
     depth_ppm: float | None,
     toi: str | None,
+    report_file: str | None,
     network_ok: bool,
     sectors: tuple[int, ...],
     flux_type: str,
@@ -461,21 +471,46 @@ def detrend_grid_command(
     """Sweep detrending variants and emit ranked machine-readable diagnostics."""
     out_path = resolve_optional_output_path(output_path_arg)
 
-    (
-        resolved_tic_id,
-        resolved_period_days,
-        resolved_t0_btjd,
-        resolved_duration_hours,
-        _resolved_depth_ppm,
-        input_resolution,
-    ) = _resolve_candidate_inputs(
-        network_ok=network_ok,
-        toi=toi,
-        tic_id=tic_id,
-        period_days=period_days,
-        t0_btjd=t0_btjd,
-        duration_hours=duration_hours,
-        depth_ppm=depth_ppm,
+    report_file_path: str | None = None
+    report_sectors_used: list[int] | None = None
+    if report_file is not None:
+        if toi is not None:
+            click.echo(
+                "Warning: --report-file provided; ignoring --toi and using report-file candidate inputs.",
+                err=True,
+            )
+        resolved_from_report = resolve_inputs_from_report_file(str(report_file))
+        resolved_tic_id = int(resolved_from_report.tic_id)
+        resolved_period_days = float(resolved_from_report.period_days)
+        resolved_t0_btjd = float(resolved_from_report.t0_btjd)
+        resolved_duration_hours = float(resolved_from_report.duration_hours)
+        input_resolution = dict(resolved_from_report.input_resolution)
+        report_file_path = str(resolved_from_report.report_file_path)
+        report_sectors_used = (
+            [int(s) for s in resolved_from_report.sectors_used]
+            if resolved_from_report.sectors_used is not None
+            else None
+        )
+    else:
+        (
+            resolved_tic_id,
+            resolved_period_days,
+            resolved_t0_btjd,
+            resolved_duration_hours,
+            _resolved_depth_ppm,
+            input_resolution,
+        ) = _resolve_candidate_inputs(
+            network_ok=network_ok,
+            toi=toi,
+            tic_id=tic_id,
+            period_days=period_days,
+            t0_btjd=t0_btjd,
+            duration_hours=duration_hours,
+            depth_ppm=depth_ppm,
+        )
+    effective_sectors, _sectors_explicit, sector_selection_source = choose_effective_sectors(
+        sectors_arg=sectors,
+        report_sectors_used=report_sectors_used,
     )
 
     check_resolution_note: dict[str, Any] | None = None
@@ -495,7 +530,7 @@ def detrend_grid_command(
             period_days=resolved_period_days,
             t0_btjd=resolved_t0_btjd,
             duration_hours=resolved_duration_hours,
-            sectors=list(sectors) if sectors else None,
+            sectors=effective_sectors,
             flux_type=str(flux_type).lower(),
             random_seed=int(random_seed),
             downsample_levels=list(downsample_levels) if downsample_levels else None,
@@ -511,6 +546,11 @@ def detrend_grid_command(
             check_resolution_note=check_resolution_note,
             vet_summary_provenance=vet_summary_provenance,
         )
+        provenance = payload.get("provenance")
+        if isinstance(provenance, dict):
+            provenance["inputs_source"] = "report_file" if report_file_path is not None else str(input_resolution.get("source"))
+            provenance["report_file"] = report_file_path
+            provenance["sector_selection_source"] = sector_selection_source
     except LightCurveNotFoundError as exc:
         raise BtvCliError(str(exc), exit_code=EXIT_DATA_UNAVAILABLE) from exc
     except BtvCliError:
