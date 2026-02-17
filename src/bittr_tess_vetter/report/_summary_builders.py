@@ -215,6 +215,161 @@ def _build_variability_summary(
     }
 
 
+def _scale_to_unit_interval(
+    value: float | None,
+    *,
+    offset: float,
+    scale: float,
+) -> float | None:
+    """Map a scalar to [0, 1) with a smooth exponential saturation."""
+    if value is None or not math.isfinite(value):
+        return None
+    if scale <= 0:
+        return None
+    normalized = max(0.0, (float(value) - offset) / scale)
+    return float(1.0 - math.exp(-normalized))
+
+
+def _build_stellar_contamination_summary(
+    lc_summary: LCSummary | None,
+    lc_robustness: LCRobustnessData | None,
+    timing_series: TransitTimingPlotData | None,
+    alias_summary: AliasHarmonicSummaryData | None = None,
+    stellar: Any | None = None,
+) -> dict[str, Any]:
+    """Build a threshold-free stellar contamination scalar + component provenance."""
+    variability_summary = _build_variability_summary(
+        lc_summary=lc_summary,
+        timing_series=timing_series,
+        alias_summary=alias_summary,
+        stellar=stellar,
+    )
+    noise_summary = _build_noise_summary(lc_summary=lc_summary, lc_robustness=lc_robustness)
+
+    component_specs = {
+        "variability_index": {
+            "raw_value": _coerce_finite_float(variability_summary.get("variability_index")),
+            "weight": 0.35,
+            "offset": 1.0,
+            "scale": 0.75,
+            "unit": "ratio",
+            "source_path": "summary.variability_summary.variability_index",
+        },
+        "periodicity_score": {
+            "raw_value": _coerce_finite_float(variability_summary.get("periodicity_score")),
+            "weight": 0.30,
+            "offset": 0.0,
+            "scale": 3.0,
+            "unit": "sigma_like_score",
+            "source_path": "summary.variability_summary.periodicity_score",
+        },
+        "red_noise_beta_duration": {
+            "raw_value": _coerce_finite_float(noise_summary.get("red_noise_beta_duration")),
+            "weight": 0.20,
+            "offset": 1.0,
+            "scale": 0.30,
+            "unit": "ratio",
+            "source_path": "summary.noise_summary.red_noise_beta_duration",
+        },
+        "trend_stat": {
+            "raw_value": _coerce_finite_float(noise_summary.get("trend_stat")),
+            "weight": 0.15,
+            "offset": 0.0,
+            "scale": 1e-3,
+            "unit": "relative_flux_per_day",
+            "source_path": "summary.noise_summary.trend_stat",
+        },
+    }
+
+    components: dict[str, Any] = {}
+    weighted_sum = 0.0
+    weight_total = 0.0
+    for key, spec in component_specs.items():
+        transformed = _scale_to_unit_interval(
+            spec["raw_value"],
+            offset=spec["offset"],
+            scale=spec["scale"],
+        )
+        if transformed is not None:
+            weighted_sum += transformed * float(spec["weight"])
+            weight_total += float(spec["weight"])
+        components[key] = {
+            "raw_value": spec["raw_value"],
+            "transformed_value": transformed,
+            "weight": float(spec["weight"]),
+            "source_path": spec["source_path"],
+            "unit": spec["unit"],
+            "transform": "1 - exp(-max(0, (raw_value - offset) / scale))",
+            "transform_offset": float(spec["offset"]),
+            "transform_scale": float(spec["scale"]),
+        }
+
+    risk_scalar = (weighted_sum / weight_total) if weight_total > 0 else None
+    return {
+        "risk_scalar": risk_scalar,
+        "aggregation": "weighted_mean_over_available_components",
+        "n_components_available": sum(
+            1
+            for component in components.values()
+            if component["transformed_value"] is not None
+        ),
+        "n_components_total": len(components),
+        "components": components,
+        "provenance": {
+            "source_blocks": [
+                "summary.variability_summary",
+                "summary.noise_summary",
+            ],
+            "computed_by": "report._summary_builders._build_stellar_contamination_summary",
+        },
+        "semantics": {
+            "risk_scalar_range": "0_to_1",
+            "risk_scalar_direction": "higher_means_higher_stellar_contamination_risk",
+            "threshold_free": True,
+            "null_policy": "risk_scalar null when all component inputs are missing",
+        },
+    }
+
+
+def _build_ephemeris_schedulability_summary(
+    checks: dict[str, CheckResult],
+) -> dict[str, Any]:
+    """Build schedulability scalar summary from V17 diagnostics when available."""
+    check_v17 = checks.get("V17")
+    if check_v17 is None:
+        return {"scalar": None, "components": {}, "provenance": {"source_check": "V17", "available": False}}
+
+    raw = check_v17.raw if isinstance(check_v17.raw, dict) else {}
+    from_raw = raw.get("schedulability_summary")
+    if isinstance(from_raw, dict):
+        scalar = _coerce_finite_float(from_raw.get("scalar"))
+        components_in = from_raw.get("components")
+        components: dict[str, float] = {}
+        if isinstance(components_in, dict):
+            for key, value in components_in.items():
+                coerced = _coerce_finite_float(value)
+                if coerced is not None:
+                    components[str(key)] = float(coerced)
+        provenance = from_raw.get("provenance")
+        return {
+            "scalar": scalar,
+            "components": components,
+            "provenance": provenance if isinstance(provenance, dict) else {"source_check": "V17"},
+        }
+
+    metrics = check_v17.metrics if isinstance(check_v17.metrics, dict) else {}
+    fallback_components = {
+        "signal_vs_phase_null": _coerce_finite_float(metrics.get("null_percentile")),
+        "period_localization": _coerce_finite_float(metrics.get("period_peak_to_next_ratio")),
+        "point_robustness": _coerce_finite_float(metrics.get("max_ablation_score_drop_fraction")),
+    }
+    return {
+        "scalar": None,
+        "components": {k: float(v) for k, v in fallback_components.items() if v is not None},
+        "provenance": {"source_check": "V17", "available": True, "fallback_only": True},
+    }
+
+
 def _build_alias_scalar_summary(
     alias_summary: AliasHarmonicSummaryData | None,
 ) -> dict[str, Any]:

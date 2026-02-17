@@ -59,7 +59,9 @@ def test_summary_registry_contains_expected_blocks() -> None:
         "odd_even_summary",
         "noise_summary",
         "variability_summary",
+        "stellar_contamination_summary",
         "alias_scalar_summary",
+        "ephemeris_schedulability_summary",
         "timing_summary",
         "secondary_scan_summary",
         "data_gap_summary",
@@ -75,6 +77,8 @@ def test_assemble_summary_adds_check_method_refs_and_references() -> None:
     assert summary["checks"]["V01"]["method_refs"] == refs_for_check("V01")
     assert isinstance(summary["references"], list)
     assert summary["odd_even_summary"]["depth_diff_ppm"] == 100.0
+    assert "stellar_contamination_summary" in summary
+    assert "ephemeris_schedulability_summary" in summary
     assert summary["verdict"] == "ALL_CHECKS_PASSED"
     assert summary["verdict_source"] == "$.summary.checks"
     assert summary["caveats"] == []
@@ -113,3 +117,22 @@ def test_assemble_plot_data_includes_robustness_and_overlays() -> None:
     assert summary["lc_robustness_summary"]["beta_duration"] == 1.3
     assert "lc_robustness" in plot_data
     assert plot_data["check_overlays"] == {"V01": {"example": [1, 2, 3]}}
+
+
+def test_stellar_contamination_summary_is_present_and_null_safe_when_inputs_missing() -> None:
+    summary, _ = assemble_summary(_base_context())
+    contamination = summary["stellar_contamination_summary"]
+
+    assert contamination["risk_scalar"] is None
+    assert contamination["n_components_available"] == 0
+    assert contamination["n_components_total"] == 4
+    assert contamination["components"]["variability_index"]["raw_value"] is None
+    assert contamination["components"]["variability_index"]["transformed_value"] is None
+
+
+def test_ephemeris_schedulability_summary_is_null_safe_when_v17_missing() -> None:
+    summary, _ = assemble_summary(_base_context())
+    sched = summary["ephemeris_schedulability_summary"]
+    assert sched["scalar"] is None
+    assert sched["components"] == {}
+    assert sched["provenance"]["source_check"] == "V17"

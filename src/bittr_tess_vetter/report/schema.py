@@ -91,6 +91,45 @@ class VariabilitySummaryModel(BaseModel):
     semantics: dict[str, float | int | str | bool | None] = Field(default_factory=dict)
 
 
+class StellarContaminationComponentModel(BaseModel):
+    """One contamination-risk component with transform metadata."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    raw_value: float | None = None
+    transformed_value: float | None = None
+    weight: float
+    source_path: str
+    unit: str | None = None
+    transform: str
+    transform_offset: float
+    transform_scale: float
+
+
+class StellarContaminationSummaryModel(BaseModel):
+    """Threshold-free stellar contamination risk summary."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    risk_scalar: float | None = None
+    aggregation: str
+    n_components_available: int = 0
+    n_components_total: int = 0
+    components: dict[str, StellarContaminationComponentModel] = Field(default_factory=dict)
+    provenance: dict[str, Any] = Field(default_factory=dict)
+    semantics: dict[str, float | int | str | bool | None] = Field(default_factory=dict)
+
+
+class EphemerisSchedulabilitySummaryModel(BaseModel):
+    """Ephemeris schedulability scalar summary."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scalar: float | None = None
+    components: dict[str, float] = Field(default_factory=dict)
+    provenance: dict[str, Any] = Field(default_factory=dict)
+
+
 class AliasScalarSummaryModel(BaseModel):
     """Scalar alias diagnostics rollup for summary consumers."""
 
@@ -201,6 +240,8 @@ class ReportSummaryModel(BaseModel):
     odd_even_summary: OddEvenSummaryModel | None = None
     noise_summary: NoiseSummaryModel | None = None
     variability_summary: VariabilitySummaryModel | None = None
+    stellar_contamination_summary: StellarContaminationSummaryModel | None = None
+    ephemeris_schedulability_summary: EphemerisSchedulabilitySummaryModel | None = None
     references: list[ReferenceEntryModel] = Field(default_factory=list)
     enrichment: dict[str, Any] | None = None
     lc_robustness_summary: dict[str, Any] | None = None

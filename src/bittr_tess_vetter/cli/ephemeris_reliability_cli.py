@@ -277,6 +277,15 @@ def ephemeris_reliability_command(
         ),
     }
     result_payload = result.to_dict()
+    if "schedulability_summary" not in result_payload:
+        try:
+            summary = ephemeris_reliability_api.compute_schedulability_summary_from_regime_result(
+                result
+            )
+        except Exception:
+            summary = None
+        if summary is not None:
+            result_payload["schedulability_summary"] = summary.to_dict()
     verdict, verdict_source = _derive_ephemeris_reliability_verdict(result_payload)
     result_payload["verdict"] = verdict
     result_payload["verdict_source"] = verdict_source

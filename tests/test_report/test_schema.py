@@ -81,6 +81,8 @@ def test_report_to_json_has_no_unknown_summary_or_plot_data_keys() -> None:
         "odd_even_summary",
         "references",
         "secondary_scan_summary",
+        "stellar_contamination_summary",
+        "ephemeris_schedulability_summary",
         "stellar",
         "tic_id",
         "timing_summary",
@@ -209,6 +211,8 @@ def test_report_payload_schema_includes_new_deterministic_summary_blocks() -> No
     assert "caveats" in summary_props
     assert "timing_summary" in summary_props
     assert "secondary_scan_summary" in summary_props
+    assert "stellar_contamination_summary" in summary_props
+    assert "ephemeris_schedulability_summary" in summary_props
     assert "data_gap_summary" in summary_props
     assert "check_execution" in summary_props
     variability_props = schema["$defs"]["VariabilitySummaryModel"]["properties"]
@@ -221,6 +225,62 @@ def test_report_payload_schema_includes_new_deterministic_summary_blocks() -> No
     assert "alias_interpretation" in alias_props
     assert "n_raw_points" in secondary_props
     assert "n_bins" in secondary_props
+
+
+def test_report_payload_accepts_stellar_contamination_summary_scalars_and_nulls() -> None:
+    lc = _make_minimal_lc()
+    candidate = Candidate(
+        ephemeris=Ephemeris(period_days=1.0, t0_btjd=0.0, duration_hours=1.0),
+        depth_ppm=500.0,
+    )
+    payload = build_report(lc, candidate, include_additional_plots=False).to_json()
+    payload = copy.deepcopy(payload)
+    payload["summary"]["stellar_contamination_summary"] = {
+        "risk_scalar": 0.37,
+        "aggregation": "weighted_mean_over_available_components",
+        "n_components_available": 2,
+        "n_components_total": 4,
+        "components": {
+            "variability_index": {
+                "raw_value": None,
+                "transformed_value": None,
+                "weight": 0.35,
+                "source_path": "summary.variability_summary.variability_index",
+                "unit": "ratio",
+                "transform": "1 - exp(-max(0, (raw_value - offset) / scale))",
+                "transform_offset": 1.0,
+                "transform_scale": 0.75,
+            }
+        },
+        "provenance": {"source_blocks": ["summary.variability_summary", "summary.noise_summary"]},
+        "semantics": {"threshold_free": True},
+    }
+
+    parsed = ReportPayloadModel.model_validate(payload)
+    assert parsed.summary.stellar_contamination_summary is not None
+    assert parsed.summary.stellar_contamination_summary.risk_scalar == pytest.approx(0.37)
+    assert (
+        parsed.summary.stellar_contamination_summary.components["variability_index"].transformed_value
+        is None
+    )
+
+
+def test_report_payload_accepts_ephemeris_schedulability_summary() -> None:
+    lc = _make_minimal_lc()
+    candidate = Candidate(
+        ephemeris=Ephemeris(period_days=1.0, t0_btjd=0.0, duration_hours=1.0),
+        depth_ppm=500.0,
+    )
+    payload = build_report(lc, candidate, include_additional_plots=False).to_json()
+    payload = copy.deepcopy(payload)
+    payload["summary"]["ephemeris_schedulability_summary"] = {
+        "scalar": 0.62,
+        "components": {"signal_vs_phase_null": 0.9, "period_localization": 0.7},
+        "provenance": {"source_check": "V17", "available": True},
+    }
+    parsed = ReportPayloadModel.model_validate(payload)
+    assert parsed.summary.ephemeris_schedulability_summary is not None
+    assert parsed.summary.ephemeris_schedulability_summary.scalar == pytest.approx(0.62)
 
 
 def test_report_payload_accepts_data_gap_summary_scalars_and_nulls() -> None:
@@ -336,6 +396,31 @@ def test_report_payload_rejects_non_scalar_values_in_new_summary_blocks() -> Non
         "n_epochs_missing_ge_0p25_in_coverage": 2,
         "n_epochs_excluded_no_coverage": [1],
         "n_epochs_evaluated_in_coverage": {"count": 4},
+    }
+    payload["summary"]["stellar_contamination_summary"] = {
+        "risk_scalar": {"bad": 0.2},
+        "aggregation": "weighted_mean_over_available_components",
+        "n_components_available": [2],
+        "n_components_total": 4,
+        "components": {
+            "variability_index": {
+                "raw_value": 1.2,
+                "transformed_value": [0.3],
+                "weight": "0.35",
+                "source_path": "summary.variability_summary.variability_index",
+                "unit": "ratio",
+                "transform": "1 - exp(-max(0, (raw_value - offset) / scale))",
+                "transform_offset": 1.0,
+                "transform_scale": 0.75,
+            }
+        },
+        "provenance": [],
+        "semantics": {"threshold_free": True},
+    }
+    payload["summary"]["ephemeris_schedulability_summary"] = {
+        "scalar": {"bad": 0.5},
+        "components": {"signal_vs_phase_null": "high"},
+        "provenance": [],
     }
 
     with pytest.raises(Exception):

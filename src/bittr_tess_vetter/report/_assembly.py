@@ -14,10 +14,12 @@ from bittr_tess_vetter.report._references import (
 from bittr_tess_vetter.report._summary_builders import (
     _build_alias_scalar_summary,
     _build_data_gap_summary,
+    _build_ephemeris_schedulability_summary,
     _build_lc_robustness_summary,
     _build_noise_summary,
     _build_odd_even_summary,
     _build_secondary_scan_summary,
+    _build_stellar_contamination_summary,
     _build_timing_summary,
     _build_variability_summary,
     _model_dump_like,
@@ -79,8 +81,22 @@ def _block_variability(ctx: ReportAssemblyContext) -> dict[str, Any]:
     )
 
 
+def _block_stellar_contamination(ctx: ReportAssemblyContext) -> dict[str, Any]:
+    return _build_stellar_contamination_summary(
+        lc_summary=ctx.lc_summary,
+        lc_robustness=ctx.lc_robustness,
+        timing_series=ctx.timing_series,
+        alias_summary=ctx.alias_summary,
+        stellar=ctx.stellar,
+    )
+
+
 def _block_alias(ctx: ReportAssemblyContext) -> dict[str, Any]:
     return _build_alias_scalar_summary(ctx.alias_summary)
+
+
+def _block_ephemeris_schedulability(ctx: ReportAssemblyContext) -> dict[str, Any]:
+    return _build_ephemeris_schedulability_summary(ctx.checks)
 
 
 def _block_timing(ctx: ReportAssemblyContext) -> dict[str, Any]:
@@ -104,7 +120,9 @@ SUMMARY_BLOCK_REGISTRY: tuple[SummaryBlockSpec, ...] = (
     SummaryBlockSpec("odd_even_summary", _block_odd_even, "odd_even_summary"),
     SummaryBlockSpec("noise_summary", _block_noise, "noise_summary"),
     SummaryBlockSpec("variability_summary", _block_variability, "variability_summary"),
+    SummaryBlockSpec("stellar_contamination_summary", _block_stellar_contamination),
     SummaryBlockSpec("alias_scalar_summary", _block_alias, "alias_scalar_summary"),
+    SummaryBlockSpec("ephemeris_schedulability_summary", _block_ephemeris_schedulability),
     SummaryBlockSpec("timing_summary", _block_timing, "timing_summary"),
     SummaryBlockSpec("secondary_scan_summary", _block_secondary_scan, "secondary_scan_summary"),
     SummaryBlockSpec("data_gap_summary", _block_data_gap, "data_gap_summary"),

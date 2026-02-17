@@ -71,6 +71,7 @@ class EphemerisReliabilityRegimeResult:
     warnings: list[str]
 
     def to_dict(self) -> dict[str, Any]:
+        schedulability_summary = compute_schedulability_summary_from_regime_result(self)
         return {
             "base": {
                 "score": float(self.base.score),
@@ -90,9 +91,101 @@ class EphemerisReliabilityRegimeResult:
             "ablation": [row.to_dict() for row in self.ablation],
             "max_ablation_score_drop_fraction": float(self.max_ablation_score_drop_fraction),
             "t0_sensitivity": self.t0_sensitivity.__dict__,
+            "schedulability_summary": schedulability_summary.to_dict(),
             "label": str(self.label),
             "warnings": list(self.warnings),
         }
+
+
+@dataclass(frozen=True)
+class SchedulabilitySummary:
+    scalar: float
+    components: dict[str, float]
+    provenance: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "scalar": float(self.scalar),
+            "components": {str(k): float(v) for k, v in self.components.items()},
+            "provenance": dict(self.provenance),
+        }
+
+
+def _clip_01_or_zero(value: float) -> float:
+    value_f = float(value)
+    if not np.isfinite(value_f):
+        return 0.0
+    return float(np.clip(value_f, 0.0, 1.0))
+
+
+def compute_schedulability_summary_from_regime_result(
+    result: EphemerisReliabilityRegimeResult,
+) -> SchedulabilitySummary:
+    """Compute continuous, threshold-free schedulability summary signals."""
+    null_percentile_component = _clip_01_or_zero(float(result.null_percentile))
+
+    peak_to_next = float(result.period_neighborhood.peak_to_next)
+    period_localization_component = (
+        float(max(peak_to_next, 0.0) / (1.0 + max(peak_to_next, 0.0)))
+        if np.isfinite(peak_to_next)
+        else 0.0
+    )
+
+    point_robustness_component = _clip_01_or_zero(
+        1.0 - float(result.max_ablation_score_drop_fraction)
+    )
+
+    top5_fraction = float(
+        result.top_contribution_fractions.get(
+            "top_5_fraction",
+            float(result.concentration.top_5_fraction_abs),
+        )
+    )
+    contribution_dispersion_component = _clip_01_or_zero(1.0 - top5_fraction)
+
+    t0_score_best = float(result.t0_sensitivity.score_best)
+    t0_delta = float(result.t0_sensitivity.delta_score)
+    t0_alignment_component = (
+        _clip_01_or_zero(1.0 - (abs(t0_delta) / max(abs(t0_score_best), 1e-12)))
+        if np.isfinite(t0_score_best) and np.isfinite(t0_delta)
+        else 0.0
+    )
+
+    components = {
+        "signal_vs_phase_null": null_percentile_component,
+        "period_localization": period_localization_component,
+        "point_robustness": point_robustness_component,
+        "contribution_dispersion": contribution_dispersion_component,
+        "t0_alignment": t0_alignment_component,
+    }
+    component_weights = {
+        "signal_vs_phase_null": 0.35,
+        "period_localization": 0.20,
+        "point_robustness": 0.20,
+        "contribution_dispersion": 0.15,
+        "t0_alignment": 0.10,
+    }
+    scalar = float(
+        sum(component_weights[name] * components[name] for name in component_weights)
+        / sum(component_weights.values())
+    )
+
+    provenance = {
+        "kind": "ephemeris_schedulability_scalar",
+        "version": "v1",
+        "policy_free": True,
+        "source": "EphemerisReliabilityRegimeResult",
+        "component_weights": component_weights,
+        "input_signals": {
+            "null_percentile": float(result.null_percentile),
+            "period_peak_to_next": float(result.period_neighborhood.peak_to_next),
+            "max_ablation_score_drop_fraction": float(result.max_ablation_score_drop_fraction),
+            "top_5_contribution_fraction": float(top5_fraction),
+            "t0_score_best": float(t0_score_best),
+            "t0_delta_score": float(t0_delta),
+        },
+    }
+    return SchedulabilitySummary(scalar=scalar, components=components, provenance=provenance)
 
 
 def _period_grid_around(

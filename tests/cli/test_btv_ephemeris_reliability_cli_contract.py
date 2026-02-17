@@ -51,7 +51,18 @@ def test_btv_ephemeris_reliability_success_contract_payload(monkeypatch, tmp_pat
 
     class _FakeResult:
         def to_dict(self) -> dict[str, Any]:
-            return {"label": "ok", "null_percentile": 0.999}
+            return {
+                "label": "ok",
+                "null_percentile": 0.999,
+                "schedulability_summary": {
+                    "scalar": 0.73,
+                    "components": {
+                        "signal_vs_phase_null": 0.99,
+                        "period_localization": 0.72,
+                    },
+                    "provenance": {"kind": "ephemeris_schedulability_scalar", "version": "v1"},
+                },
+            }
 
     def _fake_compute_reliability_regime_numpy(**kwargs: Any):
         seen["compute"] = kwargs
@@ -144,6 +155,10 @@ def test_btv_ephemeris_reliability_success_contract_payload(monkeypatch, tmp_pat
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == "cli.ephemeris_reliability.v1"
     assert payload["result"]["label"] == "ok"
+    assert "schedulability_summary" in payload["result"]
+    assert isinstance(payload["result"]["schedulability_summary"]["scalar"], float)
+    assert isinstance(payload["result"]["schedulability_summary"]["components"], dict)
+    assert isinstance(payload["result"]["schedulability_summary"]["provenance"], dict)
     assert "verdict" in payload
     assert "verdict_source" in payload
     assert payload["verdict"] == "ok"
