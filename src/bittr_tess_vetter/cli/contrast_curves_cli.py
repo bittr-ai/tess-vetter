@@ -31,9 +31,7 @@ from bittr_tess_vetter.exofop.types import ExoFopFileRow, ExoFopSelectors
 _CLI_CONTRAST_CURVES_SCHEMA = "cli.contrast_curves.v2"
 _CLI_CONTRAST_CURVE_SUMMARY_SCHEMA = "cli.contrast_curve_summary.v1"
 
-_LIKELY_FILENAME_RE = re.compile(
-    r"(?i)(contrast|sensitivity|speckle|ao|nirc2|pharo|dssi|zorro|robo-ao|hrcam|imaging).*\.(tbl|dat|csv|txt)$"
-)
+_LIKELY_FILENAME_RE = re.compile(r"(?i).*\.(tbl|dat|csv|txt)$")
 _LIKELY_TEXT_RE = re.compile(r"(?i)(contrast|sensitivity|speckle|ao|high[- ]res|imaging)")
 
 
@@ -86,10 +84,12 @@ def _is_likely_contrast_row(row: ExoFopFileRow) -> bool:
     filename = str(row.filename or "")
     description = str(row.description or "")
     file_type = str(row.type or "")
-    text_blob = " ".join((filename, description, file_type))
+    if str(file_type).lower() != "image":
+        return False
+    # Prefer extension-based eligibility over brittle keyword-only matching.
     if _LIKELY_FILENAME_RE.search(filename):
         return True
-    if str(file_type).lower() == "image" and _LIKELY_TEXT_RE.search(text_blob):
+    if _LIKELY_TEXT_RE.search(description):
         return True
     return False
 
@@ -97,7 +97,8 @@ def _is_likely_contrast_row(row: ExoFopFileRow) -> bool:
 def _selector_for_likely_contrast_files(*, max_files: int) -> ExoFopSelectors:
     return ExoFopSelectors(
         types={"Image"},
-        filename_regex=r"(?i)(contrast|sensitivity|speckle|ao|nirc2|pharo|dssi|zorro|robo-ao|hrcam).*(\.tbl|\.dat|\.csv|\.txt)$",
+        # Download by type (Image) and parse downstream, rather than relying on brittle name heuristics.
+        filename_regex=None,
         max_files=int(max_files),
     )
 
