@@ -25,6 +25,7 @@ Example:
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import math
 import os
@@ -306,6 +307,9 @@ def _prefetch_trilegal_csv(
 
     deadline = time.time() + float(timeout_seconds)
     last_error: Exception | None = None
+    empty_http_response_count = 0
+    missing_termination_marker_count = 0
+    short_response_count = 0
 
     while time.time() < deadline:
         try:
@@ -313,10 +317,16 @@ def _prefetch_trilegal_csv(
             with urlopen(req, timeout=30) as resp:  # noqa: S310 (caller controls network policy)
                 raw = resp.read()
             txt = raw.decode("utf-8", errors="replace")
+            if len(raw) == 0:
+                empty_http_response_count += 1
+                time.sleep(float(poll_interval_seconds))
+                continue
             if "#TRILEGAL normally terminated" not in txt:
+                missing_termination_marker_count += 1
                 time.sleep(float(poll_interval_seconds))
                 continue
             if len(txt) < 1000:
+                short_response_count += 1
                 time.sleep(float(poll_interval_seconds))
                 continue
 
@@ -327,8 +337,33 @@ def _prefetch_trilegal_csv(
             time.sleep(float(poll_interval_seconds))
 
     if last_error is not None:
+        if (
+            empty_http_response_count > 0
+            or missing_termination_marker_count > 0
+            or short_response_count > 0
+        ):
+            raise NetworkTimeoutError(
+                operation=(
+                    "TRILEGAL_EMPTY_RESPONSE "
+                    f"(empty={empty_http_response_count}, "
+                    f"missing_marker={missing_termination_marker_count}, "
+                    f"short={short_response_count}, "
+                    f"last_error={type(last_error).__name__}: {last_error})"
+                ),
+                timeout_seconds=float(timeout_seconds),
+            )
         raise NetworkTimeoutError(
             operation=f"TRILEGAL prefetch (last_error={type(last_error).__name__}: {last_error})",
+            timeout_seconds=float(timeout_seconds),
+        )
+    if empty_http_response_count > 0 or missing_termination_marker_count > 0 or short_response_count > 0:
+        raise NetworkTimeoutError(
+            operation=(
+                "TRILEGAL_EMPTY_RESPONSE "
+                f"(empty={empty_http_response_count}, "
+                f"missing_marker={missing_termination_marker_count}, "
+                f"short={short_response_count})"
+            ),
             timeout_seconds=float(timeout_seconds),
         )
     raise NetworkTimeoutError(
@@ -341,6 +376,38 @@ def _cached_trilegal_csv_path(*, cache_dir: str | Path, tic_id: int) -> Path:
     cache_dir_path = Path(cache_dir)
     out_dir = cache_dir_path / "triceratops"
     return out_dir / f"{int(tic_id)}_TRILEGAL.csv"
+
+
+def _triceratops_stage_state_path(
+    *,
+    cache_dir: str | Path,
+    tic_id: int,
+    sectors_used: list[int],
+) -> Path:
+    cache_dir_path = Path(cache_dir)
+    out_dir = cache_dir_path / "triceratops" / "staging_state"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    sectors_key = "-".join(str(int(s)) for s in sorted(set(sectors_used)))
+    return out_dir / f"tic_{int(tic_id)}__sectors_{sectors_key}.json"
+
+
+def _write_triceratops_stage_state(
+    *,
+    cache_dir: str | Path,
+    tic_id: int,
+    sectors_used: list[int],
+    payload: dict[str, Any],
+) -> None:
+    path = _triceratops_stage_state_path(
+        cache_dir=cache_dir,
+        tic_id=int(tic_id),
+        sectors_used=sectors_used,
+    )
+    data = dict(payload)
+    data["tic_id"] = int(tic_id)
+    data["sectors_used"] = [int(s) for s in sectors_used]
+    data.setdefault("updated_at_unix", float(time.time()))
+    path.write_text(json.dumps(data, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def stage_triceratops_runtime_artifacts(
@@ -390,56 +457,119 @@ def stage_triceratops_runtime_artifacts(
     _save = save_cached_target or _save_cached_triceratops_target
     _prefetch = prefetch_trilegal_csv or _prefetch_trilegal_csv
 
-    target = _load(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used)
-    target_cache_hit = target is not None
-    if target is None:
-        init_budget = _stage_budget(FPP_STAGE_INIT_BUDGET_SECONDS)
-        with network_timeout(float(init_budget), operation=f"TRICERATOPS init (Gaia query) for TIC {tic_id}"):
-            target = tr.target(ID=tic_id, sectors=sectors_used, mission="TESS")
-        _save(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target)
+    _write_triceratops_stage_state(
+        cache_dir=cache_dir,
+        tic_id=tic_id,
+        sectors_used=sectors_used,
+        payload={
+            "status": "in_progress",
+            "stage": "triceratops_init",
+            "started_at_unix": float(start_time),
+        },
+    )
 
-    trilegal_cache_hit = False
-    trilegal_csv_path: str | None = None
-    if getattr(target, "trilegal_fname", None):
-        fname = Path(str(target.trilegal_fname))
-        if fname.exists() and fname.stat().st_size > 0:
-            trilegal_csv_path = str(fname)
+    try:
+        target = _load(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used)
+        target_cache_hit = target is not None
+        if target is None:
+            init_budget = _stage_budget(FPP_STAGE_INIT_BUDGET_SECONDS)
+            with network_timeout(float(init_budget), operation=f"TRICERATOPS init (Gaia query) for TIC {tic_id}"):
+                target = tr.target(ID=tic_id, sectors=sectors_used, mission="TESS")
+            _save(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target)
 
-    if trilegal_csv_path is None:
-        cached_csv = _cached_trilegal_csv_path(cache_dir=cache_dir, tic_id=tic_id)
-        try:
-            if cached_csv.exists() and cached_csv.stat().st_size > 0:
-                target.trilegal_fname = str(cached_csv)
-                target.trilegal_url = None
-                trilegal_cache_hit = True
-                trilegal_csv_path = str(cached_csv)
-        except OSError:
-            pass
+        trilegal_cache_hit = False
+        trilegal_csv_path: str | None = None
+        if getattr(target, "trilegal_fname", None):
+            fname = Path(str(target.trilegal_fname))
+            if fname.exists() and fname.stat().st_size > 0:
+                trilegal_csv_path = str(fname)
 
-    if trilegal_csv_path is None:
-        trilegal_url = getattr(target, "trilegal_url", None)
-        if not isinstance(trilegal_url, str) or not trilegal_url:
-            raise RuntimeError(f"TRICERATOPS target for TIC {tic_id} has no TRILEGAL URL or cached CSV")
-        trilegal_budget = _stage_budget(FPP_STAGE_TRILEGAL_BUDGET_SECONDS)
-        with network_timeout(float(trilegal_budget), operation=f"TRILEGAL prefetch for TIC {tic_id}"):
-            trilegal_csv = _prefetch(
+        if trilegal_csv_path is None:
+            cached_csv = _cached_trilegal_csv_path(cache_dir=cache_dir, tic_id=tic_id)
+            try:
+                if cached_csv.exists() and cached_csv.stat().st_size > 0:
+                    target.trilegal_fname = str(cached_csv)
+                    target.trilegal_url = None
+                    trilegal_cache_hit = True
+                    trilegal_csv_path = str(cached_csv)
+            except OSError:
+                pass
+
+        if trilegal_csv_path is None:
+            trilegal_url = getattr(target, "trilegal_url", None)
+            if not isinstance(trilegal_url, str) or not trilegal_url:
+                raise RuntimeError(f"TRICERATOPS target for TIC {tic_id} has no TRILEGAL URL or cached CSV")
+            trilegal_budget = _stage_budget(FPP_STAGE_TRILEGAL_BUDGET_SECONDS)
+            _write_triceratops_stage_state(
                 cache_dir=cache_dir,
                 tic_id=tic_id,
-                trilegal_url=trilegal_url,
+                sectors_used=sectors_used,
+                payload={
+                    "status": "in_progress",
+                    "stage": "trilegal_prefetch",
+                    "target_cache_hit": bool(target_cache_hit),
+                    "trilegal_url": str(trilegal_url),
+                    "started_at_unix": float(start_time),
+                },
             )
-        target.trilegal_fname = trilegal_csv
-        target.trilegal_url = None
-        trilegal_csv_path = str(trilegal_csv)
+            with network_timeout(float(trilegal_budget), operation=f"TRILEGAL prefetch for TIC {tic_id}"):
+                trilegal_csv = _prefetch(
+                    cache_dir=cache_dir,
+                    tic_id=tic_id,
+                    trilegal_url=trilegal_url,
+                )
+            target.trilegal_fname = trilegal_csv
+            target.trilegal_url = None
+            trilegal_csv_path = str(trilegal_csv)
 
-    _save(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target)
-    return {
-        "tic_id": int(tic_id),
-        "sectors_used": [int(s) for s in sectors_used],
-        "target_cache_hit": bool(target_cache_hit),
-        "trilegal_cache_hit": bool(trilegal_cache_hit),
-        "trilegal_csv_path": trilegal_csv_path,
-        "runtime_seconds": float(time.time() - start_time),
-    }
+        _save(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target)
+        result = {
+            "tic_id": int(tic_id),
+            "sectors_used": [int(s) for s in sectors_used],
+            "target_cache_hit": bool(target_cache_hit),
+            "trilegal_cache_hit": bool(trilegal_cache_hit),
+            "trilegal_csv_path": trilegal_csv_path,
+            "runtime_seconds": float(time.time() - start_time),
+            "stage_state_path": str(
+                _triceratops_stage_state_path(
+                    cache_dir=cache_dir,
+                    tic_id=tic_id,
+                    sectors_used=sectors_used,
+                )
+            ),
+        }
+        _write_triceratops_stage_state(
+            cache_dir=cache_dir,
+            tic_id=tic_id,
+            sectors_used=sectors_used,
+            payload={
+                "status": "ok",
+                "stage": "complete",
+                "target_cache_hit": bool(target_cache_hit),
+                "trilegal_cache_hit": bool(trilegal_cache_hit),
+                "trilegal_csv_path": trilegal_csv_path,
+                "runtime_seconds": float(time.time() - start_time),
+                "started_at_unix": float(start_time),
+            },
+        )
+        return result
+    except Exception as exc:
+        error_text = str(exc)
+        error_code = "TRILEGAL_EMPTY_RESPONSE" if "TRILEGAL_EMPTY_RESPONSE" in error_text else type(exc).__name__
+        _write_triceratops_stage_state(
+            cache_dir=cache_dir,
+            tic_id=tic_id,
+            sectors_used=sectors_used,
+            payload={
+                "status": "failed",
+                "stage": "trilegal_prefetch",
+                "error_code": error_code,
+                "error": error_text,
+                "runtime_seconds": float(time.time() - start_time),
+                "started_at_unix": float(start_time),
+            },
+        )
+        raise
 
 
 def _triceratops_target_cache_path(

@@ -1022,8 +1022,16 @@ def fpp_prepare_command(
             )
         except Exception as exc:
             mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
+            sectors_key = "-".join(str(int(s)) for s in sorted(set(int(s) for s in sectors_loaded)))
+            stage_state_path = (
+                Path(cache.cache_dir) / "triceratops" / "staging_state" / f"tic_{int(resolved_tic_id)}__sectors_{sectors_key}.json"
+            )
+            hint = "TRILEGAL_EMPTY_RESPONSE" if "TRILEGAL_EMPTY_RESPONSE" in str(exc) else type(exc).__name__
             raise BtvCliError(
-                f"Failed to stage TRICERATOPS runtime artifacts: {exc}",
+                (
+                    f"Failed to stage TRICERATOPS runtime artifacts: {exc} "
+                    f"[code={hint} stage_state={stage_state_path}]"
+                ),
                 exit_code=mapped,
             ) from exc
         runtime_artifacts.update(
