@@ -33,6 +33,8 @@ _OP_TO_COMMAND = {
     "localize_host": "localize-host",
     "dilution": "dilution",
     "detrend_grid": "detrend-grid",
+    "contrast_curves": "contrast-curves",
+    "contrast_curve_summary": "contrast-curve-summary",
     "fpp": "fpp",
     "fpp_prepare": "fpp-prepare",
     "fpp_run": "fpp-run",
@@ -521,6 +523,29 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
                 return nested
         return None
 
+    def _extract_value_from_payload(payload: dict[str, Any] | None, key: str) -> Any:
+        if not isinstance(payload, dict):
+            return None
+        direct = payload.get(key)
+        if direct is not None:
+            return direct
+        result = payload.get("result")
+        if isinstance(result, dict):
+            nested = result.get(key)
+            if nested is not None:
+                return nested
+            summary = result.get("summary")
+            if isinstance(summary, dict):
+                nested_summary = summary.get(key)
+                if nested_summary is not None:
+                    return nested_summary
+        summary = payload.get("summary")
+        if isinstance(summary, dict):
+            nested = summary.get(key)
+            if nested is not None:
+                return nested
+        return None
+
     payloads_by_step_id, payloads_by_op, payloads_by_step_id_and_op = _load_step_payloads()
 
     model_compete = _maybe_load_step(
@@ -600,6 +625,19 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
         step_id="fpp_raw",
         allow_op_fallback=False,
     )
+    contrast_curve_summary = _maybe_load_step(
+        "contrast_curve_summary",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
+    )
+    contrast_curves = _maybe_load_step(
+        "contrast_curves",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
+    )
+    contrast_payload = contrast_curve_summary if contrast_curve_summary is not None else contrast_curves
     fpp_detrended_payload = _maybe_load_step(
         "fpp_run",
         payloads_by_op=payloads_by_op,
@@ -741,6 +779,24 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
                 detrend_invariance_policy_verdict = "INVARIANT"
                 detrend_invariance_policy_reason_code = "PASS"
 
+    contrast_curve_availability = _extract_value_from_payload(contrast_payload, "availability")
+    contrast_curve_n_observations = _extract_value_from_payload(contrast_payload, "n_observations")
+    contrast_curve_filter = _extract_value_from_payload(contrast_payload, "filter")
+    contrast_curve_quality = _extract_value_from_payload(contrast_payload, "quality")
+    contrast_curve_depth0p5 = _extract_value_from_payload(contrast_payload, "depth0p5")
+    contrast_curve_depth1p0 = _extract_value_from_payload(contrast_payload, "depth1p0")
+
+    selected_curve = _extract_value_from_payload(contrast_payload, "selected_curve")
+    if not isinstance(selected_curve, dict):
+        selected_curve = {}
+    contrast_curve_selected_id = selected_curve.get("id")
+    contrast_curve_selected_source = selected_curve.get("source")
+    contrast_curve_selected_filter = selected_curve.get("filter")
+    contrast_curve_selected_quality = selected_curve.get("quality")
+    contrast_curve_selected_depth0p5 = selected_curve.get("depth0p5")
+    contrast_curve_selected_depth1p0 = selected_curve.get("depth1p0")
+    contrast_curve_selected_metadata = selected_curve if selected_curve else None
+
     concern_flags = set(str(x) for x in (toi_result.get("concern_flags") or []) if x is not None)
     for payload in payloads_by_step_id.values():
         concern_flags.update(_extract_concern_flags(payload))
@@ -774,6 +830,19 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
         "detrend_invariance_policy_fpp_delta_abs_threshold": _DETREND_INVARIANCE_FPP_DELTA_ABS_THRESHOLD,
         "detrend_invariance_policy_observed_fpp_delta_abs": detrend_invariance_policy_observed_fpp_delta_abs,
         "detrend_invariance_policy_observed_model_verdict_changed": detrend_invariance_policy_observed_model_verdict_changed,
+        "contrast_curve_availability": contrast_curve_availability,
+        "contrast_curve_n_observations": contrast_curve_n_observations,
+        "contrast_curve_filter": contrast_curve_filter,
+        "contrast_curve_quality": contrast_curve_quality,
+        "contrast_curve_depth0p5": contrast_curve_depth0p5,
+        "contrast_curve_depth1p0": contrast_curve_depth1p0,
+        "contrast_curve_selected_id": contrast_curve_selected_id,
+        "contrast_curve_selected_source": contrast_curve_selected_source,
+        "contrast_curve_selected_filter": contrast_curve_selected_filter,
+        "contrast_curve_selected_quality": contrast_curve_selected_quality,
+        "contrast_curve_selected_depth0p5": contrast_curve_selected_depth0p5,
+        "contrast_curve_selected_depth1p0": contrast_curve_selected_depth1p0,
+        "contrast_curve_selected_metadata": contrast_curve_selected_metadata,
         "concern_flags": sorted(concern_flags),
     }
     return row
@@ -783,7 +852,7 @@ def _write_evidence_table(*, out_dir: Path, toi_results: list[dict[str, Any]]) -
     rows = [_extract_evidence_row(item, out_dir=out_dir) for item in toi_results]
 
     json_path = out_dir / "evidence_table.json"
-    _write_json(json_path, {"schema_version": "pipeline.evidence_table.v3", "rows": rows})
+    _write_json(json_path, {"schema_version": "pipeline.evidence_table.v4", "rows": rows})
 
     csv_path = out_dir / "evidence_table.csv"
     csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -814,6 +883,19 @@ def _write_evidence_table(*, out_dir: Path, toi_results: list[dict[str, Any]]) -
         "detrend_invariance_policy_fpp_delta_abs_threshold",
         "detrend_invariance_policy_observed_fpp_delta_abs",
         "detrend_invariance_policy_observed_model_verdict_changed",
+        "contrast_curve_availability",
+        "contrast_curve_n_observations",
+        "contrast_curve_filter",
+        "contrast_curve_quality",
+        "contrast_curve_depth0p5",
+        "contrast_curve_depth1p0",
+        "contrast_curve_selected_id",
+        "contrast_curve_selected_source",
+        "contrast_curve_selected_filter",
+        "contrast_curve_selected_quality",
+        "contrast_curve_selected_depth0p5",
+        "contrast_curve_selected_depth1p0",
+        "contrast_curve_selected_metadata",
         "concern_flags",
     ]
     with csv_path.open("w", encoding="utf-8", newline="") as fh:

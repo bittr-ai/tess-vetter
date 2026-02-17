@@ -20,6 +20,9 @@ def test_profile_registry_contains_mvp_profiles() -> None:
     assert full.id == "full_vetting"
     assert len(full.steps) >= 10
     assert any(step.id == "rv_feasibility" for step in full.steps)
+    full_step_ids = [step.id for step in full.steps]
+    assert "contrast_curves" in full_step_ids
+    assert full_step_ids.index("contrast_curves") < full_step_ids.index("vet")
 
     triage = get_profile("triage_fast")
     assert any(step.id == "rv_feasibility" for step in triage.steps)
@@ -133,7 +136,7 @@ def test_run_composition_report_from_and_ports_and_resume(monkeypatch, tmp_path:
 
     assert result["manifest"]["counts"]["n_ok"] == 1
     evidence_json = json.loads((out_dir / "evidence_table.json").read_text(encoding="utf-8"))
-    assert evidence_json["schema_version"] == "pipeline.evidence_table.v3"
+    assert evidence_json["schema_version"] == "pipeline.evidence_table.v4"
     row = evidence_json["rows"][0]
     assert row["toi"] == "TOI-TEST.01"
     assert row["model_compete_verdict"] == "MODEL_OK"

@@ -84,6 +84,79 @@ def test_evidence_table_extracts_mixed_top_level_and_nested_fields(tmp_path: Pat
     assert row["fpp"] == 0.017
 
 
+def test_evidence_table_extracts_contrast_curve_fields_and_selected_metadata(tmp_path: Path) -> None:
+    toi = "TOI-CONTRAST.01"
+    toi_dir = tmp_path / toi / "steps"
+    contrast_curves_path = _write_step(
+        toi_dir / "01_contrast_curves.json",
+        {
+            "result": {
+                "availability": "available",
+                "n_observations": 3,
+                "filter": "Kcont",
+                "quality": "high",
+                "depth0p5": 4.2,
+                "depth1p0": 6.8,
+            }
+        },
+    )
+    contrast_summary_path = _write_step(
+        toi_dir / "02_contrast_curve_summary.json",
+        {
+            "summary": {
+                "availability": "available",
+                "n_observations": 3,
+                "filter": "Ks",
+                "quality": "selected",
+                "depth0p5": 4.5,
+                "depth1p0": 7.1,
+                "selected_curve": {
+                    "id": "curve-1",
+                    "source": "exofop",
+                    "filter": "Ks",
+                    "quality": "A",
+                    "depth0p5": 4.5,
+                    "depth1p0": 7.1,
+                    "facility": "PHARO/P200",
+                },
+            }
+        },
+    )
+
+    toi_result = {
+        "toi": toi,
+        "concern_flags": [],
+        "steps": [
+            {"op": "contrast_curves", "status": "ok", "step_output_path": contrast_curves_path},
+            {"op": "contrast_curve_summary", "status": "ok", "step_output_path": contrast_summary_path},
+        ],
+    }
+
+    rows = _write_evidence_table(out_dir=tmp_path, toi_results=[toi_result])
+    row = rows[0]
+    assert row["contrast_curve_availability"] == "available"
+    assert row["contrast_curve_n_observations"] == 3
+    assert row["contrast_curve_filter"] == "Ks"
+    assert row["contrast_curve_quality"] == "selected"
+    assert row["contrast_curve_depth0p5"] == pytest.approx(4.5)
+    assert row["contrast_curve_depth1p0"] == pytest.approx(7.1)
+    assert row["contrast_curve_selected_id"] == "curve-1"
+    assert row["contrast_curve_selected_source"] == "exofop"
+    assert row["contrast_curve_selected_filter"] == "Ks"
+    assert row["contrast_curve_selected_quality"] == "A"
+    assert row["contrast_curve_selected_depth0p5"] == pytest.approx(4.5)
+    assert row["contrast_curve_selected_depth1p0"] == pytest.approx(7.1)
+    assert row["contrast_curve_selected_metadata"] == {
+        "id": "curve-1",
+        "source": "exofop",
+        "filter": "Ks",
+        "quality": "A",
+        "depth0p5": 4.5,
+        "depth1p0": 7.1,
+        "facility": "PHARO/P200",
+    }
+
+
 def test_evidence_table_concern_flags_are_deduped_and_csv_sorted(tmp_path: Path) -> None:
     toi = "TOI-FLAGS.01"
     toi_dir = tmp_path / toi / "steps"

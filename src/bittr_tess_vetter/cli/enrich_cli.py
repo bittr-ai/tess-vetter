@@ -27,6 +27,10 @@ from bittr_tess_vetter.cli.common_cli import (
     EXIT_RUNTIME_ERROR,
     BtvCliError,
 )
+from bittr_tess_vetter.cli.contrast_curves_cli import (
+    contrast_curve_summary_command,
+    contrast_curves_command,
+)
 from bittr_tess_vetter.cli.describe_checks_cli import describe_checks_command
 from bittr_tess_vetter.cli.detrend_grid_cli import detrend_grid_command
 from bittr_tess_vetter.cli.dilution_cli import dilution_command
@@ -113,6 +117,8 @@ cli.add_command(systematics_proxy_command)
 cli.add_command(dilution_command)
 cli.add_command(rv_feasibility_command)
 cli.add_command(toi_query_command)
+cli.add_command(contrast_curves_command)
+cli.add_command(contrast_curve_summary_command)
 cli.add_command(pipeline_group)
 
 

@@ -146,3 +146,25 @@ def test_build_cli_args_maps_rv_feasibility_op_to_command(tmp_path: Path) -> Non
 
     assert "rv-feasibility" in args
     assert "--report-file" in args
+
+
+def test_build_cli_args_maps_contrast_curves_op_to_command(tmp_path: Path) -> None:
+    step = StepSpec(
+        id="contrast-curves-step",
+        op="contrast_curves",
+        inputs={},
+        ports={},
+        outputs={},
+        on_error="fail",
+    )
+
+    args = _build_cli_args(
+        step=step,
+        toi="TOI-123.01",
+        inputs={"report_file": "/tmp/report.json"},
+        output_path=tmp_path / "out.json",
+        network_ok=True,
+    )
+
+    assert "contrast-curves" in args
+    assert "--report-file" in args

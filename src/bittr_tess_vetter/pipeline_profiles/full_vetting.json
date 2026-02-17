@@ -16,6 +16,10 @@
       "op": "measure_sectors"
     },
     {
+      "id": "contrast_curves",
+      "op": "contrast_curves"
+    },
+    {
       "id": "vet",
       "op": "vet",
       "inputs": {

@@ -24,3 +24,5 @@ def test_top_level_help_lists_new_api_addition_commands() -> None:
     assert "dilution" in result.output
     assert "rv-feasibility" in result.output
     assert "toi-query" in result.output
+    assert "contrast-curves" in result.output
+    assert "contrast-curve-summary" in result.output
