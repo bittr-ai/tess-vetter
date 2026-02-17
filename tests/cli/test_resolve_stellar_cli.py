@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 from click.testing import CliRunner
@@ -73,3 +74,30 @@ def test_resolve_stellar_with_toi_adds_echo_note(monkeypatch) -> None:
     payload = json.loads(result.output)
     assert payload["tic_id"] == 321
     assert "source continuity" in payload["note"]
+
+
+def test_resolve_stellar_accepts_short_o_alias(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.resolve_stellar_cli.load_auto_stellar_with_fallback",
+        lambda **_: (
+            {"radius": 0.9, "mass": 0.8, "tmag": 11.0},
+            {"selected_source": "tic_mast", "echo_of_tic": False},
+        ),
+    )
+
+    out_path = tmp_path / "resolve_stellar_short_o.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "resolve-stellar",
+            "--tic-id",
+            "123",
+            "-o",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "cli.resolve-stellar.v1"
+    assert payload["tic_id"] == 123

@@ -133,6 +133,48 @@ import pytest
             [("activity", "activity"), ("rv_feasibility", "rv_feasibility")],
             id="rv-feasibility",
         ),
+        pytest.param(
+            "measure-sectors",
+            {
+                "schema_version": "cli.measure_sectors.v1",
+                "sector_measurements": [{"sector": 1, "depth_ppm": 500.0, "depth_err_ppm": 50.0}],
+                "consistency": {"verdict": "CONSISTENT"},
+                "recommended_sectors": [1],
+                "result": {
+                    "sector_measurements": [{"sector": 1, "depth_ppm": 500.0, "depth_err_ppm": 50.0}],
+                    "consistency": {"verdict": "CONSISTENT"},
+                    "recommended_sectors": [1],
+                    "verdict": "CONSISTENT",
+                    "verdict_source": "$.consistency.verdict",
+                },
+                "verdict": "CONSISTENT",
+                "verdict_source": "$.consistency.verdict",
+            },
+            [
+                ("sector_measurements", "sector_measurements"),
+                ("consistency", "consistency"),
+                ("recommended_sectors", "recommended_sectors"),
+            ],
+            id="measure-sectors",
+        ),
+        pytest.param(
+            "detrend-grid",
+            {
+                "schema_version": "cli.detrend_grid.v1",
+                "stable": True,
+                "best_variant": {"variant_id": "v1"},
+                "result": {
+                    "stable": True,
+                    "best_variant": {"variant_id": "v1"},
+                    "verdict": "STABLE",
+                    "verdict_source": "$.stable",
+                },
+                "verdict": "STABLE",
+                "verdict_source": "$.stable",
+            },
+            [("stable", "stable"), ("best_variant", "best_variant")],
+            id="detrend-grid",
+        ),
     ],
 )
 def test_fixture_payloads_include_canonical_verdict_contract(

@@ -185,6 +185,15 @@ def _build_best_variant(
     }
 
 
+def _derive_detrend_grid_verdict(payload: dict[str, Any]) -> tuple[str | None, str | None]:
+    stable = payload.get("stable")
+    if stable is True:
+        return "STABLE", "$.stable"
+    if stable is False:
+        return "UNSTABLE", "$.stable"
+    return None, None
+
+
 def _execute_detrend_grid(
     *,
     tic_id: int,
@@ -283,12 +292,23 @@ def _execute_detrend_grid(
         {int(lc.sector) for lc in lightcurves if getattr(lc, "sector", None) is not None}
     )
     recommended_next_step = _build_recommended_next_step(best_variant)
+    stable = payload.get("stable")
+    verdict, verdict_source = _derive_detrend_grid_verdict(payload)
     out_payload: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": "cli.detrend_grid.v1",
+        "result": {
+            "stable": stable,
+            "best_variant": best_variant,
+            "recommended_next_step": recommended_next_step,
+            "verdict": verdict,
+            "verdict_source": verdict_source,
+        },
         **{**payload, "sweep_table": rows_annotated},
         "ranked_sweep_table": ranked_rows,
         "best_variant": best_variant,
         "recommended_next_step": recommended_next_step,
+        "verdict": verdict,
+        "verdict_source": verdict_source,
         "variant_axes": {
             "downsample_levels": effective_downsample_levels,
             "outlier_policies": effective_outlier_policies,
@@ -438,6 +458,7 @@ def _execute_detrend_grid(
     help="Optional vet JSON file path (full payload or summary block) to contextualize V16 concerns.",
 )
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,

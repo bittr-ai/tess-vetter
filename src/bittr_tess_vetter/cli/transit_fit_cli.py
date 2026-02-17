@@ -78,6 +78,7 @@ def _load_auto_stellar_inputs(
 @click.option("--mcmc-samples", type=int, default=2000, show_default=True)
 @click.option("--mcmc-burn", type=int, default=500, show_default=True)
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,

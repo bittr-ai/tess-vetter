@@ -2095,10 +2095,12 @@ def test_btv_vet_auto_measure_sectors_success_wires_v21(monkeypatch, tmp_path: P
 
     def _fake_measure(**_kwargs):
         return {
-            "schema_version": 1,
+            "schema_version": "cli.measure_sectors.v1",
             "sector_measurements": [
                 {"sector": 4, "depth_ppm": 500.0, "depth_err_ppm": 50.0, "quality_weight": 1.0}
             ],
+            "verdict": "CONSISTENT",
+            "verdict_source": "$.consistency.verdict",
             "provenance": {"command": "measure-sectors"},
         }
 

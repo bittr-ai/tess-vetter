@@ -13,7 +13,31 @@ from bittr_tess_vetter.cli import measure_sectors_cli
 
 def _payload() -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": "cli.measure_sectors.v1",
+        "result": {
+            "sector_measurements": [
+                {"sector": 1, "depth_ppm": 500.0, "depth_err_ppm": 50.0, "quality_weight": 1.0}
+            ],
+            "consistency": {
+                "chi2": 0.0,
+                "chi2_dof": 0,
+                "chi2_pvalue": 1.0,
+                "verdict": "UNRESOLVABLE",
+                "depth_median_ppm": 500.0,
+                "depth_std_ppm": 0.0,
+                "outlier_sectors": [],
+                "outlier_criterion": "|depth - weighted_mean| / depth_err_ppm > 3.0",
+                "gating_actionable": False,
+                "action_hint": "DETREND_RECOMMENDED",
+                "reason": "recommended_sector_count_lt_2",
+                "n_sectors_total": 1,
+                "n_sectors_recommended": 1,
+            },
+            "recommended_sectors": [1],
+            "recommended_sector_criterion": "test",
+            "verdict": "UNRESOLVABLE",
+            "verdict_source": "$.consistency.verdict",
+        },
         "sector_measurements": [
             {"sector": 1, "depth_ppm": 500.0, "depth_err_ppm": 50.0, "quality_weight": 1.0}
         ],
@@ -32,6 +56,8 @@ def _payload() -> dict[str, Any]:
             "n_sectors_total": 1,
             "n_sectors_recommended": 1,
         },
+        "verdict": "UNRESOLVABLE",
+        "verdict_source": "$.consistency.verdict",
         "recommended_sectors": [1],
         "recommended_sector_criterion": "test",
         "provenance": {"command": "measure-sectors"},
@@ -64,7 +90,9 @@ def test_measure_sectors_accepts_positional_toi_and_short_o(monkeypatch, tmp_pat
     assert result.exit_code == 0, result.output
     assert seen["toi"] == "TOI-5807.01"
     payload = json.loads(out_path.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == "cli.measure_sectors.v1"
+    assert payload["verdict"] == "UNRESOLVABLE"
+    assert payload["result"]["verdict"] == payload["verdict"]
 
 
 def test_measure_sectors_rejects_mismatched_positional_and_option_toi() -> None:
@@ -146,7 +174,7 @@ def test_measure_sectors_resume_skips_existing_completed_output(monkeypatch, tmp
     out_path.write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": "cli.measure_sectors.v1",
                 "sector_measurements": [],
                 "provenance": {"command": "measure-sectors"},
             }

@@ -115,6 +115,7 @@ def test_detrend_grid_output_schema_keys(monkeypatch) -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
 
+    assert payload["schema_version"] == "cli.detrend_grid.v1"
     core_keys = {
         "stable",
         "metric_variance",
@@ -132,6 +133,10 @@ def test_detrend_grid_output_schema_keys(monkeypatch) -> None:
     assert "recommended_next_step" in payload
     assert "provenance" in payload
     assert "ranked_sweep_table" in payload
+    assert payload["verdict"] == "STABLE"
+    assert payload["verdict_source"] == "$.stable"
+    assert payload["result"]["verdict"] == payload["verdict"]
+    assert payload["result"]["verdict_source"] == payload["verdict_source"]
     assert payload["best_variant"]["variant_id"] == "variant_a"
     assert payload["provenance"]["command"] == "detrend-grid"
     assert payload["provenance"]["effective_grid_config"]["downsample_levels"] == [1, 2, 5]
@@ -159,6 +164,42 @@ def test_detrend_grid_output_schema_keys(monkeypatch) -> None:
     assert payload["provenance"]["variant_counts"]["cross_product"] == 120
     assert payload["sweep_table"][0]["depth_method"] == "template_ls"
     assert "optimized for variant ranking" in payload["sweep_table"][0]["depth_note"]
+
+
+def test_detrend_grid_accepts_short_o_alias(monkeypatch, tmp_path) -> None:
+    rows = [
+        {
+            "variant_id": "variant_a",
+            "status": "ok",
+            "backend": "numpy",
+            "runtime_seconds": 0.01,
+            "n_points_used": 200,
+            "downsample_factor": 1,
+            "outlier_policy": "none",
+            "detrender": "none",
+            "score": 5.0,
+            "depth_hat_ppm": 250.0,
+            "depth_err_ppm": 10.0,
+            "warnings": [],
+            "failure_reason": None,
+            "variant_config": {"variant_id": "variant_a"},
+            "gp_hyperparams": None,
+            "gp_fit_diagnostics": None,
+        }
+    ]
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        lambda **_kwargs: _FakeSweepResult(rows),
+    )
+
+    out_path = tmp_path / "detrend_grid_short_o.json"
+    runner = CliRunner()
+    result = runner.invoke(enrich_cli.cli, [*_base_args(), "-o", str(out_path)])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["best_variant"]["variant_id"] == "variant_a"
 
 
 def test_detrend_grid_emits_recommended_next_step_for_transit_masked_best(monkeypatch) -> None:
@@ -549,5 +590,7 @@ def test_detrend_grid_best_variant_fallback_when_all_variants_fail(monkeypatch) 
     result = runner.invoke(enrich_cli.cli, _base_args())
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
+    assert payload["verdict"] == "UNSTABLE"
+    assert payload["result"]["verdict"] == "UNSTABLE"
     assert payload["best_variant"]["variant_id"] == "variant_fail"
     assert payload["best_variant"]["config"]["detrender"] == "transit_masked_bin_median"

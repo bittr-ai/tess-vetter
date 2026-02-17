@@ -290,6 +290,7 @@ def _execute_localize(
 @click.option("--oot-margin-mult", type=float, default=1.5, show_default=True)
 @click.option("--oot-window-mult", type=float, default=10.0, show_default=True)
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,

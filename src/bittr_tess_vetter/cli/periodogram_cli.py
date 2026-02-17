@@ -145,6 +145,7 @@ def _to_jsonable_result(result: Any) -> Any:
     help="Resolve stellar inputs from TIC when missing from explicit/file inputs.",
 )
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,

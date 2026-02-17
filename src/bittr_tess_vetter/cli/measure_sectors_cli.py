@@ -153,11 +153,24 @@ def _execute_measure_sectors(
         consistency=consistency,
     )
     consistency.update(routing)
+    verdict = str(consistency.get("verdict")) if consistency.get("verdict") is not None else None
+    verdict_source = "$.consistency.verdict"
     sectors_loaded = sorted(
         {int(lc.sector) for lc in lightcurves if getattr(lc, "sector", None) is not None}
     )
     return {
-        "schema_version": 1,
+        "schema_version": "cli.measure_sectors.v1",
+        "result": {
+            "sector_measurements": sector_measurements,
+            "consistency": consistency,
+            "recommended_sectors": recommended_sectors,
+            "recommended_sector_criterion": (
+                "quality_weight > 0, n_transits > 0, finite depth/error, and not flagged as outlier "
+                "(|depth - weighted_mean| / depth_err_ppm <= 3.0); fallback: all measured sectors."
+            ),
+            "verdict": verdict,
+            "verdict_source": verdict_source,
+        },
         "sector_measurements": sector_measurements,
         "consistency": consistency,
         "recommended_sectors": recommended_sectors,
@@ -165,6 +178,8 @@ def _execute_measure_sectors(
             "quality_weight > 0, n_transits > 0, finite depth/error, and not flagged as outlier "
             "(|depth - weighted_mean| / depth_err_ppm <= 3.0); fallback: all measured sectors."
         ),
+        "verdict": verdict,
+        "verdict_source": verdict_source,
         "provenance": {
             "command": "measure-sectors",
             "tic_id": int(tic_id),
@@ -356,7 +371,8 @@ def _is_completed_output(path: Path) -> bool:
     rows = payload.get("sector_measurements")
     if not isinstance(rows, list):
         return False
-    if payload.get("schema_version") != 1:
+    schema_version = payload.get("schema_version")
+    if schema_version not in (1, "cli.measure_sectors.v1"):
         return False
     provenance = payload.get("provenance")
     if not isinstance(provenance, dict):

@@ -30,6 +30,7 @@ def pipeline_group() -> None:
 )
 @click.option("--toi", "tois", multiple=True, required=True, help="TOI identifier(s). Repeatable.")
 @click.option(
+    "-o",
     "--out-dir",
     type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
     required=True,

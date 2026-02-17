@@ -66,7 +66,7 @@ def _patch_measure_sectors_execute(monkeypatch, fake_impl) -> str:
 
 def test_cli007_measure_sectors_emits_schema_and_provenance(monkeypatch, tmp_path: Path) -> None:
     expected = {
-        "schema_version": 1,
+        "schema_version": "cli.measure_sectors.v1",
         "sector_measurements": [
             {"sector": 82, "depth_ppm": 410.2, "depth_err_ppm": 21.3},
             {"sector": 83, "depth_ppm": 432.1, "depth_err_ppm": 19.7},
@@ -95,7 +95,7 @@ def test_cli007_measure_sectors_emits_schema_and_provenance(monkeypatch, tmp_pat
     assert result.exit_code == 0, result.output
     payload = json.loads(out_path.read_text(encoding="utf-8"))
 
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == "cli.measure_sectors.v1"
     assert isinstance(payload.get("sector_measurements"), list)
     assert len(payload["sector_measurements"]) == 2
     assert set(payload["sector_measurements"][0].keys()) >= {"sector", "depth_ppm", "depth_err_ppm"}
@@ -112,7 +112,7 @@ def test_cli007_cli008_vet_with_sector_measurements_injects_context_and_emits_bl
 ) -> None:
     measurements_path = tmp_path / "sectors.json"
     measurements_payload = {
-        "schema_version": 1,
+        "schema_version": "cli.measure_sectors.v1",
         "sector_measurements": [
             {"sector": 82, "depth_ppm": 410.2, "depth_err_ppm": 21.3},
             {"sector": 83, "depth_ppm": 432.1, "depth_err_ppm": 19.7},

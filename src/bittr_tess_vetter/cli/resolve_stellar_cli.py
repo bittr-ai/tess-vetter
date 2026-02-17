@@ -25,6 +25,7 @@ from bittr_tess_vetter.platform.catalogs.toi_resolution import (
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
 @click.option("--toi", type=str, default=None, help="Optional TOI label to resolve TIC via ExoFOP.")
 @click.option(
+    "-o",
     "--out",
     "output_path_arg",
     type=str,

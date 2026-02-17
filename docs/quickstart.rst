@@ -156,6 +156,12 @@ Per-command legacy-to-canonical mapping:
    * - ``btv ephemeris-reliability``
      - ``result.interpretation_label`` then ``result.label`` then ``result.reliability_label``
      - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
+   * - ``btv measure-sectors``
+     - ``consistency.verdict``
+     - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
+   * - ``btv detrend-grid``
+     - ``stable`` mapped to ``STABLE``/``UNSTABLE``
+     - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
 
 Report-Seeded Inputs (`--report-file`)
 --------------------------------------
