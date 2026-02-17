@@ -393,7 +393,12 @@ def localize_host_command(
     brightness_prior_softening_mag: float,
     output_path_arg: str,
 ) -> None:
-    """Run multi-sector host localization for a single transit candidate."""
+    """Run multi-sector host localization for a single transit candidate.
+
+    Output includes ``result.reliability_summary`` (machine-actionable routing
+    fields). When ``--reference-sources-file`` includes ``multiplicity_risk``,
+    it is threaded into the reliability summary.
+    """
     out_path = resolve_optional_output_path(output_path_arg)
     strategy = str(tpf_sector_strategy).lower()
     if toi_arg is not None and toi is not None and str(toi_arg).strip() != str(toi).strip():

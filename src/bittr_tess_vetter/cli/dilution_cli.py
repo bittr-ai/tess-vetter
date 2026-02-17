@@ -433,7 +433,12 @@ def dilution_command(
     reference_sources_file: str | None,
     output_path_arg: str,
 ) -> None:
-    """Compute host-dilution scenarios and implied-size physics flags."""
+    """Compute host-dilution scenarios and implied-size physics flags.
+
+    Output includes ``reliability_summary`` for machine routing; when
+    ``--reference-sources-file`` includes ``multiplicity_risk``, it is threaded
+    into the summary.
+    """
     out_path = resolve_optional_output_path(output_path_arg)
     if toi_arg is not None and toi is not None and str(toi_arg).strip() != str(toi).strip():
         raise BtvCliError(

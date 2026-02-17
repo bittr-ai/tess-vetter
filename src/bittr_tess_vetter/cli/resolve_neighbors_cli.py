@@ -333,7 +333,11 @@ def resolve_neighbors_command(
     network_ok: bool,
     output_path_arg: str,
 ) -> None:
-    """Resolve target and nearby Gaia sources into ``reference_sources.v1`` payload."""
+    """Resolve target and nearby Gaia sources into ``reference_sources.v1`` payload.
+
+    Output includes ``multiplicity_risk`` (RUWE/NSS/duplicated-source rollup)
+    for downstream host-localization and dilution policy routing.
+    """
     out_path = resolve_optional_output_path(output_path_arg)
     if toi_arg is not None and toi is not None and str(toi_arg).strip() != str(toi).strip():
         raise BtvCliError(
