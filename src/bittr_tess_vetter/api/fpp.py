@@ -145,6 +145,7 @@ def calculate_fpp(
     contrast_curve: ContrastCurve | None = None,
     replicates: int | None = None,
     seed: int | None = None,
+    allow_network: bool = True,
 ) -> dict[str, Any]:
     """Calculate FPP using TRICERATOPS+ with an explicit preset.
 
@@ -171,6 +172,7 @@ def calculate_fpp(
         replicates: If provided and >1, run multiple independent TRICERATOPS realizations
             (with incremented seeds) and report aggregate statistics.
         seed: Base RNG seed used for replicate runs (replicate i uses seed+i).
+        allow_network: Whether network-dependent TRICERATOPS initialization/prefetch is allowed.
 
     Returns:
         Dictionary with FPP results or error information. When ``replicates`` > 1 and
@@ -209,4 +211,5 @@ def calculate_fpp(
         seed=seed,
         external_lightcurves=external_lightcurves,
         contrast_curve=contrast_curve,
+        allow_network=allow_network,
     )

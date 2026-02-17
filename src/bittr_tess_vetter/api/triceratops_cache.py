@@ -21,6 +21,7 @@ estimate_transit_duration = _fpp._estimate_transit_duration
 load_cached_triceratops_target = _fpp._load_cached_triceratops_target
 prefetch_trilegal_csv = _fpp._prefetch_trilegal_csv
 save_cached_triceratops_target = _fpp._save_cached_triceratops_target
+stage_triceratops_runtime_artifacts = _fpp.stage_triceratops_runtime_artifacts
 
 __all__ = [
     "CalculateFppInput",
@@ -30,6 +31,7 @@ __all__ = [
     "load_cached_triceratops_target",
     "prefetch_trilegal_csv",
     "save_cached_triceratops_target",
+    "stage_triceratops_runtime_artifacts",
 ]
 
 

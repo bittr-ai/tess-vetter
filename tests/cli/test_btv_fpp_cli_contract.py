@@ -145,6 +145,7 @@ def test_btv_fpp_success_plumbs_api_params_and_emits_contract(monkeypatch, tmp_p
     assert seen["seed"] == 99
     assert seen["sectors"] == [14, 15]
     assert seen["timeout_seconds"] == 120.0
+    assert seen["allow_network"] is True
     assert seen["stellar_radius"] is None
     assert seen["stellar_mass"] is None
     assert seen["tmag"] is None
@@ -1260,3 +1261,72 @@ def test_btv_fpp_supports_positional_toi_and_short_o(monkeypatch, tmp_path: Path
     assert result.exit_code == 0, result.output
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == "cli.fpp.v3"
+
+
+def test_runtime_artifacts_ready_true_when_cached_target_has_trilegal(monkeypatch, tmp_path: Path) -> None:
+    from bittr_tess_vetter.cli import fpp_cli
+
+    trilegal_path = tmp_path / "tri.csv"
+    trilegal_path.write_text("a,b\n1,2\n", encoding="utf-8")
+
+    class _Target:
+        trilegal_fname = str(trilegal_path)
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli.load_cached_triceratops_target",
+        lambda **_kwargs: _Target(),
+    )
+
+    ready, details = fpp_cli._runtime_artifacts_ready(
+        cache_dir=tmp_path,
+        tic_id=123,
+        sectors_loaded=[1, 2],
+    )
+
+    assert ready is True
+    assert details["target_cached"] is True
+    assert details["trilegal_cached"] is True
+    assert details["trilegal_csv_path"] == str(trilegal_path)
+
+
+def test_btv_fpp_run_require_prepared_fails_when_runtime_artifacts_missing(monkeypatch, tmp_path: Path) -> None:
+    manifest = {
+        "schema_version": "cli.fpp.prepare.v1",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "tic_id": 123,
+        "period_days": 3.0,
+        "t0_btjd": 1500.0,
+        "duration_hours": 2.0,
+        "depth_ppm_used": 500.0,
+        "sectors_loaded": [10],
+        "cache_dir": str(tmp_path / "cache"),
+        "detrend": {},
+    }
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._cache_missing_sectors", lambda **_kwargs: [])
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli._runtime_artifacts_ready",
+        lambda **_kwargs: (
+            False,
+            {"target_cached": False, "trilegal_cached": False, "trilegal_csv_path": None},
+        ),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp-run",
+            "--prepare-manifest",
+            str(manifest_path),
+            "--require-prepared",
+            "--no-network",
+            "-o",
+            str(tmp_path / "fpp_run.json"),
+        ],
+    )
+
+    assert result.exit_code == 4
+    assert "Prepared runtime artifacts missing" in result.output

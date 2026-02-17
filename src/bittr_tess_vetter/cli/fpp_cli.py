@@ -14,6 +14,10 @@ import numpy as np
 from bittr_tess_vetter.api.fpp import TUTORIAL_PRESET_OVERRIDES, calculate_fpp
 from bittr_tess_vetter.api.fpp_helpers import load_contrast_curve_exofop_tbl
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
+from bittr_tess_vetter.api.triceratops_cache import (
+    load_cached_triceratops_target,
+    stage_triceratops_runtime_artifacts,
+)
 from bittr_tess_vetter.api.transit_masks import get_in_transit_mask, get_out_of_transit_mask, measure_transit_depth
 from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 from bittr_tess_vetter.cli.common_cli import (
@@ -459,6 +463,7 @@ def _execute_fpp(
     detrend_buffer: float,
     detrend_sigma_clip: float,
     cache_only_sectors: bool = False,
+    allow_network: bool = True,
 ) -> tuple[dict[str, Any], list[int]]:
     cache, sectors_loaded = _build_cache_for_fpp(
         tic_id=tic_id,
@@ -492,6 +497,7 @@ def _execute_fpp(
         seed=seed,
         contrast_curve=contrast_curve,
         overrides=overrides,
+        allow_network=allow_network,
     )
     return result, sectors_loaded
 
@@ -731,6 +737,9 @@ def _load_prepare_manifest(path: Path) -> dict[str, Any]:
     detrend_payload = payload.get("detrend")
     if detrend_payload is not None and not isinstance(detrend_payload, dict):
         raise BtvCliError("Invalid prepare manifest field 'detrend'", exit_code=EXIT_INPUT_ERROR)
+    runtime_artifacts = payload.get("runtime_artifacts")
+    if runtime_artifacts is not None and not isinstance(runtime_artifacts, dict):
+        raise BtvCliError("Invalid prepare manifest field 'runtime_artifacts'", exit_code=EXIT_INPUT_ERROR)
 
     return {
         "schema_version": schema,
@@ -743,6 +752,39 @@ def _load_prepare_manifest(path: Path) -> dict[str, Any]:
         "sectors_loaded": sectors_loaded,
         "cache_dir": cache_dir,
         "detrend": detrend_payload if isinstance(detrend_payload, dict) else {},
+        "runtime_artifacts": runtime_artifacts if isinstance(runtime_artifacts, dict) else {},
+    }
+
+
+def _runtime_artifacts_ready(
+    *,
+    cache_dir: Path,
+    tic_id: int,
+    sectors_loaded: list[int],
+) -> tuple[bool, dict[str, Any]]:
+    target = load_cached_triceratops_target(
+        cache_dir=cache_dir,
+        tic_id=int(tic_id),
+        sectors_used=[int(s) for s in sectors_loaded],
+    )
+    trilegal_ready = False
+    trilegal_path: str | None = None
+    if target is not None:
+        trilegal_fname = getattr(target, "trilegal_fname", None)
+        if trilegal_fname is not None:
+            trilegal_csv = Path(str(trilegal_fname))
+            try:
+                if trilegal_csv.exists() and trilegal_csv.stat().st_size > 0:
+                    trilegal_ready = True
+                    trilegal_path = str(trilegal_csv)
+            except OSError:
+                trilegal_ready = False
+
+    ready = (target is not None) and trilegal_ready
+    return ready, {
+        "target_cached": bool(target is not None),
+        "trilegal_cached": bool(trilegal_ready),
+        "trilegal_csv_path": trilegal_path,
     }
 
 
@@ -958,6 +1000,45 @@ def fpp_prepare_command(
         mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
         raise BtvCliError(str(exc), exit_code=mapped) from exc
 
+    runtime_artifacts: dict[str, Any] = {
+        "target_cached": False,
+        "trilegal_cached": False,
+        "trilegal_csv_path": None,
+        "staged_with_network": bool(network_ok),
+    }
+    if network_ok:
+        click.echo("[fpp-prepare] Staging TRICERATOPS runtime artifacts...")
+        try:
+            stage_result = stage_triceratops_runtime_artifacts(
+                cache=cache,
+                tic_id=int(resolved_tic_id),
+                sectors=[int(s) for s in sectors_loaded],
+            )
+        except Exception as exc:
+            mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
+            raise BtvCliError(
+                f"Failed to stage TRICERATOPS runtime artifacts: {exc}",
+                exit_code=mapped,
+            ) from exc
+        runtime_artifacts.update(
+            {
+                "target_cached": True,
+                "trilegal_cached": bool(stage_result.get("trilegal_csv_path")),
+                "trilegal_csv_path": stage_result.get("trilegal_csv_path"),
+                "target_cache_hit": bool(stage_result.get("target_cache_hit", False)),
+                "trilegal_cache_hit": bool(stage_result.get("trilegal_cache_hit", False)),
+                "runtime_seconds": stage_result.get("runtime_seconds"),
+            }
+        )
+    else:
+        ready, details = _runtime_artifacts_ready(
+            cache_dir=Path(cache.cache_dir),
+            tic_id=int(resolved_tic_id),
+            sectors_loaded=[int(s) for s in sectors_loaded],
+        )
+        runtime_artifacts.update(details)
+        runtime_artifacts["ready_without_network"] = bool(ready)
+
     manifest: dict[str, Any] = {
         "schema_version": _FPP_PREPARE_SCHEMA_VERSION,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -978,6 +1059,7 @@ def fpp_prepare_command(
             "depth_source": depth_source,
             "depth_meta": detrended_depth_meta,
         },
+        "runtime_artifacts": runtime_artifacts,
         "inputs": {
             "depth_ppm_catalog": resolved_depth_ppm,
             "resolved_source": input_resolution.get("source"),
@@ -1100,6 +1182,21 @@ def fpp_run_command(
                 ),
                 exit_code=EXIT_DATA_UNAVAILABLE,
             )
+        runtime_ready, runtime_details = _runtime_artifacts_ready(
+            cache_dir=Path(prepared["cache_dir"]),
+            tic_id=int(prepared["tic_id"]),
+            sectors_loaded=[int(s) for s in prepared["sectors_loaded"]],
+        )
+        if not runtime_ready:
+            raise BtvCliError(
+                (
+                    "Prepared runtime artifacts missing "
+                    f"(target_cached={runtime_details['target_cached']} "
+                    f"trilegal_cached={runtime_details['trilegal_cached']}). "
+                    "Run `btv fpp-prepare --network-ok` first."
+                ),
+                exit_code=EXIT_DATA_UNAVAILABLE,
+            )
 
     if replicates is not None and replicates < 1:
         raise BtvCliError("--replicates must be >= 1", exit_code=EXIT_INPUT_ERROR)
@@ -1176,6 +1273,7 @@ def fpp_run_command(
                     seed=seed,
                     contrast_curve=parsed_contrast_curve,
                     overrides=attempt_overrides,
+                    allow_network=bool(network_ok),
                 ),
                 [int(s) for s in prepared["sectors_loaded"]],
             ),
@@ -1603,6 +1701,7 @@ def fpp_command(
                 detrend_buffer=float(detrend_buffer),
                 detrend_sigma_clip=float(detrend_sigma_clip),
                 cache_only_sectors=cache_only_sector_load,
+                allow_network=bool(network_ok),
             ),
         )
     except BtvCliError:

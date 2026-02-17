@@ -343,6 +343,105 @@ def _cached_trilegal_csv_path(*, cache_dir: str | Path, tic_id: int) -> Path:
     return out_dir / f"{int(tic_id)}_TRILEGAL.csv"
 
 
+def stage_triceratops_runtime_artifacts(
+    *,
+    cache: PersistentCache,
+    tic_id: int,
+    sectors: list[int] | None = None,
+    flux_type: str = "pdcsap",
+    timeout_seconds: float | None = None,
+    load_cached_target: Callable[..., Any] | None = None,
+    save_cached_target: Callable[..., Any] | None = None,
+    prefetch_trilegal_csv: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    """Prepare TRICERATOPS init + TRILEGAL artifacts for offline FPP runs."""
+    start_time = time.time()
+    cache_dir = getattr(cache, "cache_dir", None) or tempfile.gettempdir()
+    deadline = None
+    if timeout_seconds is not None and float(timeout_seconds) > 0:
+        deadline = start_time + float(timeout_seconds)
+
+    def _remaining_seconds() -> float | None:
+        if deadline is None:
+            return None
+        return float(deadline - time.time())
+
+    def _stage_budget(default_seconds: float) -> float:
+        rem = _remaining_seconds()
+        if rem is None:
+            return float(default_seconds)
+        if rem <= 0:
+            raise NetworkTimeoutError(operation="TRICERATOPS runtime artifact staging", timeout_seconds=0.0)
+        return float(min(float(default_seconds), float(rem)))
+
+    # Ensure sectors are present in cache and resolve effective sector list.
+    _lc_data, sectors_used = _gather_light_curves(cache, tic_id, sectors, flux_type)
+    if sectors_used is None:
+        raise ValueError(f"No cached sectors available for TIC {tic_id}")
+
+    # TRICERATOPS import/bootstrap mirrors calculate_fpp_handler.
+    try:
+        import lxml  # noqa: F401
+    except Exception:
+        _set_mechanicalsoup_default_features(features="html.parser")
+    from bittr_tess_vetter.ext.triceratops_plus_vendor.triceratops import triceratops as tr
+
+    _load = load_cached_target or _load_cached_triceratops_target
+    _save = save_cached_target or _save_cached_triceratops_target
+    _prefetch = prefetch_trilegal_csv or _prefetch_trilegal_csv
+
+    target = _load(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used)
+    target_cache_hit = target is not None
+    if target is None:
+        init_budget = _stage_budget(FPP_STAGE_INIT_BUDGET_SECONDS)
+        with network_timeout(float(init_budget), operation=f"TRICERATOPS init (Gaia query) for TIC {tic_id}"):
+            target = tr.target(ID=tic_id, sectors=sectors_used, mission="TESS")
+        _save(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target)
+
+    trilegal_cache_hit = False
+    trilegal_csv_path: str | None = None
+    if getattr(target, "trilegal_fname", None):
+        fname = Path(str(target.trilegal_fname))
+        if fname.exists() and fname.stat().st_size > 0:
+            trilegal_csv_path = str(fname)
+
+    if trilegal_csv_path is None:
+        cached_csv = _cached_trilegal_csv_path(cache_dir=cache_dir, tic_id=tic_id)
+        try:
+            if cached_csv.exists() and cached_csv.stat().st_size > 0:
+                target.trilegal_fname = str(cached_csv)
+                target.trilegal_url = None
+                trilegal_cache_hit = True
+                trilegal_csv_path = str(cached_csv)
+        except OSError:
+            pass
+
+    if trilegal_csv_path is None:
+        trilegal_url = getattr(target, "trilegal_url", None)
+        if not isinstance(trilegal_url, str) or not trilegal_url:
+            raise RuntimeError(f"TRICERATOPS target for TIC {tic_id} has no TRILEGAL URL or cached CSV")
+        trilegal_budget = _stage_budget(FPP_STAGE_TRILEGAL_BUDGET_SECONDS)
+        with network_timeout(float(trilegal_budget), operation=f"TRILEGAL prefetch for TIC {tic_id}"):
+            trilegal_csv = _prefetch(
+                cache_dir=cache_dir,
+                tic_id=tic_id,
+                trilegal_url=trilegal_url,
+            )
+        target.trilegal_fname = trilegal_csv
+        target.trilegal_url = None
+        trilegal_csv_path = str(trilegal_csv)
+
+    _save(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target)
+    return {
+        "tic_id": int(tic_id),
+        "sectors_used": [int(s) for s in sectors_used],
+        "target_cache_hit": bool(target_cache_hit),
+        "trilegal_cache_hit": bool(trilegal_cache_hit),
+        "trilegal_csv_path": trilegal_csv_path,
+        "runtime_seconds": float(time.time() - start_time),
+    }
+
+
 def _triceratops_target_cache_path(
     *, cache_dir: str | Path, tic_id: int, sectors_used: list[int]
 ) -> Path:
@@ -972,6 +1071,7 @@ def calculate_fpp_handler(
     load_cached_target: Callable[..., Any] | None = None,
     save_cached_target: Callable[..., Any] | None = None,
     prefetch_trilegal_csv: Callable[..., Any] | None = None,
+    allow_network: bool = True,
 ) -> dict[str, Any]:
     """Execute TRICERATOPS+ FPP calculation.
 
@@ -1109,6 +1209,16 @@ def calculate_fpp_handler(
         stage_init_start = time.time()
         target = _load(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used)
         if target is None:
+            if not allow_network:
+                return _err(
+                    (
+                        f"Network disabled and no cached TRICERATOPS target for TIC {tic_id}. "
+                        "Run `btv fpp-prepare --network-ok` first."
+                    ),
+                    error_type="network_disabled",
+                    stage="triceratops_init",
+                    sectors_used_value=sectors_used,
+                )
             init_timeout, init_err = _stage_budget_or_err(
                 stage="triceratops_init",
                 default_seconds=FPP_STAGE_INIT_BUDGET_SECONDS,
@@ -1205,6 +1315,16 @@ def calculate_fpp_handler(
 
             trilegal_url = getattr(target, "trilegal_url", None)
             if isinstance(trilegal_url, str) and trilegal_url:
+                if not allow_network:
+                    return _err(
+                        (
+                            f"Network disabled and no cached TRILEGAL CSV for TIC {tic_id}. "
+                            "Run `btv fpp-prepare --network-ok` first."
+                        ),
+                        error_type="network_disabled",
+                        stage="trilegal_prefetch",
+                        sectors_used_value=sectors_used,
+                    )
                 prefetch_timeout, prefetch_err = _stage_budget_or_err(
                     stage="trilegal_prefetch",
                     default_seconds=FPP_STAGE_TRILEGAL_BUDGET_SECONDS,
