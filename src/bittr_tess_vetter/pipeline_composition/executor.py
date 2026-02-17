@@ -37,6 +37,8 @@ _OP_TO_COMMAND = {
 
 _RETRYABLE_TOKENS = ("429", "timeout", "timed out", "temporarily unavailable", "connection reset")
 _EXECUTOR_DEFAULT_KEYS = {"retry_max_attempts", "retry_initial_seconds"}
+_DETREND_INVARIANCE_POLICY_VERSION = "v1"
+_DETREND_INVARIANCE_FPP_DELTA_ABS_THRESHOLD = 0.01
 
 
 def _flag_name(key: str) -> str:
@@ -600,6 +602,39 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
         ):
             robustness_recommended_variant = "detrended"
 
+    detrend_invariance_policy_verdict = "NOT_EVALUATED"
+    detrend_invariance_policy_reason_code = "ROBUSTNESS_INPUTS_ABSENT"
+    detrend_invariance_policy_observed_fpp_delta_abs = None
+    detrend_invariance_policy_observed_model_verdict_changed = None
+    if robustness_present:
+        detrend_invariance_policy_verdict = "INSUFFICIENT_DATA"
+        detrend_invariance_policy_reason_code = "MISSING_MODEL_VERDICTS_OR_FPP_VALUES"
+        raw_verdict_norm = (
+            str(model_compete_raw_verdict).strip().upper() if model_compete_raw_verdict is not None else None
+        )
+        detrended_verdict_norm = (
+            str(model_compete_detrended_verdict).strip().upper()
+            if model_compete_detrended_verdict is not None
+            else None
+        )
+        if _is_finite_number(fpp_delta_detrended_minus_raw):
+            detrend_invariance_policy_observed_fpp_delta_abs = abs(float(fpp_delta_detrended_minus_raw))
+        if raw_verdict_norm is not None and detrended_verdict_norm is not None:
+            detrend_invariance_policy_observed_model_verdict_changed = raw_verdict_norm != detrended_verdict_norm
+        if (
+            detrend_invariance_policy_observed_model_verdict_changed is not None
+            and detrend_invariance_policy_observed_fpp_delta_abs is not None
+        ):
+            if detrend_invariance_policy_observed_model_verdict_changed:
+                detrend_invariance_policy_verdict = "NON_INVARIANT"
+                detrend_invariance_policy_reason_code = "MODEL_VERDICT_CHANGED"
+            elif detrend_invariance_policy_observed_fpp_delta_abs > _DETREND_INVARIANCE_FPP_DELTA_ABS_THRESHOLD:
+                detrend_invariance_policy_verdict = "NON_INVARIANT"
+                detrend_invariance_policy_reason_code = "FPP_DELTA_ABOVE_THRESHOLD"
+            else:
+                detrend_invariance_policy_verdict = "INVARIANT"
+                detrend_invariance_policy_reason_code = "PASS"
+
     concern_flags = set(str(x) for x in (toi_result.get("concern_flags") or []) if x is not None)
     for payload in payloads_by_step_id.values():
         concern_flags.update(_extract_concern_flags(payload))
@@ -621,6 +656,12 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
         "fpp_detrended": fpp_detrended,
         "fpp_delta_detrended_minus_raw": fpp_delta_detrended_minus_raw,
         "robustness_recommended_variant": robustness_recommended_variant,
+        "detrend_invariance_policy_version": _DETREND_INVARIANCE_POLICY_VERSION,
+        "detrend_invariance_policy_verdict": detrend_invariance_policy_verdict,
+        "detrend_invariance_policy_reason_code": detrend_invariance_policy_reason_code,
+        "detrend_invariance_policy_fpp_delta_abs_threshold": _DETREND_INVARIANCE_FPP_DELTA_ABS_THRESHOLD,
+        "detrend_invariance_policy_observed_fpp_delta_abs": detrend_invariance_policy_observed_fpp_delta_abs,
+        "detrend_invariance_policy_observed_model_verdict_changed": detrend_invariance_policy_observed_model_verdict_changed,
         "concern_flags": sorted(concern_flags),
     }
     return row
@@ -630,7 +671,7 @@ def _write_evidence_table(*, out_dir: Path, toi_results: list[dict[str, Any]]) -
     rows = [_extract_evidence_row(item, out_dir=out_dir) for item in toi_results]
 
     json_path = out_dir / "evidence_table.json"
-    _write_json(json_path, {"schema_version": "pipeline.evidence_table.v1", "rows": rows})
+    _write_json(json_path, {"schema_version": "pipeline.evidence_table.v2", "rows": rows})
 
     csv_path = out_dir / "evidence_table.csv"
     csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -649,6 +690,12 @@ def _write_evidence_table(*, out_dir: Path, toi_results: list[dict[str, Any]]) -
         "fpp_detrended",
         "fpp_delta_detrended_minus_raw",
         "robustness_recommended_variant",
+        "detrend_invariance_policy_version",
+        "detrend_invariance_policy_verdict",
+        "detrend_invariance_policy_reason_code",
+        "detrend_invariance_policy_fpp_delta_abs_threshold",
+        "detrend_invariance_policy_observed_fpp_delta_abs",
+        "detrend_invariance_policy_observed_model_verdict_changed",
         "concern_flags",
     ]
     with csv_path.open("w", encoding="utf-8", newline="") as fh:

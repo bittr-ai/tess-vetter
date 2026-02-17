@@ -40,6 +40,8 @@ from bittr_tess_vetter.platform.io import (
 )
 
 _STANDARD_PRESET_TIMEOUT_SECONDS = 900.0
+_MAX_POINTS_RETRY_VALUES = (3000, 2000, 1500, 1000, 750, 500, 300)
+_MAX_POINTS_RETRY_LIMIT = 3
 
 
 def _looks_like_timeout(exc: BaseException) -> bool:
@@ -116,6 +118,40 @@ def _build_retry_guidance(result: dict[str, Any], preset_name: str) -> dict[str,
             "posterior_prob_nan_count_positive": posterior_prob_nan_count_positive,
         },
     }
+
+
+def _coerce_positive_int(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _effective_max_points_for_attempt_zero(*, preset_name: str, overrides: dict[str, Any]) -> int | None:
+    if "max_points" in overrides:
+        return _coerce_positive_int(overrides.get("max_points"))
+    if preset_name == "fast":
+        return 1500
+    if preset_name == "tutorial":
+        return 3000
+    return None
+
+
+def _build_reduced_max_points_schedule(initial_max_points: int | None) -> list[int]:
+    if initial_max_points is None:
+        return list(_MAX_POINTS_RETRY_VALUES[:_MAX_POINTS_RETRY_LIMIT])
+
+    candidates = [value for value in _MAX_POINTS_RETRY_VALUES if value < initial_max_points]
+    if not candidates:
+        current = int(initial_max_points)
+        while current > 1 and len(candidates) < _MAX_POINTS_RETRY_LIMIT:
+            current = max(current // 2, 1)
+            if current < initial_max_points and current not in candidates:
+                candidates.append(current)
+            if current == 1:
+                break
+    return candidates[:_MAX_POINTS_RETRY_LIMIT]
 
 
 def _build_cache_for_fpp(
@@ -728,31 +764,66 @@ def fpp_command(
             exit_code=exit_code,
         )
 
+    initial_max_points = _effective_max_points_for_attempt_zero(
+        preset_name=preset_name,
+        overrides=parsed_overrides,
+    )
+    retry_schedule_max_points = _build_reduced_max_points_schedule(initial_max_points)
+    explicit_max_points_override = "max_points" in parsed_overrides
+    attempts: list[dict[str, Any]] = []
+    final_selected_attempt = 1
+    fallback_succeeded = False
+
     try:
-        result, sectors_loaded = _execute_fpp(
-            tic_id=resolved_tic_id,
-            period_days=resolved_period_days,
-            t0_btjd=resolved_t0_btjd,
-            duration_hours=resolved_duration_hours,
-            depth_ppm=float(depth_ppm_used),
-            sectors=effective_sectors,
-            preset=preset_name,
-            replicates=replicates,
-            seed=seed,
-            timeout_seconds=effective_timeout_seconds,
-            cache_dir=cache_dir,
-            stellar_radius=resolved_stellar.get("radius"),
-            stellar_mass=resolved_stellar.get("mass"),
-            stellar_tmag=resolved_stellar.get("tmag"),
-            contrast_curve=parsed_contrast_curve,
-            overrides=parsed_overrides,
-            detrend_cache=bool(detrend_cache_effective),
-            detrend_method=detrend_method,
-            detrend_bin_hours=float(detrend_bin_hours),
-            detrend_buffer=float(detrend_buffer),
-            detrend_sigma_clip=float(detrend_sigma_clip),
-            cache_only_sectors=cache_only_sector_load,
-        )
+        result: dict[str, Any] | None = None
+        sectors_loaded: list[int] | None = None
+        attempts_max_points: list[int | None] = [initial_max_points, *retry_schedule_max_points]
+        for attempt_index, attempt_max_points in enumerate(attempts_max_points, start=1):
+            attempt_overrides = dict(parsed_overrides)
+            if attempt_index > 1:
+                attempt_overrides["max_points"] = attempt_max_points
+            result, sectors_loaded = _execute_fpp(
+                tic_id=resolved_tic_id,
+                period_days=resolved_period_days,
+                t0_btjd=resolved_t0_btjd,
+                duration_hours=resolved_duration_hours,
+                depth_ppm=float(depth_ppm_used),
+                sectors=effective_sectors,
+                preset=preset_name,
+                replicates=replicates,
+                seed=seed,
+                timeout_seconds=effective_timeout_seconds,
+                cache_dir=cache_dir,
+                stellar_radius=resolved_stellar.get("radius"),
+                stellar_mass=resolved_stellar.get("mass"),
+                stellar_tmag=resolved_stellar.get("tmag"),
+                contrast_curve=parsed_contrast_curve,
+                overrides=attempt_overrides,
+                detrend_cache=bool(detrend_cache_effective),
+                detrend_method=detrend_method,
+                detrend_bin_hours=float(detrend_bin_hours),
+                detrend_buffer=float(detrend_buffer),
+                detrend_sigma_clip=float(detrend_sigma_clip),
+                cache_only_sectors=cache_only_sector_load,
+            )
+            is_degenerate = _is_degenerate_fpp_result(result)
+            attempts.append(
+                {
+                    "attempt": int(attempt_index),
+                    "max_points": attempt_overrides.get("max_points"),
+                    "degenerate": bool(is_degenerate),
+                    "reason": result.get("degenerate_reason"),
+                }
+            )
+            final_selected_attempt = int(attempt_index)
+            if not is_degenerate:
+                if attempt_index > 1:
+                    fallback_succeeded = True
+                break
+            if attempt_index >= len(attempts_max_points):
+                break
+        if result is None or sectors_loaded is None:
+            raise BtvCliError("FPP execution did not return a result.", exit_code=EXIT_RUNTIME_ERROR)
     except BtvCliError:
         raise
     except LightCurveNotFoundError as exc:
@@ -762,7 +833,7 @@ def fpp_command(
         raise BtvCliError(str(exc), exit_code=mapped) from exc
 
     payload: dict[str, Any] = {
-        "schema_version": "cli.fpp.v2",
+        "schema_version": "cli.fpp.v3",
         "fpp_result": result,
         "provenance": {
             "depth_source": depth_source,
@@ -796,6 +867,15 @@ def fpp_command(
                 "timeout_seconds_requested": timeout_seconds,
                 "timeout_seconds": effective_timeout_seconds,
                 "network_ok": bool(network_ok),
+                "degenerate_guard": {
+                    "guard_triggered": bool(attempts and attempts[0]["degenerate"]),
+                    "explicit_max_points_override": bool(explicit_max_points_override),
+                    "initial_max_points": initial_max_points,
+                    "retry_schedule_max_points": retry_schedule_max_points,
+                    "attempts": attempts,
+                    "final_selected_attempt": int(final_selected_attempt),
+                    "fallback_succeeded": bool(fallback_succeeded),
+                },
             },
         },
     }

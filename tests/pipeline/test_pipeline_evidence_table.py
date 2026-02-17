@@ -131,3 +131,56 @@ def test_evidence_table_extracts_robustness_fields_by_step_id(tmp_path: Path) ->
     assert row["fpp_detrended"] == 0.01
     assert row["fpp_delta_detrended_minus_raw"] == pytest.approx(-0.02)
     assert row["robustness_recommended_variant"] == "detrended"
+    assert row["detrend_invariance_policy_version"] == "v1"
+    assert row["detrend_invariance_policy_verdict"] == "NON_INVARIANT"
+    assert row["detrend_invariance_policy_reason_code"] == "MODEL_VERDICT_CHANGED"
+    assert row["detrend_invariance_policy_fpp_delta_abs_threshold"] == pytest.approx(0.01)
+    assert row["detrend_invariance_policy_observed_fpp_delta_abs"] == pytest.approx(0.02)
+    assert row["detrend_invariance_policy_observed_model_verdict_changed"] is True
+
+
+def test_evidence_table_detrend_invariance_policy_invariant_case(tmp_path: Path) -> None:
+    toi = "TOI-ROBUST.02"
+    toi_dir = tmp_path / toi / "steps"
+    model_raw_path = _write_step(toi_dir / "03_model_compete_raw.json", {"verdict": "TRANSIT_PLUS_VARIABILITY"})
+    model_detrended_path = _write_step(
+        toi_dir / "04_model_compete_detrended.json",
+        {"result": {"verdict": "TRANSIT_PLUS_VARIABILITY"}},
+    )
+    fpp_raw_path = _write_step(toi_dir / "05_fpp_raw.json", {"result": {"fpp": 0.03}})
+    fpp_detrended_path = _write_step(toi_dir / "06_fpp_detrended.json", {"fpp": 0.031})
+
+    toi_result = {
+        "toi": toi,
+        "concern_flags": [],
+        "steps": [
+            {
+                "step_id": "model_compete_raw",
+                "op": "model_compete",
+                "status": "ok",
+                "step_output_path": model_raw_path,
+            },
+            {
+                "step_id": "model_compete_detrended",
+                "op": "model_compete",
+                "status": "ok",
+                "step_output_path": model_detrended_path,
+            },
+            {"step_id": "fpp_raw", "op": "fpp", "status": "ok", "step_output_path": fpp_raw_path},
+            {
+                "step_id": "fpp_detrended",
+                "op": "fpp",
+                "status": "ok",
+                "step_output_path": fpp_detrended_path,
+            },
+        ],
+    }
+
+    rows = _write_evidence_table(out_dir=tmp_path, toi_results=[toi_result])
+    row = rows[0]
+    assert row["detrend_invariance_policy_version"] == "v1"
+    assert row["detrend_invariance_policy_verdict"] == "INVARIANT"
+    assert row["detrend_invariance_policy_reason_code"] == "PASS"
+    assert row["detrend_invariance_policy_fpp_delta_abs_threshold"] == pytest.approx(0.01)
+    assert row["detrend_invariance_policy_observed_fpp_delta_abs"] == pytest.approx(0.001)
+    assert row["detrend_invariance_policy_observed_model_verdict_changed"] is False
