@@ -11,6 +11,7 @@ import numpy as np
 from bittr_tess_vetter.api.activity import characterize_activity
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
 from bittr_tess_vetter.api.types import LightCurve
+from bittr_tess_vetter.activity.rotation_context import build_rotation_context
 from bittr_tess_vetter.cli.common_cli import (
     EXIT_DATA_UNAVAILABLE,
     EXIT_INPUT_ERROR,
@@ -192,6 +193,7 @@ def activity_command(
     resolved_toi_arg = toi if toi is not None else toi_arg
     report_file_path: str | None = None
     report_sectors_used: list[int] | None = None
+    report_stellar_radius_rsun: float | None = None
     if report_file is not None:
         if resolved_toi_arg is not None:
             click.echo(
@@ -207,6 +209,7 @@ def activity_command(
             if resolved_from_report.sectors_used is not None
             else None
         )
+        report_stellar_radius_rsun = resolved_from_report.stellar_radius_rsun
     else:
         resolved_tic_id = 0
         input_resolution = {}
@@ -255,6 +258,23 @@ def activity_command(
         "rotation_max_period": float(rotation_max_period),
     }
     activity_payload = activity.to_dict()
+    rotation_period_days = None
+    try:
+        rotation_raw = activity_payload.get("rotation_period")
+        rotation_period_days = float(rotation_raw) if rotation_raw is not None else None
+    except (TypeError, ValueError):
+        rotation_period_days = None
+    rotation_context = build_rotation_context(
+        rotation_period_days=rotation_period_days,
+        stellar_radius_rsun=report_stellar_radius_rsun,
+        rotation_period_source="activity.rotation_period",
+        stellar_radius_source=(
+            "report_file.summary.stellar.radius"
+            if report_stellar_radius_rsun is not None
+            else None
+        ),
+    )
+    activity_payload["rotation_context"] = rotation_context
     verdict, verdict_source = _derive_activity_verdict(activity_payload)
     payload = {
         "schema_version": "cli.activity.v1",

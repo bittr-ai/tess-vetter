@@ -87,6 +87,7 @@ class VariabilitySummaryModel(BaseModel):
     flare_rate_per_day: float | None = None
     classification: str | None = None
     flags: list[str] = Field(default_factory=list)
+    rotation_context: dict[str, Any] | None = None
     semantics: dict[str, float | int | str | bool | None] = Field(default_factory=dict)
 
 

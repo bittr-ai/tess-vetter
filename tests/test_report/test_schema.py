@@ -211,6 +211,8 @@ def test_report_payload_schema_includes_new_deterministic_summary_blocks() -> No
     assert "secondary_scan_summary" in summary_props
     assert "data_gap_summary" in summary_props
     assert "check_execution" in summary_props
+    variability_props = schema["$defs"]["VariabilitySummaryModel"]["properties"]
+    assert "rotation_context" in variability_props
     assert "snr_median" in timing_props
     assert "oc_median" in timing_props
     assert "n_transits_measured" in timing_props

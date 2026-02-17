@@ -25,6 +25,10 @@ from bittr_tess_vetter.activity.primitives import (
     mask_flares,
     measure_rotation_period,
 )
+from bittr_tess_vetter.activity.rotation_context import (
+    build_rotation_context,
+    estimate_v_eq_kms,
+)
 from bittr_tess_vetter.activity.result import (
     ActivityResult,
     Flare,
@@ -39,6 +43,8 @@ __all__ = [
     "mask_flares",
     "compute_phase_amplitude",
     "generate_recommendation",
+    "build_rotation_context",
+    "estimate_v_eq_kms",
     # Result types
     "Flare",
     "ActivityResult",

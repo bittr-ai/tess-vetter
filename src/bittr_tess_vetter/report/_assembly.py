@@ -71,7 +71,12 @@ def _block_noise(ctx: ReportAssemblyContext) -> dict[str, Any]:
 
 
 def _block_variability(ctx: ReportAssemblyContext) -> dict[str, Any]:
-    return _build_variability_summary(ctx.lc_summary, ctx.timing_series, ctx.alias_summary)
+    return _build_variability_summary(
+        ctx.lc_summary,
+        ctx.timing_series,
+        ctx.alias_summary,
+        ctx.stellar,
+    )
 
 
 def _block_alias(ctx: ReportAssemblyContext) -> dict[str, Any]:

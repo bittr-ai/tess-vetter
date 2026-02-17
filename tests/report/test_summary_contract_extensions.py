@@ -6,6 +6,7 @@ from bittr_tess_vetter.report import (
     ReportData,
     TransitTimingPlotData,
 )
+from bittr_tess_vetter.api.types import StellarParams
 from bittr_tess_vetter.validation.result_schema import (
     VettingBundleResult,
     error_result,
@@ -106,6 +107,8 @@ def test_variability_summary_uses_alias_signal_to_avoid_low_label() -> None:
 
     assert variability["classification"] == "moderate_variability"
     assert "PERIODIC_SIGNAL_PRESENT" in variability["flags"]
+    assert variability["rotation_context"]["status"] == "INCOMPLETE_INPUTS"
+    assert "MISSING_ROTATION_PERIOD" in variability["rotation_context"]["quality_flags"]
     assert alias_scalar["alias_interpretation"] == "weak_alias_candidate"
 
 
@@ -136,3 +139,15 @@ def test_timing_summary_surfaces_v04_depth_stability_scalars() -> None:
     assert timing["n_transits_measured"] == 7
     assert timing["depth_scatter_ppm"] == 145.2
     assert timing["chi2_reduced"] == 1.8
+
+
+def test_variability_summary_rotation_context_uses_stellar_radius_when_available() -> None:
+    payload = ReportData(
+        lc_summary=_minimal_lc_summary(),
+        stellar=StellarParams(radius=1.4, mass=1.2, tmag=9.1, teff=6400.0),
+        checks_run=[],
+    ).to_json()
+    rotation_context = payload["summary"]["variability_summary"]["rotation_context"]
+    assert rotation_context["stellar_radius_rsun"] == 1.4
+    assert rotation_context["v_eq_est_kms"] is None
+    assert "MISSING_ROTATION_PERIOD" in rotation_context["quality_flags"]

@@ -11,6 +11,7 @@ import numpy as np
 from bittr_tess_vetter.api.activity import characterize_activity
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
 from bittr_tess_vetter.api.types import LightCurve
+from bittr_tess_vetter.activity.rotation_context import build_rotation_context
 from bittr_tess_vetter.cli.common_cli import (
     EXIT_DATA_UNAVAILABLE,
     EXIT_INPUT_ERROR,
@@ -155,14 +156,6 @@ def _classify_feasibility(score: float) -> tuple[str, str]:
     return "LOW_RV_FEASIBILITY", "DEPRIORITIZE_RV_USE_PHOTOMETRIC_FOLLOWUP"
 
 
-def _estimate_v_eq_kms(*, stellar_radius_rsun: float | None, rotation_period_days: float | None) -> float | None:
-    if stellar_radius_rsun is None or rotation_period_days is None:
-        return None
-    if stellar_radius_rsun <= 0.0 or rotation_period_days <= 0.0:
-        return None
-    return 50.6 * float(stellar_radius_rsun) / float(rotation_period_days)
-
-
 def _line_broadening_bin(v_eq_est_kms: float | None) -> str:
     if v_eq_est_kms is None:
         return "UNKNOWN"
@@ -211,10 +204,13 @@ def _compute_rv_feasibility(
     s_rotation = _rotation_score(rotation_days)
     score = (0.50 * s_brightness) + (0.35 * s_variability) + (0.15 * s_rotation)
     base_verdict, _base_action_hint = _classify_feasibility(score)
-    v_eq_est_kms = _estimate_v_eq_kms(
+    rotation_context = build_rotation_context(
         stellar_radius_rsun=stellar_radius_rsun,
         rotation_period_days=rotation_days,
+        rotation_period_source="activity.rotation_period",
+        stellar_radius_source="stellar_auto.radius",
     )
+    v_eq_est_kms = rotation_context.get("v_eq_est_kms")
     broadening_bin = _line_broadening_bin(v_eq_est_kms)
     verdict, action_hint = _apply_line_broadening_adjustment(
         base_verdict=base_verdict,
@@ -235,6 +231,7 @@ def _compute_rv_feasibility(
             "line_broadening_bin": broadening_bin,
             "velocity_source": "v_eq_estimated",
         },
+        "rotation_context": rotation_context,
         "components": {
             "brightness_score": round(float(s_brightness), 3),
             "variability_score": round(float(s_variability), 3),

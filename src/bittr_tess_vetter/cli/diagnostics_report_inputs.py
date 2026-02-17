@@ -17,6 +17,7 @@ class ResolvedDiagnosticsInputs:
     t0_btjd: float
     duration_hours: float
     depth_ppm: float | None
+    stellar_radius_rsun: float | None
     sectors_used: list[int] | None
     input_resolution: dict[str, Any]
     report_file_path: str
@@ -117,6 +118,13 @@ def resolve_inputs_from_report_file(report_file: str) -> ResolvedDiagnosticsInpu
         field_name="summary.ephemeris.duration_hours",
     )
     depth_ppm = _coerce_optional_float(summary.get("input_depth_ppm"), field_name="summary.input_depth_ppm")
+    stellar_raw = summary.get("stellar")
+    stellar_radius_rsun = None
+    if isinstance(stellar_raw, dict):
+        stellar_radius_rsun = _coerce_optional_float(
+            stellar_raw.get("radius"),
+            field_name="summary.stellar.radius",
+        )
     sectors_used = _extract_report_sectors_used(payload)
 
     resolved_path = str(report_path.resolve())
@@ -141,6 +149,7 @@ def resolve_inputs_from_report_file(report_file: str) -> ResolvedDiagnosticsInpu
         t0_btjd=float(t0_btjd),
         duration_hours=float(duration_hours),
         depth_ppm=float(depth_ppm) if depth_ppm is not None else None,
+        stellar_radius_rsun=float(stellar_radius_rsun) if stellar_radius_rsun is not None else None,
         sectors_used=sectors_used,
         input_resolution=input_resolution,
         report_file_path=resolved_path,

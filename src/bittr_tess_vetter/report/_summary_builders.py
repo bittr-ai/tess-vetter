@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from bittr_tess_vetter.activity.rotation_context import build_rotation_context
 from bittr_tess_vetter.report._serialization_utils import _coerce_finite_float, _coerce_int
 from bittr_tess_vetter.validation.result_schema import CheckResult
 
@@ -115,6 +116,7 @@ def _build_variability_summary(
     lc_summary: LCSummary | None,
     timing_series: TransitTimingPlotData | None,
     alias_summary: AliasHarmonicSummaryData | None = None,
+    stellar: Any | None = None,
 ) -> dict[str, Any]:
     """Build deterministic variability summary block."""
     variability_index: float | None = None
@@ -178,12 +180,26 @@ def _build_variability_summary(
     if periodic_signal_present:
         flags.append("PERIODIC_SIGNAL_PRESENT")
 
+    stellar_radius_rsun = None
+    if stellar is not None:
+        if hasattr(stellar, "radius"):
+            stellar_radius_rsun = _coerce_finite_float(getattr(stellar, "radius"))
+        elif isinstance(stellar, dict):
+            stellar_radius_rsun = _coerce_finite_float(stellar.get("radius"))
+    rotation_context = build_rotation_context(
+        rotation_period_days=None,
+        stellar_radius_rsun=stellar_radius_rsun,
+        rotation_period_source=None,
+        stellar_radius_source="summary.stellar.radius" if stellar_radius_rsun is not None else None,
+    )
+
     return {
         "variability_index": variability_index,
         "periodicity_score": periodicity_score,
         "flare_rate_per_day": None,
         "classification": classification,
         "flags": flags,
+        "rotation_context": rotation_context,
         "semantics": {
             "variability_index_source": "lc_summary.flux_std_ppm/flux_mad_ppm",
             "periodicity_source": "timing_series.periodicity_score",

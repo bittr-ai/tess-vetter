@@ -77,6 +77,9 @@ def test_btv_activity_success_payload_contract(monkeypatch, tmp_path: Path) -> N
     assert payload["schema_version"] == "cli.activity.v1"
     assert payload["activity"]["rotation_period"] == 6.25
     assert payload["result"]["activity"]["rotation_period"] == 6.25
+    assert payload["activity"]["rotation_context"]["rotation_period_days"] == 6.25
+    assert payload["activity"]["rotation_context"]["v_eq_est_kms"] is None
+    assert "MISSING_STELLAR_RADIUS" in payload["activity"]["rotation_context"]["quality_flags"]
     assert "verdict" in payload
     assert "verdict_source" in payload
     assert payload["verdict"] == "spotted_rotator"
@@ -228,6 +231,7 @@ def test_btv_activity_report_file_inputs_override_toi(monkeypatch, tmp_path: Pat
     assert payload["inputs_summary"]["input_resolution"]["source"] == "report_file"
     assert payload["provenance"]["inputs_source"] == "report_file"
     assert payload["provenance"]["report_file"] == str(report_path.resolve())
+    assert payload["activity"]["rotation_context"]["stellar_radius_rsun"] is None
 
 
 def test_btv_activity_explicit_sectors_cache_miss_exits_4(monkeypatch) -> None:

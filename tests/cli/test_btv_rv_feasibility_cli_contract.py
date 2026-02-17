@@ -90,6 +90,8 @@ def test_btv_rv_feasibility_success_payload_contract(monkeypatch, tmp_path: Path
     assert payload["provenance"]["stellar"]["source"] == "auto"
     assert "rotation_broadening" in payload["rv_feasibility"]
     assert "line_broadening_bin" in payload["rv_feasibility"]["rotation_broadening"]
+    assert payload["rv_feasibility"]["rotation_context"]["status"] == "READY"
+    assert payload["rv_feasibility"]["rotation_context"]["v_eq_est_kms"] is not None
 
 
 def test_btv_rv_feasibility_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: Path) -> None:

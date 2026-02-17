@@ -28,6 +28,7 @@ def build_vet_lc_summary_blocks(report: ReportData) -> dict[str, Any]:
             report.lc_summary,
             report.timing_series,
             report.alias_summary,
+            report.stellar,
         ),
         "lc_robustness_summary": _build_lc_robustness_summary(report.lc_robustness),
         "odd_even_summary": _build_odd_even_summary(report.checks),
