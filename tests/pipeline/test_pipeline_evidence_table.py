@@ -24,10 +24,33 @@ def test_evidence_table_extracts_mixed_top_level_and_nested_fields(tmp_path: Pat
     timing_path = _write_step(toi_dir / "04_timing.json", {"result": {"verdict": "TIMING_OK"}})
     localize_path = _write_step(
         toi_dir / "05_localize.json",
-        {"result": {"consensus": {"action_hint": "collect_more_imaging"}}},
+        {
+            "result": {
+                "consensus": {"action_hint": "collect_more_imaging"},
+                "reliability_summary": {
+                    "status": "REVIEW_REQUIRED",
+                    "action_hint": "DEFER_HOST_ASSIGNMENT",
+                },
+            }
+        },
     )
-    dilution_path = _write_step(toi_dir / "06_dilution.json", {"result": {"n_plausible_scenarios": 4}})
+    dilution_path = _write_step(
+        toi_dir / "06_dilution.json",
+        {
+            "result": {
+                "n_plausible_scenarios": 4,
+                "reliability_summary": {
+                    "status": "REVIEW_REQUIRED",
+                    "action_hint": "REVIEW_WITH_DILUTION",
+                },
+            }
+        },
+    )
     fpp_path = _write_step(toi_dir / "07_fpp.json", {"result": {"fpp": 0.017}})
+    neighbors_path = _write_step(
+        toi_dir / "08_neighbors.json",
+        {"multiplicity_risk": {"status": "ELEVATED", "reasons": ["TARGET_RUWE_ELEVATED"]}},
+    )
 
     toi_result = {
         "toi": toi,
@@ -40,6 +63,7 @@ def test_evidence_table_extracts_mixed_top_level_and_nested_fields(tmp_path: Pat
             {"op": "localize_host", "status": "ok", "step_output_path": localize_path},
             {"op": "dilution", "status": "ok", "step_output_path": dilution_path},
             {"op": "fpp", "status": "ok", "step_output_path": fpp_path},
+            {"op": "resolve_neighbors", "status": "ok", "step_output_path": neighbors_path},
         ],
     }
 
@@ -50,7 +74,13 @@ def test_evidence_table_extracts_mixed_top_level_and_nested_fields(tmp_path: Pat
     assert row["ephemeris_verdict"] == "EPHEMERIS_OK"
     assert row["timing_verdict"] == "TIMING_OK"
     assert row["localize_host_action_hint"] == "collect_more_imaging"
+    assert row["localize_host_reliability_status"] == "REVIEW_REQUIRED"
+    assert row["localize_host_reliability_action_hint"] == "DEFER_HOST_ASSIGNMENT"
     assert row["dilution_n_plausible_scenarios"] == 4
+    assert row["dilution_reliability_status"] == "REVIEW_REQUIRED"
+    assert row["dilution_reliability_action_hint"] == "REVIEW_WITH_DILUTION"
+    assert row["multiplicity_risk_status"] == "ELEVATED"
+    assert row["multiplicity_risk_reasons"] == ["TARGET_RUWE_ELEVATED"]
     assert row["fpp"] == 0.017
 
 

@@ -491,6 +491,19 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
             return result.get("verdict")
         return None
 
+    def _extract_reliability_summary(payload: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not isinstance(payload, dict):
+            return None
+        summary = payload.get("reliability_summary")
+        if isinstance(summary, dict):
+            return summary
+        result = payload.get("result")
+        if isinstance(result, dict):
+            nested = result.get("reliability_summary")
+            if isinstance(nested, dict):
+                return nested
+        return None
+
     payloads_by_step_id, payloads_by_op = _load_step_payloads()
 
     model_compete = _maybe_load_step(
@@ -516,6 +529,11 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
     )
     dilution = _maybe_load_step("dilution", payloads_by_op=payloads_by_op, payloads_by_step_id=payloads_by_step_id)
     fpp = _maybe_load_step("fpp", payloads_by_op=payloads_by_op, payloads_by_step_id=payloads_by_step_id)
+    resolve_neighbors = _maybe_load_step(
+        "resolve_neighbors",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+    )
     model_compete_raw = _maybe_load_step(
         "model_compete",
         payloads_by_op=payloads_by_op,
@@ -548,6 +566,15 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
             consensus = result.get("consensus")
             if isinstance(consensus, dict):
                 localize_action_hint = consensus.get("action_hint")
+    localize_reliability_summary = _extract_reliability_summary(localize_host)
+    localize_reliability_status = (
+        localize_reliability_summary.get("status") if isinstance(localize_reliability_summary, dict) else None
+    )
+    localize_reliability_action_hint = (
+        localize_reliability_summary.get("action_hint")
+        if isinstance(localize_reliability_summary, dict)
+        else None
+    )
 
     dilution_n_plausible = None
     if isinstance(dilution, dict):
@@ -556,6 +583,35 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
             result = dilution.get("result")
             if isinstance(result, dict):
                 dilution_n_plausible = result.get("n_plausible_scenarios")
+    dilution_reliability_summary = _extract_reliability_summary(dilution)
+    dilution_reliability_status = (
+        dilution_reliability_summary.get("status") if isinstance(dilution_reliability_summary, dict) else None
+    )
+    dilution_reliability_action_hint = (
+        dilution_reliability_summary.get("action_hint")
+        if isinstance(dilution_reliability_summary, dict)
+        else None
+    )
+
+    multiplicity_risk_payload: dict[str, Any] | None = None
+    if isinstance(resolve_neighbors, dict):
+        direct = resolve_neighbors.get("multiplicity_risk")
+        if isinstance(direct, dict):
+            multiplicity_risk_payload = direct
+        else:
+            prov = resolve_neighbors.get("provenance")
+            if isinstance(prov, dict):
+                nested = prov.get("multiplicity_risk")
+                if isinstance(nested, dict):
+                    multiplicity_risk_payload = nested
+    multiplicity_risk_status = (
+        multiplicity_risk_payload.get("status") if isinstance(multiplicity_risk_payload, dict) else None
+    )
+    multiplicity_risk_reasons = None
+    if isinstance(multiplicity_risk_payload, dict):
+        reasons = multiplicity_risk_payload.get("reasons")
+        if isinstance(reasons, list):
+            multiplicity_risk_reasons = [str(x) for x in reasons if x is not None]
 
     fpp_value = None
     if isinstance(fpp, dict):
@@ -650,7 +706,13 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
         "ephemeris_verdict": _extract_verdict(ephemeris),
         "timing_verdict": _extract_verdict(timing),
         "localize_host_action_hint": localize_action_hint,
+        "localize_host_reliability_status": localize_reliability_status,
+        "localize_host_reliability_action_hint": localize_reliability_action_hint,
         "dilution_n_plausible_scenarios": dilution_n_plausible,
+        "dilution_reliability_status": dilution_reliability_status,
+        "dilution_reliability_action_hint": dilution_reliability_action_hint,
+        "multiplicity_risk_status": multiplicity_risk_status,
+        "multiplicity_risk_reasons": multiplicity_risk_reasons,
         "fpp": fpp_value,
         "fpp_raw": fpp_raw,
         "fpp_detrended": fpp_detrended,
@@ -671,7 +733,7 @@ def _write_evidence_table(*, out_dir: Path, toi_results: list[dict[str, Any]]) -
     rows = [_extract_evidence_row(item, out_dir=out_dir) for item in toi_results]
 
     json_path = out_dir / "evidence_table.json"
-    _write_json(json_path, {"schema_version": "pipeline.evidence_table.v2", "rows": rows})
+    _write_json(json_path, {"schema_version": "pipeline.evidence_table.v3", "rows": rows})
 
     csv_path = out_dir / "evidence_table.csv"
     csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -684,7 +746,13 @@ def _write_evidence_table(*, out_dir: Path, toi_results: list[dict[str, Any]]) -
         "ephemeris_verdict",
         "timing_verdict",
         "localize_host_action_hint",
+        "localize_host_reliability_status",
+        "localize_host_reliability_action_hint",
         "dilution_n_plausible_scenarios",
+        "dilution_reliability_status",
+        "dilution_reliability_action_hint",
+        "multiplicity_risk_status",
+        "multiplicity_risk_reasons",
         "fpp",
         "fpp_raw",
         "fpp_detrended",
@@ -703,7 +771,19 @@ def _write_evidence_table(*, out_dir: Path, toi_results: list[dict[str, Any]]) -
         writer.writeheader()
         for row in rows:
             flags = sorted(str(x) for x in (row.get("concern_flags") or []) if x is not None)
-            writer.writerow({**row, "concern_flags": ";".join(flags)})
+            risk_reasons = row.get("multiplicity_risk_reasons")
+            risk_reasons_text = (
+                ";".join(str(x) for x in risk_reasons if x is not None)
+                if isinstance(risk_reasons, list)
+                else ""
+            )
+            writer.writerow(
+                {
+                    **row,
+                    "concern_flags": ";".join(flags),
+                    "multiplicity_risk_reasons": risk_reasons_text,
+                }
+            )
 
     return rows
 
