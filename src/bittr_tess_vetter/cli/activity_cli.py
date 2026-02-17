@@ -267,11 +267,15 @@ def activity_command(
     rotation_context = build_rotation_context(
         rotation_period_days=rotation_period_days,
         stellar_radius_rsun=report_stellar_radius_rsun,
-        rotation_period_source="activity.rotation_period",
-        stellar_radius_source=(
+        rotation_period_source_path="activity.rotation_period",
+        stellar_radius_source_path=(
             "report_file.summary.stellar.radius"
             if report_stellar_radius_rsun is not None
             else None
+        ),
+        rotation_period_source_authority="activity_lomb_scargle",
+        stellar_radius_source_authority=(
+            "tic_mast" if report_stellar_radius_rsun is not None else None
         ),
     )
     activity_payload["rotation_context"] = rotation_context

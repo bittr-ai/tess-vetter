@@ -189,8 +189,10 @@ def _build_variability_summary(
     rotation_context = build_rotation_context(
         rotation_period_days=None,
         stellar_radius_rsun=stellar_radius_rsun,
-        rotation_period_source=None,
-        stellar_radius_source="summary.stellar.radius" if stellar_radius_rsun is not None else None,
+        rotation_period_source_path=None,
+        stellar_radius_source_path="summary.stellar.radius" if stellar_radius_rsun is not None else None,
+        rotation_period_source_authority=None,
+        stellar_radius_source_authority="report_seed_or_target_stellar" if stellar_radius_rsun is not None else None,
     )
 
     return {
@@ -205,6 +207,10 @@ def _build_variability_summary(
             "periodicity_source": "timing_series.periodicity_score",
             "periodic_signal_present": periodic_signal_present,
             "alias_classification_source": "alias_summary.classification",
+            "rotation_context_note": (
+                "rotation_period_days not computed in report summary; "
+                "combine with activity output to derive v_eq_est_kms."
+            ),
         },
     }
 

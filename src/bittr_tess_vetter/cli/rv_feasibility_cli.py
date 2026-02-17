@@ -187,6 +187,8 @@ def _compute_rv_feasibility(
     activity_payload: dict[str, Any],
     tmag: float | None,
     stellar_radius_rsun: float | None,
+    stellar_radius_source_path: str | None,
+    stellar_radius_source_authority: str | None,
 ) -> dict[str, Any]:
     rotation_period = activity_payload.get("rotation_period")
     variability_ppm = activity_payload.get("variability_amplitude_ppm")
@@ -207,8 +209,10 @@ def _compute_rv_feasibility(
     rotation_context = build_rotation_context(
         stellar_radius_rsun=stellar_radius_rsun,
         rotation_period_days=rotation_days,
-        rotation_period_source="activity.rotation_period",
-        stellar_radius_source="stellar_auto.radius",
+        rotation_period_source_path="activity.rotation_period",
+        stellar_radius_source_path=stellar_radius_source_path,
+        rotation_period_source_authority="activity_lomb_scargle",
+        stellar_radius_source_authority=stellar_radius_source_authority,
     )
     v_eq_est_kms = rotation_context.get("v_eq_est_kms")
     broadening_bin = _line_broadening_bin(v_eq_est_kms)
@@ -399,6 +403,15 @@ def rv_feasibility_command(
         activity_payload=activity_payload,
         tmag=resolved_tmag,
         stellar_radius_rsun=resolved_radius_rsun,
+        stellar_radius_source_path=(
+            "stellar_auto.radius" if str(stellar_provenance.get("source")) == "auto" else "cli.stellar_radius"
+        ),
+        stellar_radius_source_authority=(
+            str(stellar_provenance.get("lookup", {}).get("selected_source"))
+            if isinstance(stellar_provenance.get("lookup"), dict)
+            and stellar_provenance.get("lookup", {}).get("selected_source") is not None
+            else ("explicit" if str(stellar_provenance.get("source")) == "explicit" else None)
+        ),
     )
     verdict = str(rv_feasibility.get("verdict"))
     verdict_source = "$.result.rv_feasibility.verdict"
