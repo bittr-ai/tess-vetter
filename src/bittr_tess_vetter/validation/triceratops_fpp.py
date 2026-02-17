@@ -513,11 +513,51 @@ def stage_triceratops_runtime_artifacts(
                 },
             )
             with network_timeout(float(trilegal_budget), operation=f"TRILEGAL prefetch for TIC {tic_id}"):
-                trilegal_csv = _prefetch(
-                    cache_dir=cache_dir,
-                    tic_id=tic_id,
-                    trilegal_url=trilegal_url,
-                )
+                try:
+                    trilegal_csv = _prefetch(
+                        cache_dir=cache_dir,
+                        tic_id=tic_id,
+                        trilegal_url=trilegal_url,
+                    )
+                except Exception as e:
+                    msg = str(e)
+                    should_retry_with_fresh_url = (
+                        "HTTP Error 404" in msg
+                        or "404: Not Found" in msg
+                        or "TRILEGAL_EMPTY_RESPONSE" in msg
+                    )
+                    if not should_retry_with_fresh_url:
+                        raise
+
+                    try:
+                        from bittr_tess_vetter.ext.triceratops_plus_vendor.triceratops.funcs import (
+                            query_TRILEGAL,
+                        )
+                    except Exception:
+                        raise
+                    ra = getattr(target, "ra", None) or getattr(target, "RA", None)
+                    dec = getattr(target, "dec", None) or getattr(target, "Dec", None)
+                    if ra is None or dec is None:
+                        raise
+                    new_url = query_TRILEGAL(float(ra), float(dec), verbose=0)
+                    _write_triceratops_stage_state(
+                        cache_dir=cache_dir,
+                        tic_id=tic_id,
+                        sectors_used=sectors_used,
+                        payload={
+                            "status": "in_progress",
+                            "stage": "trilegal_prefetch",
+                            "target_cache_hit": bool(target_cache_hit),
+                            "trilegal_url": str(new_url),
+                            "retry_reason": "stale_or_empty_trilegal_url",
+                            "started_at_unix": float(start_time),
+                        },
+                    )
+                    trilegal_csv = _prefetch(
+                        cache_dir=cache_dir,
+                        tic_id=tic_id,
+                        trilegal_url=str(new_url),
+                    )
             target.trilegal_fname = trilegal_csv
             target.trilegal_url = None
             trilegal_csv_path = str(trilegal_csv)
