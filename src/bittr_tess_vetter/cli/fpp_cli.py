@@ -428,7 +428,10 @@ def _load_auto_stellar_inputs(
     type=str,
     default=None,
     show_default=True,
-    help="Pre-FPP detrend method used for depth estimation when --depth-ppm is missing.",
+    help=(
+        "Pre-FPP detrend method. When set, detrending is applied to depth estimation and "
+        "to sector flux staged for TRICERATOPS."
+    ),
 )
 @click.option("--detrend-bin-hours", type=float, default=6.0, show_default=True)
 @click.option("--detrend-buffer", type=float, default=2.0, show_default=True)
@@ -437,7 +440,10 @@ def _load_auto_stellar_inputs(
     "--detrend-cache/--no-detrend-cache",
     default=False,
     show_default=True,
-    help="Stage detrended sector light curves in cache before FPP (tutorial-style workflow).",
+    help=(
+        "Stage detrended sector light curves in cache before FPP "
+        "(enabled automatically when --detrend is set)."
+    ),
 )
 @click.option(
     "--preset",
@@ -617,8 +623,10 @@ def fpp_command(
             detrend_buffer=float(detrend_buffer),
             detrend_sigma_clip=float(detrend_sigma_clip),
         )
-    if bool(detrend_cache) and detrend_method is None:
+    detrend_cache_requested = bool(detrend_cache)
+    if detrend_cache_requested and detrend_method is None:
         raise BtvCliError("--detrend-cache requires --detrend", exit_code=EXIT_INPUT_ERROR)
+    detrend_cache_effective = detrend_cache_requested or (detrend_method is not None)
     if replicates is not None and replicates < 1:
         raise BtvCliError("--replicates must be >= 1", exit_code=EXIT_INPUT_ERROR)
     if use_stellar_auto and not network_ok:
@@ -738,7 +746,7 @@ def fpp_command(
             stellar_tmag=resolved_stellar.get("tmag"),
             contrast_curve=parsed_contrast_curve,
             overrides=parsed_overrides,
-            detrend_cache=bool(detrend_cache),
+            detrend_cache=bool(detrend_cache_effective),
             detrend_method=detrend_method,
             detrend_bin_hours=float(detrend_bin_hours),
             detrend_buffer=float(detrend_buffer),
@@ -781,7 +789,8 @@ def fpp_command(
                 "preset": preset_name,
                 "replicates": replicates,
                 "overrides": parsed_overrides,
-                "detrend_cache": bool(detrend_cache),
+                "detrend_cache": bool(detrend_cache_effective),
+                "detrend_cache_requested": bool(detrend_cache_requested),
                 "seed_requested": seed,
                 "seed_effective": result.get("base_seed", seed),
                 "timeout_seconds_requested": timeout_seconds,

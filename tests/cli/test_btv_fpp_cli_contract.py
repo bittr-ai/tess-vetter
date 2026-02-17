@@ -441,6 +441,46 @@ def test_btv_fpp_detrend_cache_requires_detrend(tmp_path: Path) -> None:
     assert "--detrend-cache requires --detrend" in result.output
 
 
+def test_btv_fpp_detrend_implies_detrend_cache(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_execute_fpp(**kwargs: Any) -> tuple[dict[str, Any], list[int]]:
+        seen.update(kwargs)
+        return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}, [14]
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._execute_fpp", _fake_execute_fpp)
+
+    out_path = tmp_path / "fpp_detrend_implies_cache.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--detrend",
+            "transit_masked_bin_median",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert seen["detrend_cache"] is True
+
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    runtime = payload["provenance"]["runtime"]
+    assert runtime["detrend_cache"] is True
+    assert runtime["detrend_cache_requested"] is False
+
+
 def test_btv_fpp_timeout_maps_to_exit_5(monkeypatch) -> None:
     def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
         return object(), [1]
