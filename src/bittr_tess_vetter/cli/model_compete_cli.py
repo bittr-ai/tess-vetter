@@ -18,6 +18,7 @@ from bittr_tess_vetter.cli.common_cli import (
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
+    emit_progress,
     resolve_optional_output_path,
 )
 from bittr_tess_vetter.cli.diagnostics_report_inputs import (
@@ -346,6 +347,7 @@ def model_compete_command(
         )
     detrend_provenance: dict[str, Any] | None = None
 
+    emit_progress("model-compete", "start")
     try:
         time, flux, flux_err, sectors_used, sector_load_path = _download_and_prepare_arrays(
             tic_id=int(resolved_tic_id),
@@ -442,6 +444,7 @@ def model_compete_command(
         },
     }
     dump_json_output(payload, out_path)
+    emit_progress("model-compete", "completed")
 
 
 __all__ = ["model_compete_command"]

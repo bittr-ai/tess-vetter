@@ -18,6 +18,7 @@ from bittr_tess_vetter.cli.common_cli import (
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
+    emit_progress,
     load_json_file,
     resolve_optional_output_path,
 )
@@ -481,6 +482,7 @@ def localize_host_command(
             depth_ppm=depth_ppm,
         )
 
+    emit_progress("localize-host", "start")
     try:
         payload = _execute_localize_host(
             tic_id=resolved_tic_id,
@@ -518,6 +520,7 @@ def localize_host_command(
     payload["provenance"]["inputs_source"] = "report_file" if report_file_path is not None else "cli"
     payload["provenance"]["report_file"] = report_file_path
     dump_json_output(payload, out_path)
+    emit_progress("localize-host", "completed")
 
 
 __all__ = ["localize_host_command"]

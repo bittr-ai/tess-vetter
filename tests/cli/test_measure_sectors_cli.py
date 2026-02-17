@@ -95,6 +95,33 @@ def test_measure_sectors_accepts_positional_toi_and_short_o(monkeypatch, tmp_pat
     assert payload["result"]["verdict"] == payload["verdict"]
 
 
+def test_measure_sectors_emits_progress_to_stderr(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.measure_sectors_cli._execute_measure_sectors",
+        lambda **_kwargs: _payload(),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "measure-sectors",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "[measure-sectors] start" in result.output
+    assert "[measure-sectors] completed" in result.output
+
+
 def test_measure_sectors_rejects_mismatched_positional_and_option_toi() -> None:
     runner = CliRunner()
     result = runner.invoke(

@@ -57,6 +57,13 @@ def _base_args() -> list[str]:
     ]
 
 
+def _json_from_cli_output(output: str) -> dict[str, Any]:
+    start = output.find("{")
+    end = output.rfind("}")
+    assert start >= 0 and end >= start, output
+    return json.loads(output[start : end + 1])
+
+
 def test_detrend_grid_command_presence_in_root_help() -> None:
     runner = CliRunner()
     result = runner.invoke(enrich_cli.cli, ["--help"])
@@ -113,7 +120,7 @@ def test_detrend_grid_output_schema_keys(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(enrich_cli.cli, _base_args())
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _json_from_cli_output(result.output)
 
     assert payload["schema_version"] == "cli.detrend_grid.v1"
     core_keys = {
@@ -131,13 +138,24 @@ def test_detrend_grid_output_schema_keys(monkeypatch) -> None:
     assert core_keys.issubset(payload.keys())
     assert "best_variant" in payload
     assert "recommended_next_step" in payload
+    assert "recommended_detrend_flags" in payload
+    assert "result_summary" in payload
     assert "provenance" in payload
     assert "ranked_sweep_table" in payload
     assert payload["verdict"] == "STABLE"
     assert payload["verdict_source"] == "$.stable"
     assert payload["result"]["verdict"] == payload["verdict"]
     assert payload["result"]["verdict_source"] == payload["verdict_source"]
+    assert payload["result"]["recommended_detrend_flags"] is None
     assert payload["best_variant"]["variant_id"] == "variant_a"
+    assert payload["result_summary"]["best_variant_id"] == "variant_a"
+    assert payload["result_summary"]["best_variant_rank"] == 1
+    assert payload["result_summary"]["best_variant_config"] == {"variant_id": "variant_a"}
+    assert payload["result_summary"]["recommended_next_step"] is None
+    assert payload["result_summary"]["recommended_detrend_flags"] is None
+    assert payload["result_summary"]["stable"] is True
+    assert payload["result_summary"]["n_variants_total"] == 2
+    assert payload["result_summary"]["depth_hat_ppm_range"] == {"min": 240.0, "max": 250.0}
     assert payload["provenance"]["command"] == "detrend-grid"
     assert payload["provenance"]["effective_grid_config"]["downsample_levels"] == [1, 2, 5]
     assert payload["provenance"]["effective_grid_config"]["outlier_policies"] == ["none", "sigma_clip_4"]
@@ -202,6 +220,40 @@ def test_detrend_grid_accepts_short_o_alias(monkeypatch, tmp_path) -> None:
     assert payload["best_variant"]["variant_id"] == "variant_a"
 
 
+def test_detrend_grid_emits_progress_to_stderr(monkeypatch) -> None:
+    rows = [
+        {
+            "variant_id": "variant_a",
+            "status": "ok",
+            "backend": "numpy",
+            "runtime_seconds": 0.01,
+            "n_points_used": 200,
+            "downsample_factor": 1,
+            "outlier_policy": "none",
+            "detrender": "none",
+            "score": 5.0,
+            "depth_hat_ppm": 250.0,
+            "depth_err_ppm": 10.0,
+            "warnings": [],
+            "failure_reason": None,
+            "variant_config": {"variant_id": "variant_a"},
+            "gp_hyperparams": None,
+            "gp_fit_diagnostics": None,
+        }
+    ]
+    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        lambda **_kwargs: _FakeSweepResult(rows),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(enrich_cli.cli, _base_args())
+    assert result.exit_code == 0, result.output
+    assert "[detrend-grid] start" in result.output
+    assert "[detrend-grid] completed" in result.output
+
+
 def test_detrend_grid_emits_recommended_next_step_for_transit_masked_best(monkeypatch) -> None:
     rows = [
         {
@@ -255,11 +307,20 @@ def test_detrend_grid_emits_recommended_next_step_for_transit_masked_best(monkey
     runner = CliRunner()
     result = runner.invoke(enrich_cli.cli, _base_args())
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _json_from_cli_output(result.output)
     assert (
         payload["recommended_next_step"]
         == "btv vet --detrend transit_masked_bin_median --detrend-bin-hours 6 --detrend-buffer 2 --detrend-sigma-clip 5"
     )
+    assert payload["recommended_detrend_flags"] == {
+        "detrend": "transit_masked_bin_median",
+        "bin_hours": 6.0,
+        "buffer": 2.0,
+        "sigma_clip": 5.0,
+    }
+    assert payload["result"]["recommended_detrend_flags"] == payload["recommended_detrend_flags"]
+    assert payload["result_summary"]["recommended_next_step"] == payload["recommended_next_step"]
+    assert payload["result_summary"]["recommended_detrend_flags"] == payload["recommended_detrend_flags"]
 
 
 def test_detrend_grid_seed_is_deterministic_and_defaults_to_zero(monkeypatch) -> None:
@@ -342,10 +403,10 @@ def test_detrend_grid_seed_is_deterministic_and_defaults_to_zero(monkeypatch) ->
     assert result_default.exit_code == 0, result_default.output
     assert result_zero.exit_code == 0, result_zero.output
 
-    payload_a = json.loads(result_a.output)
-    payload_b = json.loads(result_b.output)
-    payload_default = json.loads(result_default.output)
-    payload_zero = json.loads(result_zero.output)
+    payload_a = _json_from_cli_output(result_a.output)
+    payload_b = _json_from_cli_output(result_b.output)
+    payload_default = _json_from_cli_output(result_default.output)
+    payload_zero = _json_from_cli_output(result_zero.output)
 
     assert payload_a["best_variant"]["variant_id"] == payload_b["best_variant"]["variant_id"]
     assert payload_a["ranked_sweep_table"][0]["variant_id"] == payload_b["ranked_sweep_table"][0]["variant_id"]
@@ -436,7 +497,7 @@ def test_detrend_grid_adds_check_resolution_note_for_v16_model_competition(monke
     runner = CliRunner()
     result = runner.invoke(enrich_cli.cli, [*_base_args(), "--vet-summary-path", str(vet_path)])
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _json_from_cli_output(result.output)
 
     assert payload["check_resolution_note"]["check_id"] == "V16"
     assert payload["check_resolution_note"]["reason"] == "model_competition_concern"
@@ -475,7 +536,7 @@ def test_detrend_grid_omits_check_resolution_note_without_vet_summary(monkeypatc
     runner = CliRunner()
     result = runner.invoke(enrich_cli.cli, _base_args())
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _json_from_cli_output(result.output)
 
     assert "check_resolution_note" not in payload
 
@@ -517,7 +578,7 @@ def test_detrend_grid_accepts_summary_at_payload_root(monkeypatch, tmp_path) -> 
     runner = CliRunner()
     result = runner.invoke(enrich_cli.cli, [*_base_args(), "--vet-summary-path", str(vet_path)])
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _json_from_cli_output(result.output)
     assert payload["check_resolution_note"]["check_id"] == "V16"
     assert payload["provenance"]["vet_summary"]["summary_source"] == "payload_root"
 
@@ -573,7 +634,7 @@ def test_detrend_grid_supports_report_file_inputs(monkeypatch, tmp_path) -> None
     runner = CliRunner()
     result = runner.invoke(enrich_cli.cli, ["detrend-grid", "--report-file", str(report_path)])
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _json_from_cli_output(result.output)
     assert seen["download"] == {"tic_id": 321, "flux_type": "pdcsap", "sectors": [21, 22]}
     assert payload["provenance"]["inputs_source"] == "report_file"
     assert payload["provenance"]["sector_selection_source"] == "report_file"
@@ -633,8 +694,18 @@ def test_detrend_grid_best_variant_fallback_when_all_variants_fail(monkeypatch) 
     runner = CliRunner()
     result = runner.invoke(enrich_cli.cli, _base_args())
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _json_from_cli_output(result.output)
     assert payload["verdict"] == "UNSTABLE"
     assert payload["result"]["verdict"] == "UNSTABLE"
     assert payload["best_variant"]["variant_id"] == "variant_fail"
     assert payload["best_variant"]["config"]["detrender"] == "transit_masked_bin_median"
+    assert payload["recommended_detrend_flags"] == {
+        "detrend": "transit_masked_bin_median",
+        "bin_hours": 6.0,
+        "buffer": 2.0,
+        "sigma_clip": 5.0,
+    }
+    assert payload["result_summary"]["best_variant_id"] == "variant_fail"
+    assert payload["result_summary"]["stable"] is False
+    assert payload["result_summary"]["n_variants_total"] == 1
+    assert payload["result_summary"]["depth_hat_ppm_range"] is None

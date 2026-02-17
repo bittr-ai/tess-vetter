@@ -64,6 +64,15 @@ def dump_json_output(payload: dict[str, Any], out_path: Path | None) -> None:
     out_path.write_text(text + "\n", encoding="utf-8")
 
 
+def emit_progress(command: str, stage: str, detail: str | None = None) -> None:
+    """Emit concise always-on CLI progress lines to stderr."""
+    message = f"[{str(command).strip()}] {str(stage).strip()}"
+    detail_text = None if detail is None else str(detail).strip()
+    if detail_text:
+        message = f"{message}: {detail_text}"
+    click.echo(message, err=True)
+
+
 def load_json_file(path: Path, *, label: str) -> dict[str, Any]:
     """Load an object JSON file with user-facing errors."""
     try:

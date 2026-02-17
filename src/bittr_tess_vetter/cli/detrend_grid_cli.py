@@ -16,6 +16,7 @@ from bittr_tess_vetter.cli.common_cli import (
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
+    emit_progress,
     load_json_file,
     resolve_optional_output_path,
 )
@@ -99,6 +100,61 @@ def _build_recommended_next_step(best_variant: dict[str, Any] | None) -> str | N
         f"--detrend-buffer {float(buffer_factor):g} "
         f"--detrend-sigma-clip {float(sigma_clip):g}"
     )
+
+
+def _build_recommended_detrend_flags(best_variant: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(best_variant, dict):
+        return None
+    config = best_variant.get("config")
+    if not isinstance(config, dict):
+        return None
+    detrender = config.get("detrender")
+    if str(detrender) != "transit_masked_bin_median":
+        return None
+    return {
+        "detrend": "transit_masked_bin_median",
+        "bin_hours": float(config.get("detrender_bin_hours", 6.0)),
+        "buffer": float(config.get("detrender_buffer_factor", 2.0)),
+        "sigma_clip": float(config.get("detrender_sigma_clip", 5.0)),
+    }
+
+
+def _build_depth_hat_ppm_range(rows: list[dict[str, Any]]) -> dict[str, float] | None:
+    depths: list[float] = []
+    for row in rows:
+        raw_depth = row.get("depth_hat_ppm")
+        if raw_depth is None:
+            continue
+        try:
+            depth = float(raw_depth)
+        except (TypeError, ValueError):
+            continue
+        if np.isfinite(depth):
+            depths.append(depth)
+    if not depths:
+        return None
+    return {"min": float(min(depths)), "max": float(max(depths))}
+
+
+def _build_result_summary(
+    *,
+    best_variant: dict[str, Any] | None,
+    recommended_next_step: str | None,
+    recommended_detrend_flags: dict[str, Any] | None,
+    rows: list[dict[str, Any]],
+    stable: Any,
+    n_variants_total: Any,
+) -> dict[str, Any]:
+    return {
+        "best_variant_id": best_variant.get("variant_id") if isinstance(best_variant, dict) else None,
+        "best_variant_rank": best_variant.get("rank") if isinstance(best_variant, dict) else None,
+        "best_variant_config": best_variant.get("config") if isinstance(best_variant, dict) else None,
+        "recommended_next_step": recommended_next_step,
+        "recommended_detrend_flags": recommended_detrend_flags,
+        "depth_hat_ppm_range": _build_depth_hat_ppm_range(rows),
+        "stable": stable,
+        "n_variants_total": n_variants_total,
+    }
 
 
 def _extract_vet_summary(payload: dict[str, Any]) -> tuple[dict[str, Any], str]:
@@ -293,14 +349,25 @@ def _execute_detrend_grid(
         {int(lc.sector) for lc in lightcurves if getattr(lc, "sector", None) is not None}
     )
     recommended_next_step = _build_recommended_next_step(best_variant)
+    recommended_detrend_flags = _build_recommended_detrend_flags(best_variant)
     stable = payload.get("stable")
     verdict, verdict_source = _derive_detrend_grid_verdict(payload)
+    result_summary = _build_result_summary(
+        best_variant=best_variant,
+        recommended_next_step=recommended_next_step,
+        recommended_detrend_flags=recommended_detrend_flags,
+        rows=rows_annotated,
+        stable=stable,
+        n_variants_total=payload.get("n_variants_total"),
+    )
     out_payload: dict[str, Any] = {
         "schema_version": "cli.detrend_grid.v1",
         "result": {
             "stable": stable,
             "best_variant": best_variant,
             "recommended_next_step": recommended_next_step,
+            "recommended_detrend_flags": recommended_detrend_flags,
+            "summary": result_summary,
             "verdict": verdict,
             "verdict_source": verdict_source,
         },
@@ -308,6 +375,8 @@ def _execute_detrend_grid(
         "ranked_sweep_table": ranked_rows,
         "best_variant": best_variant,
         "recommended_next_step": recommended_next_step,
+        "recommended_detrend_flags": recommended_detrend_flags,
+        "result_summary": result_summary,
         "verdict": verdict,
         "verdict_source": verdict_source,
         "variant_axes": {
@@ -553,6 +622,7 @@ def detrend_grid_command(
             "summary_source": summary_source,
         }
 
+    emit_progress("detrend-grid", "start")
     try:
         payload = _execute_detrend_grid(
             tic_id=resolved_tic_id,
@@ -589,6 +659,7 @@ def detrend_grid_command(
         raise BtvCliError(str(exc), exit_code=EXIT_RUNTIME_ERROR) from exc
 
     dump_json_output(payload, out_path)
+    emit_progress("detrend-grid", "completed")
 
 
 __all__ = ["detrend_grid_command"]

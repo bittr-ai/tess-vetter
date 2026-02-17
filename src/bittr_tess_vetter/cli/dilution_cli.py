@@ -15,6 +15,7 @@ from bittr_tess_vetter.cli.common_cli import (
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
+    emit_progress,
     load_json_file,
     resolve_optional_output_path,
 )
@@ -512,6 +513,7 @@ def dilution_command(
         "error": None,
     }
 
+    emit_progress("dilution", "start")
     try:
         observed_depth_ppm, input_resolution = _resolve_observed_depth(
             depth_ppm=depth_ppm,
@@ -620,6 +622,7 @@ def dilution_command(
         },
     }
     dump_json_output(payload, out_path)
+    emit_progress("dilution", "completed")
 
 
 __all__ = ["dilution_command"]

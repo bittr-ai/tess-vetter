@@ -25,6 +25,7 @@ from bittr_tess_vetter.cli.common_cli import (
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
+    emit_progress,
     load_json_file,
     parse_extra_params,
     resolve_optional_output_path,
@@ -390,6 +391,7 @@ def report_command(
             return
 
     started = time.monotonic()
+    emit_progress("report", "start")
 
     config = PipelineConfig(
         timeout_seconds=timeout_seconds,
@@ -475,6 +477,7 @@ def report_command(
                 wall_time_seconds=time.monotonic() - started,
             )
             write_progress_metadata_atomic(progress_file, completed)
+        emit_progress("report", "completed")
     except BtvCliError:
         raise
     except ProgressIOError as exc:

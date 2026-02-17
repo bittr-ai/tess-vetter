@@ -1776,6 +1776,64 @@ def test_btv_vet_summary_surfaces_v04_instability_concerns(monkeypatch, tmp_path
     assert "DEPTH_DOMINATED_BY_SINGLE_EPOCH" in summary["concerns"]
 
 
+def test_btv_vet_summary_surfaces_v21_missing_sector_measurements_reason(
+    monkeypatch, tmp_path: Path
+) -> None:
+    def _fake_execute_vet(**_kwargs):
+        return {
+            "results": [
+                {
+                    "id": "V21",
+                    "status": "skipped",
+                    "flags": ["SKIPPED:NO_SECTOR_MEASUREMENTS"],
+                }
+            ],
+            "warnings": [],
+            "provenance": {},
+            "inputs_summary": {},
+        }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    out_path = tmp_path / "vet_v21_skip_reason.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    summary = payload["summary"]
+    assert summary["n_skipped"] == 1
+    assert isinstance(summary["skip_reasons"], list)
+    assert summary["skip_reasons"] == [
+        {
+            "check_id": "V21",
+            "reason_code": "V21_MISSING_SECTOR_MEASUREMENTS",
+            "reason_flag": "NO_SECTOR_MEASUREMENTS",
+            "recommendation": (
+                "Run `btv measure-sectors` to generate sector measurements, then rerun "
+                "`btv vet --sector-measurements <path-to-sector-measurements.json>`."
+            ),
+        }
+    ]
+    assert summary["v21_status"]["status"] == "skipped"
+    assert summary["v21_status"]["reason_code"] == "V21_MISSING_SECTOR_MEASUREMENTS"
+    assert "btv measure-sectors" in summary["v21_status"]["recommendation"]
+    assert "--sector-measurements" in summary["v21_status"]["recommendation"]
+
+
 def test_btv_vet_sector_measurements_forwarded_and_emitted(monkeypatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {}
 
@@ -1910,6 +1968,7 @@ def test_btv_vet_stdout_keeps_plot_data_inline(monkeypatch) -> None:
         }
 
     monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.emit_progress", lambda *args, **kwargs: None)
 
     runner = CliRunner()
     result = runner.invoke(

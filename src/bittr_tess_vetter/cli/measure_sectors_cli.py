@@ -21,6 +21,7 @@ from bittr_tess_vetter.cli.common_cli import (
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
+    emit_progress,
     load_json_file,
     resolve_optional_output_path,
 )
@@ -343,6 +344,7 @@ def measure_sectors_command(
         except Exception as exc:
             raise BtvCliError(str(exc), exit_code=EXIT_INPUT_ERROR) from exc
 
+    emit_progress("measure-sectors", "start")
     try:
         payload = _execute_measure_sectors(
             tic_id=resolved_tic_id,
@@ -370,6 +372,7 @@ def measure_sectors_command(
         raise BtvCliError(str(exc), exit_code=EXIT_RUNTIME_ERROR) from exc
 
     dump_json_output(payload, out_path)
+    emit_progress("measure-sectors", "completed")
 
 
 def _is_completed_output(path: Path) -> bool:

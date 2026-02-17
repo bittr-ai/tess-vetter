@@ -12,6 +12,7 @@ from bittr_tess_vetter.cli.common_cli import (
     EXIT_REMOTE_TIMEOUT,
     BtvCliError,
     dump_json_output,
+    emit_progress,
     resolve_optional_output_path,
 )
 from bittr_tess_vetter.cli.diagnostics_report_inputs import resolve_inputs_from_report_file
@@ -409,6 +410,7 @@ def resolve_neighbors_command(
         )
         resolved_toi = resolved_toi_arg
 
+    emit_progress("resolve-neighbors", "start")
     payload = _execute_resolve_neighbors(
         tic_id=int(resolved_tic),
         toi=resolved_toi,
@@ -420,6 +422,7 @@ def resolve_neighbors_command(
         toi_resolution=toi_resolution,
     )
     dump_json_output(payload, out_path)
+    emit_progress("resolve-neighbors", "completed")
 
 
 __all__ = ["resolve_neighbors_command"]

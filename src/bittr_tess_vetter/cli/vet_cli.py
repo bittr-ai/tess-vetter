@@ -31,6 +31,7 @@ from bittr_tess_vetter.cli.common_cli import (
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
+    emit_progress,
     load_json_file,
     parse_extra_params,
     resolve_optional_output_path,
@@ -132,6 +133,12 @@ _HIGH_SALIENCE_FLAGS = {
     "DIFFIMG_MAX_DEPTH_NONPOSITIVE",
 }
 _NETWORK_ERROR_SKIP_FLAGS = {"SKIPPED:NETWORK_TIMEOUT", "SKIPPED:NETWORK_ERROR"}
+_V21_MISSING_SECTOR_MEASUREMENTS_FLAG = "SKIPPED:NO_SECTOR_MEASUREMENTS"
+_V21_MISSING_SECTOR_MEASUREMENTS_REASON_CODE = "V21_MISSING_SECTOR_MEASUREMENTS"
+_V21_MISSING_SECTOR_MEASUREMENTS_RECOMMENDATION = (
+    "Run `btv measure-sectors` to generate sector measurements, then rerun "
+    "`btv vet --sector-measurements <path-to-sector-measurements.json>`."
+)
 _SUPPORTED_DETREND_METHODS: tuple[str, ...] = ("transit_masked_bin_median",)
 _V04_CHI2_UNSTABLE_THRESHOLD = 3.0
 _V04_SCATTER_RATIO_UNSTABLE_THRESHOLD = 0.5
@@ -453,21 +460,39 @@ def _build_root_summary(*, payload: dict[str, Any]) -> dict[str, Any]:
     n_skipped = sum(1 for row in rows if row.get("status") == "skipped")
     n_failed = sum(1 for row in rows if row.get("status") == "error")
     n_network_errors = 0
+    skip_reasons: list[dict[str, Any]] = []
+    v21_status: dict[str, Any] | None = None
 
     flagged_checks: set[str] = set()
     concerns: set[str] = set()
     for row in rows:
         flags = row.get("flags")
         check_id = str(row.get("id") or "")
+        status = str(row.get("status") or "")
+        flags_list = [str(flag) for flag in flags] if isinstance(flags, list) else []
+
+        if check_id == "V21":
+            v21_status = {"status": status}
+            if status == "skipped" and _V21_MISSING_SECTOR_MEASUREMENTS_FLAG in flags_list:
+                skip_reason = {
+                    "check_id": "V21",
+                    "reason_code": _V21_MISSING_SECTOR_MEASUREMENTS_REASON_CODE,
+                    "reason_flag": "NO_SECTOR_MEASUREMENTS",
+                    "recommendation": _V21_MISSING_SECTOR_MEASUREMENTS_RECOMMENDATION,
+                }
+                skip_reasons.append(skip_reason)
+                v21_status = dict(skip_reason)
+                v21_status["status"] = status
+
         if row.get("status") == "error" and check_id:
             flagged_checks.add(check_id)
-        if isinstance(flags, list):
-            if any(str(flag) in _HIGH_SALIENCE_FLAGS for flag in flags) and check_id:
+        if flags_list:
+            if any(flag in _HIGH_SALIENCE_FLAGS for flag in flags_list) and check_id:
                 flagged_checks.add(check_id)
-            for flag in flags:
-                if str(flag) in _HIGH_SALIENCE_FLAGS:
-                    concerns.add(str(flag))
-            if any(str(flag) in _NETWORK_ERROR_SKIP_FLAGS for flag in flags):
+            for flag in flags_list:
+                if flag in _HIGH_SALIENCE_FLAGS:
+                    concerns.add(flag)
+            if any(flag in _NETWORK_ERROR_SKIP_FLAGS for flag in flags_list):
                 n_network_errors += 1
 
         # U19: surface extreme V04 depth-instability concerns in root summary.
@@ -517,6 +542,8 @@ def _build_root_summary(*, payload: dict[str, Any]) -> dict[str, Any]:
         "flagged_checks": sorted(flagged_checks),
         "concerns": sorted(concerns),
         "disposition_hint": disposition_hint,
+        "skip_reasons": skip_reasons,
+        "v21_status": v21_status,
     }
 
 
@@ -1542,6 +1569,7 @@ def vet_command(
             return
 
     started = time.monotonic()
+    emit_progress("vet", "start")
     if progress_file is not None:
         running = build_single_candidate_progress(
             command="vet",
@@ -1654,6 +1682,7 @@ def vet_command(
                 wall_time_seconds=time.monotonic() - started,
             )
             write_progress_metadata_atomic(progress_file, completed)
+        emit_progress("vet", "completed")
     except BtvCliError:
         raise
     except ProgressIOError as exc:
