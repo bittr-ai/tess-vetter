@@ -1332,6 +1332,78 @@ def test_btv_fpp_run_require_prepared_fails_when_runtime_artifacts_missing(monke
     assert "Prepared runtime artifacts missing" in result.output
 
 
+def test_btv_fpp_run_emits_replicate_progress(monkeypatch, tmp_path: Path) -> None:
+    manifest = {
+        "schema_version": "cli.fpp.prepare.v1",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "tic_id": 123,
+        "period_days": 3.0,
+        "t0_btjd": 1500.0,
+        "duration_hours": 2.0,
+        "depth_ppm_used": 500.0,
+        "sectors_loaded": [10],
+        "cache_dir": str(tmp_path / "cache"),
+        "detrend": {},
+    }
+    manifest_path = tmp_path / "manifest_progress.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli.resolve_stellar_inputs",
+        lambda **_kwargs: ({}, {"source": "cli", "resolved_from": "cli"}),
+    )
+
+    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
+        hook = kwargs.get("progress_hook")
+        if callable(hook):
+            hook({"event": "replicate_start", "replicate_index": 1, "replicates_total": 2, "seed": 101})
+            hook(
+                {
+                    "event": "replicate_complete",
+                    "replicate_index": 1,
+                    "replicates_total": 2,
+                    "seed": 101,
+                    "status": "ok",
+                }
+            )
+            hook({"event": "replicate_start", "replicate_index": 2, "replicates_total": 2, "seed": 102})
+            hook(
+                {
+                    "event": "replicate_complete",
+                    "replicate_index": 2,
+                    "replicates_total": 2,
+                    "seed": 102,
+                    "status": "ok",
+                }
+            )
+        return {"fpp": 0.01, "nfpp": 0.001, "base_seed": 101}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    runner = CliRunner()
+    out_path = tmp_path / "fpp_run_progress.json"
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp-run",
+            "--prepare-manifest",
+            str(manifest_path),
+            "--replicates",
+            "2",
+            "--seed",
+            "101",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "[fpp-run] replicate: 1/2 seed=101 start" in result.output
+    assert "[fpp-run] replicate: 1/2 seed=101 status=ok" in result.output
+    assert "[fpp-run] replicate: 2/2 seed=102 start" in result.output
+    assert "[fpp-run] replicate: 2/2 seed=102 status=ok" in result.output
+
+
 def test_btv_fpp_prepare_supports_short_o(monkeypatch, tmp_path: Path) -> None:
     from bittr_tess_vetter.platform.io import PersistentCache
 

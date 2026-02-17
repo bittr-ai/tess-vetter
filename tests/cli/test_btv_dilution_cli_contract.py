@@ -394,6 +394,74 @@ def test_btv_dilution_report_file_inputs_override_candidate_flags(monkeypatch, t
     assert payload["provenance"]["report_file"] == str(report_path.resolve())
 
 
+def test_btv_dilution_uses_vet_result_depth_without_candidate_resolution(monkeypatch, tmp_path: Path) -> None:
+    vet_path = tmp_path / "vet.json"
+    vet_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "cli.vet.v3",
+                "summary": {"input_depth_ppm": 337.2},
+            }
+        ),
+        encoding="utf-8",
+    )
+    host_profile_path = tmp_path / "host_profile_vet.json"
+    host_profile_path.write_text(
+        json.dumps({"primary": {"tic_id": 555, "g_mag": 10.2, "radius_rsun": 1.0}, "companions": []}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve candidate inputs")),
+    )
+
+    out_path = tmp_path / "dilution_vet_result.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        dilution_command,
+        [
+            "--vet-result",
+            str(vet_path),
+            "--host-profile-file",
+            str(host_profile_path),
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["observed_depth_ppm"] == 337.2
+    assert payload["inputs_summary"]["input_resolution"]["source"] == "vet_result_file"
+    assert payload["provenance"]["vet_result_file"] == str(vet_path.resolve())
+
+
+def test_btv_dilution_vet_result_missing_depth_exits_4(tmp_path: Path) -> None:
+    vet_path = tmp_path / "vet_missing_depth.json"
+    vet_path.write_text(
+        json.dumps({"schema_version": "cli.vet.v3", "summary": {}}),
+        encoding="utf-8",
+    )
+    host_profile_path = tmp_path / "host_profile_vet_missing_depth.json"
+    host_profile_path.write_text(
+        json.dumps({"primary": {"tic_id": 555, "g_mag": 10.2, "radius_rsun": 1.0}, "companions": []}),
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        dilution_command,
+        [
+            "--vet-result",
+            str(vet_path),
+            "--host-profile-file",
+            str(host_profile_path),
+        ],
+    )
+    assert result.exit_code == 4
+    assert "Observed depth unavailable in vet result file" in result.output
+
+
 def test_btv_dilution_accepts_resolve_neighbors_style_source_ids(monkeypatch, tmp_path: Path) -> None:
     def _fake_resolve_candidate_inputs(**_kwargs: Any):
         return 123, 8.2, 2100.5, 3.1, 420.0, {

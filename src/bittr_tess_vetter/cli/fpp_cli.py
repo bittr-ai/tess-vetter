@@ -27,6 +27,7 @@ from bittr_tess_vetter.cli.common_cli import (
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
+    emit_progress,
     load_json_file,
     parse_extra_params,
     resolve_optional_output_path,
@@ -55,6 +56,19 @@ _LC_KEY_PATTERN = re.compile(r"^lc:(?P<tic>\d+):(?P<sector>\d+):(?P<flux>[a-z0-9
 _FPP_PREPARE_SCHEMA_VERSION = "cli.fpp.prepare.v1"
 
 logger = logging.getLogger(__name__)
+
+
+def _emit_fpp_replicate_progress(command: str, payload: dict[str, Any]) -> None:
+    event = str(payload.get("event") or "")
+    idx = payload.get("replicate_index")
+    total = payload.get("replicates_total")
+    seed = payload.get("seed")
+    if event == "replicate_start":
+        emit_progress(str(command), "replicate", detail=f"{idx}/{total} seed={seed} start")
+        return
+    if event == "replicate_complete":
+        status = str(payload.get("status") or "unknown")
+        emit_progress(str(command), "replicate", detail=f"{idx}/{total} seed={seed} status={status}")
 
 
 def _looks_like_timeout(exc: BaseException) -> bool:
@@ -464,6 +478,7 @@ def _execute_fpp(
     detrend_sigma_clip: float,
     cache_only_sectors: bool = False,
     allow_network: bool = True,
+    progress_hook: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[dict[str, Any], list[int]]:
     cache, sectors_loaded = _build_cache_for_fpp(
         tic_id=tic_id,
@@ -498,6 +513,7 @@ def _execute_fpp(
         contrast_curve=contrast_curve,
         overrides=overrides,
         allow_network=allow_network,
+        progress_hook=progress_hook,
     )
     return result, sectors_loaded
 
@@ -1288,6 +1304,7 @@ def fpp_run_command(
                     contrast_curve=parsed_contrast_curve,
                     overrides=attempt_overrides,
                     allow_network=bool(network_ok),
+                    progress_hook=lambda payload: _emit_fpp_replicate_progress("fpp-run", payload),
                 ),
                 [int(s) for s in prepared["sectors_loaded"]],
             ),
@@ -1721,6 +1738,7 @@ def fpp_command(
                 detrend_sigma_clip=float(detrend_sigma_clip),
                 cache_only_sectors=cache_only_sector_load,
                 allow_network=bool(network_ok),
+                progress_hook=lambda payload: _emit_fpp_replicate_progress("fpp", payload),
             ),
         )
     except BtvCliError:

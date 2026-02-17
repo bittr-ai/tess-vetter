@@ -1299,6 +1299,7 @@ def calculate_fpp_handler(
     save_cached_target: Callable[..., Any] | None = None,
     prefetch_trilegal_csv: Callable[..., Any] | None = None,
     allow_network: bool = True,
+    progress_hook: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Execute TRICERATOPS+ FPP calculation.
 
@@ -1808,6 +1809,16 @@ def calculate_fpp_handler(
 
                 run_seed = base_seed + rep_idx
                 run_start_time = time.time()
+                with contextlib.suppress(Exception):
+                    if progress_hook is not None:
+                        progress_hook(
+                            {
+                                "event": "replicate_start",
+                                "replicate_index": int(rep_idx + 1),
+                                "replicates_total": int(n_replicates),
+                                "seed": int(run_seed),
+                            }
+                        )
 
                 # Set numpy random seed for this replicate
                 np.random.seed(run_seed)
@@ -1876,6 +1887,19 @@ def calculate_fpp_handler(
                             "file": os.path.basename(contrast_curve_file),
                         }
                     replicate_results.append(run_result)
+                    with contextlib.suppress(Exception):
+                        if progress_hook is not None:
+                            progress_hook(
+                                {
+                                    "event": "replicate_complete",
+                                    "replicate_index": int(rep_idx + 1),
+                                    "replicates_total": int(n_replicates),
+                                    "seed": int(run_seed),
+                                    "runtime_seconds": float(time.time() - run_start_time),
+                                    "status": "ok",
+                                    "fpp": run_result.get("fpp"),
+                                }
+                            )
 
                 except NetworkTimeoutError as e:
                     replicate_errors.append(
@@ -1886,6 +1910,19 @@ def calculate_fpp_handler(
                             "error_type": "timeout",
                         }
                     )
+                    with contextlib.suppress(Exception):
+                        if progress_hook is not None:
+                            progress_hook(
+                                {
+                                    "event": "replicate_complete",
+                                    "replicate_index": int(rep_idx + 1),
+                                    "replicates_total": int(n_replicates),
+                                    "seed": int(run_seed),
+                                    "runtime_seconds": float(time.time() - run_start_time),
+                                    "status": "timeout",
+                                    "error": str(e),
+                                }
+                            )
                 except Exception as e:
                     replicate_errors.append(
                         {
@@ -1895,6 +1932,19 @@ def calculate_fpp_handler(
                             "error_type": "internal_error",
                         }
                     )
+                    with contextlib.suppress(Exception):
+                        if progress_hook is not None:
+                            progress_hook(
+                                {
+                                    "event": "replicate_complete",
+                                    "replicate_index": int(rep_idx + 1),
+                                    "replicates_total": int(n_replicates),
+                                    "seed": int(run_seed),
+                                    "runtime_seconds": float(time.time() - run_start_time),
+                                    "status": "error",
+                                    "error": str(e),
+                                }
+                            )
 
         finally:
             if temp_dir_obj is not None:

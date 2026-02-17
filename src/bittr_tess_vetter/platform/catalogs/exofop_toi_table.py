@@ -50,6 +50,19 @@ def _toi_cache_path(cache_dir: Path) -> Path:
     return Path(cache_dir) / "exofop" / "toi_table.pipe"
 
 
+def _toi_single_cache_path(cache_dir: Path, toi_query: str) -> Path:
+    token = (
+        str(toi_query)
+        .strip()
+        .upper()
+        .replace("TOI-", "")
+        .replace("TOI", "")
+        .replace(" ", "")
+        .replace("/", "_")
+    )
+    return Path(cache_dir) / "exofop" / "toi_single" / f"{token}.pipe"
+
+
 def _read_disk_cache(path: Path, *, cache_ttl_seconds: int) -> str | None:
     if cache_ttl_seconds <= 0:
         return None
@@ -364,6 +377,64 @@ def fetch_exofop_toi_table(
     table = ExoFOPToiTable(fetched_at_unix=now, headers=headers, rows=rows)
     _CACHE = table
     return table
+
+
+def fetch_exofop_toi_table_for_toi(
+    toi_query: str | float,
+    *,
+    cache_ttl_seconds: int = 6 * 3600,
+    disk_cache_dir: str | Path | None = None,
+) -> ExoFOPToiTable:
+    """Fetch and parse a TOI-scoped ExoFOP table response.
+
+    Uses ``download_toi.php?toi=<query>`` so callers can avoid downloading the
+    full TOI master table when resolving a single target.
+    """
+    cache_dir = Path(disk_cache_dir) if disk_cache_dir is not None else _default_cache_dir()
+    cache_path = _toi_single_cache_path(cache_dir, str(toi_query))
+    cached_text = _read_disk_cache(cache_path, cache_ttl_seconds=int(cache_ttl_seconds))
+    if cached_text:
+        headers, rows = _parse_pipe_table(cached_text)
+        return ExoFOPToiTable(
+            fetched_at_unix=float(cache_path.stat().st_mtime), headers=headers, rows=rows
+        )
+
+    query_token = (
+        str(toi_query)
+        .strip()
+        .upper()
+        .replace("TOI-", "")
+        .replace("TOI", "")
+        .strip()
+    )
+    last_exc: Exception | None = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = requests.get(
+                EXOFOP_TOI_URL,
+                params={"toi": query_token, "output": "pipe"},
+                timeout=(CONNECT_TIMEOUT_SECONDS, READ_TIMEOUT_SECONDS),
+            )
+            response.raise_for_status()
+            break
+        except Exception as e:
+            last_exc = e
+            if attempt >= MAX_RETRIES - 1:
+                raise
+            time.sleep(2**attempt)
+    else:
+        raise last_exc or RuntimeError("ExoFOP TOI-scoped fetch failed")
+
+    text = response.text
+    # ExoFOP returns a short "invalid TOI" HTML response for malformed queries.
+    if "Sorry, entered TOI is invalid" in text:
+        return ExoFOPToiTable(fetched_at_unix=time.time(), headers=[], rows=[])
+
+    with contextlib.suppress(Exception):
+        _write_disk_cache(cache_path, text)
+
+    headers, rows = _parse_pipe_table(text)
+    return ExoFOPToiTable(fetched_at_unix=time.time(), headers=headers, rows=rows)
 
 
 def exofop_entries_for_tic(

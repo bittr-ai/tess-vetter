@@ -305,6 +305,7 @@ def _merge_host_inputs(
 def _resolve_observed_depth(
     *,
     depth_ppm: float | None,
+    vet_result_file: str | None,
     report_file: str | None,
     network_ok: bool,
     toi: str | None,
@@ -318,6 +319,35 @@ def _resolve_observed_depth(
             "source": "cli",
             "resolved_from": "cli",
             "inputs": {"depth_ppm": float(depth_ppm)},
+        }
+    if vet_result_file is not None:
+        vet_payload = load_json_file(Path(vet_result_file), label="vet result file")
+        summary = vet_payload.get("summary")
+        if not isinstance(summary, dict):
+            raise BtvCliError(
+                "Vet result file is missing summary object. Provide --depth-ppm.",
+                exit_code=EXIT_DATA_UNAVAILABLE,
+            )
+        depth_from_vet = summary.get("input_depth_ppm")
+        if depth_from_vet is None:
+            raise BtvCliError(
+                "Observed depth unavailable in vet result file. Provide --depth-ppm.",
+                exit_code=EXIT_DATA_UNAVAILABLE,
+            )
+        try:
+            depth_value = float(depth_from_vet)
+        except (TypeError, ValueError) as exc:
+            raise BtvCliError(
+                f"Vet result file has invalid summary.input_depth_ppm: {depth_from_vet!r}",
+                exit_code=EXIT_INPUT_ERROR,
+            ) from exc
+        return depth_value, {
+            "source": "vet_result_file",
+            "resolved_from": "vet_result_file",
+            "inputs": {"depth_ppm": depth_value},
+            "vet_result_file": str(Path(vet_result_file).resolve()),
+            "overrides": [],
+            "errors": [],
         }
     if report_file is not None:
         resolved_from_report = resolve_inputs_from_report_file(str(report_file))
@@ -404,6 +434,7 @@ def _build_dilution_reliability_summary(
 @click.option("--duration-hours", type=float, default=None, help="Transit duration in hours for candidate input resolution.")
 @click.option("--depth-ppm", type=float, default=None, help="Observed transit depth in ppm.")
 @click.option("--toi", type=str, default=None, help="Optional TOI label for candidate input resolution.")
+@click.option("--vet-result", type=str, default=None, help="Optional vet JSON path for observed depth seeding.")
 @click.option("--report-file", type=str, default=None, help="Optional report JSON path for candidate inputs.")
 @click.option(
     "--network-ok/--no-network",
@@ -440,6 +471,7 @@ def dilution_command(
     duration_hours: float | None,
     depth_ppm: float | None,
     toi: str | None,
+    vet_result: str | None,
     report_file: str | None,
     network_ok: bool,
     host_profile_file: str | None,
@@ -465,6 +497,7 @@ def dilution_command(
             exit_code=EXIT_INPUT_ERROR,
         )
     report_file_path: str | None = None
+    vet_result_file_path: str | None = None
     report_tic_id: int | None = None
     if report_file is not None:
         if (
@@ -482,6 +515,8 @@ def dilution_command(
         report_file_path = str(resolved_from_report.report_file_path)
         report_tic_id = int(resolved_from_report.tic_id)
         resolved_toi_arg = None
+    if vet_result is not None:
+        vet_result_file_path = str(Path(vet_result).expanduser().resolve())
 
     host_profile_path: Path | None = None
     host_profile_inputs: _HostHypothesisInputs | None = None
@@ -517,6 +552,7 @@ def dilution_command(
     try:
         observed_depth_ppm, input_resolution = _resolve_observed_depth(
             depth_ppm=depth_ppm,
+            vet_result_file=vet_result_file_path,
             report_file=report_file_path,
             network_ok=bool(network_ok),
             toi=resolved_toi_arg,
@@ -610,6 +646,7 @@ def dilution_command(
         "provenance": {
             "inputs_source": "report_file" if report_file_path is not None else "cli",
             "report_file": report_file_path,
+            "vet_result_file": vet_result_file_path,
             "host_profile_path": str(host_profile_path) if host_profile_path is not None else None,
             "reference_sources_path": (
                 str(reference_sources_path) if reference_sources_path is not None else None

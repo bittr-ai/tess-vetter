@@ -7,7 +7,10 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from bittr_tess_vetter.platform.catalogs.exofop_toi_table import fetch_exofop_toi_table
+from bittr_tess_vetter.platform.catalogs.exofop_toi_table import (
+    fetch_exofop_toi_table,
+    fetch_exofop_toi_table_for_toi,
+)
 from bittr_tess_vetter.platform.catalogs.models import SourceRecord
 
 
@@ -141,36 +144,61 @@ def resolve_toi_to_tic_ephemeris_depth(
     disk_cache_dir: str | Path | None = None,
 ) -> ToiResolutionResult:
     toi_query = str(toi)
-    source_base = SourceRecord(
+    single_source = SourceRecord(
+        name="exofop_toi_table_single",
+        version="download_toi.php?toi=<TOI>",
+        retrieved_at=_now(),
+        query=f"toi={toi_query}",
+    )
+    full_source = SourceRecord(
         name="exofop_toi_table",
         version="download_toi.php",
         retrieved_at=_now(),
         query=f"toi={toi_query}",
     )
+
+    matched: dict[str, str] | None = None
+    resolved_source = single_source
+    errors: list[str] = []
+
     try:
-        table = fetch_exofop_toi_table(
+        scoped = fetch_exofop_toi_table_for_toi(
+            toi_query,
             cache_ttl_seconds=int(cache_ttl_seconds),
             disk_cache_dir=disk_cache_dir,
         )
+        matched = _first_matching_toi_row([dict(r) for r in scoped.rows], toi)
     except Exception as exc:
-        return ToiResolutionResult(
-            status=_status_from_exception(exc),
-            toi_query=toi_query,
-            source_record=source_base,
-            message=f"Failed to fetch ExoFOP TOI table: {type(exc).__name__}: {exc}",
-        )
+        errors.append(f"TOI-scoped fetch failed: {type(exc).__name__}: {exc}")
 
-    rows = [dict(r) for r in table.rows]
-    matched = _first_matching_toi_row(rows, toi)
     if matched is None:
-        return ToiResolutionResult(
-            status=LookupStatus.DATA_UNAVAILABLE,
-            toi_query=toi_query,
-            source_record=source_base.model_copy(
-                update={"query": f"toi={toi_query} -> no row match in ExoFOP table"}
-            ),
-            message=f"TOI '{toi_query}' was not found in ExoFOP TOI table",
-        )
+        resolved_source = full_source
+        try:
+            table = fetch_exofop_toi_table(
+                cache_ttl_seconds=int(cache_ttl_seconds),
+                disk_cache_dir=disk_cache_dir,
+            )
+        except Exception as exc:
+            if errors:
+                message = "; ".join(errors + [f"full-table fetch failed: {type(exc).__name__}: {exc}"])
+            else:
+                message = f"Failed to fetch ExoFOP TOI table: {type(exc).__name__}: {exc}"
+            return ToiResolutionResult(
+                status=_status_from_exception(exc),
+                toi_query=toi_query,
+                source_record=full_source,
+                message=message,
+            )
+        matched = _first_matching_toi_row([dict(r) for r in table.rows], toi)
+        if matched is None:
+            return ToiResolutionResult(
+                status=LookupStatus.DATA_UNAVAILABLE,
+                toi_query=toi_query,
+                source_record=full_source.model_copy(
+                    update={"query": f"toi={toi_query} -> no row match in ExoFOP table"}
+                ),
+                message=f"TOI '{toi_query}' was not found in ExoFOP TOI table",
+            )
 
     tic_id = _to_int(matched, ("tic_id", "tic", "ticid"))
     period_days = _to_float(matched, ("period_days", "period", "per"))
@@ -200,6 +228,9 @@ def resolve_toi_to_tic_ephemeris_depth(
     msg = None
     if missing_fields:
         msg = f"Matched TOI row but missing fields: {', '.join(missing_fields)}"
+    if errors:
+        prefix = "; ".join(errors)
+        msg = f"{prefix}; {msg}" if msg else prefix
 
     return ToiResolutionResult(
         status=status,
@@ -211,7 +242,7 @@ def resolve_toi_to_tic_ephemeris_depth(
         duration_hours=duration_hours,
         depth_ppm=depth_ppm,
         missing_fields=missing_fields,
-        source_record=source_base.model_copy(
+        source_record=resolved_source.model_copy(
             update={"query": f"toi={toi_query} -> matched toi={matched.get('toi')}"}
         ),
         raw_row={str(k): str(v) for k, v in matched.items()},

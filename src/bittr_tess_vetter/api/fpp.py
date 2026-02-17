@@ -14,6 +14,7 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Callable
 from typing import Any, Literal
 
 import numpy as np
@@ -146,6 +147,7 @@ def calculate_fpp(
     replicates: int | None = None,
     seed: int | None = None,
     allow_network: bool = True,
+    progress_hook: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Calculate FPP using TRICERATOPS+ with an explicit preset.
 
@@ -173,6 +175,7 @@ def calculate_fpp(
             (with incremented seeds) and report aggregate statistics.
         seed: Base RNG seed used for replicate runs (replicate i uses seed+i).
         allow_network: Whether network-dependent TRICERATOPS initialization/prefetch is allowed.
+        progress_hook: Optional callback invoked during replicate execution.
 
     Returns:
         Dictionary with FPP results or error information. When ``replicates`` > 1 and
@@ -212,4 +215,5 @@ def calculate_fpp(
         external_lightcurves=external_lightcurves,
         contrast_curve=contrast_curve,
         allow_network=allow_network,
+        progress_hook=progress_hook,
     )

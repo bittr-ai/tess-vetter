@@ -33,6 +33,10 @@ def test_resolve_toi_to_tic_ephemeris_depth_success(monkeypatch: pytest.MonkeyPa
         ],
     )
     monkeypatch.setattr(
+        "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table_for_toi",
+        lambda *_args, **_kwargs: table,
+    )
+    monkeypatch.setattr(
         "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table",
         lambda **_: table,
     )
@@ -53,6 +57,10 @@ def test_resolve_toi_to_tic_ephemeris_depth_not_found(monkeypatch: pytest.Monkey
         rows=[{"toi": "100.01", "tic_id": "1"}],
     )
     monkeypatch.setattr(
+        "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table_for_toi",
+        lambda *_args, **_kwargs: table,
+    )
+    monkeypatch.setattr(
         "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table",
         lambda **_: table,
     )
@@ -67,11 +75,47 @@ def test_resolve_toi_to_tic_ephemeris_depth_timeout(monkeypatch: pytest.MonkeyPa
         raise TimeoutError("timed out")
 
     monkeypatch.setattr(
+        "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table_for_toi",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(TimeoutError("timed out")),
+    )
+    monkeypatch.setattr(
         "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table",
         _raise_timeout,
     )
     result = resolve_toi_to_tic_ephemeris_depth("123.01")
     assert result.status == LookupStatus.TIMEOUT
+
+
+def test_resolve_toi_to_tic_ephemeris_depth_falls_back_to_full_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    table = ExoFOPToiTable(
+        fetched_at_unix=0.0,
+        headers=["toi", "tic_id", "period", "epoch", "duration", "depth_ppm"],
+        rows=[
+            {
+                "toi": "5807.01",
+                "tic_id": "188646744",
+                "period": "6.1234",
+                "epoch": "2459001.5",
+                "duration": "2.5",
+                "depth_ppm": "430.0",
+            }
+        ],
+    )
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table_for_toi",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(TimeoutError("scoped timeout")),
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table",
+        lambda **_: table,
+    )
+
+    result = resolve_toi_to_tic_ephemeris_depth("TOI-5807.01")
+    assert result.status == LookupStatus.OK
+    assert result.tic_id == 188646744
+    assert result.message is not None
+    assert "TOI-scoped fetch failed" in result.message
 
 
 def test_lookup_tic_coordinates_fallback_to_exofop(monkeypatch: pytest.MonkeyPatch) -> None:
