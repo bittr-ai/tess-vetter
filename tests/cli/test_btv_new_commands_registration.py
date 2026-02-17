@@ -18,6 +18,7 @@ def test_top_level_help_lists_new_api_addition_commands() -> None:
     assert "model-compete" in result.output
     assert "ephemeris-reliability" in result.output
     assert "activity" in result.output
+    assert "fetch" in result.output
     assert "timing" in result.output
     assert "systematics-proxy" in result.output
     assert "dilution" in result.output

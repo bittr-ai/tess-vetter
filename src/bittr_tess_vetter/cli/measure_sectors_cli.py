@@ -67,6 +67,7 @@ def _execute_measure_sectors(
     sector_selection_source: str,
     flux_type: str,
     network_ok: bool,
+    cache_dir: Path | None,
     detrend: str | None,
     detrend_bin_hours: float,
     detrend_buffer: float,
@@ -80,6 +81,7 @@ def _execute_measure_sectors(
         sectors=sectors,
         explicit_sectors=bool(sectors_explicit),
         network_ok=bool(network_ok),
+        cache_dir=cache_dir,
     )
 
     if len(lightcurves) == 1:
@@ -217,6 +219,12 @@ def _execute_measure_sectors(
     show_default=True,
     help="Allow network-dependent TOI resolution.",
 )
+@click.option(
+    "--cache-dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help="Optional cache directory for MAST/lightkurve products.",
+)
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
     "--flux-type",
@@ -253,6 +261,7 @@ def measure_sectors_command(
     toi: str | None,
     report_file: str | None,
     network_ok: bool,
+    cache_dir: Path | None,
     sectors: tuple[int, ...],
     flux_type: str,
     detrend: str | None,
@@ -345,6 +354,7 @@ def measure_sectors_command(
             sector_selection_source=sector_selection_source,
             flux_type=str(flux_type).lower(),
             network_ok=bool(network_ok),
+            cache_dir=cache_dir,
             detrend=detrend_method,
             detrend_bin_hours=float(detrend_bin_hours),
             detrend_buffer=float(detrend_buffer),

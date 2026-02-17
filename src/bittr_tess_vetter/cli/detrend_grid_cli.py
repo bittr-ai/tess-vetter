@@ -201,6 +201,7 @@ def _execute_detrend_grid(
     t0_btjd: float,
     duration_hours: float,
     sectors: list[int] | None,
+    cache_dir: Path | None,
     flux_type: str,
     random_seed: int,
     downsample_levels: list[int] | None,
@@ -216,7 +217,7 @@ def _execute_detrend_grid(
     check_resolution_note: dict[str, Any] | None = None,
     vet_summary_provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    client = MASTClient()
+    client = MASTClient(cache_dir=str(cache_dir)) if cache_dir is not None else MASTClient()
     lightcurves = client.download_all_sectors(
         tic_id=int(tic_id),
         flux_type=str(flux_type).lower(),
@@ -452,6 +453,12 @@ def _execute_detrend_grid(
 )
 @click.option("--check", "checks", multiple=True, help="Optional check IDs to annotate provenance.")
 @click.option(
+    "--cache-dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help="Optional cache directory for MAST/lightkurve products.",
+)
+@click.option(
     "--vet-summary-path",
     type=str,
     default=None,
@@ -486,6 +493,7 @@ def detrend_grid_command(
     gp_max_iterations: int,
     gp_timeout_seconds: float,
     checks: tuple[str, ...],
+    cache_dir: Path | None,
     vet_summary_path: str | None,
     output_path_arg: str,
 ) -> None:
@@ -552,6 +560,7 @@ def detrend_grid_command(
             t0_btjd=resolved_t0_btjd,
             duration_hours=resolved_duration_hours,
             sectors=effective_sectors,
+            cache_dir=cache_dir,
             flux_type=str(flux_type).lower(),
             random_seed=int(random_seed),
             downsample_levels=list(downsample_levels) if downsample_levels else None,

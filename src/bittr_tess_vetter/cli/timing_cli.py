@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import click
@@ -317,6 +318,12 @@ def _prealign_candidate(
     show_default=True,
     help="Allow network-dependent TOI resolution.",
 )
+@click.option(
+    "--cache-dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help="Optional cache directory for MAST/lightkurve products.",
+)
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
     "--flux-type",
@@ -371,6 +378,7 @@ def timing_command(
     toi: str | None,
     report_file: str | None,
     network_ok: bool,
+    cache_dir: Path | None,
     sectors: tuple[int, ...],
     flux_type: str,
     min_snr: float,
@@ -449,6 +457,7 @@ def timing_command(
             sectors=effective_sectors,
             explicit_sectors=bool(sectors_explicit),
             network_ok=bool(network_ok),
+            cache_dir=cache_dir,
         )
 
         if len(lightcurves) == 1:
@@ -506,6 +515,7 @@ def timing_command(
         "sectors": [int(s) for s in effective_sectors] if effective_sectors else None,
         "flux_type": str(flux_type).lower(),
         "min_snr": float(min_snr),
+        "cache_dir": str(cache_dir) if cache_dir is not None else None,
         "prealign": bool(prealign),
         "prealign_steps": int(prealign_steps),
         "prealign_lr": float(prealign_lr),

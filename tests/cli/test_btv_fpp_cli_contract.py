@@ -973,6 +973,75 @@ def test_btv_fpp_report_file_precedence_and_sector_fallback(monkeypatch, tmp_pat
     assert payload["provenance"]["inputs"]["sectors"] == [20, 21]
 
 
+def test_btv_fpp_report_file_only_supports_cli_report_schema(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    report_path = tmp_path / "report.summary_schema.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "cli.report.v3",
+                "report": {
+                    "summary": {
+                        "tic_id": 444,
+                        "ephemeris": {
+                            "period_days": 4.5,
+                            "t0_btjd": 1400.125,
+                            "duration_hours": 2.25,
+                        },
+                        "input_depth_ppm": 700.0,
+                    },
+                    "provenance": {"sectors_used": [11, 12]},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def _fake_resolve_candidate_inputs(**kwargs: Any):
+        seen["resolve"] = kwargs
+        return 444, 4.5, 1400.125, 2.25, 700.0, {"source": "cli", "resolved_from": "cli"}
+
+    def _fake_build_cache_for_fpp(**kwargs: Any) -> tuple[object, list[int]]:
+        seen["build_cache"] = kwargs
+        return object(), [11, 12]
+
+    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
+        seen["fpp"] = kwargs
+        return {"fpp": 0.05, "nfpp": 0.005, "base_seed": 3}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_report_only.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--report-file",
+            str(report_path),
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Missing TIC identifier" not in result.output
+    assert seen["resolve"]["toi"] is None
+    assert seen["resolve"]["tic_id"] == 444
+    assert seen["resolve"]["period_days"] == 4.5
+    assert seen["resolve"]["t0_btjd"] == 1400.125
+    assert seen["resolve"]["duration_hours"] == 2.25
+    assert seen["resolve"]["depth_ppm"] == 700.0
+    assert seen["build_cache"]["sectors"] == [11, 12]
+    assert seen["fpp"]["sectors"] == [11, 12]
+
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["inputs"]["tic_id"] == 444
+
+
 def test_btv_fpp_explicit_sectors_use_network_download_by_default(monkeypatch, tmp_path: Path) -> None:
     seen: dict[str, Any] = {"cached_calls": 0, "network_calls": 0}
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import click
@@ -63,6 +64,7 @@ def _download_and_prepare_arrays(
     sectors_explicit: bool,
     flux_type: str,
     network_ok: bool,
+    cache_dir: Path | None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[int], str]:
     lightcurves, sector_load_path = load_lightcurves_with_sector_policy(
         tic_id=int(tic_id),
@@ -70,6 +72,7 @@ def _download_and_prepare_arrays(
         flux_type=str(flux_type).lower(),
         explicit_sectors=bool(sectors_explicit),
         network_ok=bool(network_ok),
+        cache_dir=cache_dir,
     )
 
     if len(lightcurves) == 1:
@@ -112,6 +115,12 @@ def _download_and_prepare_arrays(
     show_default=True,
     help="Allow network-dependent TOI resolution.",
 )
+@click.option(
+    "--cache-dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help="Optional cache directory for MAST/lightkurve products.",
+)
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
     "--flux-type",
@@ -138,6 +147,7 @@ def systematics_proxy_command(
     toi: str | None,
     report_file: str | None,
     network_ok: bool,
+    cache_dir: Path | None,
     sectors: tuple[int, ...],
     flux_type: str,
     output_path_arg: str,
@@ -206,6 +216,7 @@ def systematics_proxy_command(
             sectors_explicit=bool(sectors_explicit),
             flux_type=str(flux_type).lower(),
             network_ok=bool(network_ok),
+            cache_dir=cache_dir,
         )
         systematics_proxy = systematics_api.compute_systematics_proxy(
             time=time,

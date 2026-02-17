@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -170,3 +171,32 @@ def test_load_lightcurves_with_sector_policy_no_network_fails_without_cached_dis
             network_ok=False,
         )
     assert "No cached sectors available for TIC 123 with --no-network" in str(excinfo.value)
+
+
+def test_load_lightcurves_with_sector_policy_passes_cache_dir_to_client(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    seen: dict[str, Any] = {}
+
+    class _FakeMASTClient:
+        def __init__(self, cache_dir: str | None = None) -> None:
+            seen["cache_dir"] = cache_dir
+
+        def download_all_sectors(self, *_args: Any, **_kwargs: Any) -> list[Any]:
+            return [_lc(42)]
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+
+    cache_dir = str(tmp_path / "cache_root")
+    lightcurves, path = load_lightcurves_with_sector_policy(
+        tic_id=123,
+        sectors=None,
+        flux_type="pdcsap",
+        explicit_sectors=False,
+        cache_dir=cache_dir,
+    )
+
+    assert path == "mast_discovery"
+    assert [int(lc.sector) for lc in lightcurves] == [42]
+    assert seen["cache_dir"] == cache_dir

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import click
@@ -57,6 +58,12 @@ def _derive_ephemeris_reliability_verdict(result_payload: Any) -> tuple[str | No
     show_default=True,
     help="Allow network-dependent TOI resolution.",
 )
+@click.option(
+    "--cache-dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help="Optional cache directory for MAST/lightkurve products.",
+)
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
     "--flux-type",
@@ -97,6 +104,7 @@ def ephemeris_reliability_command(
     toi: str | None,
     report_file: str | None,
     network_ok: bool,
+    cache_dir: Path | None,
     sectors: tuple[int, ...],
     flux_type: str,
     ingress_egress_fraction: float,
@@ -174,6 +182,7 @@ def ephemeris_reliability_command(
             sectors=effective_sectors,
             explicit_sectors=bool(sectors_explicit),
             network_ok=bool(network_ok),
+            cache_dir=cache_dir,
         )
 
         if len(lightcurves) == 1:

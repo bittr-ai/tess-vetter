@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import click
@@ -68,6 +69,7 @@ def _download_and_stitch_lightcurve(
     sectors_explicit: bool,
     flux_type: str,
     network_ok: bool,
+    cache_dir: Path | None,
 ) -> tuple[LightCurve, list[int], str]:
     lightcurves, sector_load_path = load_lightcurves_with_sector_policy(
         tic_id=int(tic_id),
@@ -75,6 +77,7 @@ def _download_and_stitch_lightcurve(
         flux_type=str(flux_type).lower(),
         explicit_sectors=bool(sectors_explicit),
         network_ok=bool(network_ok),
+        cache_dir=cache_dir,
     )
     if len(lightcurves) == 1:
         stitched_lc = lightcurves[0]
@@ -252,6 +255,12 @@ def _compute_rv_feasibility(
     show_default=True,
     help="Allow network-dependent TOI resolution and stellar lookup.",
 )
+@click.option(
+    "--cache-dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help="Optional cache directory for MAST/lightkurve products.",
+)
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
     "--flux-type",
@@ -284,6 +293,7 @@ def rv_feasibility_command(
     toi: str | None,
     report_file: str | None,
     network_ok: bool,
+    cache_dir: Path | None,
     sectors: tuple[int, ...],
     flux_type: str,
     rotation_min_period: float,
@@ -371,6 +381,7 @@ def rv_feasibility_command(
             sectors_explicit=bool(sectors_explicit),
             flux_type=str(flux_type).lower(),
             network_ok=bool(network_ok),
+            cache_dir=cache_dir,
         )
         activity = characterize_activity(
             lc=lc,

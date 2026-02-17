@@ -124,6 +124,7 @@ def test_btv_ephemeris_reliability_success_contract_payload(monkeypatch, tmp_pat
         "sectors": [14, 15],
         "explicit_sectors": True,
         "network_ok": True,
+        "cache_dir": None,
     }
     assert seen["stitch_called"] is True
     assert seen["stitch_tic_id"] == 123

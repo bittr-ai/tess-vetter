@@ -171,6 +171,7 @@ def test_btv_timing_success_contract_payload(monkeypatch, tmp_path: Path) -> Non
         "sectors": [14, 15],
         "explicit_sectors": True,
         "network_ok": True,
+        "cache_dir": None,
     }
     assert seen["stitch_called"] is True
     assert seen["stitch_tic_id"] == 123
@@ -209,6 +210,7 @@ def test_btv_timing_success_contract_payload(monkeypatch, tmp_path: Path) -> Non
         "sectors": [14, 15],
         "flux_type": "sap",
         "min_snr": 3.5,
+        "cache_dir": None,
         "prealign": True,
         "prealign_steps": 25,
         "prealign_lr": 0.05,

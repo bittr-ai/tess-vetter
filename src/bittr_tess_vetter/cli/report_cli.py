@@ -40,7 +40,7 @@ from bittr_tess_vetter.cli.report_seed import (
     load_report_seed,
     resolve_candidate_inputs_with_report_seed,
 )
-from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
+from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
 
 
 def _looks_like_timeout(exc: BaseException) -> bool:
@@ -112,6 +112,7 @@ def _execute_report(
     depth_ppm: float | None,
     toi: str | None,
     sectors: list[int] | None,
+    cache_dir: Path | None,
     flux_type: str,
     include_html: bool,
     include_enrichment: bool,
@@ -132,6 +133,7 @@ def _execute_report(
         toi=toi,
         sectors=sectors,
         flux_type=flux_type,
+        mast_client=(MASTClient(cache_dir=str(cache_dir)) if cache_dir is not None else None),
         include_html=include_html,
         include_enrichment=include_enrichment,
         enrichment_config=enrichment_cfg,
@@ -202,6 +204,12 @@ def _load_diagnostic_artifacts(paths: tuple[str, ...]) -> list[dict[str, Any]]:
     show_default=True,
     help="Allow network-dependent TOI resolution.",
 )
+@click.option(
+    "--cache-dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help="Optional cache directory for MAST/lightkurve products.",
+)
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
     "--flux-type",
@@ -253,6 +261,7 @@ def report_command(
     depth_ppm: float | None,
     toi: str | None,
     network_ok: bool,
+    cache_dir: Path | None,
     sectors: tuple[int, ...],
     flux_type: str,
     include_html: bool,
@@ -400,6 +409,7 @@ def report_command(
             depth_ppm=resolved_depth_ppm,
             toi=resolved_toi,
             sectors=list(sectors) if sectors else None,
+            cache_dir=cache_dir,
             flux_type=str(flux_type).lower(),
             include_html=include_html,
             include_enrichment=include_enrichment,

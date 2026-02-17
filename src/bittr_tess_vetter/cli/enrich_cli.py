@@ -32,6 +32,7 @@ from bittr_tess_vetter.cli.detrend_grid_cli import detrend_grid_command
 from bittr_tess_vetter.cli.dilution_cli import dilution_command
 from bittr_tess_vetter.cli.ephemeris_reliability_cli import ephemeris_reliability_command
 from bittr_tess_vetter.cli.fpp_cli import fpp_command
+from bittr_tess_vetter.cli.fetch_cli import fetch_command
 from bittr_tess_vetter.cli.localize_cli import localize_command
 from bittr_tess_vetter.cli.localize_host_cli import localize_host_command
 from bittr_tess_vetter.cli.measure_sectors_cli import measure_sectors_command
@@ -90,6 +91,7 @@ def cli() -> None:
 
 cli.add_command(vet_command)
 cli.add_command(fpp_command)
+cli.add_command(fetch_command)
 cli.add_command(report_command)
 cli.add_command(resolve_stellar_command)
 cli.add_command(resolve_neighbors_command)

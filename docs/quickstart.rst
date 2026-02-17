@@ -188,6 +188,7 @@ Supported commands:
 - ``btv systematics-proxy``
 - ``btv ephemeris-reliability``
 - ``btv fpp``
+- ``btv fetch``
 - ``btv resolve-neighbors``
 - ``btv localize-host``
 - ``btv dilution``

@@ -253,3 +253,41 @@ def test_btv_activity_explicit_sectors_cache_miss_exits_4(monkeypatch) -> None:
     )
     assert result.exit_code == 4
     assert "Cache-only sector load failed for TIC 123" in result.output
+
+
+def test_btv_activity_passes_cache_dir_to_loader(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_download_and_stitch_lightcurve(**kwargs: Any):
+        seen.update(kwargs)
+        return (
+            LightCurve(time=[1.0, 2.0], flux=[1.0, 0.999], flux_err=[0.001, 0.001]),
+            [14],
+            "mast_filtered",
+        )
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.activity_cli._download_and_stitch_lightcurve",
+        _fake_download_and_stitch_lightcurve,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.activity_cli.characterize_activity",
+        lambda **_kwargs: type("A", (), {"to_dict": lambda self: {"variability_class": "quiet"}})(),
+    )
+
+    out_path = tmp_path / "activity_cache_dir.json"
+    cache_dir = tmp_path / "mast_cache"
+    runner = CliRunner()
+    result = runner.invoke(
+        activity_command,
+        [
+            "--tic-id",
+            "123",
+            "--cache-dir",
+            str(cache_dir),
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert seen["cache_dir"] == cache_dir

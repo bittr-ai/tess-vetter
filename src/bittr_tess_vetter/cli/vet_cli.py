@@ -871,6 +871,7 @@ def _execute_vet(
     preset: str,
     checks: list[str] | None,
     network_ok: bool,
+    cache_dir: Path | None,
     sectors: list[int] | None,
     flux_type: str,
     fetch_tpf: bool,
@@ -890,7 +891,7 @@ def _execute_vet(
     stellar_block: dict[str, Any] | None = None,
     stellar_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    client = MASTClient()
+    client = MASTClient(cache_dir=str(cache_dir)) if cache_dir is not None else MASTClient()
     lightcurves = client.download_all_sectors(tic_id, flux_type=flux_type, sectors=sectors)
     if not lightcurves:
         raise LightCurveNotFoundError(f"No sectors available for TIC {tic_id}")
@@ -1161,6 +1162,12 @@ def _load_tpf_for_vetting(
     help="Allow network-dependent checks.",
 )
 @click.option(
+    "--cache-dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help="Optional cache directory for MAST/lightkurve products.",
+)
+@click.option(
     "--fetch-tpf/--no-fetch-tpf",
     default=False,
     show_default=True,
@@ -1271,6 +1278,7 @@ def vet_command(
     preset: str,
     checks: tuple[str, ...],
     network_ok: bool,
+    cache_dir: Path | None,
     fetch_tpf: bool,
     require_tpf: bool,
     tpf_sector_strategy: str,
@@ -1417,11 +1425,14 @@ def vet_command(
                 t0_btjd=float(resolved_t0_btjd),
                 duration_hours=float(resolved_duration_hours),
                 sectors=[int(s) for s in effective_sectors] if effective_sectors else None,
+                sectors_explicit=bool(effective_sectors is not None),
+                sector_selection_source=str(sector_selection_source),
                 flux_type=str(flux_type).lower(),
                 detrend=detrend_method,
                 detrend_bin_hours=float(detrend_bin_hours),
                 detrend_buffer=float(detrend_buffer),
                 detrend_sigma_clip=float(detrend_sigma_clip),
+                cache_dir=cache_dir,
                 input_resolution=input_resolution,
             )
             measured_rows = measured.get("sector_measurements")
@@ -1565,6 +1576,7 @@ def vet_command(
             preset=str(preset).lower(),
             checks=list(checks) if checks else None,
             network_ok=network_ok,
+            cache_dir=cache_dir,
             fetch_tpf=effective_fetch_tpf,
             require_tpf=require_tpf,
             tpf_sector_strategy=str(tpf_sector_strategy).lower(),

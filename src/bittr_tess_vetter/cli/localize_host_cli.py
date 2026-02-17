@@ -139,6 +139,7 @@ def _execute_localize_host(
     ra_deg: float | None,
     dec_deg: float | None,
     network_ok: bool,
+    cache_dir: Path | None,
     sectors: list[int] | None,
     tpf_sector_strategy: str,
     tpf_sectors: list[int] | None,
@@ -155,7 +156,7 @@ def _execute_localize_host(
     brightness_prior_weight: float = 40.0,
     brightness_prior_softening_mag: float = 2.5,
 ) -> dict[str, Any]:
-    client = MASTClient()
+    client = MASTClient(cache_dir=str(cache_dir)) if cache_dir is not None else MASTClient()
     if not network_ok:
         if not sectors:
             raise BtvCliError(
@@ -315,6 +316,12 @@ def _execute_localize_host(
     show_default=True,
     help="Allow network-dependent TOI resolution and TPF download fallback.",
 )
+@click.option(
+    "--cache-dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help="Optional cache directory for MAST/lightkurve products.",
+)
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
     "--tpf-sector-strategy",
@@ -382,6 +389,7 @@ def localize_host_command(
     dec_deg: float | None,
     reference_sources_file: str | None,
     network_ok: bool,
+    cache_dir: Path | None,
     sectors: tuple[int, ...],
     tpf_sector_strategy: str,
     tpf_sectors: tuple[int, ...],
@@ -482,6 +490,7 @@ def localize_host_command(
             ra_deg=ra_deg,
             dec_deg=dec_deg,
             network_ok=bool(network_ok),
+            cache_dir=cache_dir,
             sectors=[int(s) for s in sectors] if sectors else None,
             tpf_sector_strategy=strategy,
             tpf_sectors=[int(s) for s in tpf_sectors] if tpf_sectors else None,

@@ -166,8 +166,9 @@ def load_lightcurves_with_sector_policy(
     flux_type: str,
     explicit_sectors: bool,
     network_ok: bool = True,
+    cache_dir: str | Path | None = None,
 ) -> tuple[list[Any], str]:
-    client = MASTClient()
+    client = MASTClient(cache_dir=str(cache_dir)) if cache_dir is not None else MASTClient()
 
     if explicit_sectors:
         if not sectors:

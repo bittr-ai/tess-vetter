@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import click
@@ -67,8 +68,9 @@ def _download_and_stitch_lightcurve(
     tic_id: int,
     sectors: list[int] | None,
     flux_type: str,
+    cache_dir: Path | None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, list[int]]:
-    client = MASTClient()
+    client = MASTClient(cache_dir=str(cache_dir)) if cache_dir is not None else MASTClient()
     lightcurves = client.download_all_sectors(
         tic_id=int(tic_id),
         flux_type=str(flux_type).lower(),
@@ -105,6 +107,12 @@ def _to_jsonable_result(result: Any) -> Any:
     default=False,
     show_default=True,
     help="Allow network-dependent TOI or stellar auto resolution.",
+)
+@click.option(
+    "--cache-dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help="Optional cache directory for MAST/lightkurve products.",
 )
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
@@ -157,6 +165,7 @@ def periodogram_command(
     tic_id: int | None,
     toi: str | None,
     network_ok: bool,
+    cache_dir: Path | None,
     sectors: tuple[int, ...],
     flux_type: str,
     min_period: float,
@@ -218,6 +227,7 @@ def periodogram_command(
             tic_id=resolved_tic_id,
             sectors=list(sectors) if sectors else None,
             flux_type=str(flux_type).lower(),
+            cache_dir=cache_dir,
         )
 
         if mode == "search":

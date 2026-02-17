@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import click
@@ -40,6 +41,12 @@ def _load_auto_stellar_inputs(
     default=False,
     show_default=True,
     help="Allow network-dependent TOI and stellar auto resolution.",
+)
+@click.option(
+    "--cache-dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help="Optional cache directory for MAST/lightkurve products.",
 )
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
@@ -94,6 +101,7 @@ def fit_command(
     depth_ppm: float | None,
     toi: str | None,
     network_ok: bool,
+    cache_dir: Path | None,
     sectors: tuple[int, ...],
     flux_type: str,
     stellar_radius: float | None,
@@ -149,7 +157,8 @@ def fit_command(
     )
 
     try:
-        lightcurves = MASTClient().download_all_sectors(
+        client = MASTClient(cache_dir=str(cache_dir)) if cache_dir is not None else MASTClient()
+        lightcurves = client.download_all_sectors(
             tic_id=int(resolved_tic_id),
             flux_type=str(flux_type).lower(),
             sectors=list(sectors) if sectors else None,

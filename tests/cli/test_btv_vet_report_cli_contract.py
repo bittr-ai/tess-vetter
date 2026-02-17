@@ -259,6 +259,7 @@ def test_btv_report_execute_report_sets_wrapper_provenance_fields(monkeypatch) -
         depth_ppm=300.0,
         toi="TOI-123.01",
         sectors=[14, 15],
+        cache_dir=None,
         flux_type="pdcsap",
         include_html=False,
         include_enrichment=False,

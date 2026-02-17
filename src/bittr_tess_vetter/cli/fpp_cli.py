@@ -24,6 +24,7 @@ from bittr_tess_vetter.cli.common_cli import (
     parse_extra_params,
     resolve_optional_output_path,
 )
+from bittr_tess_vetter.cli.diagnostics_report_inputs import resolve_inputs_from_report_file
 from bittr_tess_vetter.cli.stellar_inputs import load_auto_stellar_with_fallback, resolve_stellar_inputs
 from bittr_tess_vetter.cli.vet_cli import (
     _detrend_lightcurve_for_vetting,
@@ -435,7 +436,27 @@ def _extract_report_candidate_inputs(payload: dict[str, Any]) -> tuple[dict[str,
 
 def _load_report_inputs(report_file: Path) -> tuple[dict[str, Any], list[int] | None]:
     payload = load_json_file(report_file, label="report-file")
-    return _extract_report_candidate_inputs(payload)
+    candidate, sectors_used = _extract_report_candidate_inputs(payload)
+    try:
+        resolved_from_report = resolve_inputs_from_report_file(str(report_file))
+    except BtvCliError:
+        return candidate, sectors_used
+
+    report_candidate = {
+        "tic_id": int(resolved_from_report.tic_id),
+        "period_days": float(resolved_from_report.period_days),
+        "t0_btjd": float(resolved_from_report.t0_btjd),
+        "duration_hours": float(resolved_from_report.duration_hours),
+        "depth_ppm": (
+            float(resolved_from_report.depth_ppm) if resolved_from_report.depth_ppm is not None else None
+        ),
+    }
+    for key, value in report_candidate.items():
+        if candidate.get(key) is None and value is not None:
+            candidate[key] = value
+    if sectors_used is None and resolved_from_report.sectors_used is not None:
+        sectors_used = [int(s) for s in resolved_from_report.sectors_used]
+    return candidate, sectors_used
 
 
 def _load_auto_stellar_inputs(

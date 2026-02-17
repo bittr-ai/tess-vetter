@@ -353,6 +353,50 @@ def test_detrend_grid_seed_is_deterministic_and_defaults_to_zero(monkeypatch) ->
     assert payload_default["provenance"]["random_seed"] == 0
 
 
+def test_detrend_grid_passes_cache_dir_to_mast_client(monkeypatch, tmp_path) -> None:
+    seen: dict[str, Any] = {}
+
+    class _CacheAwareFakeMASTClient:
+        def __init__(self, cache_dir: str | None = None) -> None:
+            seen["cache_dir"] = cache_dir
+
+        def download_all_sectors(self, *args: Any, **kwargs: Any) -> list[_FakeLightCurve]:
+            _ = args, kwargs
+            return [_FakeLightCurve()]
+
+    rows = [
+        {
+            "variant_id": "variant_a",
+            "status": "ok",
+            "backend": "numpy",
+            "runtime_seconds": 0.01,
+            "n_points_used": 200,
+            "downsample_factor": 1,
+            "outlier_policy": "none",
+            "detrender": "none",
+            "score": 5.0,
+            "depth_hat_ppm": 250.0,
+            "depth_err_ppm": 10.0,
+            "warnings": [],
+            "failure_reason": None,
+            "variant_config": {"variant_id": "variant_a"},
+            "gp_hyperparams": None,
+            "gp_fit_diagnostics": None,
+        }
+    ]
+    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _CacheAwareFakeMASTClient)
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        lambda **_kwargs: _FakeSweepResult(rows),
+    )
+
+    cache_dir = tmp_path / "mast_cache"
+    runner = CliRunner()
+    result = runner.invoke(enrich_cli.cli, [*_base_args(), "--cache-dir", str(cache_dir)])
+    assert result.exit_code == 0, result.output
+    assert seen["cache_dir"] == str(cache_dir)
+
+
 def test_detrend_grid_adds_check_resolution_note_for_v16_model_competition(monkeypatch, tmp_path) -> None:
     rows = [
         {
