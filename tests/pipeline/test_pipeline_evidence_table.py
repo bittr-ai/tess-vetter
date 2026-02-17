@@ -47,6 +47,16 @@ def test_evidence_table_extracts_mixed_top_level_and_nested_fields(tmp_path: Pat
         },
     )
     fpp_path = _write_step(toi_dir / "07_fpp.json", {"result": {"fpp": 0.017}})
+    vet_path = _write_step(
+        toi_dir / "09_vet.json",
+        {
+            "summary": {"known_planet_match_status": "confirmed_same_planet"},
+            "known_planet_match": {
+                "status": "confirmed_same_planet",
+                "matched_planet": {"name": "TOI-411 c", "period": 9.57307},
+            },
+        },
+    )
     neighbors_path = _write_step(
         toi_dir / "08_neighbors.json",
         {"multiplicity_risk": {"status": "ELEVATED", "reasons": ["TARGET_RUWE_ELEVATED"]}},
@@ -64,6 +74,7 @@ def test_evidence_table_extracts_mixed_top_level_and_nested_fields(tmp_path: Pat
             {"op": "dilution", "status": "ok", "step_output_path": dilution_path},
             {"op": "fpp_run", "status": "ok", "step_output_path": fpp_path},
             {"op": "resolve_neighbors", "status": "ok", "step_output_path": neighbors_path},
+            {"op": "vet", "status": "ok", "step_output_path": vet_path},
         ],
     }
 
@@ -82,6 +93,9 @@ def test_evidence_table_extracts_mixed_top_level_and_nested_fields(tmp_path: Pat
     assert row["multiplicity_risk_status"] == "ELEVATED"
     assert row["multiplicity_risk_reasons"] == ["TARGET_RUWE_ELEVATED"]
     assert row["fpp"] == 0.017
+    assert row["known_planet_status"] == "confirmed_same_planet"
+    assert row["known_planet_name"] == "TOI-411 c"
+    assert row["known_planet_period"] == pytest.approx(9.57307)
 
 
 def test_evidence_table_extracts_contrast_curve_fields_and_selected_metadata(tmp_path: Path) -> None:

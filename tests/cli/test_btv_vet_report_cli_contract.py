@@ -2093,6 +2093,55 @@ def test_resolve_candidate_inputs_skips_toi_lookup_when_manual_candidate_inputs_
     assert input_resolution["resolved_from"] == "cli"
 
 
+def test_btv_vet_attaches_known_planet_match(monkeypatch, tmp_path: Path) -> None:
+    def _fake_execute_vet(**_kwargs):
+        return {
+            "results": [],
+            "warnings": [],
+            "provenance": {},
+            "inputs_summary": {},
+        }
+
+    class _FakeMatch:
+        def to_dict(self):
+            return {
+                "status": "confirmed_same_planet",
+                "matched_planet": {"name": "TOI-411 c", "period": 9.57307},
+            }
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.vet_cli.match_known_planet_ephemeris",
+        lambda **_kwargs: _FakeMatch(),
+    )
+
+    out_path = tmp_path / "vet_known_planet.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "100990000",
+            "--period-days",
+            "9.57307",
+            "--t0-btjd",
+            "1386.18",
+            "--duration-hours",
+            "3.79",
+            "--network-ok",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["known_planet_match"]["status"] == "confirmed_same_planet"
+    assert payload["summary"]["known_planet_match_status"] == "confirmed_same_planet"
+    assert payload["result"]["known_planet_match"]["matched_planet"]["name"] == "TOI-411 c"
+
+
 def test_btv_vet_report_file_seeds_inputs_and_sectors(monkeypatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {}
 

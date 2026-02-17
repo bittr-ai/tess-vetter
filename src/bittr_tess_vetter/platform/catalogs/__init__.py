@@ -33,9 +33,11 @@ from bittr_tess_vetter.platform.catalogs.exoplanet_archive import (
     ExoplanetArchiveClient,
     ExoplanetArchiveError,
     KnownPlanet,
+    KnownPlanetMatchResult,
     KnownPlanetsResult,
     TAPQueryError,
     get_known_planets,
+    match_known_planet_ephemeris,
 )
 from bittr_tess_vetter.platform.catalogs.exoplanet_archive import (
     get_client as get_exoplanet_archive_client,
@@ -131,10 +133,12 @@ __all__ = [
     "ExoplanetArchiveClient",
     "ExoplanetArchiveError",
     "KnownPlanet",
+    "KnownPlanetMatchResult",
     "KnownPlanetsResult",
     "TAPQueryError",
     "get_exoplanet_archive_client",
     "get_known_planets",
+    "match_known_planet_ephemeris",
     # Gaia DR3
     "GAIA_TAP_ENDPOINT",
     "RUWE_ELEVATED_THRESHOLD",

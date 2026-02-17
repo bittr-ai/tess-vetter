@@ -578,6 +578,12 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
         payloads_by_step_id=payloads_by_step_id,
         payloads_by_step_id_and_op=payloads_by_step_id_and_op,
     )
+    vet_payload = _maybe_load_step(
+        "vet",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
+    )
     dilution = _maybe_load_step(
         "dilution",
         payloads_by_op=payloads_by_op,
@@ -796,6 +802,15 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
     contrast_curve_selected_depth0p5 = selected_curve.get("depth0p5")
     contrast_curve_selected_depth1p0 = selected_curve.get("depth1p0")
     contrast_curve_selected_metadata = selected_curve if selected_curve else None
+    known_planet_status = _extract_value_from_payload(vet_payload, "known_planet_match_status")
+    known_planet_payload = _extract_value_from_payload(vet_payload, "known_planet_match")
+    if not isinstance(known_planet_payload, dict):
+        known_planet_payload = {}
+    matched_planet = known_planet_payload.get("matched_planet")
+    if not isinstance(matched_planet, dict):
+        matched_planet = {}
+    known_planet_name = matched_planet.get("name")
+    known_planet_period = matched_planet.get("period")
 
     concern_flags = set(str(x) for x in (toi_result.get("concern_flags") or []) if x is not None)
     for payload in payloads_by_step_id.values():
@@ -843,6 +858,9 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
         "contrast_curve_selected_depth0p5": contrast_curve_selected_depth0p5,
         "contrast_curve_selected_depth1p0": contrast_curve_selected_depth1p0,
         "contrast_curve_selected_metadata": contrast_curve_selected_metadata,
+        "known_planet_status": known_planet_status,
+        "known_planet_name": known_planet_name,
+        "known_planet_period": known_planet_period,
         "concern_flags": sorted(concern_flags),
     }
     return row
@@ -852,7 +870,7 @@ def _write_evidence_table(*, out_dir: Path, toi_results: list[dict[str, Any]]) -
     rows = [_extract_evidence_row(item, out_dir=out_dir) for item in toi_results]
 
     json_path = out_dir / "evidence_table.json"
-    _write_json(json_path, {"schema_version": "pipeline.evidence_table.v4", "rows": rows})
+    _write_json(json_path, {"schema_version": "pipeline.evidence_table.v5", "rows": rows})
 
     csv_path = out_dir / "evidence_table.csv"
     csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -896,6 +914,9 @@ def _write_evidence_table(*, out_dir: Path, toi_results: list[dict[str, Any]]) -
         "contrast_curve_selected_depth0p5",
         "contrast_curve_selected_depth1p0",
         "contrast_curve_selected_metadata",
+        "known_planet_status",
+        "known_planet_name",
+        "known_planet_period",
         "concern_flags",
     ]
     with csv_path.open("w", encoding="utf-8", newline="") as fh:

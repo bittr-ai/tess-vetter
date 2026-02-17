@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import requests
 
@@ -128,6 +128,47 @@ class KnownPlanetsResult:
             "planets": [p.to_dict() for p in self.planets],
             "toi_id": self.toi_id,
             "source": self.source,
+        }
+
+
+@dataclass
+class KnownPlanetMatchResult:
+    """Period-level planet matching result for a TIC host."""
+
+    status: Literal[
+        "confirmed_same_planet",
+        "confirmed_same_star_different_period",
+        "no_confirmed_match",
+        "ambiguous_multi_match",
+    ]
+    tic_id: int
+    candidate_period_days: float
+    period_tolerance_days: float
+    period_tolerance_fraction: float | None
+    matched_planet: KnownPlanet | None
+    matched_planets: list[KnownPlanet]
+    confirmed_planets: list[KnownPlanet]
+    best_period_offset_days: float | None
+    notes: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "tic_id": int(self.tic_id),
+            "candidate_period_days": float(self.candidate_period_days),
+            "period_tolerance_days": float(self.period_tolerance_days),
+            "period_tolerance_fraction": (
+                float(self.period_tolerance_fraction)
+                if self.period_tolerance_fraction is not None
+                else None
+            ),
+            "matched_planet": self.matched_planet.to_dict() if self.matched_planet is not None else None,
+            "matched_planets": [p.to_dict() for p in self.matched_planets],
+            "confirmed_planets": [p.to_dict() for p in self.confirmed_planets],
+            "best_period_offset_days": (
+                float(self.best_period_offset_days) if self.best_period_offset_days is not None else None
+            ),
+            "notes": [str(x) for x in self.notes],
         }
 
 
@@ -551,6 +592,91 @@ class ExoplanetArchiveClient:
 
         return result
 
+    def match_known_planet_ephemeris(
+        self,
+        *,
+        tic_id: int,
+        period_days: float,
+        period_tolerance_days: float = 0.01,
+        period_tolerance_fraction: float | None = 0.001,
+    ) -> KnownPlanetMatchResult:
+        """Match a candidate period against confirmed planets on the same TIC host.
+
+        Matching is host+period based (not host-only), which avoids false equivalence
+        on multi-planet systems.
+        """
+        candidate_period = float(period_days)
+        abs_tol_days = float(max(period_tolerance_days, 0.0))
+        frac_tol = (
+            float(period_tolerance_fraction)
+            if period_tolerance_fraction is not None and float(period_tolerance_fraction) > 0.0
+            else None
+        )
+
+        kp = self.get_known_planets(tic_id=int(tic_id), include_candidates=False)
+        confirmed = [p for p in kp.planets if str(p.status).upper() == "CONFIRMED"]
+        if not confirmed:
+            return KnownPlanetMatchResult(
+                status="no_confirmed_match",
+                tic_id=int(tic_id),
+                candidate_period_days=candidate_period,
+                period_tolerance_days=abs_tol_days,
+                period_tolerance_fraction=frac_tol,
+                matched_planet=None,
+                matched_planets=[],
+                confirmed_planets=[],
+                best_period_offset_days=None,
+                notes=["No confirmed planets found for TIC in Exoplanet Archive."],
+            )
+
+        scored: list[tuple[float, KnownPlanet]] = []
+        matches: list[KnownPlanet] = []
+        for planet in confirmed:
+            try:
+                p_period = float(planet.period)
+            except Exception:
+                continue
+            diff = abs(candidate_period - p_period)
+            tol = abs_tol_days
+            if frac_tol is not None:
+                tol = max(tol, abs(p_period) * frac_tol)
+            scored.append((diff, planet))
+            if diff <= tol:
+                matches.append(planet)
+
+        scored.sort(key=lambda item: item[0])
+        matches_sorted = sorted(matches, key=lambda p: abs(candidate_period - float(p.period)))
+        best_match = matches_sorted[0] if matches_sorted else None
+        best_diff = scored[0][0] if scored else None
+
+        if len(matches_sorted) == 1:
+            status: Literal[
+                "confirmed_same_planet",
+                "confirmed_same_star_different_period",
+                "no_confirmed_match",
+                "ambiguous_multi_match",
+            ] = "confirmed_same_planet"
+            notes: list[str] = []
+        elif len(matches_sorted) > 1:
+            status = "ambiguous_multi_match"
+            notes = ["Multiple confirmed planets matched candidate period within tolerance."]
+        else:
+            status = "confirmed_same_star_different_period"
+            notes = ["Confirmed planets exist on host, but none matched candidate period."]
+
+        return KnownPlanetMatchResult(
+            status=status,
+            tic_id=int(tic_id),
+            candidate_period_days=candidate_period,
+            period_tolerance_days=abs_tol_days,
+            period_tolerance_fraction=frac_tol,
+            matched_planet=best_match,
+            matched_planets=matches_sorted,
+            confirmed_planets=confirmed,
+            best_period_offset_days=float(best_diff) if best_diff is not None else None,
+            notes=notes,
+        )
+
     def clear_cache(self) -> None:
         """Clear the in-memory cache."""
         self.cache.clear()
@@ -587,4 +713,24 @@ def get_known_planets(
         tic_id=tic_id,
         target=target,
         include_candidates=include_candidates,
+    )
+
+
+def match_known_planet_ephemeris(
+    *,
+    tic_id: int,
+    period_days: float,
+    period_tolerance_days: float = 0.01,
+    period_tolerance_fraction: float | None = 0.001,
+) -> KnownPlanetMatchResult:
+    """Convenience wrapper for period-level known-planet matching."""
+    return get_client().match_known_planet_ephemeris(
+        tic_id=int(tic_id),
+        period_days=float(period_days),
+        period_tolerance_days=float(period_tolerance_days),
+        period_tolerance_fraction=(
+            float(period_tolerance_fraction)
+            if period_tolerance_fraction is not None
+            else None
+        ),
     )

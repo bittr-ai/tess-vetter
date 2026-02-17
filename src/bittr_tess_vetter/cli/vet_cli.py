@@ -49,6 +49,7 @@ from bittr_tess_vetter.platform.catalogs.toi_resolution import (
     lookup_tic_coordinates,
     resolve_toi_to_tic_ephemeris_depth,
 )
+from bittr_tess_vetter.platform.catalogs.exoplanet_archive import match_known_planet_ephemeris
 from bittr_tess_vetter.platform.io import TargetNotFoundError
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
 from bittr_tess_vetter.report import build_vet_lc_summary_blocks
@@ -525,6 +526,25 @@ def _build_root_summary(*, payload: dict[str, Any]) -> dict[str, Any]:
                     if check_id:
                         flagged_checks.add(check_id)
 
+    # Surface observed transit depth for downstream consumers (e.g. btv dilution --vet-result).
+    # Prefer V05 (trapezoid fit on phase-folded LC), fall back to V04 mean across transits.
+    input_depth_ppm: float | None = None
+    for row in rows:
+        check_id = str(row.get("id") or "")
+        if check_id == "V05":
+            metrics = row.get("metrics")
+            if isinstance(metrics, dict):
+                input_depth_ppm = _to_optional_float(metrics.get("depth_ppm"))
+            break
+    if input_depth_ppm is None:
+        for row in rows:
+            check_id = str(row.get("id") or "")
+            if check_id == "V04":
+                metrics = row.get("metrics")
+                if isinstance(metrics, dict):
+                    input_depth_ppm = _to_optional_float(metrics.get("mean_depth_ppm"))
+                break
+
     if "MODEL_PREFERS_NON_TRANSIT" in concerns:
         disposition_hint = "needs_model_competition_review"
     elif n_failed > 0:
@@ -544,6 +564,7 @@ def _build_root_summary(*, payload: dict[str, Any]) -> dict[str, Any]:
         "disposition_hint": disposition_hint,
         "skip_reasons": skip_reasons,
         "v21_status": v21_status,
+        "input_depth_ppm": input_depth_ppm,
     }
 
 
@@ -613,6 +634,59 @@ def _apply_cli_payload_contract(
     result_payload["verdict"] = verdict
     result_payload["verdict_source"] = verdict_source
     return payload
+
+
+def _attach_known_planet_match(
+    *,
+    payload: dict[str, Any],
+    tic_id: int,
+    period_days: float,
+    network_ok: bool,
+) -> None:
+    if not bool(network_ok):
+        match_payload: dict[str, Any] = {
+            "status": "lookup_unavailable",
+            "tic_id": int(tic_id),
+            "candidate_period_days": float(period_days),
+            "notes": ["Skipped known-planet period match because --network-ok is disabled."],
+        }
+    else:
+        try:
+            match_result = match_known_planet_ephemeris(
+                tic_id=int(tic_id),
+                period_days=float(period_days),
+            )
+            match_payload = match_result.to_dict()
+        except Exception as exc:
+            match_payload = {
+                "status": "lookup_unavailable",
+                "tic_id": int(tic_id),
+                "candidate_period_days": float(period_days),
+                "error": str(exc),
+                "notes": ["Known-planet period match failed."],
+            }
+
+    payload["known_planet_match"] = match_payload
+
+    summary_raw = payload.get("summary")
+    summary = summary_raw if isinstance(summary_raw, dict) else {}
+    status = match_payload.get("status")
+    if status is not None:
+        summary["known_planet_match_status"] = status
+    payload["summary"] = summary
+
+    result_raw = payload.get("result")
+    result_payload = result_raw if isinstance(result_raw, dict) else {}
+    result_payload["known_planet_match"] = match_payload
+    payload["result"] = result_payload
+
+    provenance_raw = payload.get("provenance")
+    provenance = provenance_raw if isinstance(provenance_raw, dict) else {}
+    provenance["known_planet_match"] = {
+        "source": "nasa_exoplanet_archive",
+        "status": status,
+    }
+    payload["provenance"] = provenance
 
 
 def _split_vet_plot_data_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1635,6 +1709,12 @@ def vet_command(
             toi=effective_toi,
             input_resolution=input_resolution,
             coordinate_resolution=coordinate_resolution,
+        )
+        _attach_known_planet_match(
+            payload=payload,
+            tic_id=int(resolved_tic_id),
+            period_days=float(resolved_period_days),
+            network_ok=bool(network_ok),
         )
         if auto_measure_warning is not None:
             warnings_raw = payload.get("warnings")

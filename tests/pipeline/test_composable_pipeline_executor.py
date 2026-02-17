@@ -136,7 +136,7 @@ def test_run_composition_report_from_and_ports_and_resume(monkeypatch, tmp_path:
 
     assert result["manifest"]["counts"]["n_ok"] == 1
     evidence_json = json.loads((out_dir / "evidence_table.json").read_text(encoding="utf-8"))
-    assert evidence_json["schema_version"] == "pipeline.evidence_table.v4"
+    assert evidence_json["schema_version"] == "pipeline.evidence_table.v5"
     row = evidence_json["rows"][0]
     assert row["toi"] == "TOI-TEST.01"
     assert row["model_compete_verdict"] == "MODEL_OK"
