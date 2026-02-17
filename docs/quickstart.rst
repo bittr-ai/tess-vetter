@@ -89,6 +89,12 @@ The ``btv vet`` help text points to this page and the API reference:
 
    uv run python -m bittr_tess_vetter.cli.enrich_cli vet --help
 
+Quick ExoFOP TOI catalog query from CLI:
+
+.. code-block:: bash
+
+   btv toi-query --period-min 2 --period-max 20 --disposition PC --sort-by snr --sort-descending --max-results 25 --format json -o outputs/toi_query.json
+
 Use :doc:`verification/confidence_semantics` as the canonical reference for:
 
 - how to interpret ``CheckResult.status`` and ``CheckResult.confidence``

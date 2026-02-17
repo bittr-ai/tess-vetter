@@ -31,21 +31,22 @@ from bittr_tess_vetter.cli.describe_checks_cli import describe_checks_command
 from bittr_tess_vetter.cli.detrend_grid_cli import detrend_grid_command
 from bittr_tess_vetter.cli.dilution_cli import dilution_command
 from bittr_tess_vetter.cli.ephemeris_reliability_cli import ephemeris_reliability_command
-from bittr_tess_vetter.cli.fpp_cli import fpp_command
 from bittr_tess_vetter.cli.fetch_cli import fetch_command
+from bittr_tess_vetter.cli.fpp_cli import fpp_command
 from bittr_tess_vetter.cli.localize_cli import localize_command
 from bittr_tess_vetter.cli.localize_host_cli import localize_host_command
 from bittr_tess_vetter.cli.measure_sectors_cli import measure_sectors_command
 from bittr_tess_vetter.cli.model_compete_cli import model_compete_command
 from bittr_tess_vetter.cli.periodogram_cli import periodogram_command
 from bittr_tess_vetter.cli.pipeline_run_cli import pipeline_group
-from bittr_tess_vetter.cli.resolve_stellar_cli import resolve_stellar_command
 from bittr_tess_vetter.cli.report_cli import report_command
 from bittr_tess_vetter.cli.resolve_neighbors_cli import resolve_neighbors_command
+from bittr_tess_vetter.cli.resolve_stellar_cli import resolve_stellar_command
+from bittr_tess_vetter.cli.rv_feasibility_cli import rv_feasibility_command
 from bittr_tess_vetter.cli.systematics_proxy_cli import systematics_proxy_command
 from bittr_tess_vetter.cli.timing_cli import timing_command
+from bittr_tess_vetter.cli.toi_query_cli import toi_query_command
 from bittr_tess_vetter.cli.transit_fit_cli import fit_command
-from bittr_tess_vetter.cli.rv_feasibility_cli import rv_feasibility_command
 from bittr_tess_vetter.cli.vet_cli import vet_command
 from bittr_tess_vetter.features import FeatureConfig
 
@@ -109,6 +110,7 @@ cli.add_command(timing_command)
 cli.add_command(systematics_proxy_command)
 cli.add_command(dilution_command)
 cli.add_command(rv_feasibility_command)
+cli.add_command(toi_query_command)
 cli.add_command(pipeline_group)
 
 

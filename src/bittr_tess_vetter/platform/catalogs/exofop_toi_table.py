@@ -14,6 +14,30 @@ CONNECT_TIMEOUT_SECONDS = 10.0
 READ_TIMEOUT_SECONDS = 45.0
 MAX_RETRIES = 3
 
+_NUMERIC_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
+    "radius": (
+        "planet_radius_r_earth",
+        "planet_radius_rearth",
+        "radius_r_earth",
+        "radius_rearth",
+        "radius",
+        "prad",
+    ),
+    "teff": ("teff", "teff_k", "stellar_teff", "stellar_teff_k"),
+    "snr": ("snr", "signal_to_noise"),
+    "tmag": ("tmag", "tess_mag", "tess_magnitude"),
+    "period": ("period_days", "period", "per"),
+    "depth": ("depth_ppm", "depth", "dep_ppm", "dep_ppt"),
+    "duration": ("duration_hours", "duration_hr", "duration_hrs", "duration", "dur"),
+}
+_DISPOSITION_ALIASES: tuple[str, ...] = (
+    "tfopwg_disposition",
+    "disposition",
+    "toi_disposition",
+)
+_KNOWN_PLANET_CODES = {"KP", "KNOWN_PLANET", "KNOWNPLANET", "CONFIRMED_PLANET", "CONFIRMEDPLANET"}
+_FALSE_POSITIVE_CODES = {"FP", "FA", "FALSE_POSITIVE", "FALSEPOSITIVE"}
+
 
 def _default_cache_dir() -> Path:
     root = os.getenv("BITTR_TESS_VETTER_CACHE_ROOT") or os.getenv("ASTRO_ARC_CACHE_ROOT")
@@ -99,6 +123,181 @@ class ExoFOPToiTable:
                     out.append(row)
                     break
         return out
+
+
+@dataclass(frozen=True)
+class ExoFOPToiQueryStats:
+    source_rows: int
+    matched_rows_before_limit: int
+    returned_rows: int
+    skipped_non_numeric_rows: int
+    filtered_by_disposition_rows: int
+
+
+@dataclass(frozen=True)
+class ExoFOPToiQueryResult:
+    rows: list[dict[str, str]]
+    stats: ExoFOPToiQueryStats
+
+
+def _normalize_disposition_text(value: str | None) -> str:
+    text = (value or "").strip().upper()
+    for ch in ("-", " ", "/"):
+        text = text.replace(ch, "_")
+    while "__" in text:
+        text = text.replace("__", "_")
+    return text.strip("_")
+
+
+def _parse_float_value(row: dict[str, str], aliases: tuple[str, ...]) -> float | None:
+    for key in aliases:
+        raw = row.get(key)
+        if raw is None:
+            continue
+        text = str(raw).strip()
+        if not text:
+            continue
+        normalized = text.replace(",", "")
+        if normalized.lower() in {"nan", "none", "null", "--", "n/a", "na"}:
+            continue
+        try:
+            return float(normalized)
+        except Exception:
+            continue
+    return None
+
+
+def _row_disposition(row: dict[str, str]) -> str:
+    for key in _DISPOSITION_ALIASES:
+        value = row.get(key)
+        if value is not None and str(value).strip():
+            return str(value)
+    return ""
+
+
+def _disposition_matches_filter(row_disp_norm: str, wanted_norm: set[str]) -> bool:
+    if not wanted_norm:
+        return True
+    if not row_disp_norm:
+        return False
+    tokens = {part for part in row_disp_norm.split("_") if part}
+    return any(target == row_disp_norm or target in tokens for target in wanted_norm)
+
+
+def query_exofop_toi_rows(
+    table: ExoFOPToiTable,
+    *,
+    radius_min: float | None = None,
+    radius_max: float | None = None,
+    teff_min: float | None = None,
+    teff_max: float | None = None,
+    snr_min: float | None = None,
+    snr_max: float | None = None,
+    tmag_min: float | None = None,
+    tmag_max: float | None = None,
+    period_min: float | None = None,
+    period_max: float | None = None,
+    depth_min: float | None = None,
+    depth_max: float | None = None,
+    duration_min: float | None = None,
+    duration_max: float | None = None,
+    include_dispositions: set[str] | None = None,
+    exclude_dispositions: set[str] | None = None,
+    exclude_known_planets: bool = False,
+    exclude_false_positives: bool = False,
+    sort_by: str | None = None,
+    sort_descending: bool = False,
+    max_results: int | None = None,
+) -> ExoFOPToiQueryResult:
+    """Filter/sort ExoFOP TOI rows with range and disposition constraints."""
+    numeric_filters: dict[str, tuple[float | None, float | None]] = {
+        "radius": (radius_min, radius_max),
+        "teff": (teff_min, teff_max),
+        "snr": (snr_min, snr_max),
+        "tmag": (tmag_min, tmag_max),
+        "period": (period_min, period_max),
+        "depth": (depth_min, depth_max),
+        "duration": (duration_min, duration_max),
+    }
+    include_norm = {_normalize_disposition_text(x) for x in (include_dispositions or set()) if x}
+    exclude_norm = {_normalize_disposition_text(x) for x in (exclude_dispositions or set()) if x}
+
+    rows_out: list[dict[str, str]] = []
+    skipped_non_numeric_rows = 0
+    filtered_by_disposition_rows = 0
+    for row in table.rows:
+        keep = True
+        for field_name, (min_value, max_value) in numeric_filters.items():
+            if min_value is None and max_value is None:
+                continue
+            value = _parse_float_value(row, _NUMERIC_FIELD_ALIASES[field_name])
+            if value is None:
+                skipped_non_numeric_rows += 1
+                keep = False
+                break
+            if min_value is not None and value < float(min_value):
+                keep = False
+                break
+            if max_value is not None and value > float(max_value):
+                keep = False
+                break
+        if not keep:
+            continue
+
+        row_disposition = _row_disposition(row)
+        row_disp_norm = _normalize_disposition_text(row_disposition)
+        if include_norm and not _disposition_matches_filter(row_disp_norm, include_norm):
+            filtered_by_disposition_rows += 1
+            continue
+        if exclude_norm and _disposition_matches_filter(row_disp_norm, exclude_norm):
+            filtered_by_disposition_rows += 1
+            continue
+        if exclude_known_planets and _disposition_matches_filter(row_disp_norm, _KNOWN_PLANET_CODES):
+            filtered_by_disposition_rows += 1
+            continue
+        if exclude_false_positives and _disposition_matches_filter(
+            row_disp_norm, _FALSE_POSITIVE_CODES
+        ):
+            filtered_by_disposition_rows += 1
+            continue
+
+        rows_out.append(dict(row))
+
+    matched_rows_before_limit = len(rows_out)
+
+    if sort_by:
+        sort_key_text = str(sort_by).strip().lower()
+        aliases = _NUMERIC_FIELD_ALIASES.get(sort_key_text)
+        if aliases:
+            sortable: list[tuple[float, dict[str, str]]] = []
+            unsortable: list[dict[str, str]] = []
+            for row in rows_out:
+                parsed = _parse_float_value(row, aliases)
+                if parsed is None:
+                    unsortable.append(row)
+                else:
+                    sortable.append((parsed, row))
+            sortable.sort(key=lambda item: item[0], reverse=bool(sort_descending))
+            rows_out = [row for _, row in sortable] + unsortable
+        else:
+            rows_out.sort(
+                key=lambda r: str(r.get(sort_by) or "").lower(),
+                reverse=bool(sort_descending),
+            )
+
+    if max_results is not None and int(max_results) >= 0:
+        rows_out = rows_out[: int(max_results)]
+
+    return ExoFOPToiQueryResult(
+        rows=rows_out,
+        stats=ExoFOPToiQueryStats(
+            source_rows=len(table.rows),
+            matched_rows_before_limit=matched_rows_before_limit,
+            returned_rows=len(rows_out),
+            skipped_non_numeric_rows=skipped_non_numeric_rows,
+            filtered_by_disposition_rows=filtered_by_disposition_rows,
+        ),
+    )
 
 
 _CACHE: ExoFOPToiTable | None = None
