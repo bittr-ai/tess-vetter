@@ -15,8 +15,9 @@ class _FakeTarget:
     def __init__(self) -> None:
         self.trilegal_fname = None
         self.trilegal_url = "http://stev.oapd.inaf.it/tmp/expired.dat"
-        self.ra = 123.45
-        self.dec = -12.34
+        self.ra = None
+        self.dec = None
+        self.stars = {"ra": [123.45], "dec": [-12.34]}
 
 
 def test_stage_runtime_artifacts_requeries_trilegal_on_expired_or_empty(monkeypatch, tmp_path: Path) -> None:

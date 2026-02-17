@@ -84,6 +84,65 @@ def _best_effort_chmod(path: Path, mode: int) -> None:
         return
 
 
+def _extract_target_coordinates(target: Any) -> tuple[float | None, float | None]:
+    """Best-effort RA/Dec extraction from TRICERATOPS target objects."""
+    for ra_key, dec_key in (("ra", "dec"), ("RA", "Dec")):
+        ra = getattr(target, ra_key, None)
+        dec = getattr(target, dec_key, None)
+        if ra is not None and dec is not None:
+            try:
+                return float(ra), float(dec)
+            except Exception:
+                pass
+
+    stars = getattr(target, "stars", None)
+    if stars is None:
+        return None, None
+
+    def _first_numeric(value: Any) -> float | None:
+        if value is None:
+            return None
+        # pandas-like series
+        iloc = getattr(value, "iloc", None)
+        if iloc is not None:
+            try:
+                return float(iloc[0])
+            except Exception:
+                pass
+        values = getattr(value, "values", None)
+        if values is not None:
+            try:
+                if len(values) > 0:
+                    return float(values[0])
+            except Exception:
+                pass
+        if isinstance(value, (list, tuple)):
+            if len(value) > 0:
+                try:
+                    return float(value[0])
+                except Exception:
+                    pass
+            return None
+        try:
+            return float(value)
+        except Exception:
+            return None
+
+    # DataFrame-like mapping access first, then attribute access.
+    try:
+        ra_val = _first_numeric(stars["ra"]) if "ra" in stars else None  # type: ignore[index]
+    except Exception:
+        ra_val = _first_numeric(getattr(stars, "ra", None))
+    try:
+        dec_val = _first_numeric(stars["dec"]) if "dec" in stars else None  # type: ignore[index]
+    except Exception:
+        dec_val = _first_numeric(getattr(stars, "dec", None))
+
+    if ra_val is not None and dec_val is not None:
+        return ra_val, dec_val
+    return None, None
+
+
 # =============================================================================
 # Input Validation Schema
 # =============================================================================
@@ -535,8 +594,7 @@ def stage_triceratops_runtime_artifacts(
                         )
                     except Exception:
                         raise
-                    ra = getattr(target, "ra", None) or getattr(target, "RA", None)
-                    dec = getattr(target, "dec", None) or getattr(target, "Dec", None)
+                    ra, dec = _extract_target_coordinates(target)
                     if ra is None or dec is None:
                         raise
                     new_url = query_TRILEGAL(float(ra), float(dec), verbose=0)
@@ -1533,8 +1591,7 @@ def calculate_fpp_handler(
                                 )
                             except Exception:
                                 raise
-                            ra = getattr(target, "ra", None) or getattr(target, "RA", None)
-                            dec = getattr(target, "dec", None) or getattr(target, "Dec", None)
+                            ra, dec = _extract_target_coordinates(target)
                             if ra is None or dec is None:
                                 raise
                             new_url = query_TRILEGAL(float(ra), float(dec), verbose=0)
