@@ -56,7 +56,18 @@ def required_report_check_ids(*, include_v03: bool, has_stellar: bool) -> list[s
 def coerce_vetting_bundle(payload: VettingBundleResult | dict[str, Any]) -> VettingBundleResult:
     if isinstance(payload, VettingBundleResult):
         return payload
-    return VettingBundleResult.model_validate(payload)
+    # The CLI vet v2 output wraps VettingBundleResult with extra top-level fields
+    # (verdict, summary, stellar, lc_summary, schema_version, etc.).  Strip these
+    # known envelope keys so extra="forbid" on VettingBundleResult doesn't reject
+    # valid vet output files.  Unknown keys are kept so truly malformed payloads
+    # still fail validation.
+    _CLI_VET_ENVELOPE_KEYS = {
+        "schema_version", "verdict", "verdict_source", "summary",
+        "result", "stellar", "lc_summary", "lc_summary_meta",
+        "sector_gating", "sector_measurements",
+    }
+    filtered = {k: v for k, v in payload.items() if k not in _CLI_VET_ENVELOPE_KEYS}
+    return VettingBundleResult.model_validate(filtered)
 
 
 def validate_vet_artifact_candidate_match(
