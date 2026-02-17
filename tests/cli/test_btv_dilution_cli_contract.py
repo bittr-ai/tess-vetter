@@ -74,6 +74,7 @@ def test_btv_dilution_success_payload_contract(monkeypatch, tmp_path: Path) -> N
     assert "verdict_source" in payload
     assert payload["result"]["verdict"] == payload["verdict"]
     assert payload["result"]["verdict_source"] == payload["verdict_source"]
+    assert payload["result"]["reliability_summary"]["action_hint"] == payload["verdict"]
     assert payload["inputs_summary"]["input_resolution"]["source"] == "toi_catalog"
     assert payload["provenance"]["host_profile_path"] == str(host_profile_path)
     assert payload["provenance"]["host_ambiguous"] is True
@@ -110,6 +111,10 @@ def test_btv_dilution_reference_sources_only_success_contract(monkeypatch, tmp_p
         json.dumps(
             {
                 "schema_version": "reference_sources.v1",
+                "multiplicity_risk": {
+                    "status": "ELEVATED",
+                    "reasons": ["TARGET_RUWE_ELEVATED"],
+                },
                 "reference_sources": [
                     {
                         "source_id": "tic:123",
@@ -151,6 +156,7 @@ def test_btv_dilution_reference_sources_only_success_contract(monkeypatch, tmp_p
     assert payload["provenance"]["host_profile_path"] is None
     assert payload["provenance"]["reference_sources_path"] == str(reference_sources_path)
     assert payload["provenance"]["host_ambiguous"] is True
+    assert payload["reliability_summary"]["multiplicity_risk"]["status"] == "ELEVATED"
 
 
 def test_btv_dilution_partial_host_profile_supplemented_by_reference_sources(

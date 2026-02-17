@@ -113,6 +113,17 @@ For machine consumers, the canonical verdict fields across diagnostic CLI comman
 Backward compatibility: legacy command-specific fields are still emitted and remain supported.
 Use the canonical fields for new integrations.
 
+Recent contract additions (machine consumers)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``btv fpp`` now emits ``schema_version=cli.fpp.v3`` and
+  ``provenance.runtime.degenerate_guard`` (max-points quality-guard attempts/provenance).
+- Pipeline evidence output now emits ``schema_version=pipeline.evidence_table.v2`` and
+  ``detrend_invariance_policy_*`` fields in each row.
+- ``btv resolve-neighbors`` now emits ``multiplicity_risk`` (RUWE/NSS/duplicated-source risk rollup).
+- ``btv localize-host`` and ``btv dilution`` now emit ``reliability_summary`` in both top-level and
+  ``result`` payloads; when a reference-sources file includes ``multiplicity_risk``, it is threaded through.
+
 Per-command legacy-to-canonical mapping:
 
 .. list-table::

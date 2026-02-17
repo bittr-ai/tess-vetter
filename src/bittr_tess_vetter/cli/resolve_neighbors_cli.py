@@ -22,6 +22,96 @@ from bittr_tess_vetter.platform.catalogs.toi_resolution import (
     resolve_toi_to_tic_ephemeris_depth,
 )
 
+_RUWE_ELEVATED_THRESHOLD = 1.4
+
+
+def _coerce_optional_float(value: Any) -> float | None:
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    return out
+
+
+def _coerce_optional_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return bool(value)
+    return None
+
+
+def _compute_multiplicity_risk(*, reference_sources: list[dict[str, Any]], gaia_status: str) -> dict[str, Any]:
+    if gaia_status != "ok":
+        return {
+            "status": "UNKNOWN",
+            "reasons": ["GAIA_UNAVAILABLE"],
+            "ruwe_threshold": float(_RUWE_ELEVATED_THRESHOLD),
+            "target_ruwe": None,
+            "target_non_single_star": None,
+            "target_duplicated_source": None,
+            "n_neighbors": int(max(0, len(reference_sources) - 1)),
+            "n_neighbors_ruwe_elevated": 0,
+            "n_neighbors_nss_or_duplicated": 0,
+        }
+
+    target = reference_sources[0] if reference_sources else {}
+    target_meta = target.get("meta") if isinstance(target.get("meta"), dict) else {}
+    target_ruwe = _coerce_optional_float(target_meta.get("ruwe"))
+    target_nss = _coerce_optional_bool(target_meta.get("non_single_star"))
+    target_dup = _coerce_optional_bool(target_meta.get("duplicated_source"))
+
+    reasons: list[str] = []
+    severity = 0  # 0=LOW, 1=ELEVATED, 2=HIGH
+    if target_nss:
+        reasons.append("TARGET_NON_SINGLE_STAR")
+        severity = max(severity, 2)
+    if target_dup:
+        reasons.append("TARGET_DUPLICATED_SOURCE")
+        severity = max(severity, 1)
+    if target_ruwe is not None and target_ruwe > _RUWE_ELEVATED_THRESHOLD:
+        reasons.append("TARGET_RUWE_ELEVATED")
+        severity = max(severity, 1)
+
+    n_neighbors = 0
+    n_neighbors_ruwe_elevated = 0
+    n_neighbors_nss_or_duplicated = 0
+    for source in reference_sources[1:]:
+        n_neighbors += 1
+        meta = source.get("meta") if isinstance(source.get("meta"), dict) else {}
+        ruwe = _coerce_optional_float(meta.get("ruwe"))
+        nss = _coerce_optional_bool(meta.get("non_single_star"))
+        dup = _coerce_optional_bool(meta.get("duplicated_source"))
+        if ruwe is not None and ruwe > _RUWE_ELEVATED_THRESHOLD:
+            n_neighbors_ruwe_elevated += 1
+        if nss or dup:
+            n_neighbors_nss_or_duplicated += 1
+
+    if n_neighbors_ruwe_elevated > 0:
+        reasons.append("NEIGHBOR_RUWE_ELEVATED")
+        severity = max(severity, 1)
+    if n_neighbors_nss_or_duplicated > 0:
+        reasons.append("NEIGHBOR_NSS_OR_DUPLICATED")
+        severity = max(severity, 1)
+
+    if not reasons:
+        reasons = ["NO_MULTIPLICITY_FLAGS"]
+
+    status = "LOW"
+    if severity >= 2:
+        status = "HIGH"
+    elif severity == 1:
+        status = "ELEVATED"
+    return {
+        "status": status,
+        "reasons": reasons,
+        "ruwe_threshold": float(_RUWE_ELEVATED_THRESHOLD),
+        "target_ruwe": target_ruwe,
+        "target_non_single_star": target_nss,
+        "target_duplicated_source": target_dup,
+        "n_neighbors": int(n_neighbors),
+        "n_neighbors_ruwe_elevated": int(n_neighbors_ruwe_elevated),
+        "n_neighbors_nss_or_duplicated": int(n_neighbors_nss_or_duplicated),
+    }
+
 
 def _resolve_tic_id(*, tic_id: int | None, toi: str | None, network_ok: bool) -> tuple[int, dict[str, Any] | None]:
     if tic_id is not None:
@@ -148,6 +238,8 @@ def _execute_resolve_neighbors(
                     "gaia_source_id": int(gaia_result.source.source_id),
                     "phot_g_mean_mag": gaia_result.source.phot_g_mean_mag,
                     "ruwe": gaia_result.source.ruwe,
+                    "non_single_star": getattr(gaia_result.source, "non_single_star", None),
+                    "duplicated_source": getattr(gaia_result.source, "duplicated_source", None),
                 }
 
             added = 0
@@ -169,6 +261,8 @@ def _execute_resolve_neighbors(
                             "phot_g_mean_mag": neighbor.phot_g_mean_mag,
                             "delta_mag": neighbor.delta_mag,
                             "ruwe": neighbor.ruwe,
+                            "non_single_star": getattr(neighbor, "non_single_star", None),
+                            "duplicated_source": getattr(neighbor, "duplicated_source", None),
                         },
                     }
                 )
@@ -178,9 +272,14 @@ def _execute_resolve_neighbors(
             gaia_resolution["status"] = "error_fallback_target_only"
             gaia_resolution["message"] = f"{type(exc).__name__}: {exc}"
 
+    multiplicity_risk = _compute_multiplicity_risk(
+        reference_sources=reference_sources,
+        gaia_status=str(gaia_resolution.get("status")),
+    )
     return {
         "schema_version": REFERENCE_SOURCES_SCHEMA_VERSION,
         "reference_sources": reference_sources,
+        "multiplicity_risk": multiplicity_risk,
         "target": {
             "tic_id": int(tic_id),
             "toi": toi,
@@ -194,6 +293,7 @@ def _execute_resolve_neighbors(
             "coordinate_source": str(coordinate_source),
             "coordinate_resolution": coordinate_resolution,
             "gaia_resolution": gaia_resolution,
+            "multiplicity_risk": multiplicity_risk,
             "toi_resolution": toi_resolution,
         },
     }

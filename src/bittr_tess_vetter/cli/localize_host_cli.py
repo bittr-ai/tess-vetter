@@ -18,6 +18,7 @@ from bittr_tess_vetter.cli.common_cli import (
     EXIT_RUNTIME_ERROR,
     BtvCliError,
     dump_json_output,
+    load_json_file,
     resolve_optional_output_path,
 )
 from bittr_tess_vetter.cli.localize_cli import _build_reference_sources, _extract_tpf_meta
@@ -41,6 +42,43 @@ def _derive_localize_host_verdict(result_payload: Any) -> tuple[str | None, str 
         if verdict is not None:
             return str(verdict), "$.result.consensus.verdict"
     return None, None
+
+
+def _build_localize_reliability_summary(
+    *,
+    result_payload: dict[str, Any],
+    multiplicity_risk: dict[str, Any] | None,
+) -> dict[str, Any]:
+    consensus = result_payload.get("consensus")
+    consensus_obj = consensus if isinstance(consensus, dict) else {}
+    reliability = consensus_obj.get("reliability")
+    reliability_obj = reliability if isinstance(reliability, dict) else {}
+
+    reliability_flags = consensus_obj.get("reliability_flags")
+    reliability_flags_list = [str(x) for x in reliability_flags] if isinstance(reliability_flags, list) else []
+    interpretation_code = (
+        str(consensus_obj.get("interpretation_code"))
+        if consensus_obj.get("interpretation_code") is not None
+        else None
+    )
+    action_hint = str(consensus_obj.get("action_hint")) if consensus_obj.get("action_hint") is not None else None
+
+    bad_reliability = bool(reliability_obj.get("bad_reliability"))
+    status = "RELIABLE"
+    if bad_reliability or reliability_flags_list or interpretation_code is not None:
+        status = "REVIEW_REQUIRED"
+    if action_hint == "DEFER_HOST_ASSIGNMENT":
+        status = "DEFER"
+
+    return {
+        "status": status,
+        "action_hint": action_hint,
+        "interpretation_code": interpretation_code,
+        "reliability_code": reliability_obj.get("code"),
+        "reliability_flags": reliability_flags_list,
+        "bad_reliability": bool(bad_reliability),
+        "multiplicity_risk": multiplicity_risk,
+    }
 
 
 def _download_tpf_fits(
@@ -111,6 +149,7 @@ def _execute_localize_host(
     random_seed: int,
     input_resolution: dict[str, Any] | None,
     reference_sources_override: list[dict[str, Any]] | None = None,
+    reference_sources_multiplicity_risk: dict[str, Any] | None = None,
     brightness_prior_enabled: bool = True,
     brightness_prior_weight: float = 40.0,
     brightness_prior_softening_mag: float = 2.5,
@@ -216,8 +255,13 @@ def _execute_localize_host(
     selected_sectors = [int(getattr(tpf.ref, "sector", -1)) for tpf in tpf_fits_list]
     result_payload = dict(result)
     verdict, verdict_source = _derive_localize_host_verdict(result_payload)
+    reliability_summary = _build_localize_reliability_summary(
+        result_payload=result_payload,
+        multiplicity_risk=reference_sources_multiplicity_risk,
+    )
     result_payload["verdict"] = verdict
     result_payload["verdict_source"] = verdict_source
+    result_payload["reliability_summary"] = reliability_summary
     return {
         "schema_version": CLI_LOCALIZE_HOST_SCHEMA_VERSION,
         "result": result_payload,
@@ -241,6 +285,8 @@ def _execute_localize_host(
             "brightness_prior_enabled": bool(brightness_prior_enabled),
             "brightness_prior_weight": float(brightness_prior_weight),
             "brightness_prior_softening_mag": float(brightness_prior_softening_mag),
+            "reference_sources_multiplicity_risk": reference_sources_multiplicity_risk,
+            "reliability_summary": reliability_summary,
         },
     }
 
@@ -370,7 +416,11 @@ def localize_host_command(
     if (ra_deg is None) != (dec_deg is None):
         raise BtvCliError("Provide both --ra-deg and --dec-deg together.", exit_code=EXIT_INPUT_ERROR)
     reference_sources_override = None
+    reference_sources_multiplicity_risk: dict[str, Any] | None = None
     if reference_sources_file is not None:
+        reference_payload = load_json_file(Path(reference_sources_file), label="reference sources file")
+        if isinstance(reference_payload.get("multiplicity_risk"), dict):
+            reference_sources_multiplicity_risk = dict(reference_payload.get("multiplicity_risk") or {})
         reference_sources_override = load_reference_sources_file(Path(reference_sources_file))
 
     (
@@ -410,6 +460,7 @@ def localize_host_command(
             random_seed=int(random_seed),
             input_resolution=input_resolution,
             reference_sources_override=reference_sources_override,
+            reference_sources_multiplicity_risk=reference_sources_multiplicity_risk,
             brightness_prior_enabled=bool(brightness_prior),
             brightness_prior_weight=float(brightness_prior_weight),
             brightness_prior_softening_mag=float(brightness_prior_softening_mag),

@@ -127,6 +127,8 @@ def test_btv_resolve_neighbors_success_payload_contract(monkeypatch, tmp_path: P
     assert payload["reference_sources"][1]["role"] == "companion"
     assert payload["reference_sources"][1]["separation_arcsec"] == 4.2
     assert payload["provenance"]["gaia_resolution"]["n_neighbors_added"] == 1
+    assert payload["multiplicity_risk"]["status"] == "LOW"
+    assert payload["multiplicity_risk"]["reasons"] == ["NO_MULTIPLICITY_FLAGS"]
 
 
 def test_btv_resolve_neighbors_gaia_error_falls_back_to_target_only(monkeypatch, tmp_path: Path) -> None:
@@ -162,6 +164,58 @@ def test_btv_resolve_neighbors_gaia_error_falls_back_to_target_only(monkeypatch,
     assert len(payload["reference_sources"]) == 1
     assert payload["reference_sources"][0]["source_id"] == "tic:123"
     assert payload["provenance"]["gaia_resolution"]["status"] == "error_fallback_target_only"
+    assert payload["multiplicity_risk"]["status"] == "UNKNOWN"
+    assert "GAIA_UNAVAILABLE" in payload["multiplicity_risk"]["reasons"]
+
+
+def test_btv_resolve_neighbors_emits_elevated_multiplicity_risk(monkeypatch, tmp_path: Path) -> None:
+    class _FakeNssSource(_FakeSource):
+        def __init__(self, **kwargs: Any) -> None:
+            super().__init__(**kwargs)
+            self.non_single_star = True
+            self.duplicated_source = False
+
+    def _fake_query_gaia_by_position_sync(ra: float, dec: float, radius_arcsec: float) -> _FakeGaiaResult:
+        _ = ra, dec, radius_arcsec
+        return _FakeGaiaResult(
+            source=_FakeNssSource(
+                source_id=9001,
+                ra=120.001,
+                dec=-30.002,
+                phot_g_mean_mag=10.0,
+                ruwe=1.8,
+            ),
+            neighbors=[],
+        )
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.resolve_neighbors_cli.query_gaia_by_position_sync",
+        _fake_query_gaia_by_position_sync,
+    )
+
+    out_path = tmp_path / "reference_sources_multiplicity_risk.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        resolve_neighbors_command,
+        [
+            "--tic-id",
+            "123",
+            "--ra-deg",
+            "120.0",
+            "--dec-deg",
+            "-30.0",
+            "--network-ok",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    risk = payload["multiplicity_risk"]
+    assert risk["status"] == "HIGH"
+    assert "TARGET_NON_SINGLE_STAR" in risk["reasons"]
+    assert "TARGET_RUWE_ELEVATED" in risk["reasons"]
 
 
 def test_btv_resolve_neighbors_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: Path) -> None:

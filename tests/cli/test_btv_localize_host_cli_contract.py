@@ -524,6 +524,8 @@ def test_execute_localize_host_contract_includes_reliability_and_interpretation_
     assert payload_1["result"]["consensus"]["consensus_label"] == "AMBIGUOUS"
     assert payload_1["result"]["per_sector_results"][0]["reliability_flagged"] is True
     assert "HIGH_CADENCE_DROPOUT" in payload_1["result"]["per_sector_results"][0]["reliability_flags"]
+    assert payload_1["result"]["reliability_summary"]["status"] == "REVIEW_REQUIRED"
+    assert payload_1["provenance"]["reliability_summary"]["status"] == "REVIEW_REQUIRED"
 
 
 def test_btv_localize_host_toi5807_style_faint_neighbor_artifact_suppresses_off_target(
@@ -630,6 +632,10 @@ def test_btv_localize_host_loads_reference_sources_file(monkeypatch, tmp_path: P
         json.dumps(
             {
                 "schema_version": "reference_sources.v1",
+                "multiplicity_risk": {
+                    "status": "ELEVATED",
+                    "reasons": ["TARGET_RUWE_ELEVATED"],
+                },
                 "reference_sources": [
                     {"name": "Target TIC 123", "source_id": "tic:123", "ra": 120.0, "dec": -30.0},
                     {"name": "Gaia 111", "source_id": "gaia:111", "ra": 120.01, "dec": -30.01},
@@ -661,6 +667,7 @@ def test_btv_localize_host_loads_reference_sources_file(monkeypatch, tmp_path: P
 
     assert result.exit_code == 0, result.output
     assert seen["reference_sources_override"][0]["source_id"] == "tic:123"
+    assert seen["reference_sources_multiplicity_risk"]["status"] == "ELEVATED"
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == "cli.localize_host.v1"
 

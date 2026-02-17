@@ -356,6 +356,35 @@ def _derive_dilution_verdict(physics_flags_payload: Any) -> tuple[str | None, st
     )
 
 
+def _build_dilution_reliability_summary(
+    *,
+    physics_flags_payload: dict[str, Any],
+    n_plausible_scenarios: int,
+    verdict: str | None,
+    multiplicity_risk: dict[str, Any] | None,
+) -> dict[str, Any]:
+    requires_followup = bool(physics_flags_payload.get("requires_resolved_followup"))
+    radius_inconsistent = bool(physics_flags_payload.get("planet_radius_inconsistent"))
+    status = "RELIABLE"
+    action_hint = "DILUTION_PRIMARY_PLAUSIBLE"
+    if requires_followup:
+        status = "REVIEW_REQUIRED"
+        action_hint = "REVIEW_WITH_DILUTION"
+    if radius_inconsistent:
+        status = "IMPLAUSIBLE"
+        action_hint = "IMPLAUSIBLE_PRIMARY_SCENARIO"
+    if verdict is not None:
+        action_hint = str(verdict)
+    return {
+        "status": status,
+        "action_hint": action_hint,
+        "requires_resolved_followup": requires_followup,
+        "planet_radius_inconsistent": radius_inconsistent,
+        "n_plausible_scenarios": int(n_plausible_scenarios),
+        "multiplicity_risk": multiplicity_risk,
+    }
+
+
 @click.command("dilution")
 @click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier for candidate input resolution.")
@@ -427,10 +456,13 @@ def dilution_command(
 
     reference_sources_path: Path | None = None
     reference_source_inputs: _HostHypothesisInputs | None = None
+    reference_sources_multiplicity_risk: dict[str, Any] | None = None
     if reference_sources_file:
         reference_sources_path = Path(reference_sources_file)
         reference_sources_payload = load_json_file(reference_sources_path, label="reference sources file")
         reference_source_inputs = _parse_reference_sources(reference_sources_payload)
+        if isinstance(reference_sources_payload.get("multiplicity_risk"), dict):
+            reference_sources_multiplicity_risk = dict(reference_sources_payload.get("multiplicity_risk") or {})
 
     profile_tic_id, primary_g_mag, primary_radius_rsun, companions_profile, host_ambiguous = _merge_host_inputs(
         host_profile=host_profile_inputs,
@@ -512,18 +544,26 @@ def dilution_command(
     scenarios_payload = [scenario.to_dict() for scenario in scenarios]
     physics_flags_payload = physics_flags.to_dict()
     verdict, verdict_source = _derive_dilution_verdict(physics_flags_payload)
+    reliability_summary = _build_dilution_reliability_summary(
+        physics_flags_payload=physics_flags_payload,
+        n_plausible_scenarios=int(physics_flags.n_plausible_scenarios),
+        verdict=verdict,
+        multiplicity_risk=reference_sources_multiplicity_risk,
+    )
     payload = {
         "schema_version": "cli.dilution.v1",
         "result": {
             "scenarios": scenarios_payload,
             "physics_flags": physics_flags_payload,
             "n_plausible_scenarios": int(physics_flags.n_plausible_scenarios),
+            "reliability_summary": reliability_summary,
             "verdict": verdict,
             "verdict_source": verdict_source,
         },
         "scenarios": scenarios_payload,
         "physics_flags": physics_flags_payload,
         "n_plausible_scenarios": int(physics_flags.n_plausible_scenarios),
+        "reliability_summary": reliability_summary,
         "verdict": verdict,
         "verdict_source": verdict_source,
         "inputs_summary": {
@@ -537,6 +577,8 @@ def dilution_command(
             "host_ambiguous": bool(host_ambiguous),
             "observed_depth_ppm": float(observed_depth_ppm),
             "primary_radius_resolution": stellar_radius_resolution,
+            "reference_sources_multiplicity_risk": reference_sources_multiplicity_risk,
+            "reliability_summary": reliability_summary,
         },
     }
     dump_json_output(payload, out_path)
