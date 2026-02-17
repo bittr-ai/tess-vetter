@@ -88,6 +88,8 @@ def test_btv_rv_feasibility_success_payload_contract(monkeypatch, tmp_path: Path
     assert payload["inputs_summary"]["tic_id"] == 123
     assert payload["provenance"]["options"]["flux_type"] == "sap"
     assert payload["provenance"]["stellar"]["source"] == "auto"
+    assert "rotation_broadening" in payload["rv_feasibility"]
+    assert "line_broadening_bin" in payload["rv_feasibility"]["rotation_broadening"]
 
 
 def test_btv_rv_feasibility_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: Path) -> None:
@@ -204,3 +206,50 @@ def test_btv_rv_feasibility_report_file_inputs_override_toi(monkeypatch, tmp_pat
     assert payload["provenance"]["inputs_source"] == "report_file"
     assert payload["provenance"]["report_file"] == str(report_path.resolve())
 
+
+def test_btv_rv_feasibility_hard_line_broadening_downgrades_verdict(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.rv_feasibility_cli._download_and_stitch_lightcurve",
+        lambda **_kwargs: (
+            LightCurve(time=[1.0, 2.0, 3.0], flux=[1.0, 1.0, 1.0], flux_err=[0.001, 0.001, 0.001]),
+            [14],
+            "mast_discovery",
+        ),
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.rv_feasibility_cli.characterize_activity",
+        lambda **_kwargs: type(
+            "A",
+            (),
+            {
+                "to_dict": lambda self: {
+                    "rotation_period": 2.0,
+                    "variability_amplitude_ppm": 800.0,
+                    "variability_class": "spotted_rotator",
+                }
+            },
+        )(),
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.rv_feasibility_cli.load_auto_stellar_with_fallback",
+        lambda **_kwargs: ({"tmag": 8.2, "radius": 1.6}, {"status": "ok"}),
+    )
+
+    out_path = tmp_path / "rv_hard.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        rv_feasibility_command,
+        [
+            "--tic-id",
+            "123",
+            "--network-ok",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["rv_feasibility"]["rotation_broadening"]["line_broadening_bin"] == "HARD"
+    assert payload["rv_feasibility"]["rotation_broadening"]["v_eq_est_kms"] is not None
+    assert payload["rv_feasibility"]["verdict"] == "LOW_RV_FEASIBILITY"
+    assert payload["rv_feasibility"]["action_hint"] == "RV_CHALLENGING_FAST_ROTATOR"

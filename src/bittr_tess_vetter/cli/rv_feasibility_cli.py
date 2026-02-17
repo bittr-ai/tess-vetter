@@ -152,10 +152,45 @@ def _classify_feasibility(score: float) -> tuple[str, str]:
     return "LOW_RV_FEASIBILITY", "DEPRIORITIZE_RV_USE_PHOTOMETRIC_FOLLOWUP"
 
 
+def _estimate_v_eq_kms(*, stellar_radius_rsun: float | None, rotation_period_days: float | None) -> float | None:
+    if stellar_radius_rsun is None or rotation_period_days is None:
+        return None
+    if stellar_radius_rsun <= 0.0 or rotation_period_days <= 0.0:
+        return None
+    return 50.6 * float(stellar_radius_rsun) / float(rotation_period_days)
+
+
+def _line_broadening_bin(v_eq_est_kms: float | None) -> str:
+    if v_eq_est_kms is None:
+        return "UNKNOWN"
+    if v_eq_est_kms < 10.0:
+        return "GOOD"
+    if v_eq_est_kms <= 15.0:
+        return "OK"
+    return "HARD"
+
+
+def _apply_line_broadening_adjustment(*, base_verdict: str, broadening_bin: str) -> tuple[str, str]:
+    if broadening_bin == "HARD":
+        return "LOW_RV_FEASIBILITY", "RV_CHALLENGING_FAST_ROTATOR"
+    if broadening_bin == "OK" and base_verdict == "HIGH_RV_FEASIBILITY":
+        return "MODERATE_RV_FEASIBILITY", "RV_POSSIBLE_WITH_ACTIVITY_MODELING"
+    return base_verdict, (
+        "PRIORITIZE_RV_FOLLOWUP"
+        if base_verdict == "HIGH_RV_FEASIBILITY"
+        else (
+            "RV_POSSIBLE_WITH_ACTIVITY_MODELING"
+            if base_verdict == "MODERATE_RV_FEASIBILITY"
+            else "DEPRIORITIZE_RV_USE_PHOTOMETRIC_FOLLOWUP"
+        )
+    )
+
+
 def _compute_rv_feasibility(
     *,
     activity_payload: dict[str, Any],
     tmag: float | None,
+    stellar_radius_rsun: float | None,
 ) -> dict[str, Any]:
     rotation_period = activity_payload.get("rotation_period")
     variability_ppm = activity_payload.get("variability_amplitude_ppm")
@@ -172,15 +207,30 @@ def _compute_rv_feasibility(
     s_variability = _variability_score(variability)
     s_rotation = _rotation_score(rotation_days)
     score = (0.50 * s_brightness) + (0.35 * s_variability) + (0.15 * s_rotation)
-    verdict, action_hint = _classify_feasibility(score)
+    base_verdict, _base_action_hint = _classify_feasibility(score)
+    v_eq_est_kms = _estimate_v_eq_kms(
+        stellar_radius_rsun=stellar_radius_rsun,
+        rotation_period_days=rotation_days,
+    )
+    broadening_bin = _line_broadening_bin(v_eq_est_kms)
+    verdict, action_hint = _apply_line_broadening_adjustment(
+        base_verdict=base_verdict,
+        broadening_bin=broadening_bin,
+    )
     return {
         "score": round(float(score), 3),
         "verdict": verdict,
         "action_hint": action_hint,
         "inputs": {
             "tmag": float(tmag) if tmag is not None else None,
+            "stellar_radius_rsun": float(stellar_radius_rsun) if stellar_radius_rsun is not None else None,
             "rotation_period_days": rotation_days,
             "variability_amplitude_ppm": variability,
+        },
+        "rotation_broadening": {
+            "v_eq_est_kms": round(float(v_eq_est_kms), 2) if v_eq_est_kms is not None else None,
+            "line_broadening_bin": broadening_bin,
+            "velocity_source": "v_eq_estimated",
         },
         "components": {
             "brightness_score": round(float(s_brightness), 3),
@@ -212,11 +262,12 @@ def _compute_rv_feasibility(
 @click.option("--rotation-min-period", type=float, default=0.5, show_default=True)
 @click.option("--rotation-max-period", type=float, default=30.0, show_default=True)
 @click.option("--stellar-tmag", type=float, default=None, help="Optional manual stellar Tmag override.")
+@click.option("--stellar-radius", type=float, default=None, help="Optional manual stellar radius (Rsun) override.")
 @click.option(
     "--use-stellar-auto/--no-use-stellar-auto",
     default=True,
     show_default=True,
-    help="Attempt TIC/ExoFOP stellar lookup for Tmag when not provided explicitly.",
+    help="Attempt TIC/ExoFOP stellar lookup for Tmag/radius when missing from explicit inputs.",
 )
 @click.option(
     "-o",
@@ -238,6 +289,7 @@ def rv_feasibility_command(
     rotation_min_period: float,
     rotation_max_period: float,
     stellar_tmag: float | None,
+    stellar_radius: float | None,
     use_stellar_auto: bool,
     output_path_arg: str,
 ) -> None:
@@ -283,6 +335,7 @@ def rv_feasibility_command(
 
     stellar_provenance: dict[str, Any] = {"source": "none", "lookup": None}
     resolved_tmag: float | None = float(stellar_tmag) if stellar_tmag is not None else None
+    resolved_radius_rsun: float | None = float(stellar_radius) if stellar_radius is not None else None
 
     try:
         if report_file is None:
@@ -292,20 +345,24 @@ def rv_feasibility_command(
                 network_ok=bool(network_ok),
             )
 
-        if resolved_tmag is None and bool(use_stellar_auto) and bool(network_ok):
+        if bool(use_stellar_auto) and bool(network_ok) and (resolved_tmag is None or resolved_radius_rsun is None):
             stellar_values, lookup = load_auto_stellar_with_fallback(
                 tic_id=int(resolved_tic_id),
                 toi=resolved_toi_arg,
             )
-            auto_tmag = stellar_values.get("tmag")
-            resolved_tmag = float(auto_tmag) if auto_tmag is not None else None
+            if resolved_tmag is None:
+                auto_tmag = stellar_values.get("tmag")
+                resolved_tmag = float(auto_tmag) if auto_tmag is not None else None
+            if resolved_radius_rsun is None:
+                auto_radius = stellar_values.get("radius")
+                resolved_radius_rsun = float(auto_radius) if auto_radius is not None else None
             stellar_provenance = {"source": "auto", "lookup": lookup}
-        elif resolved_tmag is None and bool(use_stellar_auto) and not bool(network_ok):
+        elif bool(use_stellar_auto) and not bool(network_ok) and (resolved_tmag is None or resolved_radius_rsun is None):
             stellar_provenance = {
                 "source": "none",
                 "lookup": {"status": "skipped", "reason": "network_disabled"},
             }
-        elif resolved_tmag is not None:
+        elif resolved_tmag is not None or resolved_radius_rsun is not None:
             stellar_provenance = {"source": "explicit", "lookup": None}
 
         lc, sectors_used, sector_load_path = _download_and_stitch_lightcurve(
@@ -333,6 +390,7 @@ def rv_feasibility_command(
     rv_feasibility = _compute_rv_feasibility(
         activity_payload=activity_payload,
         tmag=resolved_tmag,
+        stellar_radius_rsun=resolved_radius_rsun,
     )
     verdict = str(rv_feasibility.get("verdict"))
     verdict_source = "$.result.rv_feasibility.verdict"
@@ -344,6 +402,7 @@ def rv_feasibility_command(
         "rotation_min_period": float(rotation_min_period),
         "rotation_max_period": float(rotation_max_period),
         "stellar_tmag": float(stellar_tmag) if stellar_tmag is not None else None,
+        "stellar_radius": float(stellar_radius) if stellar_radius is not None else None,
         "use_stellar_auto": bool(use_stellar_auto),
     }
 
