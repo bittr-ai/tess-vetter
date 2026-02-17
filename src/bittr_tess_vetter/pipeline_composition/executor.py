@@ -34,6 +34,8 @@ _OP_TO_COMMAND = {
     "dilution": "dilution",
     "detrend_grid": "detrend-grid",
     "fpp": "fpp",
+    "fpp_prepare": "fpp-prepare",
+    "fpp_run": "fpp-run",
 }
 
 _RETRYABLE_TOKENS = ("429", "timeout", "timed out", "temporarily unavailable", "connection reset")
@@ -435,9 +437,14 @@ def _run_one_toi(
 def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[str, Any]:
     toi = str(toi_result.get("toi"))
 
-    def _load_step_payloads() -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    def _load_step_payloads() -> tuple[
+        dict[str, dict[str, Any]],
+        dict[str, dict[str, Any]],
+        dict[tuple[str, str], dict[str, Any]],
+    ]:
         payloads_by_step_id: dict[str, dict[str, Any]] = {}
         payloads_by_op: dict[str, dict[str, Any]] = {}
+        payloads_by_step_id_and_op: dict[tuple[str, str], dict[str, Any]] = {}
         for row in toi_result.get("steps", []):
             if row.get("status") != "ok":
                 continue
@@ -451,7 +458,9 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
                         payloads_by_step_id[step_id] = payload
                     if op and op not in payloads_by_op:
                         payloads_by_op[op] = payload
-        return payloads_by_step_id, payloads_by_op
+                    if step_id and op and (step_id, op) not in payloads_by_step_id_and_op:
+                        payloads_by_step_id_and_op[(step_id, op)] = payload
+        return payloads_by_step_id, payloads_by_op, payloads_by_step_id_and_op
 
     def _is_finite_number(value: Any) -> bool:
         try:
@@ -473,12 +482,19 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
         *,
         payloads_by_op: dict[str, dict[str, Any]],
         payloads_by_step_id: dict[str, dict[str, Any]],
+        payloads_by_step_id_and_op: dict[tuple[str, str], dict[str, Any]],
         step_id: str | None = None,
+        allow_op_fallback: bool = True,
     ) -> dict[str, Any] | None:
         if step_id is not None:
-            payload = payloads_by_step_id.get(step_id)
+            payload = payloads_by_step_id_and_op.get((step_id, op))
             if payload is not None:
                 return payload
+            payload = payloads_by_step_id.get(step_id)
+            if payload is not None and allow_op_fallback:
+                return payload
+            if not allow_op_fallback:
+                return None
         return payloads_by_op.get(op)
 
     def _extract_verdict(payload: dict[str, Any] | None) -> Any:
@@ -505,59 +521,92 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
                 return nested
         return None
 
-    payloads_by_step_id, payloads_by_op = _load_step_payloads()
+    payloads_by_step_id, payloads_by_op, payloads_by_step_id_and_op = _load_step_payloads()
 
     model_compete = _maybe_load_step(
         "model_compete",
         payloads_by_op=payloads_by_op,
         payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
     )
     systematics = _maybe_load_step(
         "systematics_proxy",
         payloads_by_op=payloads_by_op,
         payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
     )
     ephemeris = _maybe_load_step(
         "ephemeris_reliability",
         payloads_by_op=payloads_by_op,
         payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
     )
-    timing = _maybe_load_step("timing", payloads_by_op=payloads_by_op, payloads_by_step_id=payloads_by_step_id)
+    timing = _maybe_load_step(
+        "timing",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
+    )
     localize_host = _maybe_load_step(
         "localize_host",
         payloads_by_op=payloads_by_op,
         payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
     )
-    dilution = _maybe_load_step("dilution", payloads_by_op=payloads_by_op, payloads_by_step_id=payloads_by_step_id)
-    fpp = _maybe_load_step("fpp", payloads_by_op=payloads_by_op, payloads_by_step_id=payloads_by_step_id)
+    dilution = _maybe_load_step(
+        "dilution",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
+    )
+    fpp = _maybe_load_step(
+        "fpp_run",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
+    )
+    if fpp is None:
+        fpp = _maybe_load_step(
+            "fpp",
+            payloads_by_op=payloads_by_op,
+            payloads_by_step_id=payloads_by_step_id,
+            payloads_by_step_id_and_op=payloads_by_step_id_and_op,
+        )
     resolve_neighbors = _maybe_load_step(
         "resolve_neighbors",
         payloads_by_op=payloads_by_op,
         payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
     )
     model_compete_raw = _maybe_load_step(
         "model_compete",
         payloads_by_op=payloads_by_op,
         payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
         step_id="model_compete_raw",
     )
     model_compete_detrended = _maybe_load_step(
         "model_compete",
         payloads_by_op=payloads_by_op,
         payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
         step_id="model_compete_detrended",
     )
     fpp_raw_payload = _maybe_load_step(
-        "fpp",
+        "fpp_run",
         payloads_by_op=payloads_by_op,
         payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
         step_id="fpp_raw",
+        allow_op_fallback=False,
     )
     fpp_detrended_payload = _maybe_load_step(
-        "fpp",
+        "fpp_run",
         payloads_by_op=payloads_by_op,
         payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
         step_id="fpp_detrended",
+        allow_op_fallback=False,
     )
 
     localize_action_hint = None

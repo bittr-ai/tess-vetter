@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from bittr_tess_vetter.pipeline_composition.executor import run_composition
+from bittr_tess_vetter.pipeline_composition.executor import _build_cli_args, run_composition
 from bittr_tess_vetter.pipeline_composition.registry import get_profile, list_profiles
-from bittr_tess_vetter.pipeline_composition.schema import validate_composition_payload
+from bittr_tess_vetter.pipeline_composition.schema import StepSpec, validate_composition_payload
 
 
 def test_profile_registry_contains_mvp_profiles() -> None:
@@ -31,7 +31,9 @@ def test_profile_registry_contains_mvp_profiles() -> None:
         "detrend_grid",
         "model_compete_raw",
         "model_compete_detrended",
+        "fpp_prepare_raw",
         "fpp_raw",
+        "fpp_prepare_detrended",
         "fpp_detrended",
     ]
 
@@ -65,8 +67,14 @@ def test_run_composition_report_from_and_ports_and_resume(monkeypatch, tmp_path:
                 },
             },
             {
-                "id": "fpp",
-                "op": "fpp",
+                "id": "fpp_prepare",
+                "op": "fpp_prepare",
+                "ports": {"prepare_manifest": "artifact_path"},
+            },
+            {
+                "id": "fpp_run",
+                "op": "fpp_run",
+                "inputs": {"prepare_manifest": {"port": "fpp_prepare.prepare_manifest"}},
             },
         ],
     }
@@ -100,7 +108,8 @@ def test_run_composition_report_from_and_ports_and_resume(monkeypatch, tmp_path:
         if step.id == "dilution":
             assert str(inputs.get("reference_sources_file", "")).endswith("neighbors.json")
             row["n_plausible_scenarios"] = 2
-        if step.id == "fpp":
+        if step.id == "fpp_run":
+            assert str(inputs.get("prepare_manifest", "")).endswith("fpp_prepare.json")
             row["fpp"] = 0.003
 
         output_path.write_text(json.dumps(row), encoding="utf-8")
@@ -274,7 +283,7 @@ def test_run_composition_does_not_forward_retry_defaults_to_step_inputs(monkeypa
         "id": "test_retry_defaults_not_forwarded",
         "defaults": {"retry_max_attempts": 5, "retry_initial_seconds": 2.0, "preset": "fast"},
         "steps": [
-            {"id": "fpp_step", "op": "fpp"},
+            {"id": "fpp_step", "op": "fpp_run"},
         ],
     }
     comp = validate_composition_payload(payload, source="test")
@@ -324,3 +333,27 @@ def test_run_composition_does_not_forward_retry_defaults_to_step_inputs(monkeypa
     assert "retry_max_attempts" not in seen["inputs"]
     assert "retry_initial_seconds" not in seen["inputs"]
     assert seen["retry"] == {"max_attempts": 5, "initial_backoff_seconds": 2.0}
+
+
+def test_build_cli_args_supports_staged_fpp_commands(tmp_path: Path) -> None:
+    output_path = tmp_path / "out.json"
+    step_prepare = StepSpec(id="fpp_prepare", op="fpp_prepare", inputs={}, ports={}, outputs={}, on_error="fail")
+    step_run = StepSpec(id="fpp_run", op="fpp_run", inputs={}, ports={}, outputs={}, on_error="fail")
+
+    prepare_args = _build_cli_args(
+        step=step_prepare,
+        toi="TOI-STAGE.01",
+        inputs={},
+        output_path=output_path,
+        network_ok=False,
+    )
+    run_args = _build_cli_args(
+        step=step_run,
+        toi="TOI-STAGE.01",
+        inputs={},
+        output_path=output_path,
+        network_ok=False,
+    )
+
+    assert "fpp-prepare" in prepare_args
+    assert "fpp-run" in run_args

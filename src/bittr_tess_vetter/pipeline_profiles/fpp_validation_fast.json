@@ -16,11 +16,18 @@
       "op": "resolve_stellar"
     },
     {
+      "id": "fpp_prepare",
+      "op": "fpp_prepare",
+      "inputs": {
+        "report_file": {"report_from": "report_seed"}
+      }
+    },
+    {
       "id": "fpp",
-      "op": "fpp",
+      "op": "fpp_run",
       "inputs": {
         "preset": "fast",
-        "report_file": {"report_from": "report_seed"}
+        "prepare_manifest": {"port": "fpp_prepare.artifact_path"}
       }
     },
     {

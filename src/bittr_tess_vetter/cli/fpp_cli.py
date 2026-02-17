@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import logging
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import click
 import numpy as np
@@ -47,6 +48,7 @@ _MAX_POINTS_RETRY_VALUES = (3000, 2000, 1500, 1000, 750, 500, 300)
 _MAX_POINTS_RETRY_LIMIT = 3
 _VERDICT_TOKEN_PATTERN = re.compile(r"[^A-Z0-9]+")
 _LC_KEY_PATTERN = re.compile(r"^lc:(?P<tic>\d+):(?P<sector>\d+):(?P<flux>[a-z0-9_]+)$")
+_FPP_PREPARE_SCHEMA_VERSION = "cli.fpp.prepare.v1"
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +186,60 @@ def _build_reduced_max_points_schedule(initial_max_points: int | None) -> list[i
             if current == 1:
                 break
     return candidates[:_MAX_POINTS_RETRY_LIMIT]
+
+
+def _execute_fpp_with_retry(
+    *,
+    preset_name: str,
+    parsed_overrides: dict[str, Any],
+    run_attempt: Callable[[dict[str, Any]], tuple[dict[str, Any], Any]],
+) -> tuple[dict[str, Any], Any, dict[str, Any]]:
+    initial_max_points = _effective_max_points_for_attempt_zero(
+        preset_name=preset_name,
+        overrides=parsed_overrides,
+    )
+    retry_schedule_max_points = _build_reduced_max_points_schedule(initial_max_points)
+    explicit_max_points_override = "max_points" in parsed_overrides
+    attempts: list[dict[str, Any]] = []
+    final_selected_attempt = 1
+    fallback_succeeded = False
+    attempts_max_points: list[int | None] = [initial_max_points, *retry_schedule_max_points]
+
+    result: dict[str, Any] | None = None
+    selected_data: Any = None
+    for attempt_index, attempt_max_points in enumerate(attempts_max_points, start=1):
+        attempt_overrides = dict(parsed_overrides)
+        if attempt_index > 1:
+            attempt_overrides["max_points"] = attempt_max_points
+        result, selected_data = run_attempt(attempt_overrides)
+        is_degenerate = _is_degenerate_fpp_result(result)
+        attempts.append(
+            {
+                "attempt": int(attempt_index),
+                "max_points": attempt_overrides.get("max_points"),
+                "degenerate": bool(is_degenerate),
+                "reason": result.get("degenerate_reason"),
+            }
+        )
+        final_selected_attempt = int(attempt_index)
+        if not is_degenerate:
+            if attempt_index > 1:
+                fallback_succeeded = True
+            break
+        if attempt_index >= len(attempts_max_points):
+            break
+
+    if result is None:
+        raise BtvCliError("FPP execution did not return a result.", exit_code=EXIT_RUNTIME_ERROR)
+    retry_meta = {
+        "explicit_max_points_override": bool(explicit_max_points_override),
+        "initial_max_points": initial_max_points,
+        "retry_schedule_max_points": retry_schedule_max_points,
+        "attempts": attempts,
+        "final_selected_attempt": int(final_selected_attempt),
+        "fallback_succeeded": bool(fallback_succeeded),
+    }
+    return result, selected_data, retry_meta
 
 
 def _new_mast_client(*, cache_dir: Path | None) -> MASTClient:
@@ -608,6 +664,596 @@ def _load_auto_stellar_inputs(
     return load_auto_stellar_with_fallback(tic_id=int(tic_id), toi=toi)
 
 
+def _cache_missing_sectors(
+    *,
+    cache: PersistentCache,
+    tic_id: int,
+    sectors_loaded: list[int],
+) -> list[int]:
+    missing: list[int] = []
+    for sector in sectors_loaded:
+        key = make_data_ref(int(tic_id), int(sector), "pdcsap")
+        cache_get = getattr(cache, "get", None)
+        cached_item = cache_get(key) if callable(cache_get) else None
+        if cached_item is None:
+            missing.append(int(sector))
+    return missing
+
+
+def _coerce_manifest_number(payload: dict[str, Any], field: str) -> float:
+    raw = payload.get(field)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise BtvCliError(f"Invalid prepare manifest field '{field}'", exit_code=EXIT_INPUT_ERROR) from exc
+    if not np.isfinite(value):
+        raise BtvCliError(f"Invalid prepare manifest field '{field}'", exit_code=EXIT_INPUT_ERROR)
+    return value
+
+
+def _load_prepare_manifest(path: Path) -> dict[str, Any]:
+    payload = load_json_file(path, label="prepare-manifest")
+    schema = payload.get("schema_version")
+    if schema != _FPP_PREPARE_SCHEMA_VERSION:
+        raise BtvCliError(
+            (
+                f"Unsupported prepare-manifest schema_version '{schema}'. "
+                f"Expected '{_FPP_PREPARE_SCHEMA_VERSION}'."
+            ),
+            exit_code=EXIT_INPUT_ERROR,
+        )
+
+    try:
+        tic_id = int(payload.get("tic_id"))
+    except (TypeError, ValueError) as exc:
+        raise BtvCliError("Invalid prepare manifest field 'tic_id'", exit_code=EXIT_INPUT_ERROR) from exc
+    if tic_id <= 0:
+        raise BtvCliError("Invalid prepare manifest field 'tic_id'", exit_code=EXIT_INPUT_ERROR)
+
+    sectors_raw = payload.get("sectors_loaded")
+    if not isinstance(sectors_raw, list):
+        raise BtvCliError("Invalid prepare manifest field 'sectors_loaded'", exit_code=EXIT_INPUT_ERROR)
+    sectors_loaded: list[int] = []
+    for item in sectors_raw:
+        try:
+            sectors_loaded.append(int(item))
+        except (TypeError, ValueError) as exc:
+            raise BtvCliError("Invalid prepare manifest field 'sectors_loaded'", exit_code=EXIT_INPUT_ERROR) from exc
+    sectors_loaded = sorted(set(sectors_loaded))
+    if not sectors_loaded:
+        raise BtvCliError("Prepare manifest has empty sectors_loaded", exit_code=EXIT_INPUT_ERROR)
+
+    cache_dir_raw = payload.get("cache_dir")
+    cache_dir = Path(str(cache_dir_raw)).expanduser() if cache_dir_raw is not None else None
+    if cache_dir is None or not str(cache_dir).strip():
+        raise BtvCliError("Invalid prepare manifest field 'cache_dir'", exit_code=EXIT_INPUT_ERROR)
+
+    detrend_payload = payload.get("detrend")
+    if detrend_payload is not None and not isinstance(detrend_payload, dict):
+        raise BtvCliError("Invalid prepare manifest field 'detrend'", exit_code=EXIT_INPUT_ERROR)
+
+    return {
+        "schema_version": schema,
+        "created_at": payload.get("created_at"),
+        "tic_id": tic_id,
+        "period_days": _coerce_manifest_number(payload, "period_days"),
+        "t0_btjd": _coerce_manifest_number(payload, "t0_btjd"),
+        "duration_hours": _coerce_manifest_number(payload, "duration_hours"),
+        "depth_ppm_used": _coerce_manifest_number(payload, "depth_ppm_used"),
+        "sectors_loaded": sectors_loaded,
+        "cache_dir": cache_dir,
+        "detrend": detrend_payload if isinstance(detrend_payload, dict) else {},
+    }
+
+
+@click.command("fpp-prepare")
+@click.option("--tic-id", type=int, default=None, help="TIC identifier.")
+@click.option("--period-days", type=float, default=None, help="Orbital period in days.")
+@click.option("--t0-btjd", type=float, default=None, help="Reference epoch in BTJD.")
+@click.option("--duration-hours", type=float, default=None, help="Transit duration in hours.")
+@click.option("--depth-ppm", type=float, default=None, help="Transit depth in ppm.")
+@click.option("--toi", type=str, default=None, help="Optional TOI label for input resolution.")
+@click.option(
+    "--report-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Optional prior CLI report/vet JSON to seed candidate inputs and sectors_used.",
+)
+@click.option(
+    "--detrend",
+    type=str,
+    default=None,
+    show_default=True,
+    help=(
+        "Pre-FPP detrend method. When set, detrending is applied to depth estimation and "
+        "to sector flux staged for TRICERATOPS."
+    ),
+)
+@click.option("--detrend-bin-hours", type=float, default=6.0, show_default=True)
+@click.option("--detrend-buffer", type=float, default=2.0, show_default=True)
+@click.option("--detrend-sigma-clip", type=float, default=5.0, show_default=True)
+@click.option(
+    "--detrend-cache/--no-detrend-cache",
+    default=False,
+    show_default=True,
+    help="Stage detrended sector light curves in cache before FPP.",
+)
+@click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
+@click.option(
+    "--cache-only-sectors/--allow-sector-download",
+    default=False,
+    show_default=True,
+    help="When true, sector loading uses cache-only for selected/report sectors.",
+)
+@click.option(
+    "--network-ok/--no-network",
+    default=False,
+    show_default=True,
+    help="Allow network-dependent resolution for TOI inputs.",
+)
+@click.option(
+    "--cache-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Optional cache directory for FPP light-curve staging.",
+)
+@click.option(
+    "--out",
+    "output_manifest_path",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Output JSON manifest path for staged FPP run.",
+)
+def fpp_prepare_command(
+    tic_id: int | None,
+    period_days: float | None,
+    t0_btjd: float | None,
+    duration_hours: float | None,
+    depth_ppm: float | None,
+    toi: str | None,
+    report_file: Path | None,
+    detrend: str | None,
+    detrend_bin_hours: float,
+    detrend_buffer: float,
+    detrend_sigma_clip: float,
+    detrend_cache: bool,
+    sectors: tuple[int, ...],
+    cache_only_sectors: bool,
+    network_ok: bool,
+    cache_dir: Path | None,
+    output_manifest_path: Path,
+) -> None:
+    """Resolve candidate inputs and stage cache artifacts for FPP compute."""
+    click.echo("[fpp-prepare] Resolving candidate inputs...")
+    report_candidate: dict[str, Any] = {}
+    report_sectors_used: list[int] | None = None
+    if report_file is not None:
+        report_candidate, report_sectors_used = _load_report_inputs(report_file)
+        if toi is not None:
+            click.echo(
+                "[fpp-prepare] --report-file provided with --toi; using --toi only for missing fields.",
+                err=True,
+            )
+
+    candidate_tic_id = tic_id if tic_id is not None else report_candidate.get("tic_id")
+    candidate_period_days = period_days if period_days is not None else report_candidate.get("period_days")
+    candidate_t0_btjd = t0_btjd if t0_btjd is not None else report_candidate.get("t0_btjd")
+    candidate_duration_hours = (
+        duration_hours if duration_hours is not None else report_candidate.get("duration_hours")
+    )
+    candidate_depth_ppm = depth_ppm if depth_ppm is not None else report_candidate.get("depth_ppm")
+
+    should_use_toi_resolver = any(
+        value is None
+        for value in (
+            candidate_tic_id,
+            candidate_period_days,
+            candidate_t0_btjd,
+            candidate_duration_hours,
+        )
+    )
+    if candidate_depth_ppm is None and detrend is None:
+        should_use_toi_resolver = True
+    toi_for_resolution = toi if should_use_toi_resolver else None
+
+    requested_sectors = [int(s) for s in sectors] if sectors else None
+    effective_sectors = requested_sectors if requested_sectors is not None else report_sectors_used
+    cache_only_sector_load = bool(cache_only_sectors) and effective_sectors is not None
+
+    (
+        resolved_tic_id,
+        resolved_period_days,
+        resolved_t0_btjd,
+        resolved_duration_hours,
+        resolved_depth_ppm,
+        input_resolution,
+    ) = _resolve_candidate_inputs(
+        network_ok=network_ok,
+        toi=toi_for_resolution,
+        tic_id=int(candidate_tic_id) if candidate_tic_id is not None else None,
+        period_days=float(candidate_period_days) if candidate_period_days is not None else None,
+        t0_btjd=float(candidate_t0_btjd) if candidate_t0_btjd is not None else None,
+        duration_hours=float(candidate_duration_hours) if candidate_duration_hours is not None else None,
+        depth_ppm=float(candidate_depth_ppm) if candidate_depth_ppm is not None else None,
+    )
+
+    detrend_method = _normalize_detrend_method(detrend)
+    if detrend_method is not None:
+        _validate_detrend_args(
+            detrend_bin_hours=float(detrend_bin_hours),
+            detrend_buffer=float(detrend_buffer),
+            detrend_sigma_clip=float(detrend_sigma_clip),
+        )
+    detrend_cache_requested = bool(detrend_cache)
+    if detrend_cache_requested and detrend_method is None:
+        raise BtvCliError("--detrend-cache requires --detrend", exit_code=EXIT_INPUT_ERROR)
+    detrend_cache_effective = detrend_cache_requested or (detrend_method is not None)
+
+    depth_source = "catalog"
+    depth_ppm_used = resolved_depth_ppm
+    detrended_depth_meta: dict[str, Any] | None = None
+    if depth_ppm is not None:
+        depth_source = "explicit"
+        depth_ppm_used = float(depth_ppm)
+    elif detrend_method is not None:
+        try:
+            detrended_depth, detrended_depth_meta = _estimate_detrended_depth_ppm(
+                tic_id=resolved_tic_id,
+                period_days=resolved_period_days,
+                t0_btjd=resolved_t0_btjd,
+                duration_hours=resolved_duration_hours,
+                catalog_depth_ppm=resolved_depth_ppm,
+                sectors=effective_sectors,
+                detrend_method=detrend_method,
+                detrend_bin_hours=float(detrend_bin_hours),
+                detrend_buffer=float(detrend_buffer),
+                detrend_sigma_clip=float(detrend_sigma_clip),
+                cache_dir=cache_dir,
+                cache_only_sectors=cache_only_sector_load,
+            )
+            if detrended_depth is not None:
+                depth_ppm_used = float(detrended_depth)
+                depth_source = "detrended"
+        except Exception as exc:
+            mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
+            if isinstance(exc, LightCurveNotFoundError):
+                mapped = EXIT_DATA_UNAVAILABLE
+            if resolved_depth_ppm is None:
+                raise BtvCliError(str(exc), exit_code=mapped) from exc
+            detrended_depth_meta = {
+                "method": str(detrend_method),
+                "reason": "detrended_depth_failed",
+                "error": str(exc),
+            }
+
+    if depth_ppm_used is None:
+        exit_code = EXIT_DATA_UNAVAILABLE if toi is not None else EXIT_INPUT_ERROR
+        raise BtvCliError(
+            "Missing transit depth. Provide --depth-ppm, enable --detrend, or use --toi with depth metadata.",
+            exit_code=exit_code,
+        )
+
+    click.echo("[fpp-prepare] Staging sector light curves in cache...")
+    try:
+        cache, sectors_loaded = _build_cache_for_fpp(
+            tic_id=resolved_tic_id,
+            sectors=effective_sectors,
+            cache_dir=cache_dir,
+            detrend_cache=bool(detrend_cache_effective),
+            period_days=float(resolved_period_days),
+            t0_btjd=float(resolved_t0_btjd),
+            duration_hours=float(resolved_duration_hours),
+            depth_ppm=float(depth_ppm_used),
+            detrend_method=detrend_method,
+            detrend_bin_hours=float(detrend_bin_hours),
+            detrend_buffer=float(detrend_buffer),
+            detrend_sigma_clip=float(detrend_sigma_clip),
+            cache_only_sectors=cache_only_sector_load,
+        )
+    except BtvCliError:
+        raise
+    except LightCurveNotFoundError as exc:
+        raise BtvCliError(str(exc), exit_code=EXIT_DATA_UNAVAILABLE) from exc
+    except Exception as exc:
+        mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
+        raise BtvCliError(str(exc), exit_code=mapped) from exc
+
+    manifest: dict[str, Any] = {
+        "schema_version": _FPP_PREPARE_SCHEMA_VERSION,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "tic_id": int(resolved_tic_id),
+        "period_days": float(resolved_period_days),
+        "t0_btjd": float(resolved_t0_btjd),
+        "duration_hours": float(resolved_duration_hours),
+        "depth_ppm_used": float(depth_ppm_used),
+        "sectors_loaded": [int(s) for s in sectors_loaded],
+        "cache_dir": str(cache.cache_dir),
+        "detrend": {
+            "method": detrend_method,
+            "cache_applied": bool(detrend_cache_effective),
+            "cache_requested": bool(detrend_cache_requested),
+            "bin_hours": float(detrend_bin_hours),
+            "buffer_factor": float(detrend_buffer),
+            "sigma_clip": float(detrend_sigma_clip),
+            "depth_source": depth_source,
+            "depth_meta": detrended_depth_meta,
+        },
+        "inputs": {
+            "depth_ppm_catalog": resolved_depth_ppm,
+            "resolved_source": input_resolution.get("source"),
+            "resolved_from": input_resolution.get("resolved_from"),
+            "requested_sectors": effective_sectors,
+        },
+    }
+    click.echo(f"[fpp-prepare] Writing manifest: {output_manifest_path}")
+    dump_json_output(manifest, output_manifest_path)
+
+
+@click.command("fpp-run")
+@click.option(
+    "--prepare-manifest",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Manifest JSON produced by btv fpp-prepare.",
+)
+@click.option(
+    "--require-prepared/--allow-missing-prepared",
+    default=False,
+    show_default=True,
+    help="Fail fast when staged cache artifacts referenced by the manifest are missing.",
+)
+@click.option(
+    "--preset",
+    type=click.Choice(["fast", "standard", "tutorial"], case_sensitive=False),
+    default="fast",
+    show_default=True,
+    help="TRICERATOPS runtime preset (standard typically expects a longer timeout budget).",
+)
+@click.option("--replicates", type=int, default=None, help="Replicate count for FPP aggregation.")
+@click.option("--seed", type=int, default=None, help="Base RNG seed.")
+@click.option("--override", "overrides", multiple=True, help="Repeat KEY=VALUE TRICERATOPS override entries.")
+@click.option(
+    "--timeout-seconds",
+    type=float,
+    default=None,
+    help="Optional timeout budget. If omitted with --preset standard, defaults to 900 seconds.",
+)
+@click.option(
+    "--contrast-curve",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="ExoFOP-style .tbl/.dat contrast-curve file for TRICERATOPS companion constraints.",
+)
+@click.option(
+    "--contrast-curve-filter",
+    type=str,
+    default=None,
+    help="Optional band label override for --contrast-curve (for example Kcont, Ks, r).",
+)
+@click.option("--stellar-radius", type=float, default=None, help="Stellar radius (Rsun).")
+@click.option("--stellar-mass", type=float, default=None, help="Stellar mass (Msun).")
+@click.option("--stellar-tmag", type=float, default=None, help="TESS magnitude.")
+@click.option("--stellar-file", type=str, default=None, help="JSON file with stellar inputs.")
+@click.option(
+    "--use-stellar-auto/--no-use-stellar-auto",
+    default=False,
+    show_default=True,
+    help="Resolve stellar inputs from TIC when missing from explicit/file inputs.",
+)
+@click.option(
+    "--require-stellar/--no-require-stellar",
+    default=False,
+    show_default=True,
+    help="Fail unless stellar radius and mass resolve.",
+)
+@click.option(
+    "--network-ok/--no-network",
+    default=False,
+    show_default=True,
+    help="Allow network-dependent stellar auto resolution when requested.",
+)
+@click.option(
+    "-o",
+    "--out",
+    "output_path_arg",
+    type=str,
+    default="-",
+    show_default=True,
+    help="JSON output path; '-' writes to stdout.",
+)
+def fpp_run_command(
+    prepare_manifest: Path,
+    require_prepared: bool,
+    preset: str,
+    replicates: int | None,
+    seed: int | None,
+    overrides: tuple[str, ...],
+    timeout_seconds: float | None,
+    contrast_curve: Path | None,
+    contrast_curve_filter: str | None,
+    stellar_radius: float | None,
+    stellar_mass: float | None,
+    stellar_tmag: float | None,
+    stellar_file: str | None,
+    use_stellar_auto: bool,
+    require_stellar: bool,
+    network_ok: bool,
+    output_path_arg: str,
+) -> None:
+    """Run FPP compute from a prepared staging manifest."""
+    out_path = resolve_optional_output_path(output_path_arg)
+    click.echo(f"[fpp-run] Loading prepare manifest: {prepare_manifest}")
+    prepared = _load_prepare_manifest(prepare_manifest)
+    cache = PersistentCache(cache_dir=prepared["cache_dir"])
+    if require_prepared:
+        click.echo("[fpp-run] Verifying prepared cache artifacts...")
+        missing_sectors = _cache_missing_sectors(
+            cache=cache,
+            tic_id=int(prepared["tic_id"]),
+            sectors_loaded=[int(s) for s in prepared["sectors_loaded"]],
+        )
+        if missing_sectors:
+            raise BtvCliError(
+                (
+                    "Missing prepared cache artifacts for sectors: "
+                    + ", ".join(str(s) for s in sorted(set(missing_sectors)))
+                ),
+                exit_code=EXIT_DATA_UNAVAILABLE,
+            )
+
+    if replicates is not None and replicates < 1:
+        raise BtvCliError("--replicates must be >= 1", exit_code=EXIT_INPUT_ERROR)
+    if use_stellar_auto and not network_ok:
+        raise BtvCliError("--use-stellar-auto requires --network-ok", exit_code=EXIT_DATA_UNAVAILABLE)
+    if timeout_seconds is not None and float(timeout_seconds) <= 0.0:
+        raise BtvCliError("--timeout-seconds must be > 0", exit_code=EXIT_INPUT_ERROR)
+
+    preset_name = str(preset).lower()
+    parsed_overrides = parse_extra_params(overrides)
+    effective_timeout_seconds = (
+        float(timeout_seconds)
+        if timeout_seconds is not None
+        else (_STANDARD_PRESET_TIMEOUT_SECONDS if preset_name == "standard" else None)
+    )
+    if timeout_seconds is None and preset_name == "standard":
+        click.echo(
+            "Using default timeout_seconds=900 for --preset standard.",
+            err=True,
+        )
+
+    parsed_contrast_curve: Any | None = None
+    if contrast_curve is not None:
+        try:
+            parsed_contrast_curve = load_contrast_curve_exofop_tbl(
+                contrast_curve,
+                filter=contrast_curve_filter,
+            )
+        except Exception as exc:
+            raise BtvCliError(
+                f"Failed to parse --contrast-curve: {exc}",
+                exit_code=EXIT_INPUT_ERROR,
+            ) from exc
+
+    try:
+        resolved_stellar, stellar_resolution = resolve_stellar_inputs(
+            tic_id=int(prepared["tic_id"]),
+            stellar_radius=stellar_radius,
+            stellar_mass=stellar_mass,
+            stellar_tmag=stellar_tmag,
+            stellar_file=stellar_file,
+            use_stellar_auto=use_stellar_auto,
+            require_stellar=require_stellar,
+            auto_loader=(lambda _tic_id: _load_auto_stellar_inputs(_tic_id)) if use_stellar_auto else None,
+        )
+    except (TargetNotFoundError, LightCurveNotFoundError) as exc:
+        raise BtvCliError(str(exc), exit_code=EXIT_DATA_UNAVAILABLE) from exc
+    except Exception as exc:
+        if isinstance(exc, BtvCliError):
+            raise
+        mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
+        raise BtvCliError(str(exc), exit_code=mapped) from exc
+
+    click.echo("[fpp-run] Running FPP compute using prepared cache...")
+    try:
+        result, selected_sectors, retry_meta = _execute_fpp_with_retry(
+            preset_name=preset_name,
+            parsed_overrides=parsed_overrides,
+            run_attempt=lambda attempt_overrides: (
+                calculate_fpp(
+                    cache=cache,
+                    tic_id=int(prepared["tic_id"]),
+                    period=float(prepared["period_days"]),
+                    t0=float(prepared["t0_btjd"]),
+                    depth_ppm=float(prepared["depth_ppm_used"]),
+                    duration_hours=float(prepared["duration_hours"]),
+                    sectors=[int(s) for s in prepared["sectors_loaded"]],
+                    stellar_radius=resolved_stellar.get("radius"),
+                    stellar_mass=resolved_stellar.get("mass"),
+                    tmag=resolved_stellar.get("tmag"),
+                    timeout_seconds=effective_timeout_seconds,
+                    preset=preset_name,
+                    replicates=replicates,
+                    seed=seed,
+                    contrast_curve=parsed_contrast_curve,
+                    overrides=attempt_overrides,
+                ),
+                [int(s) for s in prepared["sectors_loaded"]],
+            ),
+        )
+    except BtvCliError:
+        raise
+    except Exception as exc:
+        mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
+        raise BtvCliError(str(exc), exit_code=mapped) from exc
+
+    verdict, verdict_source = _derive_fpp_verdict(result)
+    payload: dict[str, Any] = {
+        "schema_version": "cli.fpp.v3",
+        "fpp_result": result,
+        "verdict": verdict,
+        "verdict_source": verdict_source,
+        "result": {
+            "fpp_result": result,
+            "verdict": verdict,
+            "verdict_source": verdict_source,
+        },
+        "provenance": {
+            "depth_source": prepared["detrend"].get("depth_source", "prepared"),
+            "depth_ppm_used": float(prepared["depth_ppm_used"]),
+            "prepare_manifest": {
+                "schema_version": prepared["schema_version"],
+                "created_at": prepared["created_at"],
+                "path": str(prepare_manifest),
+            },
+            "inputs": {
+                "tic_id": int(prepared["tic_id"]),
+                "period_days": float(prepared["period_days"]),
+                "t0_btjd": float(prepared["t0_btjd"]),
+                "duration_hours": float(prepared["duration_hours"]),
+                "depth_ppm": float(prepared["depth_ppm_used"]),
+                "depth_ppm_catalog": None,
+                "sectors": [int(s) for s in prepared["sectors_loaded"]],
+                "sectors_loaded": [int(s) for s in selected_sectors],
+            },
+            "resolved_source": "prepare_manifest",
+            "resolved_from": "prepare_manifest",
+            "stellar": stellar_resolution,
+            "detrended_depth": prepared["detrend"].get("depth_meta"),
+            "contrast_curve": {
+                "path": str(contrast_curve) if contrast_curve is not None else None,
+                "filter": str(parsed_contrast_curve.filter) if parsed_contrast_curve is not None else None,
+            },
+            "runtime": {
+                "preset": preset_name,
+                "replicates": replicates,
+                "overrides": parsed_overrides,
+                "detrend_cache": bool(prepared["detrend"].get("cache_applied", False)),
+                "detrend_cache_requested": bool(prepared["detrend"].get("cache_requested", False)),
+                "seed_requested": seed,
+                "seed_effective": result.get("base_seed", seed),
+                "timeout_seconds_requested": timeout_seconds,
+                "timeout_seconds": effective_timeout_seconds,
+                "network_ok": bool(network_ok),
+                "require_prepared": bool(require_prepared),
+                "degenerate_guard": {
+                    "guard_triggered": bool(retry_meta["attempts"] and retry_meta["attempts"][0]["degenerate"]),
+                    "explicit_max_points_override": bool(retry_meta["explicit_max_points_override"]),
+                    "initial_max_points": retry_meta["initial_max_points"],
+                    "retry_schedule_max_points": retry_meta["retry_schedule_max_points"],
+                    "attempts": retry_meta["attempts"],
+                    "final_selected_attempt": int(retry_meta["final_selected_attempt"]),
+                    "fallback_succeeded": bool(retry_meta["fallback_succeeded"]),
+                },
+            },
+        },
+    }
+    retry_guidance = _build_retry_guidance(result=result, preset_name=preset_name)
+    if retry_guidance is not None:
+        payload["provenance"]["retry_guidance"] = retry_guidance
+    click.echo("[fpp-run] Writing FPP output...")
+    dump_json_output(payload, out_path)
+
+
 @click.command("fpp")
 @click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
@@ -868,13 +1514,15 @@ def fpp_command(
             stellar_file=stellar_file,
             use_stellar_auto=use_stellar_auto,
             require_stellar=require_stellar,
-        auto_loader=(
-            (lambda _tic_id: _load_auto_stellar_inputs(_tic_id, toi=resolved_toi_arg))
-            if resolved_toi_arg is not None
-            else (lambda _tic_id: _load_auto_stellar_inputs(_tic_id))
-        )
-        if use_stellar_auto
-            else None,
+            auto_loader=(
+                (
+                    (lambda _tic_id: _load_auto_stellar_inputs(_tic_id, toi=resolved_toi_arg))
+                    if resolved_toi_arg is not None
+                    else (lambda _tic_id: _load_auto_stellar_inputs(_tic_id))
+                )
+                if use_stellar_auto
+                else None
+            ),
         )
     except (TargetNotFoundError, LightCurveNotFoundError) as exc:
         raise BtvCliError(str(exc), exit_code=EXIT_DATA_UNAVAILABLE) from exc
@@ -928,25 +1576,11 @@ def fpp_command(
             exit_code=exit_code,
         )
 
-    initial_max_points = _effective_max_points_for_attempt_zero(
-        preset_name=preset_name,
-        overrides=parsed_overrides,
-    )
-    retry_schedule_max_points = _build_reduced_max_points_schedule(initial_max_points)
-    explicit_max_points_override = "max_points" in parsed_overrides
-    attempts: list[dict[str, Any]] = []
-    final_selected_attempt = 1
-    fallback_succeeded = False
-
     try:
-        result: dict[str, Any] | None = None
-        sectors_loaded: list[int] | None = None
-        attempts_max_points: list[int | None] = [initial_max_points, *retry_schedule_max_points]
-        for attempt_index, attempt_max_points in enumerate(attempts_max_points, start=1):
-            attempt_overrides = dict(parsed_overrides)
-            if attempt_index > 1:
-                attempt_overrides["max_points"] = attempt_max_points
-            result, sectors_loaded = _execute_fpp(
+        result, sectors_loaded, retry_meta = _execute_fpp_with_retry(
+            preset_name=preset_name,
+            parsed_overrides=parsed_overrides,
+            run_attempt=lambda attempt_overrides: _execute_fpp(
                 tic_id=resolved_tic_id,
                 period_days=resolved_period_days,
                 t0_btjd=resolved_t0_btjd,
@@ -969,25 +1603,8 @@ def fpp_command(
                 detrend_buffer=float(detrend_buffer),
                 detrend_sigma_clip=float(detrend_sigma_clip),
                 cache_only_sectors=cache_only_sector_load,
-            )
-            is_degenerate = _is_degenerate_fpp_result(result)
-            attempts.append(
-                {
-                    "attempt": int(attempt_index),
-                    "max_points": attempt_overrides.get("max_points"),
-                    "degenerate": bool(is_degenerate),
-                    "reason": result.get("degenerate_reason"),
-                }
-            )
-            final_selected_attempt = int(attempt_index)
-            if not is_degenerate:
-                if attempt_index > 1:
-                    fallback_succeeded = True
-                break
-            if attempt_index >= len(attempts_max_points):
-                break
-        if result is None or sectors_loaded is None:
-            raise BtvCliError("FPP execution did not return a result.", exit_code=EXIT_RUNTIME_ERROR)
+            ),
+        )
     except BtvCliError:
         raise
     except LightCurveNotFoundError as exc:
@@ -1040,13 +1657,13 @@ def fpp_command(
                 "timeout_seconds": effective_timeout_seconds,
                 "network_ok": bool(network_ok),
                 "degenerate_guard": {
-                    "guard_triggered": bool(attempts and attempts[0]["degenerate"]),
-                    "explicit_max_points_override": bool(explicit_max_points_override),
-                    "initial_max_points": initial_max_points,
-                    "retry_schedule_max_points": retry_schedule_max_points,
-                    "attempts": attempts,
-                    "final_selected_attempt": int(final_selected_attempt),
-                    "fallback_succeeded": bool(fallback_succeeded),
+                    "guard_triggered": bool(retry_meta["attempts"] and retry_meta["attempts"][0]["degenerate"]),
+                    "explicit_max_points_override": bool(retry_meta["explicit_max_points_override"]),
+                    "initial_max_points": retry_meta["initial_max_points"],
+                    "retry_schedule_max_points": retry_meta["retry_schedule_max_points"],
+                    "attempts": retry_meta["attempts"],
+                    "final_selected_attempt": int(retry_meta["final_selected_attempt"]),
+                    "fallback_succeeded": bool(retry_meta["fallback_succeeded"]),
                 },
             },
         },
@@ -1057,4 +1674,4 @@ def fpp_command(
     dump_json_output(payload, out_path)
 
 
-__all__ = ["fpp_command"]
+__all__ = ["fpp_command", "fpp_prepare_command", "fpp_run_command"]

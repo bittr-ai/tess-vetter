@@ -28,7 +28,7 @@ def test_pipeline_validate_and_profiles_include_robustness_composition() -> None
     validate_result = runner.invoke(cli, ["pipeline", "validate", "--profile", "robustness_composition"])
     assert validate_result.exit_code == 0, validate_result.output
     assert (
-        "valid profile=robustness_composition composition_id=robustness_composition step_count=6"
+        "valid profile=robustness_composition composition_id=robustness_composition step_count=8"
         in validate_result.output
     )
 

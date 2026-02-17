@@ -54,22 +54,29 @@
       }
     },
     {
-      "id": "fpp_raw",
-      "op": "fpp",
+      "id": "fpp_prepare_raw",
+      "op": "fpp_prepare",
       "inputs": {
-        "preset": "fast",
-        "use_stellar_auto": true,
         "report_file": {
           "report_from": "report_seed"
         }
       }
     },
     {
-      "id": "fpp_detrended",
-      "op": "fpp",
+      "id": "fpp_raw",
+      "op": "fpp_run",
       "inputs": {
         "preset": "fast",
         "use_stellar_auto": true,
+        "prepare_manifest": {
+          "port": "fpp_prepare_raw.artifact_path"
+        }
+      }
+    },
+    {
+      "id": "fpp_prepare_detrended",
+      "op": "fpp_prepare",
+      "inputs": {
         "report_file": {
           "report_from": "report_seed"
         },
@@ -84,6 +91,17 @@
         },
         "detrend_sigma_clip": {
           "$ref": "steps.detrend_grid.best_variant.config.detrender_sigma_clip"
+        }
+      }
+    },
+    {
+      "id": "fpp_detrended",
+      "op": "fpp_run",
+      "inputs": {
+        "preset": "fast",
+        "use_stellar_auto": true,
+        "prepare_manifest": {
+          "port": "fpp_prepare_detrended.artifact_path"
         }
       }
     }

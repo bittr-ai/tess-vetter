@@ -62,7 +62,7 @@ def test_evidence_table_extracts_mixed_top_level_and_nested_fields(tmp_path: Pat
             {"op": "timing", "status": "ok", "step_output_path": timing_path},
             {"op": "localize_host", "status": "ok", "step_output_path": localize_path},
             {"op": "dilution", "status": "ok", "step_output_path": dilution_path},
-            {"op": "fpp", "status": "ok", "step_output_path": fpp_path},
+            {"op": "fpp_run", "status": "ok", "step_output_path": fpp_path},
             {"op": "resolve_neighbors", "status": "ok", "step_output_path": neighbors_path},
         ],
     }
@@ -143,10 +143,10 @@ def test_evidence_table_extracts_robustness_fields_by_step_id(tmp_path: Path) ->
                 "status": "ok",
                 "step_output_path": model_detrended_path,
             },
-            {"step_id": "fpp_raw", "op": "fpp", "status": "ok", "step_output_path": fpp_raw_path},
+            {"step_id": "fpp_raw", "op": "fpp_run", "status": "ok", "step_output_path": fpp_raw_path},
             {
                 "step_id": "fpp_detrended",
-                "op": "fpp",
+                "op": "fpp_run",
                 "status": "ok",
                 "step_output_path": fpp_detrended_path,
             },
@@ -167,6 +167,26 @@ def test_evidence_table_extracts_robustness_fields_by_step_id(tmp_path: Path) ->
     assert row["detrend_invariance_policy_fpp_delta_abs_threshold"] == pytest.approx(0.01)
     assert row["detrend_invariance_policy_observed_fpp_delta_abs"] == pytest.approx(0.02)
     assert row["detrend_invariance_policy_observed_model_verdict_changed"] is True
+
+
+def test_evidence_table_prefers_fpp_run_for_final_fpp_value(tmp_path: Path) -> None:
+    toi = "TOI-FPP-RUN.01"
+    toi_dir = tmp_path / toi / "steps"
+    legacy_fpp_path = _write_step(toi_dir / "01_fpp_legacy.json", {"fpp": 0.9})
+    staged_fpp_run_path = _write_step(toi_dir / "02_fpp_run.json", {"result": {"fpp": 0.02}})
+
+    toi_result = {
+        "toi": toi,
+        "concern_flags": [],
+        "steps": [
+            {"step_id": "fpp_legacy", "op": "fpp", "status": "ok", "step_output_path": legacy_fpp_path},
+            {"step_id": "fpp", "op": "fpp_run", "status": "ok", "step_output_path": staged_fpp_run_path},
+        ],
+    }
+
+    rows = _write_evidence_table(out_dir=tmp_path, toi_results=[toi_result])
+    row = rows[0]
+    assert row["fpp"] == 0.02
 
 
 def test_evidence_table_detrend_invariance_policy_invariant_case(tmp_path: Path) -> None:
@@ -196,10 +216,10 @@ def test_evidence_table_detrend_invariance_policy_invariant_case(tmp_path: Path)
                 "status": "ok",
                 "step_output_path": model_detrended_path,
             },
-            {"step_id": "fpp_raw", "op": "fpp", "status": "ok", "step_output_path": fpp_raw_path},
+            {"step_id": "fpp_raw", "op": "fpp_run", "status": "ok", "step_output_path": fpp_raw_path},
             {
                 "step_id": "fpp_detrended",
-                "op": "fpp",
+                "op": "fpp_run",
                 "status": "ok",
                 "step_output_path": fpp_detrended_path,
             },
