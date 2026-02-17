@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +44,7 @@ from bittr_tess_vetter.platform.io import (
 _STANDARD_PRESET_TIMEOUT_SECONDS = 900.0
 _MAX_POINTS_RETRY_VALUES = (3000, 2000, 1500, 1000, 750, 500, 300)
 _MAX_POINTS_RETRY_LIMIT = 3
+_VERDICT_TOKEN_PATTERN = re.compile(r"[^A-Z0-9]+")
 
 
 def _looks_like_timeout(exc: BaseException) -> bool:
@@ -76,6 +78,31 @@ def _is_degenerate_fpp_result(result: dict[str, Any]) -> bool:
         except (TypeError, ValueError):
             return True
     return False
+
+
+def _derive_fpp_verdict(result: dict[str, Any]) -> tuple[str, str]:
+    disposition = result.get("disposition")
+    if isinstance(disposition, str) and disposition.strip():
+        token = _VERDICT_TOKEN_PATTERN.sub("_", disposition.strip().upper()).strip("_")
+        if not token:
+            token = "UNKNOWN"
+        return f"FPP_{token}", "$.fpp_result.disposition"
+
+    fpp = result.get("fpp")
+    try:
+        fpp_value = float(fpp)
+    except (TypeError, ValueError):
+        fpp_value = None
+    if fpp_value is not None and np.isfinite(fpp_value):
+        if fpp_value <= 0.01:
+            return "FPP_LOW", "$.fpp_result.fpp"
+        if fpp_value <= 0.1:
+            return "FPP_MODERATE", "$.fpp_result.fpp"
+        return "FPP_HIGH", "$.fpp_result.fpp"
+
+    if result.get("error") is not None:
+        return "FPP_ERROR", "$.fpp_result.error"
+    return "FPP_UNAVAILABLE", "$.fpp_result"
 
 
 def _build_retry_guidance(result: dict[str, Any], preset_name: str) -> dict[str, Any] | None:
@@ -853,9 +880,17 @@ def fpp_command(
         mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
         raise BtvCliError(str(exc), exit_code=mapped) from exc
 
+    verdict, verdict_source = _derive_fpp_verdict(result)
     payload: dict[str, Any] = {
         "schema_version": "cli.fpp.v3",
         "fpp_result": result,
+        "verdict": verdict,
+        "verdict_source": verdict_source,
+        "result": {
+            "fpp_result": result,
+            "verdict": verdict,
+            "verdict_source": verdict_source,
+        },
         "provenance": {
             "depth_source": depth_source,
             "depth_ppm_used": float(depth_ppm_used),

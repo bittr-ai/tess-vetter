@@ -126,6 +126,10 @@ def test_btv_resolve_neighbors_success_payload_contract(monkeypatch, tmp_path: P
     assert payload["reference_sources"][1]["source_id"] == "gaia:9002"
     assert payload["reference_sources"][1]["role"] == "companion"
     assert payload["reference_sources"][1]["separation_arcsec"] == 4.2
+    assert payload["verdict"] == "NEIGHBORS_RESOLVED"
+    assert payload["verdict_source"] == "$.provenance.gaia_resolution.n_neighbors_added"
+    assert payload["result"]["verdict"] == payload["verdict"]
+    assert payload["result"]["verdict_source"] == payload["verdict_source"]
     assert payload["provenance"]["gaia_resolution"]["n_neighbors_added"] == 1
     assert payload["multiplicity_risk"]["status"] == "LOW"
     assert payload["multiplicity_risk"]["reasons"] == ["NO_MULTIPLICITY_FLAGS"]
@@ -163,6 +167,10 @@ def test_btv_resolve_neighbors_gaia_error_falls_back_to_target_only(monkeypatch,
     assert payload["schema_version"] == "reference_sources.v1"
     assert len(payload["reference_sources"]) == 1
     assert payload["reference_sources"][0]["source_id"] == "tic:123"
+    assert payload["verdict"] == "DATA_UNAVAILABLE"
+    assert payload["verdict_source"] == "$.provenance.gaia_resolution.status"
+    assert payload["result"]["verdict"] == payload["verdict"]
+    assert payload["result"]["verdict_source"] == payload["verdict_source"]
     assert payload["provenance"]["gaia_resolution"]["status"] == "error_fallback_target_only"
     assert payload["multiplicity_risk"]["status"] == "UNKNOWN"
     assert "GAIA_UNAVAILABLE" in payload["multiplicity_risk"]["reasons"]
@@ -213,6 +221,9 @@ def test_btv_resolve_neighbors_emits_elevated_multiplicity_risk(monkeypatch, tmp
     assert result.exit_code == 0, result.output
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     risk = payload["multiplicity_risk"]
+    assert payload["verdict"] == "TARGET_ONLY"
+    assert payload["verdict_source"] == "$.provenance.gaia_resolution.n_neighbors_added"
+    assert payload["result"]["verdict"] == payload["verdict"]
     assert risk["status"] == "HIGH"
     assert "TARGET_NON_SINGLE_STAR" in risk["reasons"]
     assert "TARGET_RUWE_ELEVATED" in risk["reasons"]
@@ -256,6 +267,8 @@ def test_btv_resolve_neighbors_accepts_positional_toi_and_short_o(monkeypatch, t
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == "reference_sources.v1"
     assert payload["target"]["toi"] == "TOI-5807.01"
+    assert payload["verdict"] == "DATA_UNAVAILABLE"
+    assert payload["result"]["verdict"] == payload["verdict"]
 
 
 def test_btv_resolve_neighbors_rejects_mismatched_positional_and_option_toi() -> None:

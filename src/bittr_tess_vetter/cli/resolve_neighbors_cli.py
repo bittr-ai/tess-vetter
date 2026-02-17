@@ -114,6 +114,27 @@ def _compute_multiplicity_risk(*, reference_sources: list[dict[str, Any]], gaia_
     }
 
 
+def _derive_resolve_neighbors_verdict(payload: dict[str, Any]) -> tuple[str, str]:
+    provenance = payload.get("provenance") if isinstance(payload.get("provenance"), dict) else {}
+    gaia_resolution = (
+        provenance.get("gaia_resolution") if isinstance(provenance.get("gaia_resolution"), dict) else {}
+    )
+    gaia_status = str(gaia_resolution.get("status") or "")
+    if gaia_status == "ok":
+        n_neighbors_added = gaia_resolution.get("n_neighbors_added")
+        try:
+            neighbors = int(n_neighbors_added)
+        except (TypeError, ValueError):
+            neighbors = max(0, len(payload.get("reference_sources", [])) - 1)
+        if neighbors > 0:
+            return "NEIGHBORS_RESOLVED", "$.provenance.gaia_resolution.n_neighbors_added"
+        return "TARGET_ONLY", "$.provenance.gaia_resolution.n_neighbors_added"
+
+    if gaia_status in {"skipped_no_network", "error_fallback_target_only"}:
+        return "DATA_UNAVAILABLE", "$.provenance.gaia_resolution.status"
+    return "DATA_UNAVAILABLE", "$.provenance.gaia_resolution.status"
+
+
 def _resolve_tic_id(*, tic_id: int | None, toi: str | None, network_ok: bool) -> tuple[int, dict[str, Any] | None]:
     if tic_id is not None:
         return int(tic_id), None
@@ -277,7 +298,7 @@ def _execute_resolve_neighbors(
         reference_sources=reference_sources,
         gaia_status=str(gaia_resolution.get("status")),
     )
-    return {
+    payload: dict[str, Any] = {
         "schema_version": REFERENCE_SOURCES_SCHEMA_VERSION,
         "reference_sources": reference_sources,
         "multiplicity_risk": multiplicity_risk,
@@ -298,6 +319,14 @@ def _execute_resolve_neighbors(
             "toi_resolution": toi_resolution,
         },
     }
+    verdict, verdict_source = _derive_resolve_neighbors_verdict(payload)
+    payload["verdict"] = verdict
+    payload["verdict_source"] = verdict_source
+    payload["result"] = {
+        "verdict": verdict,
+        "verdict_source": verdict_source,
+    }
+    return payload
 
 
 @click.command("resolve-neighbors")

@@ -185,6 +185,35 @@ def _load_diagnostic_artifacts(paths: tuple[str, ...]) -> list[dict[str, Any]]:
     return artifacts
 
 
+def _apply_report_canonical_verdict(report_payload: dict[str, Any]) -> None:
+    report_block = report_payload.get("report")
+    summary_block: dict[str, Any] = {}
+    if isinstance(report_block, dict) and isinstance(report_block.get("summary"), dict):
+        summary_block = report_block["summary"]
+
+    summary_verdict = summary_block.get("verdict")
+    summary_verdict_source = summary_block.get("verdict_source")
+
+    verdict = summary_verdict if summary_verdict is not None else report_payload.get("verdict")
+    verdict_source = report_payload.get("verdict_source")
+    if summary_verdict is not None:
+        verdict_source = (
+            summary_verdict_source
+            if summary_verdict_source is not None
+            else "$.report.summary.verdict"
+        )
+
+    report_payload["verdict"] = verdict
+    report_payload["verdict_source"] = verdict_source
+
+    result_payload = report_payload.get("result")
+    if not isinstance(result_payload, dict):
+        result_payload = {}
+    result_payload["verdict"] = verdict
+    result_payload["verdict_source"] = verdict_source
+    report_payload["result"] = result_payload
+
+
 @click.command("report")
 @click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
@@ -426,6 +455,7 @@ def report_command(
             },
             diagnostic_artifacts=diagnostic_artifacts,
         )
+        _apply_report_canonical_verdict(output["report_json"])
 
         dump_json_output(output["report_json"], out_path)
         dump_json_output(output["plot_data_json"], plot_data_path)

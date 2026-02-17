@@ -159,6 +159,15 @@ Per-command legacy-to-canonical mapping:
    * - ``btv measure-sectors``
      - ``consistency.verdict``
      - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
+   * - ``btv fpp``
+     - ``fpp_result.disposition`` (fallback ``fpp_result.fpp`` buckets)
+     - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
+   * - ``btv resolve-neighbors``
+     - ``provenance.gaia_resolution`` state mapped to ``NEIGHBORS_RESOLVED`` / ``TARGET_ONLY`` / ``DATA_UNAVAILABLE``
+     - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
+   * - ``btv report``
+     - ``report.summary.verdict`` (source ``report.summary.verdict_source`` when present)
+     - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
    * - ``btv detrend-grid``
      - ``stable`` mapped to ``STABLE``/``UNSTABLE``
      - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``

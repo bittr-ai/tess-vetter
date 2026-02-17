@@ -198,7 +198,7 @@ def test_btv_report_success_writes_payload_and_html(monkeypatch, tmp_path: Path)
                 "provenance": {"vet_artifact": {"provided": False}},
                 "verdict": None,
                 "verdict_source": None,
-                "report": {"schema_version": "1.0.0", "summary": {}},
+                "report": {"schema_version": "1.0.0", "summary": {"verdict": "PASS"}},
             },
             "plot_data_json": {"full_lc": {"time": [1.0], "flux": [1.0]}},
             "html": "<html></html>",
@@ -233,8 +233,10 @@ def test_btv_report_success_writes_payload_and_html(monkeypatch, tmp_path: Path)
     assert result.exit_code == 0, result.output
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == "cli.report.v3"
-    assert "verdict" in payload
-    assert "verdict_source" in payload
+    assert payload["verdict"] == "PASS"
+    assert payload["verdict_source"] == "$.report.summary.verdict"
+    assert payload["result"]["verdict"] == payload["verdict"]
+    assert payload["result"]["verdict_source"] == payload["verdict_source"]
     assert payload["report"]["schema_version"] == "1.0.0"
     assert json.loads(plot_data_path.read_text(encoding="utf-8"))["full_lc"]["time"] == [1.0]
     assert html_path.read_text(encoding="utf-8") == "<html></html>"
@@ -344,6 +346,8 @@ def test_btv_report_passes_through_diagnostic_json_artifacts(monkeypatch, tmp_pa
     assert result.exit_code == 0, result.output
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["verdict"] == "ALL_CHECKS_PASSED"
+    assert payload["result"]["verdict"] == payload["verdict"]
+    assert payload["result"]["verdict_source"] == payload["verdict_source"]
     artifacts = captured["diagnostic_artifacts"]
     assert isinstance(artifacts, list)
     assert artifacts[0]["schema_version"] == "cli.activity.v1"

@@ -113,6 +113,11 @@ def test_btv_fpp_success_plumbs_api_params_and_emits_contract(monkeypatch, tmp_p
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == "cli.fpp.v3"
     assert "fpp_result" in payload
+    assert payload["verdict"] == "FPP_POSSIBLE_PLANET"
+    assert payload["verdict_source"] == "$.fpp_result.disposition"
+    assert payload["result"]["verdict"] == payload["verdict"]
+    assert payload["result"]["verdict_source"] == payload["verdict_source"]
+    assert payload["result"]["fpp_result"] == payload["fpp_result"]
     assert "provenance" in payload
     assert "inputs" in payload["provenance"]
     assert payload["provenance"]["depth_source"] == "explicit"
@@ -164,6 +169,10 @@ def test_btv_fpp_standard_preset_defaults_timeout_900(monkeypatch, tmp_path: Pat
     assert result.exit_code == 0, result.output
     assert seen["timeout_seconds"] == 900.0
     payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["verdict"] == "FPP_HIGH"
+    assert payload["verdict_source"] == "$.fpp_result.fpp"
+    assert payload["result"]["verdict"] == payload["verdict"]
+    assert payload["result"]["verdict_source"] == payload["verdict_source"]
     assert payload["provenance"]["runtime"]["timeout_seconds_requested"] is None
     assert payload["provenance"]["runtime"]["timeout_seconds"] == 900.0
 
