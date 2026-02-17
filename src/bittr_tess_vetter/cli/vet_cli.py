@@ -673,8 +673,14 @@ def _resolve_candidate_inputs(
     errors: list[str] = []
     source = "cli"
     resolved_from = "cli"
+    has_complete_manual_candidate = (
+        tic_id is not None
+        and period_days is not None
+        and t0_btjd is not None
+        and duration_hours is not None
+    )
 
-    if toi is not None:
+    if toi is not None and not has_complete_manual_candidate:
         if not network_ok:
             raise BtvCliError(
                 "--toi requires --network-ok to resolve ExoFOP inputs",

@@ -10,6 +10,7 @@ from click.testing import CliRunner
 
 import bittr_tess_vetter.cli.enrich_cli as enrich_cli
 import bittr_tess_vetter.cli.report_cli as report_cli
+import bittr_tess_vetter.cli.vet_cli as vet_cli
 from bittr_tess_vetter.cli.progress_metadata import ProgressIOError
 from bittr_tess_vetter.domain.lightcurve import LightCurveData
 from bittr_tess_vetter.pipeline import make_candidate_key
@@ -2058,6 +2059,38 @@ def test_btv_vet_rejects_mismatched_positional_and_option_toi() -> None:
     )
     assert result.exit_code == 1
     assert "Positional TOI argument and --toi must match" in result.output
+
+
+def test_resolve_candidate_inputs_skips_toi_lookup_when_manual_candidate_inputs_complete(monkeypatch) -> None:
+    def _should_not_resolve(_toi: str):
+        raise AssertionError("TOI lookup should not run when required candidate inputs are already provided")
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.resolve_toi_to_tic_ephemeris_depth", _should_not_resolve)
+
+    (
+        tic_id,
+        period_days,
+        t0_btjd,
+        duration_hours,
+        depth_ppm,
+        input_resolution,
+    ) = vet_cli._resolve_candidate_inputs(
+        network_ok=False,
+        toi="TOI-123.01",
+        tic_id=123,
+        period_days=10.5,
+        t0_btjd=2000.2,
+        duration_hours=2.5,
+        depth_ppm=300.0,
+    )
+
+    assert tic_id == 123
+    assert period_days == 10.5
+    assert t0_btjd == 2000.2
+    assert duration_hours == 2.5
+    assert depth_ppm == 300.0
+    assert input_resolution["source"] == "cli"
+    assert input_resolution["resolved_from"] == "cli"
 
 
 def test_btv_vet_report_file_seeds_inputs_and_sectors(monkeypatch, tmp_path: Path) -> None:

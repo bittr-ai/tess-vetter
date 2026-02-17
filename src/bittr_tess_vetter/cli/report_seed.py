@@ -151,8 +151,23 @@ def resolve_candidate_inputs_with_report_seed(
     errors: list[str] = []
     source = "cli"
     resolved_from = "cli"
+    has_complete_manual_candidate = (
+        tic_id is not None
+        and period_days is not None
+        and t0_btjd is not None
+        and duration_hours is not None
+    )
+    has_complete_report_candidate = report_seed is not None and all(
+        value is not None
+        for value in (
+            report_seed.tic_id,
+            report_seed.period_days,
+            report_seed.t0_btjd,
+            report_seed.duration_hours,
+        )
+    )
 
-    if toi is not None and network_ok:
+    if toi is not None and network_ok and not (has_complete_manual_candidate or has_complete_report_candidate):
         toi_result = resolve_toi_to_tic_ephemeris_depth(toi)
         source = "toi_catalog"
         resolved_from = "exofop_toi_table"
