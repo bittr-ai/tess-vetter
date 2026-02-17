@@ -508,7 +508,7 @@ def _load_auto_stellar_inputs(
     "--contrast-curve",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     default=None,
-    help="ExoFOP-style .tbl contrast-curve file for TRICERATOPS companion constraints.",
+    help="ExoFOP-style .tbl/.dat contrast-curve file for TRICERATOPS companion constraints.",
 )
 @click.option(
     "--contrast-curve-filter",

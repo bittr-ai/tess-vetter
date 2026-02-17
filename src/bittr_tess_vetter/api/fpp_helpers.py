@@ -2,7 +2,7 @@
 
 These helpers reduce notebook glue around TRICERATOPS(+):
 - hydrating a PersistentCache from local per-sector light curves
-- parsing common high-resolution imaging contrast-curve files (ExoFOP .tbl)
+- parsing common high-resolution imaging contrast-curve files (ExoFOP .tbl/.dat)
 
 They do not impose thresholds or make any validation verdicts.
 """
@@ -85,6 +85,7 @@ def hydrate_cache_from_dataset(
 
 
 _FLOAT_RE = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$")
+_FIT_SECTION_RE = re.compile(r"fit of angular separation", re.IGNORECASE)
 
 
 def load_contrast_curve_exofop_tbl(
@@ -92,7 +93,7 @@ def load_contrast_curve_exofop_tbl(
     *,
     filter: str | None = None,
 ) -> ContrastCurve:
-    """Parse an ExoFOP-format contrast curve `.tbl` file into a ContrastCurve.
+    """Parse an ExoFOP-format contrast curve `.tbl`/`.dat` file into a ContrastCurve.
 
     The common format is:
 
@@ -104,8 +105,13 @@ def load_contrast_curve_exofop_tbl(
     - accepts comma- or whitespace-delimited rows
     - ignores non-numeric rows
 
+    Gemini speckle `.dat` files often contain two sections: a 4-column annulus
+    table and a 2-column fit table with a header comment containing
+    "fit of angular separation". When that header is present, only the fit
+    section rows below the header are parsed.
+
     Args:
-        path: Path to the `.tbl` file.
+        path: Path to the `.tbl` or `.dat` file.
         filter: Optional imaging band label to store in the returned ContrastCurve.
             If None, defaults to "Vis". (TRICERATOPS normalization is applied later.)
 
@@ -116,10 +122,17 @@ def load_contrast_curve_exofop_tbl(
     if not p.exists() or not p.is_file():
         raise FileNotFoundError(f"Contrast curve file not found: {p}")
 
+    lines = p.read_text().splitlines()
+    fit_section_index: int | None = None
+    for i, line in enumerate(lines):
+        if _FIT_SECTION_RE.search(line):
+            fit_section_index = int(i)
+            break
+    parse_lines = lines[fit_section_index + 1 :] if fit_section_index is not None else lines
+
     seps: list[float] = []
     dmags: list[float] = []
-
-    for line in p.read_text().splitlines():
+    for line in parse_lines:
         s = line.strip()
         if not s or s.startswith("#"):
             continue
