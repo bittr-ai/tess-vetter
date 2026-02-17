@@ -8,7 +8,7 @@ import numpy as np
 from click.testing import CliRunner
 
 import bittr_tess_vetter.cli.enrich_cli as enrich_cli
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
+from bittr_tess_vetter.domain.lightcurve import LightCurveData, make_data_ref
 from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
 
 
@@ -35,6 +35,45 @@ def test_btv_help_lists_fpp() -> None:
     result = runner.invoke(enrich_cli.cli, ["--help"])
     assert result.exit_code == 0
     assert "fpp" in result.output
+
+
+def test_build_cache_for_fpp_prefers_persistent_cache_for_requested_sectors(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from bittr_tess_vetter.cli import fpp_cli
+    from bittr_tess_vetter.platform.io import PersistentCache
+
+    seen = {"network_calls": 0, "cached_calls": 0}
+
+    class _FakeMASTClient:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:  # noqa: ARG002
+            pass
+
+        def download_all_sectors(self, *_args: Any, **_kwargs: Any):
+            seen["network_calls"] += 1
+            raise AssertionError("network should not be used when persistent cache has requested sectors")
+
+        def download_lightcurve_cached(self, *_args: Any, **_kwargs: Any):
+            seen["cached_calls"] += 1
+            raise AssertionError("lightkurve cache should not be needed when persistent cache is warm")
+
+    cache = PersistentCache(cache_dir=tmp_path)
+    cache.put(make_data_ref(123, 14, "pdcsap"), _make_lc(tic_id=123, sector=14, start=2000.0))
+    cache.put(make_data_ref(123, 15, "pdcsap"), _make_lc(tic_id=123, sector=15, start=2001.0))
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.MASTClient", _FakeMASTClient)
+
+    built_cache, sectors_loaded = fpp_cli._build_cache_for_fpp(
+        tic_id=123,
+        sectors=[14, 15],
+        cache_dir=tmp_path,
+    )
+
+    assert sectors_loaded == [14, 15]
+    assert seen["network_calls"] == 0
+    assert seen["cached_calls"] == 0
+    assert built_cache.get(make_data_ref(123, 14, "pdcsap")) is not None
 
 
 def test_btv_fpp_success_plumbs_api_params_and_emits_contract(monkeypatch, tmp_path: Path) -> None:
@@ -890,6 +929,12 @@ def test_build_cache_for_fpp_stores_requested_sector_products(monkeypatch, tmp_p
             self.cache_dir = cache_dir
             self.records: dict[str, object] = {}
 
+        def get(self, key: str) -> object | None:
+            return self.records.get(key)
+
+        def keys(self) -> list[str]:
+            return list(self.records.keys())
+
         def put(self, key: str, value: object) -> None:
             self.records[key] = value
 
@@ -1104,13 +1149,15 @@ def test_btv_fpp_explicit_sectors_use_network_download_by_default(monkeypatch, t
             "14",
             "--sectors",
             "15",
+            "--cache-dir",
+            str(tmp_path / "cache"),
             "--out",
             str(out_path),
         ],
     )
 
     assert result.exit_code == 0, result.output
-    assert seen["network_calls"] >= 2
+    assert seen["network_calls"] >= 1
     assert seen["cached_calls"] == 0
 
 
@@ -1166,6 +1213,8 @@ def test_btv_fpp_explicit_sectors_cache_only_when_requested(monkeypatch, tmp_pat
             "--sectors",
             "15",
             "--cache-only-sectors",
+            "--cache-dir",
+            str(tmp_path / "cache"),
             "--out",
             str(out_path),
         ],

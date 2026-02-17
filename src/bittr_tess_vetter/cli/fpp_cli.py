@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 from typing import Any
@@ -45,6 +46,9 @@ _STANDARD_PRESET_TIMEOUT_SECONDS = 900.0
 _MAX_POINTS_RETRY_VALUES = (3000, 2000, 1500, 1000, 750, 500, 300)
 _MAX_POINTS_RETRY_LIMIT = 3
 _VERDICT_TOKEN_PATTERN = re.compile(r"[^A-Z0-9]+")
+_LC_KEY_PATTERN = re.compile(r"^lc:(?P<tic>\d+):(?P<sector>\d+):(?P<flux>[a-z0-9_]+)$")
+
+logger = logging.getLogger(__name__)
 
 
 def _looks_like_timeout(exc: BaseException) -> bool:
@@ -182,6 +186,112 @@ def _build_reduced_max_points_schedule(initial_max_points: int | None) -> list[i
     return candidates[:_MAX_POINTS_RETRY_LIMIT]
 
 
+def _new_mast_client(*, cache_dir: Path | None) -> MASTClient:
+    if cache_dir is None:
+        return MASTClient()
+    try:
+        return MASTClient(cache_dir=cache_dir)
+    except TypeError:
+        return MASTClient()
+
+
+def _cached_sectors_for_tic(
+    *,
+    cache: PersistentCache,
+    tic_id: int,
+    flux_type: str = "pdcsap",
+) -> list[int]:
+    sectors: list[int] = []
+    wanted_flux = str(flux_type).lower()
+    for key in cache.keys():
+        match = _LC_KEY_PATTERN.match(str(key))
+        if match is None:
+            continue
+        try:
+            key_tic = int(match.group("tic"))
+            key_sector = int(match.group("sector"))
+            key_flux = str(match.group("flux")).lower()
+        except Exception:
+            continue
+        if key_tic == int(tic_id) and key_flux == wanted_flux:
+            sectors.append(key_sector)
+    return sorted(set(sectors))
+
+
+def _load_lightcurves_for_fpp(
+    *,
+    tic_id: int,
+    sectors: list[int] | None,
+    cache: PersistentCache,
+    client: MASTClient,
+    cache_only_sectors: bool,
+    flux_type: str = "pdcsap",
+) -> tuple[list[Any], str]:
+    requested = sorted({int(s) for s in sectors}) if sectors is not None else None
+    cached_sectors = requested if requested is not None else _cached_sectors_for_tic(
+        cache=cache,
+        tic_id=int(tic_id),
+        flux_type=str(flux_type).lower(),
+    )
+
+    lightcurves: list[Any] = []
+    loaded_sectors: set[int] = set()
+    for sector in cached_sectors:
+        key = make_data_ref(int(tic_id), int(sector), str(flux_type).lower())
+        cache_get = getattr(cache, "get", None)
+        cached_item = cache_get(key) if callable(cache_get) else None
+        if cached_item is None:
+            continue
+        lightcurves.append(cached_item)
+        loaded_sectors.add(int(sector))
+
+    if requested is None:
+        if lightcurves:
+            return lightcurves, "persistent_cache_only"
+        fetched = client.download_all_sectors(
+            int(tic_id),
+            flux_type=str(flux_type).lower(),
+            sectors=None,
+        )
+        return list(fetched), "mast_all_sectors"
+
+    missing = [int(s) for s in requested if int(s) not in loaded_sectors]
+    if not missing:
+        return lightcurves, "persistent_cache_requested_sectors"
+
+    cached_loaded = 0
+    if bool(cache_only_sectors):
+        for sector in missing:
+            try:
+                lc = client.download_lightcurve_cached(
+                    tic_id=int(tic_id),
+                    sector=int(sector),
+                    flux_type=str(flux_type).lower(),
+                )
+            except Exception:
+                continue
+            lightcurves.append(lc)
+            loaded_sectors.add(int(sector))
+            cached_loaded += 1
+        if lightcurves:
+            return lightcurves, (
+                "persistent_plus_lightkurve_cache_requested_sectors"
+                if cached_loaded > 0
+                else "persistent_cache_requested_sectors"
+            )
+        return [], "cache_only_requested_sectors_miss"
+
+    remaining = [int(s) for s in requested if int(s) not in loaded_sectors]
+    if remaining:
+        fetched = client.download_all_sectors(
+            int(tic_id),
+            flux_type=str(flux_type).lower(),
+            sectors=remaining,
+        )
+        lightcurves.extend(list(fetched))
+    return lightcurves, "persistent_plus_mast_requested_sectors"
+
+
 def _build_cache_for_fpp(
     *,
     tic_id: int,
@@ -198,26 +308,34 @@ def _build_cache_for_fpp(
     detrend_sigma_clip: float = 5.0,
     cache_only_sectors: bool = False,
 ) -> tuple[PersistentCache, list[int]]:
-    client = MASTClient()
-    if bool(cache_only_sectors) and sectors is not None:
-        lightcurves = []
-        for sector in sectors:
-            try:
-                lightcurves.append(
-                    client.download_lightcurve_cached(
-                        tic_id=int(tic_id),
-                        sector=int(sector),
-                        flux_type="pdcsap",
-                    )
-                )
-            except Exception:
-                continue
-    else:
-        lightcurves = client.download_all_sectors(tic_id, flux_type="pdcsap", sectors=sectors)
-    if not lightcurves:
-        raise LightCurveNotFoundError(f"No sectors available for TIC {tic_id}")
-
     cache = PersistentCache(cache_dir=cache_dir)
+    client = _new_mast_client(cache_dir=cache_dir)
+    logger.info(
+        "[fpp] Loading light curves (TIC=%s sectors=%s cache_dir=%s cache_only=%s)",
+        int(tic_id),
+        sectors,
+        str(cache.cache_dir),
+        bool(cache_only_sectors),
+    )
+    lightcurves, load_path = _load_lightcurves_for_fpp(
+        tic_id=int(tic_id),
+        sectors=sectors,
+        cache=cache,
+        client=client,
+        cache_only_sectors=bool(cache_only_sectors),
+        flux_type="pdcsap",
+    )
+    if not lightcurves:
+        raise LightCurveNotFoundError(
+            f"No sectors available for TIC {tic_id} (load_path={load_path})."
+        )
+    logger.info(
+        "[fpp] Loaded %s sector light curves for TIC %s via %s",
+        len(lightcurves),
+        int(tic_id),
+        load_path,
+    )
+
     sectors_loaded: list[int] = []
     for lc_data in lightcurves:
         staged_lc_data = lc_data
@@ -334,26 +452,23 @@ def _estimate_detrended_depth_ppm(
     detrend_bin_hours: float,
     detrend_buffer: float,
     detrend_sigma_clip: float,
+    cache_dir: Path | None = None,
     cache_only_sectors: bool = False,
 ) -> tuple[float | None, dict[str, Any]]:
-    client = MASTClient()
-    if bool(cache_only_sectors) and sectors is not None:
-        lightcurves = []
-        for sector in sectors:
-            try:
-                lightcurves.append(
-                    client.download_lightcurve_cached(
-                        tic_id=int(tic_id),
-                        sector=int(sector),
-                        flux_type="pdcsap",
-                    )
-                )
-            except Exception:
-                continue
-    else:
-        lightcurves = client.download_all_sectors(tic_id=int(tic_id), flux_type="pdcsap", sectors=sectors)
+    cache = PersistentCache(cache_dir=cache_dir)
+    client = _new_mast_client(cache_dir=cache_dir)
+    lightcurves, load_path = _load_lightcurves_for_fpp(
+        tic_id=int(tic_id),
+        sectors=sectors,
+        cache=cache,
+        client=client,
+        cache_only_sectors=bool(cache_only_sectors),
+        flux_type="pdcsap",
+    )
     if not lightcurves:
-        raise LightCurveNotFoundError(f"No sectors available for TIC {tic_id}")
+        raise LightCurveNotFoundError(
+            f"No sectors available for TIC {tic_id} (load_path={load_path})."
+        )
 
     stitched = lightcurves[0] if len(lightcurves) == 1 else stitch_lightcurve_data(lightcurves, tic_id=int(tic_id))[0]
     lc = LightCurve.from_internal(stitched)
@@ -788,6 +903,7 @@ def fpp_command(
                 detrend_bin_hours=float(detrend_bin_hours),
                 detrend_buffer=float(detrend_buffer),
                 detrend_sigma_clip=float(detrend_sigma_clip),
+                cache_dir=cache_dir,
                 cache_only_sectors=cache_only_sector_load,
             )
             if detrended_depth is not None:
