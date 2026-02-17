@@ -53,3 +53,22 @@ def test_query_exofop_toi_rows_disposition_filters_sort_and_limit() -> None:
     assert result.stats.matched_rows_before_limit == 2
     assert result.stats.returned_rows == 1
     assert result.stats.filtered_by_disposition_rows == 2
+
+
+def test_query_exofop_toi_rows_exclude_known_planets_filters_cp() -> None:
+    table = ExoFOPToiTable(
+        fetched_at_unix=0.0,
+        headers=["toi", "tfopwg_disposition"],
+        rows=[
+            {"toi": "300.01", "tfopwg_disposition": "CP"},
+            {"toi": "300.02", "tfopwg_disposition": "PC"},
+        ],
+    )
+
+    result = query_exofop_toi_rows(
+        table,
+        include_dispositions={"CP", "PC"},
+        exclude_known_planets=True,
+    )
+
+    assert [row["toi"] for row in result.rows] == ["300.02"]
