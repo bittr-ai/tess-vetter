@@ -14,6 +14,7 @@ from bittr_tess_vetter.cli.common_cli import (
     dump_json_output,
     resolve_optional_output_path,
 )
+from bittr_tess_vetter.cli.diagnostics_report_inputs import resolve_inputs_from_report_file
 from bittr_tess_vetter.cli.reference_sources import REFERENCE_SOURCES_SCHEMA_VERSION
 from bittr_tess_vetter.platform.catalogs.gaia_client import query_gaia_by_position_sync
 from bittr_tess_vetter.platform.catalogs.toi_resolution import (
@@ -303,6 +304,7 @@ def _execute_resolve_neighbors(
 @click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
 @click.option("--toi", type=str, default=None, help="Optional TOI label to resolve TIC.")
+@click.option("--report-file", type=str, default=None, help="Optional report JSON path for candidate inputs.")
 @click.option("--ra-deg", type=float, default=None, help="Optional target right ascension in degrees.")
 @click.option("--dec-deg", type=float, default=None, help="Optional target declination in degrees.")
 @click.option("--radius-arcsec", type=float, default=60.0, show_default=True, help="Gaia cone radius.")
@@ -326,6 +328,7 @@ def resolve_neighbors_command(
     toi_arg: str | None,
     tic_id: int | None,
     toi: str | None,
+    report_file: str | None,
     ra_deg: float | None,
     dec_deg: float | None,
     radius_arcsec: float,
@@ -351,18 +354,35 @@ def resolve_neighbors_command(
         raise BtvCliError("--radius-arcsec must be > 0", exit_code=EXIT_INPUT_ERROR)
     if int(max_neighbors) < 0:
         raise BtvCliError("--max-neighbors must be >= 0", exit_code=EXIT_INPUT_ERROR)
-    if tic_id is not None and resolved_toi_arg is not None:
+    if report_file is not None and (tic_id is not None or resolved_toi_arg is not None):
+        click.echo(
+            "Warning: --report-file provided; ignoring --tic-id/--toi and using report-file candidate inputs.",
+            err=True,
+        )
+    if report_file is None and tic_id is not None and resolved_toi_arg is not None:
         raise BtvCliError("Provide either --tic-id or --toi, not both.", exit_code=EXIT_INPUT_ERROR)
 
-    resolved_tic, toi_resolution = _resolve_tic_id(
-        tic_id=tic_id,
-        toi=resolved_toi_arg,
-        network_ok=bool(network_ok),
-    )
+    if report_file is not None:
+        resolved_from_report = resolve_inputs_from_report_file(str(report_file))
+        resolved_tic = int(resolved_from_report.tic_id)
+        toi_resolution = {
+            "status": "ok",
+            "source": "report_file",
+            "report_file": str(resolved_from_report.report_file_path),
+            "tic_id": int(resolved_from_report.tic_id),
+        }
+        resolved_toi = resolved_toi_arg
+    else:
+        resolved_tic, toi_resolution = _resolve_tic_id(
+            tic_id=tic_id,
+            toi=resolved_toi_arg,
+            network_ok=bool(network_ok),
+        )
+        resolved_toi = resolved_toi_arg
 
     payload = _execute_resolve_neighbors(
         tic_id=int(resolved_tic),
-        toi=resolved_toi_arg,
+        toi=resolved_toi,
         ra_deg=ra_deg,
         dec_deg=dec_deg,
         radius_arcsec=float(radius_arcsec),

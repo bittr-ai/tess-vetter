@@ -157,6 +157,35 @@ Per-command legacy-to-canonical mapping:
      - ``result.interpretation_label`` then ``result.label`` then ``result.reliability_label``
      - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
 
+Report-Seeded Inputs (`--report-file`)
+--------------------------------------
+
+Most diagnostics support report-seeded candidate inputs so agents can run
+commands uniformly from a prior ``btv report`` output without re-specifying
+ephemeris fields.
+
+Usage pattern:
+
+.. code-block:: bash
+
+   btv <command> --report-file outputs/report/toi_xxxx.json --network-ok -o outputs/<command>/toi_xxxx.json
+
+Supported commands:
+
+- ``btv vet``
+- ``btv measure-sectors``
+- ``btv detrend-grid``
+- ``btv model-compete``
+- ``btv activity``
+- ``btv rv-feasibility``
+- ``btv timing``
+- ``btv systematics-proxy``
+- ``btv ephemeris-reliability``
+- ``btv fpp``
+- ``btv resolve-neighbors``
+- ``btv localize-host``
+- ``btv dilution``
+
 Vetting Check Categories
 ------------------------
 

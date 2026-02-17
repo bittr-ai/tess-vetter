@@ -18,6 +18,7 @@ from bittr_tess_vetter.cli.common_cli import (
     load_json_file,
     resolve_optional_output_path,
 )
+from bittr_tess_vetter.cli.diagnostics_report_inputs import resolve_inputs_from_report_file
 from bittr_tess_vetter.cli.stellar_inputs import load_auto_stellar_with_fallback
 from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
 
@@ -303,6 +304,7 @@ def _merge_host_inputs(
 def _resolve_observed_depth(
     *,
     depth_ppm: float | None,
+    report_file: str | None,
     network_ok: bool,
     toi: str | None,
     tic_id: int | None,
@@ -316,6 +318,14 @@ def _resolve_observed_depth(
             "resolved_from": "cli",
             "inputs": {"depth_ppm": float(depth_ppm)},
         }
+    if report_file is not None:
+        resolved_from_report = resolve_inputs_from_report_file(str(report_file))
+        if resolved_from_report.depth_ppm is None:
+            raise BtvCliError(
+                "Observed depth unavailable in report file. Provide --depth-ppm.",
+                exit_code=EXIT_DATA_UNAVAILABLE,
+            )
+        return float(resolved_from_report.depth_ppm), dict(resolved_from_report.input_resolution)
 
     (
         _resolved_tic_id,
@@ -393,6 +403,7 @@ def _build_dilution_reliability_summary(
 @click.option("--duration-hours", type=float, default=None, help="Transit duration in hours for candidate input resolution.")
 @click.option("--depth-ppm", type=float, default=None, help="Observed transit depth in ppm.")
 @click.option("--toi", type=str, default=None, help="Optional TOI label for candidate input resolution.")
+@click.option("--report-file", type=str, default=None, help="Optional report JSON path for candidate inputs.")
 @click.option(
     "--network-ok/--no-network",
     default=False,
@@ -428,6 +439,7 @@ def dilution_command(
     duration_hours: float | None,
     depth_ppm: float | None,
     toi: str | None,
+    report_file: str | None,
     network_ok: bool,
     host_profile_file: str | None,
     reference_sources_file: str | None,
@@ -451,6 +463,24 @@ def dilution_command(
             "Provide at least one: --host-profile-file or --reference-sources-file",
             exit_code=EXIT_INPUT_ERROR,
         )
+    report_file_path: str | None = None
+    report_tic_id: int | None = None
+    if report_file is not None:
+        if (
+            resolved_toi_arg is not None
+            or tic_id is not None
+            or period_days is not None
+            or t0_btjd is not None
+            or duration_hours is not None
+        ):
+            click.echo(
+                "Warning: --report-file provided; ignoring candidate input flags and using report-file candidate inputs.",
+                err=True,
+            )
+        resolved_from_report = resolve_inputs_from_report_file(str(report_file))
+        report_file_path = str(resolved_from_report.report_file_path)
+        report_tic_id = int(resolved_from_report.tic_id)
+        resolved_toi_arg = None
 
     host_profile_path: Path | None = None
     host_profile_inputs: _HostHypothesisInputs | None = None
@@ -472,7 +502,7 @@ def dilution_command(
     profile_tic_id, primary_g_mag, primary_radius_rsun, companions_profile, host_ambiguous = _merge_host_inputs(
         host_profile=host_profile_inputs,
         reference_sources=reference_source_inputs,
-        cli_tic_id=tic_id,
+        cli_tic_id=report_tic_id if report_tic_id is not None else tic_id,
     )
     stellar_radius_resolution: dict[str, Any] = {
         "attempted": False,
@@ -485,9 +515,10 @@ def dilution_command(
     try:
         observed_depth_ppm, input_resolution = _resolve_observed_depth(
             depth_ppm=depth_ppm,
+            report_file=report_file_path,
             network_ok=bool(network_ok),
             toi=resolved_toi_arg,
-            tic_id=tic_id,
+            tic_id=(report_tic_id if report_tic_id is not None else tic_id),
             period_days=period_days,
             t0_btjd=t0_btjd,
             duration_hours=duration_hours,
@@ -575,6 +606,8 @@ def dilution_command(
             "input_resolution": input_resolution,
         },
         "provenance": {
+            "inputs_source": "report_file" if report_file_path is not None else "cli",
+            "report_file": report_file_path,
             "host_profile_path": str(host_profile_path) if host_profile_path is not None else None,
             "reference_sources_path": (
                 str(reference_sources_path) if reference_sources_path is not None else None

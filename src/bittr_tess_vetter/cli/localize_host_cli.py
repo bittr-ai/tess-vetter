@@ -21,6 +21,7 @@ from bittr_tess_vetter.cli.common_cli import (
     load_json_file,
     resolve_optional_output_path,
 )
+from bittr_tess_vetter.cli.diagnostics_report_inputs import resolve_inputs_from_report_file
 from bittr_tess_vetter.cli.localize_cli import _build_reference_sources, _extract_tpf_meta
 from bittr_tess_vetter.cli.reference_sources import load_reference_sources_file
 from bittr_tess_vetter.cli.vet_cli import _resolve_candidate_inputs
@@ -299,6 +300,7 @@ def _execute_localize_host(
 @click.option("--duration-hours", type=float, default=None, help="Transit duration in hours.")
 @click.option("--depth-ppm", type=float, default=None, help="Transit depth in ppm.")
 @click.option("--toi", type=str, default=None, help="Optional TOI label to resolve candidate inputs.")
+@click.option("--report-file", type=str, default=None, help="Optional report JSON path for candidate inputs.")
 @click.option("--ra-deg", type=float, default=None, help="Fallback target right ascension in degrees.")
 @click.option("--dec-deg", type=float, default=None, help="Fallback target declination in degrees.")
 @click.option(
@@ -375,6 +377,7 @@ def localize_host_command(
     duration_hours: float | None,
     depth_ppm: float | None,
     toi: str | None,
+    report_file: str | None,
     ra_deg: float | None,
     dec_deg: float | None,
     reference_sources_file: str | None,
@@ -428,22 +431,47 @@ def localize_host_command(
             reference_sources_multiplicity_risk = dict(reference_payload.get("multiplicity_risk") or {})
         reference_sources_override = load_reference_sources_file(Path(reference_sources_file))
 
-    (
-        resolved_tic_id,
-        resolved_period_days,
-        resolved_t0_btjd,
-        resolved_duration_hours,
-        _resolved_depth_ppm,
-        input_resolution,
-    ) = _resolve_candidate_inputs(
-        network_ok=network_ok,
-        toi=resolved_toi_arg,
-        tic_id=tic_id,
-        period_days=period_days,
-        t0_btjd=t0_btjd,
-        duration_hours=duration_hours,
-        depth_ppm=depth_ppm,
-    )
+    report_file_path: str | None = None
+    if report_file is not None:
+        if (
+            resolved_toi_arg is not None
+            or tic_id is not None
+            or period_days is not None
+            or t0_btjd is not None
+            or duration_hours is not None
+            or depth_ppm is not None
+        ):
+            click.echo(
+                "Warning: --report-file provided; ignoring candidate input flags and using report-file candidate inputs.",
+                err=True,
+            )
+        resolved_from_report = resolve_inputs_from_report_file(str(report_file))
+        resolved_tic_id = int(resolved_from_report.tic_id)
+        resolved_period_days = float(resolved_from_report.period_days)
+        resolved_t0_btjd = float(resolved_from_report.t0_btjd)
+        resolved_duration_hours = float(resolved_from_report.duration_hours)
+        _resolved_depth_ppm = (
+            float(resolved_from_report.depth_ppm) if resolved_from_report.depth_ppm is not None else None
+        )
+        input_resolution = dict(resolved_from_report.input_resolution)
+        report_file_path = str(resolved_from_report.report_file_path)
+    else:
+        (
+            resolved_tic_id,
+            resolved_period_days,
+            resolved_t0_btjd,
+            resolved_duration_hours,
+            _resolved_depth_ppm,
+            input_resolution,
+        ) = _resolve_candidate_inputs(
+            network_ok=network_ok,
+            toi=resolved_toi_arg,
+            tic_id=tic_id,
+            period_days=period_days,
+            t0_btjd=t0_btjd,
+            duration_hours=duration_hours,
+            depth_ppm=depth_ppm,
+        )
 
     try:
         payload = _execute_localize_host(
@@ -477,6 +505,9 @@ def localize_host_command(
     except Exception as exc:
         raise BtvCliError(str(exc), exit_code=EXIT_RUNTIME_ERROR) from exc
 
+    payload.setdefault("provenance", {})
+    payload["provenance"]["inputs_source"] = "report_file" if report_file_path is not None else "cli"
+    payload["provenance"]["report_file"] = report_file_path
     dump_json_output(payload, out_path)
 
 

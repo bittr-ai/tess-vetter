@@ -274,3 +274,62 @@ def test_btv_resolve_neighbors_rejects_mismatched_positional_and_option_toi() ->
     )
     assert result.exit_code == 1
     assert "must match" in result.output
+
+
+def test_btv_resolve_neighbors_report_file_inputs_override_candidate_flags(monkeypatch, tmp_path: Path) -> None:
+    report_path = tmp_path / "resolve_neighbors.report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "report": {
+                    "summary": {
+                        "tic_id": 555,
+                        "ephemeris": {
+                            "period_days": 6.0,
+                            "t0_btjd": 2450.0,
+                            "duration_hours": 2.0,
+                        },
+                        "input_depth_ppm": 400.0,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.resolve_neighbors_cli._resolve_tic_id",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve TOI with report file")),
+    )
+
+    def _fake_execute_resolve_neighbors(**kwargs: Any) -> dict[str, Any]:
+        return {
+            "schema_version": "reference_sources.v1",
+            "reference_sources": [],
+            "target": {"tic_id": kwargs["tic_id"], "toi": kwargs["toi"], "ra_deg": 0.0, "dec_deg": 0.0},
+            "provenance": {"toi_resolution": kwargs["toi_resolution"]},
+        }
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.resolve_neighbors_cli._execute_resolve_neighbors",
+        _fake_execute_resolve_neighbors,
+    )
+
+    out_path = tmp_path / "reference_sources_report_file.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        resolve_neighbors_command,
+        [
+            "--report-file",
+            str(report_path),
+            "--toi",
+            "TOI-555.01",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Warning: --report-file provided; ignoring --tic-id/--toi" in result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["target"]["tic_id"] == 555
+    assert payload["provenance"]["toi_resolution"]["source"] == "report_file"

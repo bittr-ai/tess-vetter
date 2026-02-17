@@ -206,6 +206,66 @@ def test_btv_localize_host_rejects_mismatched_positional_and_option_toi(monkeypa
     assert "must match" in result.output
 
 
+def test_btv_localize_host_report_file_inputs_override_candidate_flags(monkeypatch, tmp_path: Path) -> None:
+    report_path = tmp_path / "localize_host.report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "report": {
+                    "summary": {
+                        "tic_id": 555,
+                        "ephemeris": {
+                            "period_days": 6.0,
+                            "t0_btjd": 2450.0,
+                            "duration_hours": 2.0,
+                        },
+                        "input_depth_ppm": 400.0,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve TOI with report file")),
+    )
+
+    def _fake_execute_localize_host(**kwargs: Any) -> dict[str, Any]:
+        return {
+            "schema_version": "cli.localize_host.v1",
+            "result": {"consensus_label": "ON_TARGET"},
+            "inputs_summary": {"input_resolution": kwargs["input_resolution"]},
+            "provenance": {"selected_sectors": [14], "network_ok": False},
+        }
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.localize_host_cli._execute_localize_host",
+        _fake_execute_localize_host,
+    )
+
+    out_path = tmp_path / "localize_host_report_file.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        localize_host_command,
+        [
+            "--report-file",
+            str(report_path),
+            "--toi",
+            "TOI-555.01",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Warning: --report-file provided; ignoring candidate input flags" in result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["inputs_summary"]["input_resolution"]["source"] == "report_file"
+    assert payload["provenance"]["inputs_source"] == "report_file"
+    assert payload["provenance"]["report_file"] == str(report_path.resolve())
+
+
 def test_btv_localize_host_data_unavailable_when_tpf_missing_exits_4(monkeypatch) -> None:
     def _fake_resolve_candidate_inputs(**_kwargs: Any):
         return 123, 10.5, 2000.2, 2.5, None, {"source": "cli"}
