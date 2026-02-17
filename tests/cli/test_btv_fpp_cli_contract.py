@@ -953,7 +953,7 @@ def test_build_cache_for_fpp_stores_requested_sector_products(monkeypatch, tmp_p
     ]
 
 
-def test_btv_fpp_report_file_precedence_and_sector_fallback(monkeypatch, tmp_path: Path) -> None:
+def test_btv_fpp_report_file_with_toi_prefers_toi_candidate_inputs(monkeypatch, tmp_path: Path) -> None:
     seen: dict[str, Any] = {}
 
     report_path = tmp_path / "report.json"
@@ -994,7 +994,7 @@ def test_btv_fpp_report_file_precedence_and_sector_fallback(monkeypatch, tmp_pat
     monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
     monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
-    out_path = tmp_path / "fpp_report_precedence.json"
+    out_path = tmp_path / "fpp_report_with_toi_prefers_toi.json"
     runner = CliRunner()
     result = runner.invoke(
         enrich_cli.cli,
@@ -1004,22 +1004,22 @@ def test_btv_fpp_report_file_precedence_and_sector_fallback(monkeypatch, tmp_pat
             str(report_path),
             "--tic-id",
             "333",
-            "--depth-ppm",
-            "900.0",
-            "--toi",
-            "TOI-123.01",
-            "--out",
-            str(out_path),
-        ],
-    )
+                "--depth-ppm",
+                "900.0",
+                "--toi",
+                "TOI-123.01",
+                "--network-ok",
+                "--out",
+                str(out_path),
+            ],
+        )
 
     assert result.exit_code == 0, result.output
-    assert "--report-file provided with --toi" in result.output
-    assert seen["resolve"]["toi"] is None
+    assert seen["resolve"]["toi"] == "TOI-123.01"
     assert seen["resolve"]["tic_id"] == 333
-    assert seen["resolve"]["period_days"] == 2.5
-    assert seen["resolve"]["t0_btjd"] == 1300.25
-    assert seen["resolve"]["duration_hours"] == 1.5
+    assert seen["resolve"]["period_days"] is None
+    assert seen["resolve"]["t0_btjd"] is None
+    assert seen["resolve"]["duration_hours"] is None
     assert seen["resolve"]["depth_ppm"] == 900.0
     assert seen["build_cache"]["sectors"] == [20, 21]
     assert seen["fpp"]["sectors"] == [20, 21]
@@ -1376,3 +1376,87 @@ def test_btv_fpp_prepare_supports_short_o(monkeypatch, tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == "cli.fpp.prepare.v1"
+
+
+def test_btv_fpp_prepare_with_toi_prefers_toi_candidate_inputs(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    report_path = tmp_path / "report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "cli.vet.v2",
+                "inputs_summary": {
+                    "input_resolution": {
+                        "inputs": {
+                            "tic_id": 222,
+                            "period_days": 2.5,
+                            "t0_btjd": 1300.25,
+                            "duration_hours": 1.5,
+                            "depth_ppm": 600.0,
+                        }
+                    }
+                },
+                "provenance": {"sectors_used": [20, 21]},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    from bittr_tess_vetter.platform.io import PersistentCache
+
+    def _fake_resolve_candidate_inputs(**kwargs: Any):
+        seen["resolve"] = kwargs
+        return (333, 3.1, 1400.5, 2.2, 900.0, {"source": "toi", "resolved_from": "toi"})
+
+    def _fake_build_cache_for_fpp(**kwargs: Any):
+        seen["build_cache"] = kwargs
+        cache = PersistentCache(cache_dir=tmp_path / "cache")
+        return cache, [20, 21]
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp",
+        _fake_build_cache_for_fpp,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli.stage_triceratops_runtime_artifacts",
+        lambda **_kwargs: {
+            "trilegal_csv_path": str(tmp_path / "cache" / "triceratops" / "fake.csv"),
+            "target_cache_hit": True,
+            "trilegal_cache_hit": False,
+            "runtime_seconds": 1.0,
+        },
+    )
+
+    out_path = tmp_path / "prepare_with_toi_manifest.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp-prepare",
+            "--toi",
+            "TOI-123.01",
+            "--report-file",
+            str(report_path),
+            "--tic-id",
+            "333",
+            "--depth-ppm",
+            "900.0",
+            "--network-ok",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen["resolve"]["toi"] == "TOI-123.01"
+    assert seen["resolve"]["tic_id"] == 333
+    assert seen["resolve"]["period_days"] is None
+    assert seen["resolve"]["t0_btjd"] is None
+    assert seen["resolve"]["duration_hours"] is None
+    assert seen["resolve"]["depth_ppm"] == 900.0
+    assert seen["build_cache"]["sectors"] == [20, 21]

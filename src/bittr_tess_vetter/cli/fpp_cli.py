@@ -872,19 +872,22 @@ def fpp_prepare_command(
     report_sectors_used: list[int] | None = None
     if report_file is not None:
         report_candidate, report_sectors_used = _load_report_inputs(report_file)
-        if toi is not None:
+        if toi is not None and network_ok:
             click.echo(
-                "[fpp-prepare] --report-file provided with --toi; using --toi only for missing fields.",
+                "[fpp-prepare] --report-file provided with --toi; using --toi for candidate inputs and report only for sectors.",
                 err=True,
             )
 
-    candidate_tic_id = tic_id if tic_id is not None else report_candidate.get("tic_id")
-    candidate_period_days = period_days if period_days is not None else report_candidate.get("period_days")
-    candidate_t0_btjd = t0_btjd if t0_btjd is not None else report_candidate.get("t0_btjd")
+    use_report_for_candidate_inputs = not (toi is not None and network_ok)
+    report_candidate_inputs = report_candidate if use_report_for_candidate_inputs else {}
+
+    candidate_tic_id = tic_id if tic_id is not None else report_candidate_inputs.get("tic_id")
+    candidate_period_days = period_days if period_days is not None else report_candidate_inputs.get("period_days")
+    candidate_t0_btjd = t0_btjd if t0_btjd is not None else report_candidate_inputs.get("t0_btjd")
     candidate_duration_hours = (
-        duration_hours if duration_hours is not None else report_candidate.get("duration_hours")
+        duration_hours if duration_hours is not None else report_candidate_inputs.get("duration_hours")
     )
-    candidate_depth_ppm = depth_ppm if depth_ppm is not None else report_candidate.get("depth_ppm")
+    candidate_depth_ppm = depth_ppm if depth_ppm is not None else report_candidate_inputs.get("depth_ppm")
 
     should_use_toi_resolver = any(
         value is None
@@ -896,6 +899,8 @@ def fpp_prepare_command(
         )
     )
     if candidate_depth_ppm is None and detrend is None:
+        should_use_toi_resolver = True
+    if toi is not None and network_ok:
         should_use_toi_resolver = True
     toi_for_resolution = toi if should_use_toi_resolver else None
 
@@ -1512,19 +1517,22 @@ def fpp_command(
     report_sectors_used: list[int] | None = None
     if report_file is not None:
         report_candidate, report_sectors_used = _load_report_inputs(report_file)
-        if resolved_toi_arg is not None:
+        if resolved_toi_arg is not None and network_ok:
             click.echo(
-                "--report-file provided with --toi; preferring report candidate values and using --toi only for missing fields.",
+                "--report-file provided with --toi; using --toi for candidate inputs and report only for sectors.",
                 err=True,
             )
 
-    candidate_tic_id = tic_id if tic_id is not None else report_candidate.get("tic_id")
-    candidate_period_days = period_days if period_days is not None else report_candidate.get("period_days")
-    candidate_t0_btjd = t0_btjd if t0_btjd is not None else report_candidate.get("t0_btjd")
+    use_report_for_candidate_inputs = not (resolved_toi_arg is not None and network_ok)
+    report_candidate_inputs = report_candidate if use_report_for_candidate_inputs else {}
+
+    candidate_tic_id = tic_id if tic_id is not None else report_candidate_inputs.get("tic_id")
+    candidate_period_days = period_days if period_days is not None else report_candidate_inputs.get("period_days")
+    candidate_t0_btjd = t0_btjd if t0_btjd is not None else report_candidate_inputs.get("t0_btjd")
     candidate_duration_hours = (
-        duration_hours if duration_hours is not None else report_candidate.get("duration_hours")
+        duration_hours if duration_hours is not None else report_candidate_inputs.get("duration_hours")
     )
-    candidate_depth_ppm = depth_ppm if depth_ppm is not None else report_candidate.get("depth_ppm")
+    candidate_depth_ppm = depth_ppm if depth_ppm is not None else report_candidate_inputs.get("depth_ppm")
 
     should_use_toi_resolver = any(
         value is None
@@ -1536,6 +1544,8 @@ def fpp_command(
         )
     )
     if candidate_depth_ppm is None and detrend is None:
+        should_use_toi_resolver = True
+    if resolved_toi_arg is not None and network_ok:
         should_use_toi_resolver = True
     toi_for_resolution = resolved_toi_arg if should_use_toi_resolver else None
 
