@@ -55,6 +55,10 @@ TRILEGAL_POLL_TIMEOUT_SECONDS = 180.0
 TRILEGAL_POLL_INTERVAL_SECONDS = 5.0
 TRICERATOPS_INIT_TIMEOUT_DEFAULT = 300.0
 REPLICATE_SUCCESS_RATE_WARN_THRESHOLD = 0.5
+FPP_STAGE_INIT_BUDGET_SECONDS = 120.0
+FPP_STAGE_TRILEGAL_BUDGET_SECONDS = 120.0
+FPP_STAGE_CALC_DEPTHS_BUDGET_SECONDS = 30.0
+FPP_STAGE_CALC_PROBS_BUDGET_SECONDS = 600.0
 
 _INSECURE_PERMS_MASK = 0o022  # group/other writable
 
@@ -1013,7 +1017,7 @@ def calculate_fpp_handler(
         error_type: str,
         stage: str,
         sectors_used_value: list[int] | None = None,
-    ) -> dict[str, Any]:
+        ) -> dict[str, Any]:
         return {
             "error": message,
             "error_type": error_type,
@@ -1023,6 +1027,25 @@ def calculate_fpp_handler(
             "sectors_used": sectors_used_value,
             "runtime_seconds": float(time.time() - start_time),
         }
+
+    def _stage_budget_or_err(
+        *,
+        stage: str,
+        default_seconds: float,
+        sectors_used_value: list[int] | None,
+    ) -> tuple[float | None, dict[str, Any] | None]:
+        rem = _remaining_seconds()
+        budget = float(default_seconds)
+        if rem is not None:
+            if rem <= 0:
+                return None, _err(
+                    f"FPP calculation timed out before {stage}",
+                    error_type="timeout",
+                    stage=stage,
+                    sectors_used_value=sectors_used_value,
+                )
+            budget = min(float(default_seconds), float(rem))
+        return float(budget), None
 
     # Step 1: Get light curve from cache
     lc_data, sectors_used = _gather_light_curves(cache, tic_id, sectors, flux_type)
@@ -1083,19 +1106,27 @@ def calculate_fpp_handler(
         _save = save_cached_target or _save_cached_triceratops_target
         _prefetch = prefetch_trilegal_csv or _prefetch_trilegal_csv
 
+        stage_init_start = time.time()
         target = _load(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used)
         if target is None:
-            init_timeout = TRICERATOPS_INIT_TIMEOUT_DEFAULT
-            rem = _remaining_seconds()
-            if rem is not None:
-                if rem <= 0:
-                    return _err(
-                        "FPP calculation timed out before TRICERATOPS initialization",
-                        error_type="timeout",
-                        stage="triceratops_init",
-                        sectors_used_value=sectors_used,
-                    )
-                init_timeout = min(init_timeout, rem)
+            init_timeout, init_err = _stage_budget_or_err(
+                stage="triceratops_init",
+                default_seconds=FPP_STAGE_INIT_BUDGET_SECONDS,
+                sectors_used_value=sectors_used,
+            )
+            if init_err is not None or init_timeout is None:
+                return init_err or _err(
+                    "FPP calculation timed out before TRICERATOPS initialization",
+                    error_type="timeout",
+                    stage="triceratops_init",
+                    sectors_used_value=sectors_used,
+                )
+            logger.info(
+                "[fpp] Stage triceratops_init: start (TIC=%s sectors=%s budget=%.1fs cache=miss)",
+                tic_id,
+                len(sectors_used),
+                float(init_timeout),
+            )
 
             try:
                 with network_timeout(
@@ -1117,6 +1148,24 @@ def calculate_fpp_handler(
                 ):
                     target = tr.target(ID=tic_id, sectors=sectors_used, mission="TESS")
                 _save(cache_dir=cache_dir, tic_id=tic_id, sectors_used=sectors_used, target=target)
+        else:
+            logger.info(
+                "[fpp] Stage triceratops_init: cache hit (TIC=%s sectors=%s)",
+                tic_id,
+                len(sectors_used),
+            )
+        n_nearby = None
+        try:
+            stars = getattr(target, "stars", None)
+            if isinstance(stars, list):
+                n_nearby = len(stars)
+        except Exception:
+            n_nearby = None
+        logger.info(
+            "[fpp] Stage triceratops_init: complete (%.1fs nearby_sources=%s)",
+            float(time.time() - stage_init_start),
+            "unknown" if n_nearby is None else n_nearby,
+        )
     except NetworkTimeoutError as e:
         return _err(
             str(e),
@@ -1137,6 +1186,7 @@ def calculate_fpp_handler(
     try:
         # Work around TRICERATOPS's internal TRILEGAL fetch path which can raise
         # pandas EmptyDataError when the output URL exists but is momentarily empty.
+        stage_trilegal_start = time.time()
         if getattr(target, "trilegal_fname", None) is None:
             # If we already have a cached TRILEGAL CSV for this TIC, prefer it to avoid
             # re-querying TRILEGAL and to avoid expired TRILEGAL URLs (HTTP 404).
@@ -1145,22 +1195,33 @@ def calculate_fpp_handler(
                 if cached_csv.exists() and cached_csv.stat().st_size > 0:
                     target.trilegal_fname = str(cached_csv)
                     target.trilegal_url = None
+                    logger.info(
+                        "[fpp] Stage trilegal_prefetch: cache hit (TIC=%s file=%s)",
+                        tic_id,
+                        str(cached_csv),
+                    )
             except OSError:
                 pass
 
             trilegal_url = getattr(target, "trilegal_url", None)
             if isinstance(trilegal_url, str) and trilegal_url:
-                prefetch_timeout = TRICERATOPS_INIT_TIMEOUT_DEFAULT
-                rem = _remaining_seconds()
-                if rem is not None:
-                    if rem <= 0:
-                        return _err(
-                            "FPP calculation timed out before TRILEGAL prefetch",
-                            error_type="timeout",
-                            stage="triceratops_calc_probs",
-                            sectors_used_value=sectors_used,
-                        )
-                    prefetch_timeout = min(prefetch_timeout, rem)
+                prefetch_timeout, prefetch_err = _stage_budget_or_err(
+                    stage="trilegal_prefetch",
+                    default_seconds=FPP_STAGE_TRILEGAL_BUDGET_SECONDS,
+                    sectors_used_value=sectors_used,
+                )
+                if prefetch_err is not None or prefetch_timeout is None:
+                    return prefetch_err or _err(
+                        "FPP calculation timed out before TRILEGAL prefetch",
+                        error_type="timeout",
+                        stage="trilegal_prefetch",
+                        sectors_used_value=sectors_used,
+                    )
+                logger.info(
+                    "[fpp] Stage trilegal_prefetch: start (TIC=%s budget=%.1fs)",
+                    tic_id,
+                    float(prefetch_timeout),
+                )
                 with network_timeout(
                     float(prefetch_timeout),
                     operation=f"TRILEGAL prefetch for TIC {tic_id}",
@@ -1196,6 +1257,10 @@ def calculate_fpp_handler(
                             raise
                 target.trilegal_fname = trilegal_csv
                 target.trilegal_url = None
+        logger.info(
+            "[fpp] Stage trilegal_prefetch: complete (%.1fs)",
+            float(time.time() - stage_trilegal_start),
+        )
 
         # TRICERATOPS expects time array centered on transit midpoint
         # Fold the light curve to center on transits
@@ -1267,7 +1332,25 @@ def calculate_fpp_handler(
 
         # calc_depths must be called before calc_probs
         # It computes transit depths for all sources in the aperture
+        stage_calc_depths_start = time.time()
+        logger.info(
+            "[fpp] Stage calc_depths: start (TIC=%s budget=%.1fs)",
+            tic_id,
+            float(FPP_STAGE_CALC_DEPTHS_BUDGET_SECONDS),
+        )
         target.calc_depths(tdepth=depth_fractional)
+        calc_depths_runtime = float(time.time() - stage_calc_depths_start)
+        if calc_depths_runtime > float(FPP_STAGE_CALC_DEPTHS_BUDGET_SECONDS):
+            return _err(
+                (
+                    "calc_depths exceeded stage budget "
+                    f"({calc_depths_runtime:.1f}s > {FPP_STAGE_CALC_DEPTHS_BUDGET_SECONDS:.1f}s)"
+                ),
+                error_type="timeout",
+                stage="calc_depths",
+                sectors_used_value=sectors_used,
+            )
+        logger.info("[fpp] Stage calc_depths: complete (%.1fs)", calc_depths_runtime)
 
         rem = _remaining_seconds()
         if rem is not None and rem <= 0:
@@ -1290,8 +1373,18 @@ def calculate_fpp_handler(
                 draws = min(draws, 200_000)
         draws = int(max(10_000, min(draws, 1_000_000)))
 
-        # If the caller provided an overall timeout budget, let calc_probs use the remaining time.
+        # If the caller provided an overall timeout budget, let calc_probs use the remaining time,
+        # but keep a bounded stage budget to avoid silent long hangs.
         calc_timeout = float(TRICERATOPS_CALC_TIMEOUT) if rem is None else float(rem)
+        calc_timeout = min(float(calc_timeout), float(FPP_STAGE_CALC_PROBS_BUDGET_SECONDS))
+        logger.info(
+            "[fpp] Stage triceratops_calc_probs: start (TIC=%s draws=%s max_points=%s budget=%.1fs replicates=%s)",
+            tic_id,
+            draws,
+            max_points,
+            float(calc_timeout),
+            max(1, int(replicates)) if replicates is not None else 1,
+        )
 
         # Prepare external LC files for TRICERATOPS+ multi-band FPP
         external_lc_files: list[str] | None = None
@@ -1322,6 +1415,7 @@ def calculate_fpp_handler(
         contrast_curve_filter: str | None = None
         contrast_curve_filter_raw: str | None = None
 
+        stage_calc_probs_start = time.time()
         try:
             if external_lightcurves and temp_dir_obj is not None:
                 temp_dir_path = Path(temp_dir_obj.name)
@@ -1470,6 +1564,12 @@ def calculate_fpp_handler(
         finally:
             if temp_dir_obj is not None:
                 temp_dir_obj.cleanup()
+        logger.info(
+            "[fpp] Stage triceratops_calc_probs: complete (%.1fs successes=%s errors=%s)",
+            float(time.time() - stage_calc_probs_start),
+            len([r for r in replicate_results if not _is_result_degenerate(r)]),
+            len(replicate_errors),
+        )
 
     except NetworkTimeoutError as e:
         return _err(
