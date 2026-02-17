@@ -12,6 +12,7 @@ from bittr_tess_vetter.api.fpp import ContrastCurve
 from bittr_tess_vetter.api.fpp_helpers import load_contrast_curve_exofop_tbl
 
 _FLOAT_RE = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$")
+_ALLOWED_TEXT_EXTS = {".tbl", ".dat", ".csv", ".txt"}
 
 
 class ContrastCurveParseError(ValueError):
@@ -58,6 +59,10 @@ def parse_contrast_curve_file(path: str | Path, *, filter_name: str | None = Non
     parsed_path = Path(path).expanduser().resolve()
     if not parsed_path.exists() or not parsed_path.is_file():
         raise FileNotFoundError(f"Contrast curve file not found: {parsed_path}")
+    if parsed_path.suffix.lower() not in _ALLOWED_TEXT_EXTS:
+        raise ContrastCurveParseError(
+            f"Unsupported contrast-curve extension for parser: {parsed_path.suffix} (file={parsed_path})"
+        )
 
     try:
         return load_contrast_curve_exofop_tbl(parsed_path, filter=filter_name)
@@ -100,6 +105,19 @@ def normalize_contrast_curve(curve: ContrastCurve) -> dict[str, Any]:
             merged_dmag[idx] = float(np.nanmax(dmag_arr[mask]))
         sep_arr = unique_sep
         dmag_arr = merged_dmag
+
+    # Guardrails against corrupted or unit-mismatched parses.
+    sep_max = float(np.max(sep_arr))
+    dmag_max = float(np.max(dmag_arr))
+    dmag_min = float(np.min(dmag_arr))
+    if sep_max > 60.0:
+        raise ContrastCurveParseError(
+            f"Implausible separation scale detected (max={sep_max:.3f} arcsec)."
+        )
+    if dmag_max > 25.0 or dmag_min < -2.0:
+        raise ContrastCurveParseError(
+            f"Implausible delta_mag range detected (min={dmag_min:.3f}, max={dmag_max:.3f})."
+        )
 
     flux_ratio = np.power(10.0, -0.4 * dmag_arr)
 
