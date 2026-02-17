@@ -58,7 +58,6 @@ TRICERATOPS_INIT_TIMEOUT_DEFAULT = 300.0
 REPLICATE_SUCCESS_RATE_WARN_THRESHOLD = 0.5
 FPP_STAGE_INIT_BUDGET_SECONDS = 120.0
 FPP_STAGE_TRILEGAL_BUDGET_SECONDS = 120.0
-FPP_STAGE_CALC_DEPTHS_BUDGET_SECONDS = 30.0
 FPP_STAGE_CALC_PROBS_BUDGET_SECONDS = 600.0
 
 _INSECURE_PERMS_MASK = 0o022  # group/other writable
@@ -1681,22 +1680,11 @@ def calculate_fpp_handler(
         # It computes transit depths for all sources in the aperture
         stage_calc_depths_start = time.time()
         logger.info(
-            "[fpp] Stage calc_depths: start (TIC=%s budget=%.1fs)",
+            "[fpp] Stage calc_depths: start (TIC=%s)",
             tic_id,
-            float(FPP_STAGE_CALC_DEPTHS_BUDGET_SECONDS),
         )
         target.calc_depths(tdepth=depth_fractional)
         calc_depths_runtime = float(time.time() - stage_calc_depths_start)
-        if calc_depths_runtime > float(FPP_STAGE_CALC_DEPTHS_BUDGET_SECONDS):
-            return _err(
-                (
-                    "calc_depths exceeded stage budget "
-                    f"({calc_depths_runtime:.1f}s > {FPP_STAGE_CALC_DEPTHS_BUDGET_SECONDS:.1f}s)"
-                ),
-                error_type="timeout",
-                stage="calc_depths",
-                sectors_used_value=sectors_used,
-            )
         logger.info("[fpp] Stage calc_depths: complete (%.1fs)", calc_depths_runtime)
 
         rem = _remaining_seconds()
