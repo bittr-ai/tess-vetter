@@ -840,6 +840,7 @@ def _runtime_artifacts_ready(
     help="Optional cache directory for FPP light-curve staging.",
 )
 @click.option(
+    "-o",
     "--out",
     "output_manifest_path",
     required=True,

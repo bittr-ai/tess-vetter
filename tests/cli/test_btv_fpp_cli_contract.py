@@ -1330,3 +1330,49 @@ def test_btv_fpp_run_require_prepared_fails_when_runtime_artifacts_missing(monke
 
     assert result.exit_code == 4
     assert "Prepared runtime artifacts missing" in result.output
+
+
+def test_btv_fpp_prepare_supports_short_o(monkeypatch, tmp_path: Path) -> None:
+    from bittr_tess_vetter.platform.io import PersistentCache
+
+    def _fake_resolve_candidate_inputs(**_kwargs: Any):
+        return (123, 7.5, 2500.25, 3.0, 900.0, {"source": "cli", "resolved_from": "cli"})
+
+    def _fake_build_cache_for_fpp(**_kwargs: Any):
+        cache = PersistentCache(cache_dir=tmp_path / "cache")
+        return cache, [14, 15]
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp",
+        _fake_build_cache_for_fpp,
+    )
+
+    out_path = tmp_path / "prepare_manifest.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp-prepare",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--no-network",
+            "-o",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "cli.fpp.prepare.v1"
