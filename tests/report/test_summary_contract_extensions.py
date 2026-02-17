@@ -151,3 +151,34 @@ def test_variability_summary_rotation_context_uses_stellar_radius_when_available
     assert rotation_context["stellar_radius_rsun"] == 1.4
     assert rotation_context["v_eq_est_kms"] is None
     assert "MISSING_ROTATION_PERIOD" in rotation_context["quality_flags"]
+
+
+def test_variability_periodicity_falls_back_to_alias_when_timing_missing() -> None:
+    alias = AliasHarmonicSummaryData(
+        harmonic_labels=["P", "P/2", "2P"],
+        periods=[4.0, 2.0, 8.0],
+        scores=[0.9, 1.1, 0.2],
+        harmonic_depth_ppm=[500.0, 620.0, 120.0],
+        best_harmonic="P/2",
+        best_ratio_over_p=0.5,
+        classification="ALIAS_WEAK",
+        phase_shift_event_count=0,
+        phase_shift_peak_sigma=3.4,
+        secondary_significance=0.2,
+    )
+    payload = ReportData(
+        lc_summary=_minimal_lc_summary(),
+        alias_summary=alias,
+        checks_run=[],
+    ).to_json()
+
+    variability = payload["summary"]["variability_summary"]
+    contamination = payload["summary"]["stellar_contamination_summary"]
+
+    assert variability["periodicity_score"] == 3.4
+    assert (
+        variability["semantics"]["periodicity_source"]
+        == "alias_summary.{classification,phase_shift_peak_sigma,secondary_significance,phase_shift_event_count}"
+    )
+    assert contamination["components"]["periodicity_score"]["raw_value"] == 3.4
+    assert contamination["components"]["periodicity_score"]["transformed_value"] is not None

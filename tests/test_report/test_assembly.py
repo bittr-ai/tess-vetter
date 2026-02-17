@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from bittr_tess_vetter.api.types import ok_result
 from bittr_tess_vetter.report._assembly import (
     SUMMARY_BLOCK_REGISTRY,
@@ -136,3 +138,36 @@ def test_ephemeris_schedulability_summary_is_null_safe_when_v17_missing() -> Non
     assert sched["scalar"] is None
     assert sched["components"] == {}
     assert sched["provenance"]["source_check"] == "V17"
+
+
+def test_ephemeris_schedulability_reconstructs_scalar_when_preassembled_missing() -> None:
+    ctx = _base_context()
+    ctx.checks["V17"] = ok_result(
+        id="V17",
+        name="ephemeris_reliability_regime",
+        metrics={
+            "null_percentile": 0.3,
+            "period_peak_to_next_ratio": 1.2,
+            "max_ablation_score_drop_fraction": 0.2,
+            "top_5_fraction_abs": 0.55,
+        },
+        raw={
+            "null_percentile": 0.9,
+            "period_neighborhood": {"peak_to_next": 2.0},
+            "max_ablation_score_drop_fraction": 0.1,
+            "top_contribution_fractions": {"top_5_fraction": 0.25},
+            "t0_sensitivity": {"score_best": 10.0, "delta_score": 2.0},
+        },
+    )
+    summary, _ = assemble_summary(ctx)
+    sched = summary["ephemeris_schedulability_summary"]
+
+    assert sched["components"]["signal_vs_phase_null"] == pytest.approx(0.9)
+    assert sched["components"]["period_localization"] == pytest.approx(2.0 / 3.0)
+    assert sched["components"]["point_robustness"] == pytest.approx(0.9)
+    assert sched["components"]["contribution_dispersion"] == pytest.approx(0.75)
+    assert sched["components"]["t0_alignment"] == pytest.approx(0.8)
+    assert sched["scalar"] == pytest.approx(0.8208333333)
+    assert sched["provenance"]["kind"] == "ephemeris_schedulability_scalar"
+    assert sched["provenance"]["version"] == "v1"
+    assert sched["provenance"]["preassembled_schedulability_summary_available"] is False

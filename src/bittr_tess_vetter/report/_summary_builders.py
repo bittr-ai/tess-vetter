@@ -127,7 +127,6 @@ def _build_variability_summary(
         and math.isfinite(lc_summary.flux_mad_ppm)
     ):
         variability_index = float(lc_summary.flux_std_ppm / lc_summary.flux_mad_ppm)
-    periodicity_score = timing_series.periodicity_score if timing_series is not None else None
     alias_classification = (
         str(alias_summary.classification).upper()
         if alias_summary is not None and alias_summary.classification is not None
@@ -148,6 +147,40 @@ def _build_variability_summary(
         if alias_summary is not None
         else None
     )
+    periodicity_from_timing = (
+        _coerce_finite_float(timing_series.periodicity_score)
+        if timing_series is not None
+        else None
+    )
+    alias_periodicity_candidates: list[float] = []
+    if alias_classification == "ALIAS_STRONG":
+        alias_periodicity_candidates.append(3.0)
+    elif alias_classification == "ALIAS_WEAK":
+        alias_periodicity_candidates.append(1.5)
+    if phase_shift_peak_sigma is not None:
+        alias_periodicity_candidates.append(float(phase_shift_peak_sigma))
+    if secondary_significance is not None:
+        alias_periodicity_candidates.append(float(secondary_significance))
+    if phase_shift_event_count is not None and phase_shift_event_count > 0:
+        alias_periodicity_candidates.append(1.5)
+
+    alias_periodicity_score = (
+        float(max(alias_periodicity_candidates))
+        if alias_periodicity_candidates
+        else None
+    )
+    if periodicity_from_timing is not None:
+        periodicity_score = periodicity_from_timing
+        periodicity_source = "timing_series.periodicity_score"
+    elif alias_periodicity_score is not None:
+        periodicity_score = alias_periodicity_score
+        periodicity_source = (
+            "alias_summary.{classification,phase_shift_peak_sigma,"
+            "secondary_significance,phase_shift_event_count}"
+        )
+    else:
+        periodicity_score = None
+        periodicity_source = "unavailable"
     periodic_signal_present = bool(
         (periodicity_score is not None and periodicity_score >= 3.0)
         or alias_classification in {"ALIAS_WEAK", "ALIAS_STRONG"}
@@ -204,7 +237,11 @@ def _build_variability_summary(
         "rotation_context": rotation_context,
         "semantics": {
             "variability_index_source": "lc_summary.flux_std_ppm/flux_mad_ppm",
-            "periodicity_source": "timing_series.periodicity_score",
+            "periodicity_source": periodicity_source,
+            "periodicity_alias_fallback_formula": (
+                "max(classification_signal,phase_shift_peak_sigma,"
+                "secondary_significance,event_count_signal)"
+            ),
             "periodic_signal_present": periodic_signal_present,
             "alias_classification_source": "alias_summary.classification",
             "rotation_context_note": (
@@ -358,15 +395,106 @@ def _build_ephemeris_schedulability_summary(
         }
 
     metrics = check_v17.metrics if isinstance(check_v17.metrics, dict) else {}
-    fallback_components = {
-        "signal_vs_phase_null": _coerce_finite_float(metrics.get("null_percentile")),
-        "period_localization": _coerce_finite_float(metrics.get("period_peak_to_next_ratio")),
-        "point_robustness": _coerce_finite_float(metrics.get("max_ablation_score_drop_fraction")),
+
+    def _clip_01_or_zero(value: float | None) -> float:
+        if value is None or not math.isfinite(value):
+            return 0.0
+        return float(max(0.0, min(1.0, value)))
+
+    null_percentile = _coerce_finite_float(raw.get("null_percentile"))
+    if null_percentile is None:
+        null_percentile = _coerce_finite_float(metrics.get("null_percentile"))
+
+    period_neighborhood = raw.get("period_neighborhood")
+    peak_to_next = None
+    if isinstance(period_neighborhood, dict):
+        peak_to_next = _coerce_finite_float(period_neighborhood.get("peak_to_next"))
+    if peak_to_next is None:
+        peak_to_next = _coerce_finite_float(metrics.get("period_peak_to_next_ratio"))
+
+    max_ablation_drop = _coerce_finite_float(raw.get("max_ablation_score_drop_fraction"))
+    if max_ablation_drop is None:
+        max_ablation_drop = _coerce_finite_float(metrics.get("max_ablation_score_drop_fraction"))
+
+    top_contribution_fractions = raw.get("top_contribution_fractions")
+    top5_fraction = None
+    if isinstance(top_contribution_fractions, dict):
+        top5_fraction = _coerce_finite_float(top_contribution_fractions.get("top_5_fraction"))
+        if top5_fraction is None:
+            top5_fraction = _coerce_finite_float(top_contribution_fractions.get("top_5_fraction_abs"))
+    if top5_fraction is None:
+        top5_fraction = _coerce_finite_float(metrics.get("top_5_fraction"))
+    if top5_fraction is None:
+        top5_fraction = _coerce_finite_float(metrics.get("top_5_fraction_abs"))
+
+    t0_sensitivity = raw.get("t0_sensitivity")
+    t0_score_best = None
+    t0_delta_score = None
+    if isinstance(t0_sensitivity, dict):
+        t0_score_best = _coerce_finite_float(t0_sensitivity.get("score_best"))
+        t0_delta_score = _coerce_finite_float(t0_sensitivity.get("delta_score"))
+    if t0_score_best is None:
+        t0_score_best = _coerce_finite_float(metrics.get("t0_score_best"))
+    if t0_delta_score is None:
+        t0_delta_score = _coerce_finite_float(metrics.get("t0_delta_score"))
+
+    signal_vs_phase_null_component = _clip_01_or_zero(null_percentile)
+    period_localization_component = (
+        float(max(peak_to_next, 0.0) / (1.0 + max(peak_to_next, 0.0)))
+        if peak_to_next is not None
+        else 0.0
+    )
+    point_robustness_component = _clip_01_or_zero(
+        None if max_ablation_drop is None else 1.0 - max_ablation_drop
+    )
+    contribution_dispersion_component = _clip_01_or_zero(
+        None if top5_fraction is None else 1.0 - top5_fraction
+    )
+    t0_alignment_component = (
+        _clip_01_or_zero(1.0 - (abs(t0_delta_score) / max(abs(t0_score_best), 1e-12)))
+        if t0_score_best is not None and t0_delta_score is not None
+        else 0.0
+    )
+
+    components = {
+        "signal_vs_phase_null": signal_vs_phase_null_component,
+        "period_localization": period_localization_component,
+        "point_robustness": point_robustness_component,
+        "contribution_dispersion": contribution_dispersion_component,
+        "t0_alignment": t0_alignment_component,
     }
+    component_weights = {
+        "signal_vs_phase_null": 0.35,
+        "period_localization": 0.20,
+        "point_robustness": 0.20,
+        "contribution_dispersion": 0.15,
+        "t0_alignment": 0.10,
+    }
+    scalar = float(
+        sum(component_weights[name] * components[name] for name in component_weights)
+        / sum(component_weights.values())
+    )
     return {
-        "scalar": None,
-        "components": {k: float(v) for k, v in fallback_components.items() if v is not None},
-        "provenance": {"source_check": "V17", "available": True, "fallback_only": True},
+        "scalar": scalar,
+        "components": components,
+        "provenance": {
+            "source_check": "V17",
+            "available": True,
+            "kind": "ephemeris_schedulability_scalar",
+            "version": "v1",
+            "policy_free": True,
+            "source": "V17.raw_and_metrics_reconstruction",
+            "component_weights": component_weights,
+            "input_signals": {
+                "null_percentile": null_percentile,
+                "period_peak_to_next": peak_to_next,
+                "max_ablation_score_drop_fraction": max_ablation_drop,
+                "top_5_contribution_fraction": top5_fraction,
+                "t0_score_best": t0_score_best,
+                "t0_delta_score": t0_delta_score,
+            },
+            "preassembled_schedulability_summary_available": False,
+        },
     }
 
 
