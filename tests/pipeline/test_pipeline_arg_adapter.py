@@ -124,3 +124,25 @@ def test_run_step_with_retries_uses_backoff_jitter_for_retryable_errors(monkeypa
     assert payload == {"ok": True}
     assert used_attempts == 3
     assert sleep_calls == pytest.approx([0.21, 0.41])
+
+
+def test_build_cli_args_maps_rv_feasibility_op_to_command(tmp_path: Path) -> None:
+    step = StepSpec(
+        id="rv-step",
+        op="rv_feasibility",
+        inputs={},
+        ports={},
+        outputs={},
+        on_error="fail",
+    )
+
+    args = _build_cli_args(
+        step=step,
+        toi="TOI-123.01",
+        inputs={"report_file": "/tmp/report.json"},
+        output_path=tmp_path / "out.json",
+        network_ok=True,
+    )
+
+    assert "rv-feasibility" in args
+    assert "--report-file" in args

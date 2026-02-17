@@ -23,6 +23,7 @@ _OP_TO_COMMAND = {
     "fit": "fit",
     "report": "report",
     "activity": "activity",
+    "rv_feasibility": "rv-feasibility",
     "model_compete": "model-compete",
     "timing": "timing",
     "systematics_proxy": "systematics-proxy",

@@ -19,6 +19,13 @@
       }
     },
     {
+      "id": "rv_feasibility",
+      "op": "rv_feasibility",
+      "inputs": {
+        "report_file": {"report_from": "report_seed"}
+      }
+    },
+    {
       "id": "model_compete",
       "op": "model_compete",
       "inputs": {

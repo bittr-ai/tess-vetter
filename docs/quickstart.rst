@@ -135,6 +135,9 @@ Per-command legacy-to-canonical mapping:
    * - ``btv activity``
      - ``activity.interpretation_label`` then ``activity.recommendation`` then ``activity.variability_class``
      - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
+   * - ``btv rv-feasibility``
+     - ``result.rv_feasibility.verdict``
+     - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``
    * - ``btv dilution``
      - ``physics_flags.requires_resolved_followup`` then ``physics_flags.planet_radius_inconsistent``
      - ``verdict`` / ``verdict_source`` and ``result.verdict`` / ``result.verdict_source``

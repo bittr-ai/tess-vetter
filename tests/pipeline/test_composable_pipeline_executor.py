@@ -19,6 +19,10 @@ def test_profile_registry_contains_mvp_profiles() -> None:
     full = get_profile("full_vetting")
     assert full.id == "full_vetting"
     assert len(full.steps) >= 10
+    assert any(step.id == "rv_feasibility" for step in full.steps)
+
+    triage = get_profile("triage_fast")
+    assert any(step.id == "rv_feasibility" for step in triage.steps)
 
     robust = get_profile("robustness_composition")
     assert robust.id == "robustness_composition"
