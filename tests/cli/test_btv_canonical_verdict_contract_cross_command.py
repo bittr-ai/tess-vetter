@@ -115,6 +115,24 @@ import pytest
             [("scenarios", "scenarios")],
             id="dilution",
         ),
+        pytest.param(
+            "rv-feasibility",
+            {
+                "schema_version": "cli.rv_feasibility.v1",
+                "activity": {"rotation_period": 6.1},
+                "rv_feasibility": {"verdict": "MODERATE_RV_FEASIBILITY"},
+                "result": {
+                    "activity": {"rotation_period": 6.1},
+                    "rv_feasibility": {"verdict": "MODERATE_RV_FEASIBILITY"},
+                    "verdict": "MODERATE_RV_FEASIBILITY",
+                    "verdict_source": "$.result.rv_feasibility.verdict",
+                },
+                "verdict": "MODERATE_RV_FEASIBILITY",
+                "verdict_source": "$.result.rv_feasibility.verdict",
+            },
+            [("activity", "activity"), ("rv_feasibility", "rv_feasibility")],
+            id="rv-feasibility",
+        ),
     ],
 )
 def test_fixture_payloads_include_canonical_verdict_contract(

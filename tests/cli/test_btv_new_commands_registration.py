@@ -21,3 +21,4 @@ def test_top_level_help_lists_new_api_addition_commands() -> None:
     assert "timing" in result.output
     assert "systematics-proxy" in result.output
     assert "dilution" in result.output
+    assert "rv-feasibility" in result.output

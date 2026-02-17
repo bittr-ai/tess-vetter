@@ -44,6 +44,7 @@ from bittr_tess_vetter.cli.resolve_neighbors_cli import resolve_neighbors_comman
 from bittr_tess_vetter.cli.systematics_proxy_cli import systematics_proxy_command
 from bittr_tess_vetter.cli.timing_cli import timing_command
 from bittr_tess_vetter.cli.transit_fit_cli import fit_command
+from bittr_tess_vetter.cli.rv_feasibility_cli import rv_feasibility_command
 from bittr_tess_vetter.cli.vet_cli import vet_command
 from bittr_tess_vetter.features import FeatureConfig
 
@@ -105,6 +106,7 @@ cli.add_command(activity_command)
 cli.add_command(timing_command)
 cli.add_command(systematics_proxy_command)
 cli.add_command(dilution_command)
+cli.add_command(rv_feasibility_command)
 cli.add_command(pipeline_group)
 
 
