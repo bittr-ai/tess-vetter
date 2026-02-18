@@ -12,7 +12,6 @@ import click
 import numpy as np
 
 from bittr_tess_vetter.api.fpp import TUTORIAL_PRESET_OVERRIDES, calculate_fpp
-from bittr_tess_vetter.api.fpp_helpers import load_contrast_curve_exofop_tbl
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
 from bittr_tess_vetter.api.triceratops_cache import (
     load_cached_triceratops_target,
@@ -41,6 +40,7 @@ from bittr_tess_vetter.cli.vet_cli import (
     _validate_detrend_args,
 )
 from bittr_tess_vetter.domain.lightcurve import make_data_ref
+from bittr_tess_vetter.contrast_curves import parse_contrast_curve_with_provenance
 from bittr_tess_vetter.platform.io import (
     LightCurveNotFoundError,
     MASTClient,
@@ -75,6 +75,26 @@ def _looks_like_timeout(exc: BaseException) -> bool:
     if isinstance(exc, TimeoutError):
         return True
     return "timeout" in type(exc).__name__.lower()
+
+
+def _load_cli_contrast_curve(
+    *,
+    contrast_curve: Path | None,
+    contrast_curve_filter: str | None,
+) -> tuple[Any | None, dict[str, Any] | None]:
+    if contrast_curve is None:
+        return None, None
+    try:
+        parsed, parse_provenance = parse_contrast_curve_with_provenance(
+            contrast_curve,
+            filter_name=contrast_curve_filter,
+        )
+        return parsed, parse_provenance
+    except Exception as exc:
+        raise BtvCliError(
+            f"Failed to parse --contrast-curve: {exc}",
+            exit_code=EXIT_INPUT_ERROR,
+        ) from exc
 
 
 def _is_degenerate_fpp_result(result: dict[str, Any]) -> bool:
@@ -1248,18 +1268,10 @@ def fpp_run_command(
             err=True,
         )
 
-    parsed_contrast_curve: Any | None = None
-    if contrast_curve is not None:
-        try:
-            parsed_contrast_curve = load_contrast_curve_exofop_tbl(
-                contrast_curve,
-                filter=contrast_curve_filter,
-            )
-        except Exception as exc:
-            raise BtvCliError(
-                f"Failed to parse --contrast-curve: {exc}",
-                exit_code=EXIT_INPUT_ERROR,
-            ) from exc
+    parsed_contrast_curve, contrast_curve_parse_provenance = _load_cli_contrast_curve(
+        contrast_curve=contrast_curve,
+        contrast_curve_filter=contrast_curve_filter,
+    )
 
     try:
         resolved_stellar, stellar_resolution = resolve_stellar_inputs(
@@ -1351,6 +1363,7 @@ def fpp_run_command(
             "contrast_curve": {
                 "path": str(contrast_curve) if contrast_curve is not None else None,
                 "filter": str(parsed_contrast_curve.filter) if parsed_contrast_curve is not None else None,
+                "parse_provenance": contrast_curve_parse_provenance,
             },
             "runtime": {
                 "preset": preset_name,
@@ -1626,18 +1639,10 @@ def fpp_command(
             err=True,
         )
 
-    parsed_contrast_curve: Any | None = None
-    if contrast_curve is not None:
-        try:
-            parsed_contrast_curve = load_contrast_curve_exofop_tbl(
-                contrast_curve,
-                filter=contrast_curve_filter,
-            )
-        except Exception as exc:
-            raise BtvCliError(
-                f"Failed to parse --contrast-curve: {exc}",
-                exit_code=EXIT_INPUT_ERROR,
-            ) from exc
+    parsed_contrast_curve, contrast_curve_parse_provenance = _load_cli_contrast_curve(
+        contrast_curve=contrast_curve,
+        contrast_curve_filter=contrast_curve_filter,
+    )
 
     try:
         resolved_stellar, stellar_resolution = resolve_stellar_inputs(
@@ -1780,6 +1785,7 @@ def fpp_command(
             "contrast_curve": {
                 "path": str(contrast_curve) if contrast_curve is not None else None,
                 "filter": str(parsed_contrast_curve.filter) if parsed_contrast_curve is not None else None,
+                "parse_provenance": contrast_curve_parse_provenance,
             },
             "runtime": {
                 "preset": preset_name,

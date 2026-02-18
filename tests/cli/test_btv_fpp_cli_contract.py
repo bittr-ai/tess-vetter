@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pytest
 from click.testing import CliRunner
 
 import bittr_tess_vetter.cli.enrich_cli as enrich_cli
@@ -550,6 +551,60 @@ def test_btv_fpp_contrast_curve_tbl_parsed_and_passed(monkeypatch, tmp_path: Pat
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["provenance"]["contrast_curve"]["path"] == str(cc_path)
     assert payload["provenance"]["contrast_curve"]["filter"] == "Kcont"
+    assert payload["provenance"]["contrast_curve"]["parse_provenance"]["strategy"] == "text_table_primary"
+
+
+def test_btv_fpp_contrast_curve_fits_parsed_and_passed(monkeypatch, tmp_path: Path) -> None:
+    fits = pytest.importorskip("astropy.io.fits")
+    np = pytest.importorskip("numpy")
+    seen: dict[str, Any] = {}
+
+    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
+        return object(), [14]
+
+    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    cc_path = tmp_path / "TIC149302744I-at20190714_soarspeckle.fits"
+    rng = np.random.default_rng(123)
+    image = rng.normal(0.0, 0.001, size=(200, 200))
+    image[100, 100] += 2.0
+    fits.PrimaryHDU(data=image).writeto(cc_path)
+
+    out_path = tmp_path / "fpp_with_contrast_fits.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--contrast-curve",
+            str(cc_path),
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    cc = seen["contrast_curve"]
+    assert cc is not None
+    assert len(cc.separation_arcsec) >= 2
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["contrast_curve"]["path"] == str(cc_path)
+    assert payload["provenance"]["contrast_curve"]["parse_provenance"]["strategy"] == "fits_image_azimuthal"
 
 
 def test_btv_fpp_overrides_are_forwarded(monkeypatch, tmp_path: Path) -> None:
@@ -1402,6 +1457,72 @@ def test_btv_fpp_run_emits_replicate_progress(monkeypatch, tmp_path: Path) -> No
     assert "[fpp-run] replicate: 1/2 seed=101 status=ok" in result.output
     assert "[fpp-run] replicate: 2/2 seed=102 start" in result.output
     assert "[fpp-run] replicate: 2/2 seed=102 status=ok" in result.output
+
+
+def test_btv_fpp_run_contrast_curve_fits_parsed_and_passed(monkeypatch, tmp_path: Path) -> None:
+    fits = pytest.importorskip("astropy.io.fits")
+    np = pytest.importorskip("numpy")
+    seen: dict[str, Any] = {}
+
+    manifest = {
+        "schema_version": "cli.fpp.prepare.v1",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "tic_id": 123,
+        "period_days": 3.0,
+        "t0_btjd": 1500.0,
+        "duration_hours": 2.0,
+        "depth_ppm_used": 500.0,
+        "sectors_loaded": [10],
+        "cache_dir": str(tmp_path / "cache"),
+        "detrend": {},
+    }
+    manifest_path = tmp_path / "manifest_fits_cc.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    cc_path = tmp_path / "TIC149302744I-at20190714_soarspeckle.fits"
+    rng = np.random.default_rng(7)
+    image = rng.normal(0.0, 0.001, size=(200, 200))
+    image[100, 100] += 2.0
+    fits.PrimaryHDU(data=image).writeto(cc_path)
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._cache_missing_sectors", lambda **_kwargs: [])
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli._runtime_artifacts_ready",
+        lambda **_kwargs: (True, {"target_cached": True, "trilegal_cached": True, "trilegal_csv_path": "ok.csv"}),
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli.resolve_stellar_inputs",
+        lambda **_kwargs: ({}, {"source": "cli", "resolved_from": "cli"}),
+    )
+
+    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"fpp": 0.01, "nfpp": 0.001, "base_seed": 101}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_run_with_fits_cc.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp-run",
+            "--prepare-manifest",
+            str(manifest_path),
+            "--require-prepared",
+            "--contrast-curve",
+            str(cc_path),
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    cc = seen["contrast_curve"]
+    assert cc is not None
+    assert len(cc.separation_arcsec) >= 2
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["contrast_curve"]["parse_provenance"]["strategy"] == "fits_image_azimuthal"
 
 
 def test_btv_fpp_run_can_execute_twice_with_same_manifest(monkeypatch, tmp_path: Path) -> None:
