@@ -1739,6 +1739,72 @@ def test_btv_fpp_prepare_retries_after_transient_failure_with_failed_state_file_
     assert calls["n"] == 2
 
 
+def test_btv_fpp_prepare_passes_timeout_seconds_to_runtime_staging(
+    monkeypatch, tmp_path: Path
+) -> None:
+    seen: dict[str, Any] = {}
+
+    from bittr_tess_vetter.platform.io import PersistentCache
+
+    def _fake_resolve_candidate_inputs(**_kwargs: Any):
+        return (123, 7.5, 2500.25, 3.0, 900.0, {"source": "cli", "resolved_from": "cli"})
+
+    def _fake_build_cache_for_fpp(**_kwargs: Any):
+        cache = PersistentCache(cache_dir=tmp_path / "cache")
+        return cache, [14, 15]
+
+    def _fake_stage_runtime(**kwargs: Any):
+        seen["timeout_seconds"] = kwargs.get("timeout_seconds")
+        return {
+            "trilegal_csv_path": str(tmp_path / "cache" / "triceratops" / "123_TRILEGAL.csv"),
+            "target_cache_hit": True,
+            "trilegal_cache_hit": False,
+            "runtime_seconds": 0.5,
+        }
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp",
+        _fake_build_cache_for_fpp,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli.stage_triceratops_runtime_artifacts",
+        _fake_stage_runtime,
+    )
+
+    out_path = tmp_path / "prepare_timeout_manifest.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp-prepare",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--network-ok",
+            "--timeout-seconds",
+            "900",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen["timeout_seconds"] == 900.0
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["runtime_artifacts"]["timeout_seconds_requested"] == 900.0
+
+
 def test_btv_fpp_prepare_with_toi_prefers_toi_candidate_inputs(monkeypatch, tmp_path: Path) -> None:
     seen: dict[str, Any] = {}
 

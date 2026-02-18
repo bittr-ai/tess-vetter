@@ -497,7 +497,9 @@ def stage_triceratops_runtime_artifacts(
             return float(default_seconds)
         if rem <= 0:
             raise NetworkTimeoutError(operation="TRICERATOPS runtime artifact staging", timeout_seconds=0.0)
-        return float(min(float(default_seconds), float(rem)))
+        # When an explicit total timeout is provided, allow stage budgets to
+        # consume the remaining envelope instead of hard-capping at defaults.
+        return float(rem)
 
     # Ensure sectors are present in cache and resolve effective sector list.
     _lc_data, sectors_used = _gather_light_curves(cache, tic_id, sectors, flux_type)

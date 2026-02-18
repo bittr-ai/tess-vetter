@@ -876,6 +876,15 @@ def _runtime_artifacts_ready(
     help="Optional cache directory for FPP light-curve staging.",
 )
 @click.option(
+    "--timeout-seconds",
+    type=float,
+    default=None,
+    help=(
+        "Optional overall timeout for TRICERATOPS runtime staging. When set, "
+        "stage budgets draw from this value."
+    ),
+)
+@click.option(
     "-o",
     "--out",
     "output_manifest_path",
@@ -900,6 +909,7 @@ def fpp_prepare_command(
     cache_only_sectors: bool,
     network_ok: bool,
     cache_dir: Path | None,
+    timeout_seconds: float | None,
     output_manifest_path: Path,
 ) -> None:
     """Resolve candidate inputs and stage cache artifacts for FPP compute."""
@@ -972,6 +982,8 @@ def fpp_prepare_command(
     if detrend_cache_requested and detrend_method is None:
         raise BtvCliError("--detrend-cache requires --detrend", exit_code=EXIT_INPUT_ERROR)
     detrend_cache_effective = detrend_cache_requested or (detrend_method is not None)
+    if timeout_seconds is not None and float(timeout_seconds) <= 0.0:
+        raise BtvCliError("--timeout-seconds must be > 0", exit_code=EXIT_INPUT_ERROR)
 
     depth_source = "catalog"
     depth_ppm_used = resolved_depth_ppm
@@ -1047,6 +1059,7 @@ def fpp_prepare_command(
         "trilegal_cached": False,
         "trilegal_csv_path": None,
         "staged_with_network": bool(network_ok),
+        "timeout_seconds_requested": float(timeout_seconds) if timeout_seconds is not None else None,
     }
     if network_ok:
         click.echo("[fpp-prepare] Staging TRICERATOPS runtime artifacts...")
@@ -1055,6 +1068,7 @@ def fpp_prepare_command(
                 cache=cache,
                 tic_id=int(resolved_tic_id),
                 sectors=[int(s) for s in sectors_loaded],
+                timeout_seconds=float(timeout_seconds) if timeout_seconds is not None else None,
             )
         except Exception as exc:
             mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
