@@ -9,7 +9,10 @@ from bittr_tess_vetter.contrast_curves.normalize import (
     MAX_RELEVANT_SEPARATION_ARCSEC,
     normalize_contrast_curve,
 )
-from bittr_tess_vetter.contrast_curves.parsing import parse_contrast_curve_file
+from bittr_tess_vetter.contrast_curves.parsing import (
+    parse_contrast_curve_file,
+    parse_contrast_curve_with_provenance,
+)
 from bittr_tess_vetter.contrast_curves.summary import (
     build_ruling_summary,
     derive_contrast_verdict,
@@ -25,5 +28,5 @@ __all__ = [
     "derive_contrast_verdict",
     "normalize_contrast_curve",
     "parse_contrast_curve_file",
+    "parse_contrast_curve_with_provenance",
 ]
-

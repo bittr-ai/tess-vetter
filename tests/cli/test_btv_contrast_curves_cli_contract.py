@@ -48,6 +48,10 @@ def test_btv_contrast_curve_summary_success_contract(monkeypatch, tmp_path: Path
     assert payload["result"]["verdict"] == payload["verdict"]
     assert payload["result"]["verdict_source"] == payload["verdict_source"]
     assert payload["result"]["sensitivity"] == payload["sensitivity"]
+    assert payload["provenance"]["parse_provenance"]["strategy"] in {
+        "text_table_primary",
+        "text_table_fallback",
+    }
 
 
 def test_btv_contrast_curve_summary_rejects_mismatched_positional_and_option_toi(tmp_path: Path) -> None:
@@ -102,6 +106,67 @@ def test_btv_contrast_curve_summary_parses_fits_table(tmp_path: Path) -> None:
     assert payload["ruling_summary"]["max_delta_mag_at_1p0_arcsec"] == pytest.approx(8.0)
 
 
+def test_btv_contrast_curve_summary_parses_fits_image_fallback(tmp_path: Path) -> None:
+    fits = pytest.importorskip("astropy.io.fits")
+    rng = pytest.importorskip("numpy").random.default_rng(42)
+
+    cc_file = tmp_path / "TIC149302744I-at20190714_soarspeckle.fits"
+    image = rng.normal(0.0, 0.001, size=(200, 200))
+    image[100, 100] += 2.0
+    fits.PrimaryHDU(data=image).writeto(cc_file)
+
+    out_path = tmp_path / "summary_fits_image.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        contrast_curve_summary_command,
+        [
+            "TOI-123.01",
+            "--file",
+            str(cc_file),
+            "-o",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    parse_provenance = payload["provenance"]["parse_provenance"]
+    assert parse_provenance["strategy"] == "fits_image_azimuthal"
+    assert parse_provenance["pixel_scale_source"] == "lookup:soar_hrcam"
+    assert payload["sensitivity"]["n_points"] >= 2
+
+
+def test_btv_contrast_curve_summary_accepts_pixel_scale_override(tmp_path: Path) -> None:
+    fits = pytest.importorskip("astropy.io.fits")
+
+    cc_file = tmp_path / "unknown_scale.fits"
+    np = pytest.importorskip("numpy")
+    rng = np.random.default_rng(9)
+    image = rng.normal(0.0, 0.001, size=(64, 64))
+    image[32, 32] += 1.0
+    fits.PrimaryHDU(data=image).writeto(cc_file)
+
+    out_path = tmp_path / "summary_fits_override.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        contrast_curve_summary_command,
+        [
+            "TOI-123.01",
+            "--file",
+            str(cc_file),
+            "--pixel-scale-arcsec-per-px",
+            "0.02",
+            "-o",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["parse_provenance"]["pixel_scale_source"] == "override:cli"
+    assert payload["inputs_summary"]["pixel_scale_arcsec_per_px"] == pytest.approx(0.02)
+
+
 def test_btv_contrast_curve_summary_rejects_unparseable_fits(tmp_path: Path) -> None:
     fits = pytest.importorskip("astropy.io.fits")
 
@@ -120,7 +185,7 @@ def test_btv_contrast_curve_summary_rejects_unparseable_fits(tmp_path: Path) -> 
     )
 
     assert result.exit_code == 1
-    assert "does not contain a parseable contrast-curve table" in result.output
+    assert "does not contain a parseable contrast-curve table or valid 2D image" in result.output
 
 
 def test_btv_contrast_curves_success_contract(monkeypatch, tmp_path: Path) -> None:

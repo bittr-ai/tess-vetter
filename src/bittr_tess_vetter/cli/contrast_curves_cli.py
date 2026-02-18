@@ -23,7 +23,7 @@ from bittr_tess_vetter.contrast_curves import (
     combine_normalized_curves,
     derive_contrast_verdict,
     normalize_contrast_curve,
-    parse_contrast_curve_file,
+    parse_contrast_curve_with_provenance,
 )
 from bittr_tess_vetter.exofop.client import ExoFopClient
 from bittr_tess_vetter.exofop.types import ExoFopFileRow, ExoFopSelectors
@@ -144,14 +144,21 @@ def _compatibility_score(filter_label: str | None) -> float:
     return 0.5
 
 
-def _summarize_single_curve(*, path: Path, filter_name: str | None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    parsed = parse_contrast_curve_file(path, filter_name=filter_name)
+def _summarize_single_curve(
+    *, path: Path, filter_name: str | None, pixel_scale_arcsec_per_px: float | None = None
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    parsed, parse_provenance = parse_contrast_curve_with_provenance(
+        path,
+        filter_name=filter_name,
+        pixel_scale_arcsec_per_px=pixel_scale_arcsec_per_px,
+    )
     normalized = normalize_contrast_curve(parsed)
     ruling_summary = build_ruling_summary(normalized)
     return (
         {
             "path": str(path),
             "filter": str(parsed.filter),
+            "parse_provenance": parse_provenance,
             "sensitivity": normalized,
         },
         normalized,
@@ -172,6 +179,12 @@ def _summarize_single_curve(*, path: Path, filter_name: str | None) -> tuple[dic
 )
 @click.option("--filter", "filter_name", type=str, default=None, help="Optional filter label override.")
 @click.option(
+    "--pixel-scale-arcsec-per-px",
+    type=float,
+    default=None,
+    help="Optional pixel scale override for FITS image extraction (arcsec/pixel).",
+)
+@click.option(
     "-o",
     "--out",
     "output_path_arg",
@@ -186,6 +199,7 @@ def contrast_curve_summary_command(
     tic_id: int | None,
     contrast_curve_file: Path,
     filter_name: str | None,
+    pixel_scale_arcsec_per_px: float | None,
     output_path_arg: str,
 ) -> None:
     """Parse a local contrast-curve file and emit normalized sensitivity summary."""
@@ -196,6 +210,7 @@ def contrast_curve_summary_command(
         summary_block, normalized, ruling_summary = _summarize_single_curve(
             path=contrast_curve_file,
             filter_name=filter_name,
+            pixel_scale_arcsec_per_px=pixel_scale_arcsec_per_px,
         )
     except (FileNotFoundError, ContrastCurveParseError) as exc:
         raise BtvCliError(str(exc), exit_code=EXIT_INPUT_ERROR) from exc
@@ -228,10 +243,12 @@ def contrast_curve_summary_command(
             "tic_id": int(tic_id) if tic_id is not None else None,
             "contrast_curve_file": str(contrast_curve_file),
             "filter": filter_name,
+            "pixel_scale_arcsec_per_px": pixel_scale_arcsec_per_px,
         },
         "provenance": {
-            "parser": "load_contrast_curve_exofop_tbl_with_fallback",
+            "parser": "parse_contrast_curve_with_provenance",
             "source": "local_file",
+            "parse_provenance": summary_block.get("parse_provenance", {}),
         },
     }
     dump_json_output(payload, out_path)

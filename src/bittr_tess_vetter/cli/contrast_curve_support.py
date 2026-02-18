@@ -9,6 +9,7 @@ from bittr_tess_vetter.contrast_curves import (
     derive_contrast_verdict,
     normalize_contrast_curve,
     parse_contrast_curve_file,
+    parse_contrast_curve_with_provenance,
 )
 
 __all__ = [
@@ -18,5 +19,5 @@ __all__ = [
     "derive_contrast_verdict",
     "normalize_contrast_curve",
     "parse_contrast_curve_file",
+    "parse_contrast_curve_with_provenance",
 ]
-
