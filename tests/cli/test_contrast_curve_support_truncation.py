@@ -3,7 +3,11 @@ from __future__ import annotations
 import pytest
 
 from bittr_tess_vetter.api.fpp import ContrastCurve
-from bittr_tess_vetter.cli.contrast_curve_support import ContrastCurveParseError, build_ruling_summary, normalize_contrast_curve
+from bittr_tess_vetter.contrast_curves import (
+    ContrastCurveParseError,
+    build_ruling_summary,
+    normalize_contrast_curve,
+)
 
 
 def test_normalize_contrast_curve_truncates_outer_artifact_values() -> None:

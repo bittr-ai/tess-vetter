@@ -17,7 +17,7 @@ from bittr_tess_vetter.cli.common_cli import (
     dump_json_output,
     resolve_optional_output_path,
 )
-from bittr_tess_vetter.cli.contrast_curve_support import (
+from bittr_tess_vetter.contrast_curves import (
     ContrastCurveParseError,
     build_ruling_summary,
     combine_normalized_curves,
