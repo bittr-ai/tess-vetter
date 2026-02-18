@@ -33,13 +33,19 @@ class ExoFopClient:
         cache_dir: str | Path,
         cookie_jar_path: str | Path | None = None,
         user_agent: str = "bittr-tess-vetter exofop-client",
-        timeout_seconds: float = 30.0,
+        timeout_seconds: float = 180.0,
         max_retries: int = 3,
         retry_backoff_seconds: float = 1.0,
     ) -> None:
         self.cache_dir = Path(cache_dir)
         self.cookie_jar_path = Path(cookie_jar_path) if cookie_jar_path else None
         self.user_agent = user_agent
+        env_timeout = os.getenv("BTV_EXOFOP_TIMEOUT_SECONDS")
+        if env_timeout is not None and str(env_timeout).strip() != "":
+            try:
+                timeout_seconds = float(env_timeout)
+            except (TypeError, ValueError):
+                pass
         self.timeout_seconds = float(timeout_seconds)
         self.max_retries = int(max_retries)
         self.retry_backoff_seconds = float(retry_backoff_seconds)
