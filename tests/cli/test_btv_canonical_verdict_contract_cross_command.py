@@ -138,16 +138,16 @@ import pytest
             {
                 "schema_version": "cli.measure_sectors.v1",
                 "sector_measurements": [{"sector": 1, "depth_ppm": 500.0, "depth_err_ppm": 50.0}],
-                "consistency": {"verdict": "CONSISTENT"},
+                "consistency": {"verdict": "EXPECTED_SCATTER"},
                 "recommended_sectors": [1],
                 "result": {
                     "sector_measurements": [{"sector": 1, "depth_ppm": 500.0, "depth_err_ppm": 50.0}],
-                    "consistency": {"verdict": "CONSISTENT"},
+                    "consistency": {"verdict": "EXPECTED_SCATTER"},
                     "recommended_sectors": [1],
-                    "verdict": "CONSISTENT",
+                    "verdict": "EXPECTED_SCATTER",
                     "verdict_source": "$.consistency.verdict",
                 },
-                "verdict": "CONSISTENT",
+                "verdict": "EXPECTED_SCATTER",
                 "verdict_source": "$.consistency.verdict",
             },
             [

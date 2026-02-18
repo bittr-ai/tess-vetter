@@ -168,8 +168,9 @@ def _execute_measure_sectors(
             "consistency": consistency,
             "recommended_sectors": recommended_sectors,
             "recommended_sector_criterion": (
-                "quality_weight > 0, n_transits > 0, finite depth/error, and not flagged as outlier "
-                "(|depth - weighted_mean| / depth_err_ppm <= 3.0); fallback: all measured sectors."
+                "quality_weight > 0, n_transits > 0, depth_ppm > 0, depth_err_ppm > 0, "
+                "depth_snr >= 1.0, and not flagged as outlier "
+                "(depth_ppm <= 0 OR |depth - weighted_mean| / depth_err_ppm > 3.0)."
             ),
             "verdict": verdict,
             "verdict_source": verdict_source,
@@ -178,8 +179,9 @@ def _execute_measure_sectors(
         "consistency": consistency,
         "recommended_sectors": recommended_sectors,
         "recommended_sector_criterion": (
-            "quality_weight > 0, n_transits > 0, finite depth/error, and not flagged as outlier "
-            "(|depth - weighted_mean| / depth_err_ppm <= 3.0); fallback: all measured sectors."
+            "quality_weight > 0, n_transits > 0, depth_ppm > 0, depth_err_ppm > 0, "
+            "depth_snr >= 1.0, and not flagged as outlier "
+            "(depth_ppm <= 0 OR |depth - weighted_mean| / depth_err_ppm > 3.0)."
         ),
         "verdict": verdict,
         "verdict_source": verdict_source,
@@ -447,7 +449,7 @@ def _build_consistency_enrichment(sector_measurements: list[dict[str, Any]]) -> 
         "depth_median_ppm": depth_median_ppm,
         "depth_std_ppm": depth_std_ppm,
         "outlier_sectors": [int(s) for s in outlier_sectors],
-        "outlier_criterion": "|depth - weighted_mean| / depth_err_ppm > 3.0",
+        "outlier_criterion": "depth_ppm <= 0 OR |depth - weighted_mean| / depth_err_ppm > 3.0",
     }
 
 
@@ -459,11 +461,9 @@ def _recommended_sectors(
     consistency = consistency if consistency is not None else _build_consistency_enrichment(sector_measurements)
     outlier_set = {int(s) for s in consistency.get("outlier_sectors", [])}
     recommended: list[int] = []
-    all_sectors: list[int] = []
     for row in sector_measurements:
         try:
             sector = int(row.get("sector"))
-            all_sectors.append(sector)
             quality_weight = float(row.get("quality_weight", 0.0) or 0.0)
             n_transits = int(row.get("n_transits", 0) or 0)
             depth = float(row.get("depth_ppm"))
@@ -475,12 +475,13 @@ def _recommended_sectors(
             and n_transits > 0
             and np.isfinite(depth)
             and np.isfinite(depth_err)
+            and depth > 0.0
             and depth_err > 0.0
+            and (depth / depth_err) >= 1.0
             and sector not in outlier_set
         ):
             recommended.append(sector)
-    chosen = recommended if recommended else all_sectors
-    return sorted({int(s) for s in chosen})
+    return sorted({int(s) for s in recommended})
 
 
 def _build_gating_routing(
@@ -502,7 +503,7 @@ def _build_gating_routing(
             "n_sectors_recommended": int(n_recommended),
         }
 
-    if verdict == "CONSISTENT":
+    if verdict == "EXPECTED_SCATTER":
         return {
             "gating_actionable": True,
             "action_hint": "USE_ALL_SECTORS",

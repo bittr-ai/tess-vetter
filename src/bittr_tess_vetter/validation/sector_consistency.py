@@ -57,30 +57,40 @@ def compute_sector_consistency(
     Returns:
         (consistency_class, outlier_sectors, chi2_pval)
     """
-    valid = [m for m in measurements if float(m.quality_weight) > 0 and float(m.depth_ppm) > 0]
+    valid = [
+        m
+        for m in measurements
+        if float(m.quality_weight) > 0
+        and np.isfinite(float(m.depth_ppm))
+        and np.isfinite(float(m.depth_err_ppm))
+        and float(m.depth_err_ppm) > 0
+    ]
+    non_detection_outliers = [int(m.sector) for m in valid if float(m.depth_ppm) <= 0]
+    positive = [m for m in valid if float(m.depth_ppm) > 0]
 
-    if len(valid) < min_sectors:
-        return "UNRESOLVABLE", [], 1.0
+    if len(positive) < min_sectors:
+        return "UNRESOLVABLE", sorted(set(non_detection_outliers)), 1.0
 
-    depths = np.array([m.depth_ppm for m in valid], dtype=np.float64)
-    errors = np.array([m.depth_err_ppm for m in valid], dtype=np.float64)
+    depths = np.array([m.depth_ppm for m in positive], dtype=np.float64)
+    errors = np.array([m.depth_err_ppm for m in positive], dtype=np.float64)
 
     if np.any(errors <= 0):
-        return "UNRESOLVABLE", [], 1.0
+        return "UNRESOLVABLE", sorted(set(non_detection_outliers)), 1.0
 
     inv_var = 1.0 / (errors**2)
     weighted_mean = float(np.sum(depths * inv_var) / np.sum(inv_var))
 
     chi2 = float(np.sum(((depths - weighted_mean) / errors) ** 2))
-    dof = len(valid) - 1
+    dof = len(positive) - 1
     if dof <= 0:
-        return "UNRESOLVABLE", [], 1.0
+        return "UNRESOLVABLE", sorted(set(non_detection_outliers)), 1.0
 
     chi2_pval = float(stats.chi2.sf(chi2, dof))
 
     residuals = np.abs(depths - weighted_mean) / errors
     outlier_mask = residuals > 3.0
-    outlier_sectors = [valid[i].sector for i in range(len(valid)) if bool(outlier_mask[i])]
+    residual_outliers = [int(positive[i].sector) for i in range(len(positive)) if bool(outlier_mask[i])]
+    outlier_sectors = sorted(set(residual_outliers + non_detection_outliers))
 
     if chi2_pval < chi2_threshold:
         return "INCONSISTENT", outlier_sectors, chi2_pval
