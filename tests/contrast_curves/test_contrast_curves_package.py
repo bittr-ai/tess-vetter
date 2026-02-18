@@ -94,6 +94,10 @@ def test_parse_contrast_curve_with_provenance_extracts_from_fits_image_lookup_sc
     assert provenance["pixel_scale_source"] == "lookup:soar_hrcam"
     assert provenance["pixel_scale_arcsec_per_px"] == pytest.approx(0.01575)
     assert len(curve.separation_arcsec) >= 2
+    # Layer-1 regression: full half-width extraction should reach ~1.55 arcsec OWA
+    # for a 200x200 SOAR image (vs ~1.22 with the old 0.8 edge cap).
+    assert float(np.max(np.asarray(curve.separation_arcsec))) >= 1.5
+    assert provenance["edge_margin_fraction"] == pytest.approx(1.0)
 
 
 def test_parse_contrast_curve_with_provenance_extracts_from_fits_image_cd_matrix(tmp_path) -> None:

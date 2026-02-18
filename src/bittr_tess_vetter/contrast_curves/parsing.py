@@ -34,6 +34,7 @@ _DEFAULT_MIN_PIXELS_PER_ANNULUS = 10
 _DEFAULT_INNER_RADIUS_PX = 3
 _DEFAULT_CORE_RADIUS_PX = 2
 _DEFAULT_MAX_SEPARATION_ARCSEC = 4.0
+_DEFAULT_EDGE_MARGIN_FRACTION = 1.0
 
 
 def _fallback_parse_contrast_curve(path: Path, *, filter_name: str | None) -> ContrastCurve:
@@ -287,6 +288,7 @@ def _extract_azimuthal_contrast_curve(
     inner_radius_px: int = _DEFAULT_INNER_RADIUS_PX,
     core_radius_px: int = _DEFAULT_CORE_RADIUS_PX,
     max_separation_arcsec: float = _DEFAULT_MAX_SEPARATION_ARCSEC,
+    edge_margin_fraction: float = _DEFAULT_EDGE_MARGIN_FRACTION,
 ) -> tuple[np.ndarray, np.ndarray]:
     img = np.asarray(image, dtype=np.float64)
     if img.ndim != 2:
@@ -314,7 +316,10 @@ def _extract_azimuthal_contrast_curve(
     yy, xx = np.indices(img.shape)
     rr = np.sqrt((xx - float(x0)) ** 2 + (yy - float(y0)) ** 2)
     half_width = 0.5 * float(min(img.shape))
-    r_max_px = min(float(max_separation_arcsec) / float(pixel_scale_arcsec_per_px), 0.8 * half_width)
+    r_max_px = min(
+        float(max_separation_arcsec) / float(pixel_scale_arcsec_per_px),
+        float(edge_margin_fraction) * half_width,
+    )
     if not np.isfinite(r_max_px) or r_max_px <= float(inner_radius_px + annulus_width_px):
         raise ContrastCurveParseError("FITS image extraction failed: insufficient radial extent.")
 
@@ -370,6 +375,9 @@ def _extract_azimuthal_contrast_curve(
                 "inner_radius_px": int(inner_radius_px),
                 "core_radius_px": int(core_radius_px),
                 "max_separation_arcsec": float(max_separation_arcsec),
+                "edge_margin_fraction": float(edge_margin_fraction),
+                "half_width_px": float(half_width),
+                "r_max_px": float(r_max_px),
                 "annulus_attempts": int(annulus_attempts),
                 "annulus_used": int(annulus_used),
                 "annulus_skipped_low_pixels": int(annulus_skipped_lowpix),
