@@ -170,7 +170,8 @@ def _execute_measure_sectors(
             "recommended_sector_criterion": (
                 "quality_weight > 0, n_transits > 0, depth_ppm > 0, depth_err_ppm > 0, "
                 "depth_snr >= 1.0, and not flagged as outlier "
-                "(depth_ppm <= 0 OR |depth - weighted_mean| / depth_err_ppm > 3.0)."
+                "(depth_ppm <= 0 OR |depth - weighted_mean| / depth_err_ppm > 3.0). "
+                "This is a V21 consistency-gating criterion only and is not an FPP sector-exclusion recommendation."
             ),
             "verdict": verdict,
             "verdict_source": verdict_source,
@@ -181,7 +182,8 @@ def _execute_measure_sectors(
         "recommended_sector_criterion": (
             "quality_weight > 0, n_transits > 0, depth_ppm > 0, depth_err_ppm > 0, "
             "depth_snr >= 1.0, and not flagged as outlier "
-            "(depth_ppm <= 0 OR |depth - weighted_mean| / depth_err_ppm > 3.0)."
+            "(depth_ppm <= 0 OR |depth - weighted_mean| / depth_err_ppm > 3.0). "
+            "This is a V21 consistency-gating criterion only and is not an FPP sector-exclusion recommendation."
         ),
         "verdict": verdict,
         "verdict_source": verdict_source,
