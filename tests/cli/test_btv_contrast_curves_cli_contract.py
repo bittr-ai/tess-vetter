@@ -69,6 +69,60 @@ def test_btv_contrast_curve_summary_rejects_mismatched_positional_and_option_toi
     assert "must match" in result.output
 
 
+def test_btv_contrast_curve_summary_parses_fits_table(tmp_path: Path) -> None:
+    fits = pytest.importorskip("astropy.io.fits")
+
+    cc_file = tmp_path / "curve.fits"
+    cols = [
+        fits.Column(name="SEP_MAS", array=[100.0, 500.0, 1000.0], format="E"),
+        fits.Column(name="DMAG", array=[3.0, 6.0, 8.0], format="E"),
+    ]
+    hdu = fits.BinTableHDU.from_columns(cols)
+    hdu.writeto(cc_file)
+
+    out_path = tmp_path / "summary_fits.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        contrast_curve_summary_command,
+        [
+            "TOI-123.01",
+            "--file",
+            str(cc_file),
+            "--filter",
+            "Kcont",
+            "-o",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["sensitivity"]["n_points"] == 3
+    assert payload["sensitivity"]["separation_arcsec_max"] == pytest.approx(1.0)
+    assert payload["ruling_summary"]["max_delta_mag_at_1p0_arcsec"] == pytest.approx(8.0)
+
+
+def test_btv_contrast_curve_summary_rejects_unparseable_fits(tmp_path: Path) -> None:
+    fits = pytest.importorskip("astropy.io.fits")
+
+    cc_file = tmp_path / "bad_curve.fits"
+    primary = fits.PrimaryHDU()
+    primary.writeto(cc_file)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        contrast_curve_summary_command,
+        [
+            "TOI-123.01",
+            "--file",
+            str(cc_file),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "does not contain a parseable contrast-curve table" in result.output
+
+
 def test_btv_contrast_curves_success_contract(monkeypatch, tmp_path: Path) -> None:
     cache_dir = tmp_path / "cache"
     target_root = cache_dir / "exofop" / "tic_123" / "files"
