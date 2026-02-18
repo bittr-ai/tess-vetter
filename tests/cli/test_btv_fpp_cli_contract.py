@@ -1404,6 +1404,71 @@ def test_btv_fpp_run_emits_replicate_progress(monkeypatch, tmp_path: Path) -> No
     assert "[fpp-run] replicate: 2/2 seed=102 status=ok" in result.output
 
 
+def test_btv_fpp_run_can_execute_twice_with_same_manifest(monkeypatch, tmp_path: Path) -> None:
+    manifest = {
+        "schema_version": "cli.fpp.prepare.v1",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "tic_id": 123,
+        "period_days": 3.0,
+        "t0_btjd": 1500.0,
+        "duration_hours": 2.0,
+        "depth_ppm_used": 500.0,
+        "sectors_loaded": [10],
+        "cache_dir": str(tmp_path / "cache"),
+        "detrend": {},
+    }
+    manifest_path = tmp_path / "manifest_twice.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    seen: dict[str, int] = {"calls": 0}
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli.resolve_stellar_inputs",
+        lambda **_kwargs: ({}, {"source": "cli", "resolved_from": "cli"}),
+    )
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._cache_missing_sectors", lambda **_kwargs: [])
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli._runtime_artifacts_ready",
+        lambda **_kwargs: (True, {"target_cached": True, "trilegal_cached": True, "trilegal_csv_path": "ok.csv"}),
+    )
+
+    def _fake_calculate_fpp(**_kwargs: Any) -> dict[str, Any]:
+        seen["calls"] += 1
+        return {"fpp": 0.01, "nfpp": 0.001, "base_seed": 101}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    runner = CliRunner()
+    out1 = tmp_path / "fpp_run_1.json"
+    out2 = tmp_path / "fpp_run_2.json"
+    result1 = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp-run",
+            "--prepare-manifest",
+            str(manifest_path),
+            "--require-prepared",
+            "--out",
+            str(out1),
+        ],
+    )
+    result2 = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp-run",
+            "--prepare-manifest",
+            str(manifest_path),
+            "--require-prepared",
+            "--out",
+            str(out2),
+        ],
+    )
+
+    assert result1.exit_code == 0, result1.output
+    assert result2.exit_code == 0, result2.output
+    assert seen["calls"] == 2
+
+
 def test_btv_fpp_prepare_supports_short_o(monkeypatch, tmp_path: Path) -> None:
     from bittr_tess_vetter.platform.io import PersistentCache
 
@@ -1448,6 +1513,109 @@ def test_btv_fpp_prepare_supports_short_o(monkeypatch, tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == "cli.fpp.prepare.v1"
+
+
+def test_btv_fpp_prepare_retries_after_transient_failure_with_failed_state_file_present(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from bittr_tess_vetter.platform.io import PersistentCache
+
+    def _fake_resolve_candidate_inputs(**_kwargs: Any):
+        return (123, 7.5, 2500.25, 3.0, 900.0, {"source": "cli", "resolved_from": "cli"})
+
+    def _fake_build_cache_for_fpp(**_kwargs: Any):
+        cache = PersistentCache(cache_dir=tmp_path / "cache")
+        return cache, [14, 15]
+
+    calls = {"n": 0}
+
+    def _fake_stage_runtime(**_kwargs: Any):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("temporary network timeout")
+        return {
+            "trilegal_csv_path": str(tmp_path / "cache" / "triceratops" / "123_TRILEGAL.csv"),
+            "target_cache_hit": True,
+            "trilegal_cache_hit": False,
+            "runtime_seconds": 0.5,
+        }
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp",
+        _fake_build_cache_for_fpp,
+    )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli.stage_triceratops_runtime_artifacts",
+        _fake_stage_runtime,
+    )
+
+    runner = CliRunner()
+    out1 = tmp_path / "prepare_fail.json"
+    first = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp-prepare",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--network-ok",
+            "--out",
+            str(out1),
+        ],
+    )
+    assert first.exit_code != 0
+
+    # Simulate stale failed stage-state file that should not block retry.
+    stage_state = (
+        tmp_path / "cache" / "triceratops" / "staging_state" / "tic_123__sectors_14-15.json"
+    )
+    stage_state.parent.mkdir(parents=True, exist_ok=True)
+    stage_state.write_text(
+        json.dumps(
+            {
+                "status": "failed",
+                "stage": "trilegal_prefetch",
+                "error_code": "NetworkTimeoutError",
+                "error": "temporary network timeout",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out2 = tmp_path / "prepare_retry.json"
+    second = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp-prepare",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--network-ok",
+            "--out",
+            str(out2),
+        ],
+    )
+
+    assert second.exit_code == 0, second.output
+    assert calls["n"] == 2
 
 
 def test_btv_fpp_prepare_with_toi_prefers_toi_candidate_inputs(monkeypatch, tmp_path: Path) -> None:
