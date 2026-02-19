@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import csv
 import hashlib
 import io
@@ -19,8 +20,10 @@ import requests
 from bittr_tess_vetter.exofop.types import (
     ExoFopFetchResult,
     ExoFopFileRow,
+    ExoFopObsNoteRow,
     ExoFopSelectors,
     ExoFopTarget,
+    ExoFopToiRow,
 )
 
 
@@ -42,10 +45,8 @@ class ExoFopClient:
         self.user_agent = user_agent
         env_timeout = os.getenv("BTV_EXOFOP_TIMEOUT_SECONDS")
         if env_timeout is not None and str(env_timeout).strip() != "":
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 timeout_seconds = float(env_timeout)
-            except (TypeError, ValueError):
-                pass
         self.timeout_seconds = float(timeout_seconds)
         self.max_retries = int(max_retries)
         self.retry_backoff_seconds = float(retry_backoff_seconds)
@@ -113,6 +114,59 @@ class ExoFopClient:
         text = self._get_text(url, params={"id": str(int(tic_id)), "output": "csv"})
         self._write_text_atomic(out_path, text)
         return self._parse_filelist_csv(text, fallback_tic_id=int(tic_id))
+
+    def obs_notes(self, *, tic_id: int, force_refresh: bool = False) -> list[ExoFopObsNoteRow]:
+        target_dir = self._target_dir(tic_id)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        out_path = target_dir / "obsnotes.csv"
+        if out_path.exists() and not force_refresh:
+            return self._parse_obsnotes_text(
+                out_path.read_text(encoding="utf-8", errors="replace"),
+                fallback_tic_id=int(tic_id),
+            )
+
+        url = self._url("download_obsnotes.php")
+        text = self._get_text(url, params={"tid": str(int(tic_id))})
+        self._write_text_atomic(out_path, text)
+        return self._parse_obsnotes_text(text, fallback_tic_id=int(tic_id))
+
+    def toi_row(
+        self,
+        *,
+        tic_id: int,
+        toi: str | float | None = None,
+        force_refresh: bool = False,
+    ) -> ExoFopToiRow | None:
+        target_dir = self._target_dir(tic_id)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        out_path = target_dir / "toi_table.pipe"
+        if out_path.exists() and not force_refresh:
+            text = out_path.read_text(encoding="utf-8", errors="replace")
+            return self._extract_toi_row(text=text, tic_id=int(tic_id), toi=toi)
+
+        endpoint = self._url("download_toi.php")
+        best_effort_params = [
+            {"tic": str(int(tic_id)), "output": "pipe"},
+            {"id": str(int(tic_id)), "output": "pipe"},
+            {"tid": str(int(tic_id)), "output": "pipe"},
+            {"output": "pipe"},
+        ]
+        last_text: str | None = None
+        for params in best_effort_params:
+            try:
+                text = self._get_text(endpoint, params=params)
+            except Exception:
+                continue
+            last_text = text
+            row = self._extract_toi_row(text=text, tic_id=int(tic_id), toi=toi)
+            if row is not None:
+                self._write_text_atomic(out_path, text)
+                return row
+
+        if last_text is None:
+            return None
+        self._write_text_atomic(out_path, last_text)
+        return self._extract_toi_row(text=last_text, tic_id=int(tic_id), toi=toi)
 
     def index_target(
         self,
@@ -199,7 +253,7 @@ class ExoFopClient:
 
         rows = self.file_list(tic_id=tic_id, force_refresh=force_refresh)
         selected = self._filter_rows(rows, selectors)
-        selected_names = {r.filename for r in selected}
+        selected_names = [r.filename for r in selected]
 
         # Download zip once (or reuse cached) and extract requested files.
         zip_path = archives_dir / "files.zip"
@@ -224,6 +278,7 @@ class ExoFopClient:
             files_dir=files_dir,
             file_rows=rows,
             downloaded_files=sorted(extracted.values()),
+            extracted_files=extracted,
             skipped=files_skipped,
             warnings=warnings,
         )
@@ -374,6 +429,227 @@ class ExoFopClient:
             )
         return rows
 
+    def _normalize_table_key(self, key: str) -> str:
+        text = str(key or "").strip().lower()
+        text = text.replace("%", "pct")
+        for ch in ("(", ")", "[", "]", "{", "}", ",", ":", ";", "/", "-", "."):
+            text = text.replace(ch, " ")
+        return "_".join(part for part in text.split() if part)
+
+    def _iter_structured_rows(self, text: str) -> list[dict[str, str]]:
+        body = str(text or "").lstrip("\ufeff").replace("\x00", "")
+        if "<html" in body.lower():
+            return []
+        lines = [ln for ln in body.splitlines() if ln.strip()]
+        if not lines:
+            return []
+
+        sample = "\n".join(lines[:20])
+        delimiters = ",|\t;"
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=delimiters)
+            delimiter = dialect.delimiter
+        except Exception:
+            delimiter = self._best_delimiter(lines, candidates=[",", "|", "\t", ";"])
+
+        reader = csv.DictReader(io.StringIO("\n".join(lines)), delimiter=delimiter)
+        out: list[dict[str, str]] = []
+        has_headers = bool(reader.fieldnames) and len([h for h in (reader.fieldnames or []) if h]) > 1
+        if has_headers:
+            for row in reader:
+                if not row:
+                    continue
+                cleaned: dict[str, str] = {}
+                for k, v in row.items():
+                    if k is None:
+                        continue
+                    nk = self._normalize_table_key(k)
+                    if not nk:
+                        continue
+                    cleaned[nk] = str(v).strip() if v is not None else ""
+                if cleaned:
+                    out.append(cleaned)
+            if out:
+                return out
+
+        return self._parse_headered_rows_with_delimiter(lines, delimiter=delimiter)
+
+    def _best_delimiter(self, lines: list[str], *, candidates: list[str]) -> str:
+        best = ","
+        best_score = -1.0
+        for candidate in candidates:
+            counts = [len(line.split(candidate)) for line in lines[:8]]
+            if not counts:
+                continue
+            if max(counts) < 2:
+                continue
+            score = float(sum(counts)) / float(len(counts))
+            if score > best_score:
+                best_score = score
+                best = candidate
+        return best
+
+    def _parse_headered_rows_with_delimiter(self, lines: list[str], *, delimiter: str) -> list[dict[str, str]]:
+        if not lines:
+            return []
+        header = [self._normalize_table_key(h) for h in lines[0].split(delimiter)]
+        header = [h for h in header if h]
+        if not header:
+            return []
+        rows: list[dict[str, str]] = []
+        for line in lines[1:]:
+            cols = [c.strip() for c in line.split(delimiter)]
+            if not cols:
+                continue
+            row: dict[str, str] = {}
+            for idx, key in enumerate(header):
+                row[key] = cols[idx] if idx < len(cols) else ""
+            if any(str(v).strip() for v in row.values()):
+                rows.append(row)
+        return rows
+
+    def _find_first_value(self, row: dict[str, str], aliases: tuple[str, ...]) -> str | None:
+        for alias in aliases:
+            value = row.get(alias)
+            if value is None:
+                continue
+            text = str(value).strip()
+            if text:
+                return text
+        return None
+
+    def _parse_int_best_effort(self, value: str | None) -> int | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        try:
+            return int(float(text))
+        except Exception:
+            return None
+
+    def _parse_obsnotes_text(self, text: str, *, fallback_tic_id: int | None = None) -> list[ExoFopObsNoteRow]:
+        rows = self._iter_structured_rows(text)
+        out: list[ExoFopObsNoteRow] = []
+        for row in rows:
+            text_value = self._find_first_value(
+                row,
+                aliases=(
+                    "text",
+                    "note",
+                    "obs_note",
+                    "obsnotes",
+                    "observation_note",
+                    "comments",
+                    "comment",
+                    "description",
+                ),
+            )
+            if text_value is None:
+                continue
+
+            author = self._find_first_value(row, aliases=("author", "user", "observer", "submitter", "name"))
+            date_utc = self._find_first_value(
+                row,
+                aliases=("date", "date_utc", "created_at", "create_date", "obs_date", "upload_date"),
+            )
+            data_tag = self._find_first_value(
+                row,
+                aliases=("data_tag", "tag", "datatype", "data_type", "category", "table"),
+            )
+            group = self._find_first_value(row, aliases=("group", "team", "program"))
+            note_id = self._parse_int_best_effort(
+                self._find_first_value(row, aliases=("note_id", "id", "obsnote_id"))
+            )
+            tic_id = self._parse_int_best_effort(
+                self._find_first_value(row, aliases=("tic", "tic_id", "target_tic", "target"))
+            )
+            if tic_id is None:
+                tic_id = int(fallback_tic_id) if fallback_tic_id is not None else 0
+            if tic_id <= 0:
+                continue
+
+            out.append(
+                ExoFopObsNoteRow(
+                    tic_id=tic_id,
+                    author=author,
+                    date_utc=date_utc,
+                    data_tag=data_tag,
+                    text=text_value,
+                    note_id=note_id,
+                    group=group,
+                    raw=dict(row),
+                )
+            )
+        return out
+
+    def _parse_toi_table_rows(self, text: str) -> list[dict[str, str]]:
+        return self._iter_structured_rows(text)
+
+    def _extract_toi_row(
+        self,
+        *,
+        text: str,
+        tic_id: int,
+        toi: str | float | None,
+    ) -> ExoFopToiRow | None:
+        rows = self._parse_toi_table_rows(text)
+        tic_target = str(int(tic_id))
+        toi_target = self._normalize_toi_value(toi)
+
+        selected: dict[str, str] | None = None
+        for row in rows:
+            row_tic = self._find_first_value(row, aliases=("tic_id", "tic", "ticid"))
+            if row_tic is None:
+                continue
+            row_tic_int = self._parse_int_best_effort(row_tic)
+            if row_tic_int is None or str(int(row_tic_int)) != tic_target:
+                continue
+            if toi_target is not None:
+                row_toi = self._normalize_toi_value(
+                    self._find_first_value(row, aliases=("toi", "toi_id", "toi_number"))
+                )
+                if row_toi != toi_target:
+                    continue
+            selected = row
+            break
+
+        if selected is None:
+            return None
+
+        toi_value = self._find_first_value(selected, aliases=("toi", "toi_id", "toi_number"))
+        tfopwg = self._find_first_value(
+            selected,
+            aliases=("tfopwg_disposition", "tfopwg_disp", "tfopwg", "disposition"),
+        )
+        planet_disp = self._find_first_value(
+            selected,
+            aliases=("planet_disposition", "disp", "disposition", "disposition_group"),
+        )
+        comments = self._find_first_value(selected, aliases=("comments", "comment", "notes", "remarks"))
+        return ExoFopToiRow(
+            tic_id=int(tic_id),
+            toi=toi_value,
+            tfopwg_disposition=tfopwg,
+            planet_disposition=planet_disp,
+            comments=comments,
+            raw=dict(selected),
+        )
+
+    def _normalize_toi_value(self, value: str | float | None) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip().upper()
+        if not text:
+            return None
+        text = text.replace("TOI-", "").replace("TOI", "")
+        try:
+            numeric = float(text)
+            return f"{numeric:.2f}"
+        except Exception:
+            return text
+
     def _filter_rows(
         self, rows: list[ExoFopFileRow], selectors: ExoFopSelectors | None
     ) -> list[ExoFopFileRow]:
@@ -406,22 +682,42 @@ class ExoFopClient:
     # Files / extraction / hashing
     # -----------------------------------------------------------------------------
 
-    def _extract_selected(self, *, zip_path: Path, out_dir: Path, names: set[str]) -> dict[str, Path]:
+    def _extract_selected(self, *, zip_path: Path, out_dir: Path, names: list[str]) -> dict[str, Path]:
         out: dict[str, Path] = {}
         if not names:
             return out
         with zipfile.ZipFile(zip_path, "r") as zf:
-            members = {Path(n).name: n for n in zf.namelist()}
+            member_names = list(zf.namelist())
+            members_by_name = {name: name for name in member_names}
+            members_by_basename: dict[str, list[str]] = {}
+            for member_name in member_names:
+                members_by_basename.setdefault(Path(member_name).name, []).append(member_name)
+            basename_counts: dict[str, int] = {}
             for want in names:
-                member = members.get(Path(want).name)
+                basename_counts[Path(want).name] = basename_counts.get(Path(want).name, 0) + 1
+            for want in names:
+                member = members_by_name.get(want)
+                if member is None:
+                    candidates = members_by_basename.get(Path(want).name, [])
+                    if len(candidates) == 1:
+                        member = candidates[0]
+                    elif len(candidates) > 1:
+                        # Prefer deterministic extraction of the shortest member path.
+                        member = sorted(candidates, key=lambda item: (len(item), item))[0]
                 if member is None:
                     continue
-                dest = out_dir / Path(want).name
+                basename = Path(want).name
+                if basename_counts.get(basename, 0) > 1:
+                    stem = Path(member).as_posix().replace("/", "__").replace("\\", "__")
+                    dest = out_dir / stem
+                else:
+                    dest = out_dir / basename
                 if dest.exists() and dest.stat().st_size > 0:
                     out[want] = dest
                     continue
                 # Extract to temp then move
                 tmp = dest.with_suffix(dest.suffix + ".tmp")
+                tmp.parent.mkdir(parents=True, exist_ok=True)
                 with zf.open(member) as src, open(tmp, "wb") as dst:
                     dst.write(src.read())
                 os.replace(tmp, dest)
@@ -472,13 +768,18 @@ class ExoFopClient:
         files_dir: Path,
         file_rows: list[ExoFopFileRow],
         downloaded_files: Iterable[Path],
+        extracted_files: dict[str, Path] | None = None,
         skipped: list[str],
         warnings: list[str],
     ) -> None:
         files_meta: list[dict[str, Any]] = []
         downloaded_set = {Path(p).name for p in downloaded_files}
         for row in file_rows:
-            local_path = files_dir / Path(row.filename).name
+            local_path = (
+                extracted_files.get(row.filename)
+                if extracted_files is not None and row.filename in extracted_files
+                else files_dir / Path(row.filename).name
+            )
             entry: dict[str, Any] = {
                 "file_id": row.file_id,
                 "filename": row.filename,

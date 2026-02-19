@@ -95,6 +95,12 @@ Quick ExoFOP TOI catalog query from CLI:
 
    btv toi-query --period-min 2 --period-max 20 --disposition PC --sort-by snr --sort-descending --max-results 25 --format json -o outputs/toi_query.json
 
+Follow-up context assembly from cached artifacts and optional notes:
+
+.. code-block:: bash
+
+   btv followup TOI-123.01 --cache-dir persistent_cache --headers-only --notes-file working_docs/followup_notes.txt -o outputs/followup/toi-123.01.json
+
 Use :doc:`verification/confidence_semantics` as the canonical reference for:
 
 - how to interpret ``CheckResult.status`` and ``CheckResult.confidence``
@@ -207,6 +213,7 @@ Supported commands:
 - ``btv resolve-neighbors``
 - ``btv localize-host``
 - ``btv dilution``
+- ``btv followup``
 
 Vetting Check Categories
 ------------------------

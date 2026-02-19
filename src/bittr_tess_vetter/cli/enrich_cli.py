@@ -36,6 +36,7 @@ from bittr_tess_vetter.cli.detrend_grid_cli import detrend_grid_command
 from bittr_tess_vetter.cli.dilution_cli import dilution_command
 from bittr_tess_vetter.cli.ephemeris_reliability_cli import ephemeris_reliability_command
 from bittr_tess_vetter.cli.fetch_cli import cache_sectors_command, fetch_command
+from bittr_tess_vetter.cli.followup_cli import followup_command
 from bittr_tess_vetter.cli.fpp_cli import fpp_command, fpp_prepare_command, fpp_run_command
 from bittr_tess_vetter.cli.localize_cli import localize_command
 from bittr_tess_vetter.cli.localize_host_cli import localize_host_command
@@ -121,6 +122,7 @@ cli.add_command(toi_query_command)
 cli.add_command(contrast_curves_command)
 cli.add_command(contrast_curve_summary_command)
 cli.add_command(pipeline_group)
+cli.add_command(followup_command)
 
 
 @cli.command()

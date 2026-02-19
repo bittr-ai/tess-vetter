@@ -44,3 +44,24 @@ class ExoFopFetchResult:
     files_skipped: list[str]
     warnings: list[str]
 
+
+@dataclass(frozen=True)
+class ExoFopObsNoteRow:
+    tic_id: int
+    author: str | None
+    date_utc: str | None
+    data_tag: str | None
+    text: str
+    note_id: int | None = None
+    group: str | None = None
+    raw: dict[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class ExoFopToiRow:
+    tic_id: int
+    toi: str | None
+    tfopwg_disposition: str | None
+    planet_disposition: str | None
+    comments: str | None
+    raw: dict[str, str]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import zipfile
+
 from bittr_tess_vetter.exofop.client import ExoFopClient
 from bittr_tess_vetter.exofop.types import ExoFopSelectors
 
@@ -30,3 +32,25 @@ def test_filter_rows(tmp_path):
     sel = ExoFopSelectors(types={"Spectrum"}, filename_regex=r"\.fits$", tag_ids={11})
     out = client._filter_rows(rows, sel)
     assert [r.filename for r in out] == ["b.fits"]
+
+
+def test_extract_selected_keeps_duplicate_basenames_from_different_zip_paths(tmp_path):
+    client = ExoFopClient(cache_dir=tmp_path)
+    zip_path = tmp_path / "files.zip"
+    out_dir = tmp_path / "files"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("a/spec.fits", b"first")
+        zf.writestr("b/spec.fits", b"second")
+
+    extracted = client._extract_selected(
+        zip_path=zip_path,
+        out_dir=out_dir,
+        names=["a/spec.fits", "b/spec.fits"],
+    )
+
+    assert "a/spec.fits" in extracted
+    assert "b/spec.fits" in extracted
+    assert extracted["a/spec.fits"] != extracted["b/spec.fits"]
+    assert extracted["a/spec.fits"].read_bytes() == b"first"
+    assert extracted["b/spec.fits"].read_bytes() == b"second"
