@@ -698,6 +698,47 @@ def test_btv_fpp_drop_scenario_forwarded(monkeypatch, tmp_path: Path) -> None:
     assert payload["provenance"]["runtime"]["overrides"]["drop_scenario"] == ["EB", "DEB"]
 
 
+def test_btv_fpp_drop_scenario_mixed_case_label_accepted(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
+        return object(), [14]
+
+    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_with_drop_scenario_mixed_case.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--drop-scenario",
+            "ebX2p",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert seen["overrides"]["drop_scenario"] == ["EBx2P"]
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["runtime"]["overrides"]["drop_scenario"] == ["EBx2P"]
+
+
 def test_btv_fpp_drop_scenario_invalid_label_rejected(tmp_path: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(

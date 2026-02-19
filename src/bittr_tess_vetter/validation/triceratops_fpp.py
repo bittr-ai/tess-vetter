@@ -283,12 +283,13 @@ def normalize_drop_scenario_labels(value: Any) -> list[str]:
             f"Droppable options: {', '.join(droppable_scenario_labels())}"
         )
 
+    canonical_by_upper = {label.upper(): label for label in _VALID_DROP_SCENARIO_LABELS}
     labels: list[str] = []
     for raw in labels_raw:
         token = str(raw).strip()
         if not token:
             continue
-        labels.append(token.upper())
+        labels.append(canonical_by_upper.get(token.upper(), token.upper()))
 
     labels = list(dict.fromkeys(labels))
     unknown = [label for label in labels if label not in _VALID_DROP_SCENARIO_LABELS]
