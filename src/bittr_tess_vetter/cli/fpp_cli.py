@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 import logging
 import re
 from pathlib import Path
@@ -46,6 +47,9 @@ from bittr_tess_vetter.platform.io import (
     MASTClient,
     PersistentCache,
     TargetNotFoundError,
+)
+from bittr_tess_vetter.validation.triceratops_fpp import (
+    _triceratops_artifact_file_lock,
 )
 
 _STANDARD_PRESET_TIMEOUT_SECONDS = 900.0
@@ -797,30 +801,60 @@ def _runtime_artifacts_ready(
     cache_dir: Path,
     tic_id: int,
     sectors_loaded: list[int],
+    stage_state_path: Path | None = None,
 ) -> tuple[bool, dict[str, Any]]:
-    target = load_cached_triceratops_target(
+    sectors_used = [int(s) for s in sectors_loaded]
+    effective_stage_state_path = stage_state_path
+    stage_state_required = effective_stage_state_path is not None
+
+    with _triceratops_artifact_file_lock(
         cache_dir=cache_dir,
         tic_id=int(tic_id),
-        sectors_used=[int(s) for s in sectors_loaded],
-    )
-    trilegal_ready = False
-    trilegal_path: str | None = None
-    if target is not None:
-        trilegal_fname = getattr(target, "trilegal_fname", None)
-        if trilegal_fname is not None:
-            trilegal_csv = Path(str(trilegal_fname))
-            try:
-                if trilegal_csv.exists() and trilegal_csv.stat().st_size > 0:
-                    trilegal_ready = True
-                    trilegal_path = str(trilegal_csv)
-            except OSError:
-                trilegal_ready = False
+        sectors_used=sectors_used,
+        wait=True,
+    ):
+        target = load_cached_triceratops_target(
+            cache_dir=cache_dir,
+            tic_id=int(tic_id),
+            sectors_used=sectors_used,
+        )
+        trilegal_ready = False
+        trilegal_path: str | None = None
+        if target is not None:
+            trilegal_fname = getattr(target, "trilegal_fname", None)
+            if trilegal_fname is not None:
+                trilegal_csv = Path(str(trilegal_fname))
+                try:
+                    if trilegal_csv.exists() and trilegal_csv.stat().st_size > 0:
+                        trilegal_ready = True
+                        trilegal_path = str(trilegal_csv)
+                except OSError:
+                    trilegal_ready = False
 
-    ready = (target is not None) and trilegal_ready
+        stage_state_status: str | None = None
+        stage_state_ok = False
+        if stage_state_required and effective_stage_state_path is not None:
+            try:
+                if effective_stage_state_path.exists():
+                    payload = json.loads(effective_stage_state_path.read_text(encoding="utf-8"))
+                    if isinstance(payload, dict):
+                        raw_status = payload.get("status")
+                        if isinstance(raw_status, str):
+                            stage_state_status = raw_status
+                            stage_state_ok = raw_status == "ok"
+            except Exception:
+                stage_state_ok = False
+        else:
+            stage_state_ok = True
+
+    ready = (target is not None) and trilegal_ready and (stage_state_ok or not stage_state_required)
     return ready, {
         "target_cached": bool(target is not None),
         "trilegal_cached": bool(trilegal_ready),
         "trilegal_csv_path": trilegal_path,
+        "stage_state_path": str(effective_stage_state_path) if effective_stage_state_path is not None else None,
+        "stage_state_status": stage_state_status,
+        "stage_state_ok": bool(stage_state_ok) if stage_state_required else None,
     }
 
 
@@ -1092,6 +1126,7 @@ def fpp_prepare_command(
                 "target_cache_hit": bool(stage_result.get("target_cache_hit", False)),
                 "trilegal_cache_hit": bool(stage_result.get("trilegal_cache_hit", False)),
                 "runtime_seconds": stage_result.get("runtime_seconds"),
+                "stage_state_path": stage_result.get("stage_state_path"),
             }
         )
     else:
@@ -1250,13 +1285,19 @@ def fpp_run_command(
             cache_dir=Path(prepared["cache_dir"]),
             tic_id=int(prepared["tic_id"]),
             sectors_loaded=[int(s) for s in prepared["sectors_loaded"]],
+            stage_state_path=(
+                Path(str(prepared["runtime_artifacts"].get("stage_state_path")))
+                if prepared["runtime_artifacts"].get("stage_state_path")
+                else None
+            ),
         )
         if not runtime_ready:
             raise BtvCliError(
                 (
                     "Prepared runtime artifacts missing "
                     f"(target_cached={runtime_details['target_cached']} "
-                    f"trilegal_cached={runtime_details['trilegal_cached']}). "
+                    f"trilegal_cached={runtime_details['trilegal_cached']} "
+                    f"stage_state_ok={runtime_details.get('stage_state_ok')}). "
                     "Run `btv fpp-prepare --network-ok` first."
                 ),
                 exit_code=EXIT_DATA_UNAVAILABLE,

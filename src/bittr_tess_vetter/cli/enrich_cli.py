@@ -35,7 +35,7 @@ from bittr_tess_vetter.cli.describe_checks_cli import describe_checks_command
 from bittr_tess_vetter.cli.detrend_grid_cli import detrend_grid_command
 from bittr_tess_vetter.cli.dilution_cli import dilution_command
 from bittr_tess_vetter.cli.ephemeris_reliability_cli import ephemeris_reliability_command
-from bittr_tess_vetter.cli.fetch_cli import fetch_command
+from bittr_tess_vetter.cli.fetch_cli import cache_sectors_command, fetch_command
 from bittr_tess_vetter.cli.fpp_cli import fpp_command, fpp_prepare_command, fpp_run_command
 from bittr_tess_vetter.cli.localize_cli import localize_command
 from bittr_tess_vetter.cli.localize_host_cli import localize_host_command
@@ -99,6 +99,7 @@ cli.add_command(fpp_command)
 cli.add_command(fpp_prepare_command)
 cli.add_command(fpp_run_command)
 cli.add_command(fetch_command)
+cli.add_command(cache_sectors_command)
 cli.add_command(report_command)
 cli.add_command(resolve_stellar_command)
 cli.add_command(resolve_neighbors_command)

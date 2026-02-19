@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import threading
+import time
 from typing import Any
 
 import numpy as np
@@ -1344,6 +1346,50 @@ def test_runtime_artifacts_ready_true_when_cached_target_has_trilegal(monkeypatc
     assert details["trilegal_csv_path"] == str(trilegal_path)
 
 
+def test_runtime_artifacts_ready_waits_for_prepare_lock(monkeypatch, tmp_path: Path) -> None:
+    from bittr_tess_vetter.cli import fpp_cli
+
+    trilegal_path = tmp_path / "tri_lock_wait.csv"
+    trilegal_path.write_text("a,b\n1,2\n", encoding="utf-8")
+    stage_state_path = tmp_path / "stage_state.json"
+    stage_state_path.write_text(json.dumps({"status": "ok"}), encoding="utf-8")
+
+    class _Target:
+        trilegal_fname = str(trilegal_path)
+
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli.load_cached_triceratops_target",
+        lambda **_kwargs: _Target(),
+    )
+
+    result_box: dict[str, Any] = {}
+
+    def _run_check() -> None:
+        result_box["value"] = fpp_cli._runtime_artifacts_ready(
+            cache_dir=tmp_path,
+            tic_id=123,
+            sectors_loaded=[1, 2],
+            stage_state_path=stage_state_path,
+        )
+
+    with fpp_cli._triceratops_artifact_file_lock(
+        cache_dir=tmp_path,
+        tic_id=123,
+        sectors_used=[1, 2],
+        wait=True,
+    ):
+        worker = threading.Thread(target=_run_check, daemon=True)
+        worker.start()
+        time.sleep(0.2)
+        assert worker.is_alive()
+
+    worker.join(timeout=2.0)
+    assert not worker.is_alive()
+    ready, details = result_box["value"]
+    assert ready is True
+    assert details["stage_state_ok"] is True
+
+
 def test_btv_fpp_run_require_prepared_fails_when_runtime_artifacts_missing(monkeypatch, tmp_path: Path) -> None:
     manifest = {
         "schema_version": "cli.fpp.prepare.v1",
@@ -1385,6 +1431,56 @@ def test_btv_fpp_run_require_prepared_fails_when_runtime_artifacts_missing(monke
 
     assert result.exit_code == 4
     assert "Prepared runtime artifacts missing" in result.output
+
+
+def test_btv_fpp_run_require_prepared_rejects_non_ok_stage_state(monkeypatch, tmp_path: Path) -> None:
+    trilegal_path = tmp_path / "trilegal_ready.csv"
+    trilegal_path.write_text("a,b\n1,2\n", encoding="utf-8")
+    stage_state_path = tmp_path / "stage_state_failed.json"
+    stage_state_path.write_text(json.dumps({"status": "failed"}), encoding="utf-8")
+
+    manifest = {
+        "schema_version": "cli.fpp.prepare.v1",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "tic_id": 123,
+        "period_days": 3.0,
+        "t0_btjd": 1500.0,
+        "duration_hours": 2.0,
+        "depth_ppm_used": 500.0,
+        "sectors_loaded": [10],
+        "cache_dir": str(tmp_path / "cache"),
+        "detrend": {},
+        "runtime_artifacts": {"stage_state_path": str(stage_state_path)},
+    }
+    manifest_path = tmp_path / "manifest_stage_failed.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    class _Target:
+        trilegal_fname = str(trilegal_path)
+
+    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._cache_missing_sectors", lambda **_kwargs: [])
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.fpp_cli.load_cached_triceratops_target",
+        lambda **_kwargs: _Target(),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp-run",
+            "--prepare-manifest",
+            str(manifest_path),
+            "--require-prepared",
+            "--no-network",
+            "-o",
+            str(tmp_path / "fpp_run_stage_failed.json"),
+        ],
+    )
+
+    assert result.exit_code == 4
+    assert "Prepared runtime artifacts missing" in result.output
+    assert "stage_state_ok=False" in result.output
 
 
 def test_btv_fpp_run_emits_replicate_progress(monkeypatch, tmp_path: Path) -> None:
