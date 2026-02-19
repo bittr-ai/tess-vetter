@@ -100,7 +100,27 @@ docs = [
 plotting = [
   "matplotlib>=3.5.1",
 ]
-all = ["bittr-tess-vetter[tls,fit,wotan,batman,mlx,exovetter,ldtk,triceratops,plotting]"]
+all = [
+  "transitleastsquares>=1.32",
+  "numba>=0.63.0",
+  "emcee>=3.1.6",
+  "arviz>=0.23.0",
+  "wotan>=1.1",
+  "batman-package>=2.4.0",
+  "mlx>=0.0.0; platform_system == 'Darwin' and platform_machine == 'arm64'",
+  "exovetter>=0.0.0",
+  "ldtk>=1.8.5",
+  "lightkurve>=2.0.0",
+  "pytransit>=2.2",
+  "mechanicalsoup>=1.0.0",
+  "seaborn>=0.13.0",
+  "pyrr>=0.10.3",
+  "celerite>=0.4.0",
+  "corner>=2.2.1",
+  "pandas>=2.0.0",
+  "matplotlib>=3.5.1",
+  "astroquery>=0.4.6",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bittr_tess_vetter"]

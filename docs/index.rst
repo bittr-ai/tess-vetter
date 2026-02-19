@@ -50,6 +50,8 @@ Contents
 
    installation
    quickstart
+   cli_contracts
+   reference_sources
    stability
    verification/confidence_semantics
    tutorials

@@ -130,11 +130,16 @@ Recent contract additions (machine consumers)
 
 - ``btv fpp`` now emits ``schema_version=cli.fpp.v3`` and
   ``provenance.runtime.degenerate_guard`` (max-points quality-guard attempts/provenance).
-- Pipeline evidence output now emits ``schema_version=pipeline.evidence_table.v2`` and
+- Pipeline evidence output now emits ``schema_version=pipeline.evidence_table.v5`` and
   ``detrend_invariance_policy_*`` fields in each row.
 - ``btv resolve-neighbors`` now emits ``multiplicity_risk`` (RUWE/NSS/duplicated-source risk rollup).
 - ``btv localize-host`` and ``btv dilution`` now emit ``reliability_summary`` in both top-level and
   ``result`` payloads; when a reference-sources file includes ``multiplicity_risk``, it is threaded through.
+
+Machine-consumer contract docs:
+
+- ``cli_contracts`` for JSON envelope conventions and schema catalog.
+- ``reference_sources`` for ``reference_sources.v1`` payload requirements.
 
 Per-command legacy-to-canonical mapping:
 

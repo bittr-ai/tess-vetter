@@ -11,7 +11,14 @@ Run the full local smoke suite:
 ## Versioning
 
 1. Bump `version` in `pyproject.toml`.
-2. Update `CHANGELOG.md`.
+2. Bump `__version__` in `src/bittr_tess_vetter/__init__.py` to match.
+3. Run the packaging guardrail test:
+
+```bash
+uv run pytest -q tests/test_packaging_version_integrity.py
+```
+
+4. Update `CHANGELOG.md`.
 
 ## Tag and push
 
@@ -33,4 +40,3 @@ Pushing a `v*` tag triggers `.github/workflows/release.yml`, which:
 
 - Configure PyPI trusted publishing for this repo (see the comment in `release.yml`).
 - Decide whether you want coverage reporting and configure Codecov (optional).
-

@@ -10,7 +10,7 @@ permissions:
   id-token: write
 
 jobs:
-  build:
+  quality-gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,8 +20,31 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install hatch
-        run: uv pip install hatch
+      - name: Install locked dev dependencies
+        run: uv sync --group dev
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Type check
+        run: uv run mypy src/bittr_tess_vetter
+
+      - name: Tests (non-slow)
+        run: uv run pytest -q -m "not slow"
+
+  build:
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install locked dev dependencies
+        run: uv sync --group dev
 
       - name: Build package
         run: uv run hatch build
