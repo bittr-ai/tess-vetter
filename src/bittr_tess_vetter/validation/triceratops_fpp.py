@@ -62,6 +62,23 @@ FPP_STAGE_TRILEGAL_BUDGET_SECONDS = 120.0
 FPP_STAGE_CALC_PROBS_BUDGET_SECONDS = 600.0
 
 _INSECURE_PERMS_MASK = 0o022  # group/other writable
+_VALID_DROP_SCENARIO_LABELS: tuple[str, ...] = (
+    "TP",
+    "EB",
+    "EBx2P",
+    "PTP",
+    "PEB",
+    "PEBx2P",
+    "STP",
+    "SEB",
+    "SEBx2P",
+    "DTP",
+    "DEB",
+    "DEBx2P",
+    "BTP",
+    "BEB",
+    "BEBx2P",
+)
 
 
 def _triceratops_sectors_key(sectors_used: list[int]) -> str:
@@ -240,6 +257,54 @@ def _extract_target_coordinates(target: Any) -> tuple[float | None, float | None
     if ra_val is not None and dec_val is not None:
         return ra_val, dec_val
     return None, None
+
+
+def valid_drop_scenario_labels() -> tuple[str, ...]:
+    """Return the canonical allowlist of TRICERATOPS drop_scenario labels."""
+    return _VALID_DROP_SCENARIO_LABELS
+
+
+def droppable_scenario_labels() -> tuple[str, ...]:
+    """Return user-droppable scenario labels (planet TP is intentionally excluded)."""
+    return tuple(label for label in _VALID_DROP_SCENARIO_LABELS if label != "TP")
+
+
+def normalize_drop_scenario_labels(value: Any) -> list[str]:
+    """Normalize and validate TRICERATOPS drop_scenario labels."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        labels_raw = [value]
+    elif isinstance(value, (list, tuple)):
+        labels_raw = list(value)
+    else:
+        raise ValueError(
+            "drop_scenario must be a string label or list of labels. "
+            f"Droppable options: {', '.join(droppable_scenario_labels())}"
+        )
+
+    labels: list[str] = []
+    for raw in labels_raw:
+        token = str(raw).strip()
+        if not token:
+            continue
+        labels.append(token.upper())
+
+    labels = list(dict.fromkeys(labels))
+    unknown = [label for label in labels if label not in _VALID_DROP_SCENARIO_LABELS]
+    if unknown:
+        raise ValueError(
+            "Unknown drop_scenario label(s): "
+            + ", ".join(unknown)
+            + ". Droppable options: "
+            + ", ".join(droppable_scenario_labels())
+        )
+    if "TP" in labels:
+        raise ValueError(
+            "drop_scenario cannot include TP. "
+            "Droppable options: " + ", ".join(droppable_scenario_labels())
+        )
+    return labels
 
 
 # =============================================================================
@@ -1226,6 +1291,7 @@ def _extract_single_run_result(
     use_empirical_noise_floor: bool,
     n_external_lcs: int,
     external_filters_used: list[str],
+    drop_scenario_used: list[str],
     run_seed: int | None,
     run_start_time: float,
 ) -> dict[str, Any]:
@@ -1356,6 +1422,9 @@ def _extract_single_run_result(
         "use_empirical_noise_floor": bool(use_empirical_noise_floor),
         "n_external_lcs": n_external_lcs,
         "external_filters": external_filters_used,
+        "drop_scenario": list(drop_scenario_used),
+        "conditioning_type": "hard_exclusion",
+        "drop_scenario_justification": None,
     }
 
     # Check for degenerate results
@@ -1402,6 +1471,7 @@ def calculate_fpp_handler(
     seed: int | None = None,
     external_lightcurves: list[Any] | None = None,
     contrast_curve: Any | None = None,
+    drop_scenario: list[str] | None = None,
     *,
     load_cached_target: Callable[..., Any] | None = None,
     save_cached_target: Callable[..., Any] | None = None,
@@ -1484,6 +1554,16 @@ def calculate_fpp_handler(
         return float(budget), None
 
     # Step 1: Get light curve from cache
+    try:
+        drop_scenario_effective = normalize_drop_scenario_labels(drop_scenario)
+    except ValueError as e:
+        return _err(
+            str(e),
+            error_type="input_error",
+            stage="validate_drop_scenario",
+            sectors_used_value=sectors,
+        )
+
     lc_data, sectors_used = _gather_light_curves(cache, tic_id, sectors, flux_type)
     if lc_data is None:
         return _err(
@@ -1960,6 +2040,8 @@ def calculate_fpp_handler(
                         if contrast_curve_file is not None:
                             calc_kwargs["contrast_curve_file"] = contrast_curve_file
                             calc_kwargs["filt"] = contrast_curve_filter or "Vis"
+                        if drop_scenario_effective:
+                            calc_kwargs["drop_scenario"] = list(drop_scenario_effective)
 
                         target.calc_probs(**calc_kwargs)
 
@@ -1983,6 +2065,7 @@ def calculate_fpp_handler(
                         use_empirical_noise_floor=use_empirical_noise_floor,
                         n_external_lcs=n_external_lcs,
                         external_filters_used=external_filters_used,
+                        drop_scenario_used=drop_scenario_effective,
                         run_seed=run_seed,
                         run_start_time=run_start_time,
                     )

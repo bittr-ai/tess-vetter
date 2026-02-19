@@ -50,6 +50,8 @@ from bittr_tess_vetter.platform.io import (
 )
 from bittr_tess_vetter.validation.triceratops_fpp import (
     _triceratops_artifact_file_lock,
+    droppable_scenario_labels,
+    normalize_drop_scenario_labels,
 )
 
 _STANDARD_PRESET_TIMEOUT_SECONDS = 900.0
@@ -202,6 +204,28 @@ def _coerce_positive_int(value: Any) -> int | None:
     except (TypeError, ValueError):
         return None
     return parsed if parsed > 0 else None
+
+
+def _resolve_drop_scenario_override(
+    *,
+    parsed_overrides: dict[str, Any],
+    explicit_drop_scenarios: tuple[str, ...] | None = None,
+) -> list[str]:
+    explicit_values = tuple(explicit_drop_scenarios or ())
+    selected_value: Any | None = None
+    if explicit_values:
+        selected_value = list(explicit_values)
+    elif "drop_scenario" in parsed_overrides:
+        selected_value = parsed_overrides.get("drop_scenario")
+
+    try:
+        normalized = normalize_drop_scenario_labels(selected_value)
+    except ValueError as exc:
+        raise BtvCliError(str(exc), exit_code=EXIT_INPUT_ERROR) from exc
+
+    if explicit_values or "drop_scenario" in parsed_overrides:
+        parsed_overrides["drop_scenario"] = list(normalized)
+    return normalized
 
 
 def _effective_max_points_for_attempt_zero(*, preset_name: str, overrides: dict[str, Any]) -> int | None:
@@ -1312,6 +1336,7 @@ def fpp_run_command(
 
     preset_name = str(preset).lower()
     parsed_overrides = parse_extra_params(overrides)
+    _resolve_drop_scenario_override(parsed_overrides=parsed_overrides)
     effective_timeout_seconds = (
         float(timeout_seconds)
         if timeout_seconds is not None
@@ -1497,6 +1522,16 @@ def fpp_run_command(
 @click.option("--replicates", type=int, default=None, help="Replicate count for FPP aggregation.")
 @click.option("--seed", type=int, default=None, help="Base RNG seed.")
 @click.option("--override", "overrides", multiple=True, help="Repeat KEY=VALUE TRICERATOPS override entries.")
+@click.option(
+    "--drop-scenario",
+    "drop_scenarios",
+    multiple=True,
+    type=str,
+    help=(
+        "Repeatable TRICERATOPS hard-exclusion scenario label. "
+        f"Droppable options: {', '.join(droppable_scenario_labels())}. TP is not allowed."
+    ),
+)
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
     "--cache-only-sectors/--allow-sector-download",
@@ -1577,6 +1612,7 @@ def fpp_command(
     replicates: int | None,
     seed: int | None,
     overrides: tuple[str, ...],
+    drop_scenarios: tuple[str, ...],
     sectors: tuple[int, ...],
     cache_only_sectors: bool,
     timeout_seconds: float | None,
@@ -1683,6 +1719,10 @@ def fpp_command(
 
     preset_name = str(preset).lower()
     parsed_overrides = parse_extra_params(overrides)
+    _resolve_drop_scenario_override(
+        parsed_overrides=parsed_overrides,
+        explicit_drop_scenarios=drop_scenarios,
+    )
     effective_timeout_seconds = (
         float(timeout_seconds)
         if timeout_seconds is not None

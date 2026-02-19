@@ -210,6 +210,7 @@ def calculate_fpp(
         use_empirical_noise_floor=bool(
             extra.get("use_empirical_noise_floor", base.use_empirical_noise_floor)
         ),
+        drop_scenario=extra.get("drop_scenario"),
         replicates=replicates,
         seed=seed,
         external_lightcurves=external_lightcurves,

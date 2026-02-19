@@ -6,7 +6,7 @@ requiring network access by monkeypatching the vendored TRICERATOPS target.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -253,6 +253,7 @@ class MockTriceratopsTarget:
     stars: list[dict[str, Any]] | None = None
     trilegal_fname: str | None = "/fake/trilegal.csv"
     trilegal_url: str | None = None
+    last_calc_probs_kwargs: dict[str, Any] = field(default_factory=dict)
 
     def calc_depths(self, tdepth: float) -> None:  # noqa: ARG002
         """Mock calc_depths - does nothing."""
@@ -260,6 +261,7 @@ class MockTriceratopsTarget:
 
     def calc_probs(self, **kwargs: Any) -> None:  # noqa: ARG002
         """Mock calc_probs - sets FPP/NFPP based on configuration."""
+        self.last_calc_probs_kwargs = dict(kwargs)
         # Create mock probs DataFrame-like object
         if self.probs is None:
             self.probs = MockProbsDataFrame(
@@ -548,3 +550,31 @@ class TestCalculateFppHandlerReplicates:
         )
 
         assert result1.get("base_seed") == result2.get("base_seed") == 12345
+
+    @patch("bittr_tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+    @patch("bittr_tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+    def test_drop_scenario_forwarding_and_provenance(self, mock_save, mock_load, mock_cache):
+        """drop_scenario should be forwarded to calc_probs and written to runtime provenance."""
+        from bittr_tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+
+        target = make_valid_target(fpp=0.01, seed=42)
+        mock_load.return_value = target
+
+        result = calculate_fpp_handler(
+            cache=mock_cache,
+            tic_id=12345,
+            period=10.0,
+            t0=1500.0,
+            depth_ppm=500,
+            duration_hours=3.0,
+            replicates=1,
+            seed=42,
+            drop_scenario=["EB", "DEB"],
+        )
+
+        assert "error" not in result
+        assert target.last_calc_probs_kwargs.get("drop_scenario") == ["EB", "DEB"]
+        runtime = result["triceratops_runtime"]
+        assert runtime["drop_scenario"] == ["EB", "DEB"]
+        assert runtime["conditioning_type"] == "hard_exclusion"
+        assert runtime["drop_scenario_justification"] is None
