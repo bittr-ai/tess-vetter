@@ -13,6 +13,7 @@ from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError, M
 @dataclass(frozen=True)
 class ResolvedDiagnosticsInputs:
     tic_id: int
+    toi: str | None
     period_days: float
     t0_btjd: float
     duration_hours: float
@@ -111,6 +112,9 @@ def resolve_inputs_from_report_file(report_file: str) -> ResolvedDiagnosticsInpu
         raise BtvCliError("Report file is missing summary.ephemeris object")
 
     tic_id = _coerce_required_int(summary.get("tic_id"), field_name="summary.tic_id")
+    toi = str(summary.get("toi")).strip() if summary.get("toi") is not None else None
+    if toi == "":
+        toi = None
     period_days = _coerce_required_float(ephemeris_raw.get("period_days"), field_name="summary.ephemeris.period_days")
     t0_btjd = _coerce_required_float(ephemeris_raw.get("t0_btjd"), field_name="summary.ephemeris.t0_btjd")
     duration_hours = _coerce_required_float(
@@ -145,6 +149,7 @@ def resolve_inputs_from_report_file(report_file: str) -> ResolvedDiagnosticsInpu
 
     return ResolvedDiagnosticsInputs(
         tic_id=int(tic_id),
+        toi=toi,
         period_days=float(period_days),
         t0_btjd=float(t0_btjd),
         duration_hours=float(duration_hours),
@@ -262,9 +267,9 @@ def load_lightcurves_with_sector_policy(
 
         cached_sectors = sorted(
             {
-                int(getattr(row, "sector"))
+                int(row.sector)
                 for row in cached_results
-                if getattr(row, "sector", None) is not None
+                if hasattr(row, "sector") and row.sector is not None
             }
         )
         if cached_sectors:

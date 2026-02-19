@@ -119,13 +119,14 @@ def test_btv_followup_report_file_inputs_override_toi(monkeypatch, tmp_path: Pat
     report_path.write_text(
         json.dumps(
             {
-                "report": {
-                    "summary": {
-                        "tic_id": 555,
-                        "ephemeris": {
-                            "period_days": 6.0,
-                            "t0_btjd": 2450.0,
-                            "duration_hours": 2.0,
+                    "report": {
+                        "summary": {
+                            "tic_id": 555,
+                            "toi": "TOI-555.01",
+                            "ephemeris": {
+                                "period_days": 6.0,
+                                "t0_btjd": 2450.0,
+                                "duration_hours": 2.0,
                         },
                     },
                     "provenance": {"sectors_used": [13, 14]},
@@ -163,7 +164,7 @@ def test_btv_followup_report_file_inputs_override_toi(monkeypatch, tmp_path: Pat
 
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["inputs_summary"]["tic_id"] == 555
-    assert payload["inputs_summary"]["toi"] is None
+    assert payload["inputs_summary"]["toi"] == "TOI-555.01"
     assert payload["inputs_summary"]["input_resolution"]["source"] == "report_file"
     assert payload["provenance"]["inputs_source"] == "report_file"
     assert payload["provenance"]["report_file"] == str(report_path.resolve())

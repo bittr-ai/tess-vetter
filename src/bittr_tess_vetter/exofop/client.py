@@ -105,15 +105,39 @@ class ExoFopClient:
         target_dir = self._target_dir(tic_id)
         target_dir.mkdir(parents=True, exist_ok=True)
         out_path = target_dir / "filelist.csv"
+        # Canonical discovery path: target.php JSON includes the files table.
+        with contextlib.suppress(Exception):
+            payload = self.target_json(tic_id=tic_id, force_refresh=force_refresh)
+            rows = self._parse_filelist_target_json(payload, fallback_tic_id=int(tic_id))
+            if rows:
+                self._write_text_atomic(out_path, self._render_filelist_csv(rows))
+                return rows
+
+        # Fallback for payload gaps/regressions.
         if out_path.exists() and not force_refresh:
             return self._parse_filelist_csv(
                 out_path.read_text(encoding="utf-8", errors="replace"), fallback_tic_id=int(tic_id)
             )
-
-        url = self._url("download_filelist.php")
-        text = self._get_text(url, params={"id": str(int(tic_id)), "output": "csv"})
+        text = self._get_text(self._url("download_filelist.php"), params={"id": str(int(tic_id)), "output": "csv"})
         self._write_text_atomic(out_path, text)
         return self._parse_filelist_csv(text, fallback_tic_id=int(tic_id))
+
+    def target_json(self, *, tic_id: int, force_refresh: bool = False) -> dict[str, Any]:
+        target_dir = self._target_dir(tic_id)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        out_path = target_dir / "target.json"
+        if out_path.exists() and not force_refresh:
+            try:
+                payload = json.loads(out_path.read_text(encoding="utf-8", errors="replace"))
+                if isinstance(payload, dict):
+                    return payload
+            except Exception:
+                pass
+        payload = self._get_json(self._url("target.php"), params={"id": str(int(tic_id)), "json": "1"})
+        if not isinstance(payload, dict):
+            raise ValueError("ExoFOP target.php response is not a JSON object")
+        self._write_text_atomic(out_path, json.dumps(payload, indent=2, sort_keys=True))
+        return payload
 
     def obs_notes(self, *, tic_id: int, force_refresh: bool = False) -> list[ExoFopObsNoteRow]:
         target_dir = self._target_dir(tic_id)
@@ -137,6 +161,13 @@ class ExoFopClient:
         toi: str | float | None = None,
         force_refresh: bool = False,
     ) -> ExoFopToiRow | None:
+        with contextlib.suppress(Exception):
+            payload = self.target_json(tic_id=int(tic_id), force_refresh=force_refresh)
+            row = self._extract_toi_row_from_target_json(payload=payload, tic_id=int(tic_id), toi=toi)
+            if row is not None:
+                return row
+
+        # Legacy fallback:
         target_dir = self._target_dir(tic_id)
         target_dir.mkdir(parents=True, exist_ok=True)
         out_path = target_dir / "toi_table.pipe"
@@ -193,24 +224,42 @@ class ExoFopClient:
 
         summary_paths: dict[str, Path] = {}
         if include_summaries:
-            summary_specs = {
-                "spect": ("download_spect.php", {"target": str(exo.tic_id), "output": "csv"}),
-                "imaging": ("download_imaging.php", {"target": str(exo.tic_id), "output": "csv"}),
-                "tseries": ("download_tseries.php", {"target": str(exo.tic_id), "output": "csv"}),
-                "uploads": ("download_uploads.php", {"target": str(exo.tic_id), "output": "csv"}),
-                "stellar": ("download_stellar.php", {"id": str(exo.tic_id), "output": "pipe"}),
-                "planet": ("download_planet.php", {"id": str(exo.tic_id), "output": "pipe"}),
-            }
-            for key, (endpoint, params) in summary_specs.items():
-                out_path = summaries_dir / f"{key}.{self._ext_for_output(params.get('output'))}"
-                summary_paths[key] = out_path
-                if out_path.exists() and not force_refresh:
-                    continue
-                try:
-                    text = self._get_text(self._url(endpoint), params=params)
-                    self._write_text_atomic(out_path, text)
-                except Exception as e:
-                    warnings.append(f"{endpoint} failed: {type(e).__name__}: {e}")
+            try:
+                payload = self.target_json(tic_id=int(exo.tic_id), force_refresh=force_refresh)
+                summary_payloads = {
+                    "spect": payload.get("spectroscopy"),
+                    "imaging": payload.get("imaging"),
+                    "tseries": payload.get("time_series"),
+                    "uploads": payload.get("files"),
+                    "stellar": payload.get("stellar_parameters"),
+                    "planet": payload.get("planet_parameters"),
+                }
+                for key, block in summary_payloads.items():
+                    out_path = summaries_dir / f"{key}.json"
+                    summary_paths[key] = out_path
+                    if out_path.exists() and not force_refresh:
+                        continue
+                    self._write_text_atomic(out_path, json.dumps(block if block is not None else [], indent=2))
+            except Exception as exc:
+                warnings.append(f"target.php summary discovery failed: {type(exc).__name__}: {exc}")
+                summary_specs = {
+                    "spect": ("download_spect.php", {"target": str(exo.tic_id), "output": "csv"}),
+                    "imaging": ("download_imaging.php", {"target": str(exo.tic_id), "output": "csv"}),
+                    "tseries": ("download_tseries.php", {"target": str(exo.tic_id), "output": "csv"}),
+                    "uploads": ("download_uploads.php", {"target": str(exo.tic_id), "output": "csv"}),
+                    "stellar": ("download_stellar.php", {"id": str(exo.tic_id), "output": "pipe"}),
+                    "planet": ("download_planet.php", {"id": str(exo.tic_id), "output": "pipe"}),
+                }
+                for key, (endpoint, params) in summary_specs.items():
+                    out_path = summaries_dir / f"{key}.{self._ext_for_output(params.get('output'))}"
+                    summary_paths[key] = out_path
+                    if out_path.exists() and not force_refresh:
+                        continue
+                    try:
+                        text = self._get_text(self._url(endpoint), params=params)
+                        self._write_text_atomic(out_path, text)
+                    except Exception as endpoint_error:
+                        warnings.append(f"{endpoint} failed: {type(endpoint_error).__name__}: {endpoint_error}")
 
         manifest_path = target_dir / "manifest.json"
         self._write_manifest(
@@ -429,6 +478,78 @@ class ExoFopClient:
             )
         return rows
 
+    def _parse_filelist_target_json(self, payload: dict[str, Any], *, fallback_tic_id: int) -> list[ExoFopFileRow]:
+        files_block = payload.get("files")
+        if not isinstance(files_block, list):
+            return []
+        rows: list[ExoFopFileRow] = []
+        for item in files_block:
+            if not isinstance(item, dict):
+                continue
+            filename = str(item.get("fname") or "").strip()
+            if not filename:
+                continue
+            try:
+                file_id = int(float(item.get("fid")))
+            except Exception:
+                continue
+            tic_value = item.get("tic_id") or item.get("tic") or fallback_tic_id
+            try:
+                tic_id = int(float(tic_value))
+            except Exception:
+                tic_id = int(fallback_tic_id)
+            if tic_id <= 0:
+                continue
+            rows.append(
+                ExoFopFileRow(
+                    file_id=file_id,
+                    tic_id=tic_id,
+                    toi=(str(item.get("ftoi")).strip() or None),
+                    filename=filename,
+                    type=(str(item.get("ftype") or "Unknown").strip() or "Unknown"),
+                    date_utc=(str(item.get("fdate")).strip() or None),
+                    user=(str(item.get("fuser")).strip() or None),
+                    group=(str(item.get("fgroup")).strip() or None),
+                    tag=(str(item.get("ftag")).strip() or None),
+                    description=(str(item.get("fdesc")).strip() or None),
+                )
+            )
+        return rows
+
+    def _render_filelist_csv(self, rows: list[ExoFopFileRow]) -> str:
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(
+            [
+                "Type",
+                "File Name",
+                "File ID",
+                "TIC",
+                "TOI",
+                "Date",
+                "User",
+                "Group",
+                "Tag",
+                "Description",
+            ]
+        )
+        for row in rows:
+            writer.writerow(
+                [
+                    row.type,
+                    row.filename,
+                    row.file_id,
+                    row.tic_id,
+                    row.toi or "",
+                    row.date_utc or "",
+                    row.user or "",
+                    row.group or "",
+                    row.tag or "",
+                    row.description or "",
+                ]
+            )
+        return buf.getvalue()
+
     def _normalize_table_key(self, key: str) -> str:
         text = str(key or "").strip().lower()
         text = text.replace("%", "pct")
@@ -438,19 +559,28 @@ class ExoFopClient:
 
     def _iter_structured_rows(self, text: str) -> list[dict[str, str]]:
         body = str(text or "").lstrip("\ufeff").replace("\x00", "")
-        if "<html" in body.lower():
+        stripped = body.lstrip().lower()
+        if stripped.startswith("<html") or stripped.startswith("<!doctype html"):
             return []
         lines = [ln for ln in body.splitlines() if ln.strip()]
         if not lines:
             return []
 
-        sample = "\n".join(lines[:20])
-        delimiters = ",|\t;"
-        try:
-            dialect = csv.Sniffer().sniff(sample, delimiters=delimiters)
-            delimiter = dialect.delimiter
-        except Exception:
-            delimiter = self._best_delimiter(lines, candidates=[",", "|", "\t", ";"])
+        # Choose delimiter from header first to avoid being skewed by rich free-text notes rows.
+        header_line = lines[0]
+        delimiter = ","
+        header_scores = {candidate: header_line.count(candidate) for candidate in [",", "|", "\t", ";"]}
+        best_header_delim = max(header_scores, key=header_scores.get)
+        if header_scores.get(best_header_delim, 0) > 0:
+            delimiter = best_header_delim
+        else:
+            sample = "\n".join(lines[:20])
+            delimiters = ",|\t;"
+            try:
+                dialect = csv.Sniffer().sniff(sample, delimiters=delimiters)
+                delimiter = dialect.delimiter
+            except Exception:
+                delimiter = self._best_delimiter(lines, candidates=[",", "|", "\t", ";"])
 
         reader = csv.DictReader(io.StringIO("\n".join(lines)), delimiter=delimiter)
         out: list[dict[str, str]] = []
@@ -537,6 +667,7 @@ class ExoFopClient:
                 row,
                 aliases=(
                     "text",
+                    "notes",
                     "note",
                     "obs_note",
                     "obsnotes",
@@ -549,16 +680,19 @@ class ExoFopClient:
             if text_value is None:
                 continue
 
-            author = self._find_first_value(row, aliases=("author", "user", "observer", "submitter", "name"))
+            author = self._find_first_value(
+                row,
+                aliases=("author", "user", "username", "observer", "submitter", "name"),
+            )
             date_utc = self._find_first_value(
                 row,
-                aliases=("date", "date_utc", "created_at", "create_date", "obs_date", "upload_date"),
+                aliases=("date", "date_utc", "created_at", "create_date", "obs_date", "upload_date", "lastmod"),
             )
             data_tag = self._find_first_value(
                 row,
-                aliases=("data_tag", "tag", "datatype", "data_type", "category", "table"),
+                aliases=("data_tag", "tag", "tag_id", "tagid", "datatype", "data_type", "category", "table"),
             )
-            group = self._find_first_value(row, aliases=("group", "team", "program"))
+            group = self._find_first_value(row, aliases=("group", "groupname", "team", "program"))
             note_id = self._parse_int_best_effort(
                 self._find_first_value(row, aliases=("note_id", "id", "obsnote_id"))
             )
@@ -635,6 +769,37 @@ class ExoFopClient:
             planet_disposition=planet_disp,
             comments=comments,
             raw=dict(selected),
+        )
+
+    def _extract_toi_row_from_target_json(
+        self,
+        *,
+        payload: dict[str, Any],
+        tic_id: int,
+        toi: str | float | None,
+    ) -> ExoFopToiRow | None:
+        rows = payload.get("tois")
+        if not isinstance(rows, list):
+            return None
+        toi_target = self._normalize_toi_value(toi)
+        selected: dict[str, Any] | None = None
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            row_toi = self._normalize_toi_value(item.get("toi"))
+            if toi_target is not None and row_toi != toi_target:
+                continue
+            selected = item
+            break
+        if selected is None:
+            return None
+        return ExoFopToiRow(
+            tic_id=int(tic_id),
+            toi=(str(selected.get("toi")).strip() or None),
+            tfopwg_disposition=(str(selected.get("disp_tfop")).strip() or None),
+            planet_disposition=(str(selected.get("disp_tess")).strip() or None),
+            comments=(str(selected.get("notes")).strip() or None),
+            raw={str(k): str(v) for k, v in selected.items()},
         )
 
     def _normalize_toi_value(self, value: str | float | None) -> str | None:

@@ -37,6 +37,35 @@ def test_parse_obsnotes_pipe_fallback(tmp_path):
     assert rows[0].text == "RV trend present"
 
 
+def test_parse_obsnotes_notes_column_with_embedded_html(tmp_path):
+    client = ExoFopClient(cache_dir=tmp_path)
+    text = (
+        "ID,TIC ID,Username,Groupname,TAG ID,Lastmod,notes\n"
+        '23968,68646526,latham,,1573,2021-11-30 12:20:55,"<!DOCTYPE html><html><body>4 RV epochs, 162 m/s scatter</body></html>"\n'
+    )
+
+    rows = client._parse_obsnotes_text(text, fallback_tic_id=68646526)
+
+    assert len(rows) == 1
+    assert rows[0].tic_id == 68646526
+    assert rows[0].author == "latham"
+    assert "4 RV epochs" in rows[0].text
+
+
+def test_parse_obsnotes_prefers_header_delimiter_over_semicolons_in_note_text(tmp_path):
+    client = ExoFopClient(cache_dir=tmp_path)
+    text = (
+        "ID,TIC ID,Username,Groupname,TAG ID,Lastmod,notes\n"
+        '1,68646526,latham,,1573,2021-11-30 12:20:55,"style=color:#222222; font-family: Arial; 4 RV epochs, 162 m/s scatter"\n'
+    )
+
+    rows = client._parse_obsnotes_text(text, fallback_tic_id=68646526)
+
+    assert len(rows) == 1
+    assert rows[0].author == "latham"
+    assert "4 RV epochs" in rows[0].text
+
+
 def test_extract_toi_row_best_effort(tmp_path):
     client = ExoFopClient(cache_dir=tmp_path)
     text = (

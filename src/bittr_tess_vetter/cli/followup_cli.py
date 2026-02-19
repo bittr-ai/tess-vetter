@@ -267,6 +267,7 @@ def followup_command(
             resolved_toi_arg = None
         resolved_from_report = resolve_inputs_from_report_file(str(report_file))
         resolved_tic_id = int(resolved_from_report.tic_id)
+        resolved_toi_arg = resolved_from_report.toi
         input_resolution = dict(resolved_from_report.input_resolution)
         report_file_path = str(resolved_from_report.report_file_path)
     else:
