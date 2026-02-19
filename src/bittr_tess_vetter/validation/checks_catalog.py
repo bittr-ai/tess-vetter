@@ -240,6 +240,7 @@ def run_nearby_eb_search(
     )
     match_summaries: list[dict[str, Any]] = []
     min_delta_any = float("inf")
+    deltas: dict[str, float | None]
 
     for r in rows:
         per = float(r.get("period_days") or float("nan"))
@@ -316,6 +317,7 @@ def run_exofop_toi_lookup(
     - on-disk caching with TTL (persists across MCP restarts)
     - bounded retries/backoff for network fetches
     """
+    fetch_error: str | None = None
     try:
         from bittr_tess_vetter.platform.catalogs.exofop_toi_table import fetch_exofop_toi_table
 

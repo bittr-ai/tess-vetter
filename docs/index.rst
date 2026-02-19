@@ -52,8 +52,10 @@ Contents
    quickstart
    cli_contracts
    reference_sources
+   report_external_charting_seam
    stability
    verification/confidence_semantics
+   verification/feature_truth_spec
    tutorials
    tutorials/blend_localization
 

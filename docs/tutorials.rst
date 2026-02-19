@@ -8,6 +8,15 @@ Rendered tutorials
 ------------------
 
 - :doc:`tutorials/blend_localization`
+- :doc:`tutorials/10-toi-5807-check-by-check`
+- :doc:`tutorials/tutorial_toi-5807-incremental/README`
+
+.. toctree::
+   :hidden:
+   :maxdepth: 1
+
+   tutorials/10-toi-5807-check-by-check
+   tutorials/tutorial_toi-5807-incremental/README
 
 Notebook tutorials (download)
 -----------------------------

@@ -170,10 +170,10 @@ def compute_systematics_proxy(
         try:
             shifts = [0.1 * float(period_days), 0.2 * float(period_days), 0.33 * float(period_days)]
             ratios: list[float] = []
-            for dt in shifts:
-                in_m = get_in_transit_mask(time, period_days, t0_btjd + dt, duration_hours)
+            for shift_days in shifts:
+                in_m = get_in_transit_mask(time, period_days, t0_btjd + shift_days, duration_hours)
                 out_m = get_out_of_transit_mask(
-                    time, period_days, t0_btjd + dt, duration_hours, buffer_factor=3.0
+                    time, period_days, t0_btjd + shift_days, duration_hours, buffer_factor=3.0
                 )
                 if int(np.sum(in_m)) < 5 or int(np.sum(out_m)) < 20:
                     continue
