@@ -1,0 +1,23 @@
+"""Detection/periodogram domain models (public API).
+
+These models are part of the stable contract between the tess-vetter
+library and host applications (e.g., MCP servers).
+"""
+
+from __future__ import annotations
+
+from tess_vetter.domain.detection import (  # noqa: F401
+    Detection,
+    PeriodogramPeak,
+    PeriodogramResult,
+    TransitCandidate,
+    VetterCheckResult,
+)
+
+__all__ = [
+    "Detection",
+    "PeriodogramPeak",
+    "PeriodogramResult",
+    "TransitCandidate",
+    "VetterCheckResult",
+]

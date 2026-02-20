@@ -1,4 +1,4 @@
-bittr-tess-vetter
+tess-vetter
 =================
 
 Domain library for TESS transit detection and vetting (array-in/array-out).
@@ -22,7 +22,7 @@ Quick Example
 .. code-block:: python
 
    import numpy as np
-   import bittr_tess_vetter.api as btv
+   import tess_vetter.api as btv
 
    # Create light curve
    lc = btv.LightCurve(time=time, flux=flux, flux_err=flux_err)

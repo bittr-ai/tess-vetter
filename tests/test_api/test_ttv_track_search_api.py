@@ -42,7 +42,7 @@ def _make_synthetic_ttv_lc(
 
 
 def test_should_run_ttv_search_gate() -> None:
-    from bittr_tess_vetter.api.ttv_track_search import should_run_ttv_search
+    from tess_vetter.api.ttv_track_search import should_run_ttv_search
 
     t = np.concatenate([np.arange(0.0, 10.0, 0.1), np.arange(200.0, 210.0, 0.1)])
     assert should_run_ttv_search(t, min_baseline_days=50.0, min_windows=2) is True
@@ -50,7 +50,7 @@ def test_should_run_ttv_search_gate() -> None:
 
 
 def test_run_ttv_track_search_finds_improvement() -> None:
-    from bittr_tess_vetter.api.ttv_track_search import TTVSearchBudget, run_ttv_track_search
+    from tess_vetter.api.ttv_track_search import TTVSearchBudget, run_ttv_track_search
 
     period_days = 10.0
     t0_btjd = 1000.0
@@ -88,7 +88,7 @@ def test_run_ttv_track_search_finds_improvement() -> None:
 
 
 def test_run_ttv_track_search_deterministic() -> None:
-    from bittr_tess_vetter.api.ttv_track_search import TTVSearchBudget, run_ttv_track_search
+    from tess_vetter.api.ttv_track_search import TTVSearchBudget, run_ttv_track_search
 
     time, flux, flux_err = _make_synthetic_ttv_lc()
 

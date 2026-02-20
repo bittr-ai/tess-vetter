@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from click.testing import CliRunner
 
-from bittr_tess_vetter.cli.enrich_cli import cli
+from tess_vetter.cli.enrich_cli import cli
 
 
 def test_btv_pipeline_run_builtin_profile_wires_cli_contract_end_to_end(monkeypatch, tmp_path: Path) -> None:
@@ -21,7 +21,7 @@ def test_btv_pipeline_run_builtin_profile_wires_cli_contract_end_to_end(monkeypa
         assert text is True
 
         argv = [str(token) for token in args]
-        assert argv[:3] == [argv[0], "-m", "bittr_tess_vetter.cli.enrich_cli"]
+        assert argv[:3] == [argv[0], "-m", "tess_vetter.cli.enrich_cli"]
         command = argv[3]
         assert "--network-ok" in argv
         assert "--no-network" not in argv
@@ -47,7 +47,7 @@ def test_btv_pipeline_run_builtin_profile_wires_cli_contract_end_to_end(monkeypa
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.pipeline_composition.executor.subprocess.run",
+        "tess_vetter.pipeline_composition.executor.subprocess.run",
         _fake_subprocess_run,
     )
 
@@ -126,7 +126,7 @@ def test_btv_pipeline_run_resume_uses_checkpoint_markers_and_sets_skipped_resume
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.pipeline_composition.executor.subprocess.run",
+        "tess_vetter.pipeline_composition.executor.subprocess.run",
         _fake_subprocess_run,
     )
 
@@ -225,7 +225,7 @@ def test_btv_pipeline_run_continue_on_error_marks_partial_and_preserves_step_lab
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.pipeline_composition.executor.subprocess.run",
+        "tess_vetter.pipeline_composition.executor.subprocess.run",
         _fake_subprocess_run,
     )
 
@@ -315,7 +315,7 @@ def test_btv_pipeline_run_continue_on_error_two_tois_mixed_partial_and_ok(monkey
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.pipeline_composition.executor.subprocess.run",
+        "tess_vetter.pipeline_composition.executor.subprocess.run",
         _fake_subprocess_run,
     )
 
@@ -408,7 +408,7 @@ def test_btv_pipeline_run_resume_after_mixed_outcomes_converges_to_two_ok_and_re
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.pipeline_composition.executor.subprocess.run",
+        "tess_vetter.pipeline_composition.executor.subprocess.run",
         _fake_subprocess_run,
     )
 

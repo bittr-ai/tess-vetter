@@ -8,19 +8,19 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.pipeline import (
+from tess_vetter.api.pipeline import (
     VettingPipeline,
     describe_checks,
     list_checks,
 )
-from bittr_tess_vetter.validation.registry import (
+from tess_vetter.validation.registry import (
     CheckConfig,
     CheckInputs,
     CheckRegistry,
     CheckRequirements,
     CheckTier,
 )
-from bittr_tess_vetter.validation.result_schema import CheckResult, ok_result
+from tess_vetter.validation.result_schema import CheckResult, ok_result
 
 
 class MockCheck:

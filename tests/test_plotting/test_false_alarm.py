@@ -12,11 +12,11 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 
-from bittr_tess_vetter.plotting.false_alarm import (
+from tess_vetter.plotting.false_alarm import (
     plot_asymmetry,
     plot_data_gaps,
 )
-from bittr_tess_vetter.validation.result_schema import ok_result
+from tess_vetter.validation.result_schema import ok_result
 
 
 @pytest.fixture

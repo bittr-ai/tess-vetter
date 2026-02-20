@@ -1,6 +1,6 @@
 # Bibliography
 
-All references cited by bittr-tess-vetter, sorted by year.
+All references cited by tess-vetter, sorted by year.
 
 ## Lomb 1976
 

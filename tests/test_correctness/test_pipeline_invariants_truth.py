@@ -6,10 +6,10 @@ import importlib
 
 import numpy as np
 
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.features.evidence import is_skip_block
-from bittr_tess_vetter.pipeline import enrich_candidate
-from bittr_tess_vetter.features import FEATURE_SCHEMA_VERSION, FeatureConfig
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.features.evidence import is_skip_block
+from tess_vetter.pipeline import enrich_candidate
+from tess_vetter.features import FEATURE_SCHEMA_VERSION, FeatureConfig
 
 
 @dataclass
@@ -77,8 +77,8 @@ def test_enrich_candidate_offline_local_path_produces_stable_skip_blocks(monkeyp
         ]
         return _FakeBundle(results=checks, warnings=[])
 
-    monkeypatch.setattr("bittr_tess_vetter.pipeline._load_lightcurves_from_local", _fake_load_local)
-    vet_mod = importlib.import_module("bittr_tess_vetter.api.vet")
+    monkeypatch.setattr("tess_vetter.pipeline._load_lightcurves_from_local", _fake_load_local)
+    vet_mod = importlib.import_module("tess_vetter.api.vet")
     monkeypatch.setattr(vet_mod, "vet_candidate", _fake_vet_candidate)
 
     cfg = FeatureConfig(
@@ -127,7 +127,7 @@ def test_enrich_candidate_local_data_missing_sets_error_status(monkeypatch) -> N
     def _fake_load_local(_tic: int, _path: str, *, requested_sectors=None):
         raise FileNotFoundError("no local data")
 
-    monkeypatch.setattr("bittr_tess_vetter.pipeline._load_lightcurves_from_local", _fake_load_local)
+    monkeypatch.setattr("tess_vetter.pipeline._load_lightcurves_from_local", _fake_load_local)
 
     cfg = FeatureConfig(network_ok=False, local_data_path="/dev/null")
 

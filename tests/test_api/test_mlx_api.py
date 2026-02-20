@@ -5,11 +5,11 @@ import importlib.util
 
 def test_api_mlx_module_importable() -> None:
     # Importing the facade must not require MLX to be installed.
-    from bittr_tess_vetter.api import mlx  # noqa: F401
+    from tess_vetter.api import mlx  # noqa: F401
 
 
 def test_api_root_mlx_exports_guarded() -> None:
-    from bittr_tess_vetter import api
+    from tess_vetter import api
 
     expected_available = importlib.util.find_spec("mlx") is not None
     assert expected_available == api.MLX_AVAILABLE

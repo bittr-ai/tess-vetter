@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import zipfile
 
-from bittr_tess_vetter.exofop.client import ExoFopClient
-from bittr_tess_vetter.exofop.types import ExoFopSelectors
+from tess_vetter.exofop.client import ExoFopClient
+from tess_vetter.exofop.types import ExoFopSelectors
 
 
 def test_parse_filelist_csv_basic(tmp_path):

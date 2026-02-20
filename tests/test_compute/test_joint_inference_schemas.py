@@ -15,7 +15,7 @@ import json
 
 import pytest
 
-from bittr_tess_vetter.compute.joint_inference_schemas import (
+from tess_vetter.compute.joint_inference_schemas import (
     JointInferenceResult,
     SectorEvidence,
     create_joint_result_from_sectors,
@@ -25,7 +25,7 @@ from bittr_tess_vetter.compute.joint_inference_schemas import (
     sector_evidence_to_dict,
     to_evidence_block,
 )
-from bittr_tess_vetter.compute.pixel_host_hypotheses import HypothesisScore
+from tess_vetter.compute.pixel_host_hypotheses import HypothesisScore
 
 # =============================================================================
 # Test Fixtures

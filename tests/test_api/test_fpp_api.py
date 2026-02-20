@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from bittr_tess_vetter.api.fpp import (
+from tess_vetter.api.fpp import (
     FAST_PRESET,
     STANDARD_PRESET,
     ContrastCurve,
@@ -15,7 +15,7 @@ from bittr_tess_vetter.api.fpp import (
 
 def test_calculate_fpp_fast_preset_wires_expected_defaults() -> None:
     cache = MagicMock()
-    with patch("bittr_tess_vetter.api.fpp.calculate_fpp_handler") as handler:
+    with patch("tess_vetter.api.fpp.calculate_fpp_handler") as handler:
         handler.return_value = {"fpp": 0.1}
         calculate_fpp(
             cache=cache,
@@ -35,7 +35,7 @@ def test_calculate_fpp_fast_preset_wires_expected_defaults() -> None:
 
 def test_calculate_fpp_standard_preset_wires_expected_defaults() -> None:
     cache = MagicMock()
-    with patch("bittr_tess_vetter.api.fpp.calculate_fpp_handler") as handler:
+    with patch("tess_vetter.api.fpp.calculate_fpp_handler") as handler:
         handler.return_value = {"fpp": 0.1}
         calculate_fpp(
             cache=cache,
@@ -55,7 +55,7 @@ def test_calculate_fpp_standard_preset_wires_expected_defaults() -> None:
 
 def test_calculate_fpp_overrides_take_precedence() -> None:
     cache = MagicMock()
-    with patch("bittr_tess_vetter.api.fpp.calculate_fpp_handler") as handler:
+    with patch("tess_vetter.api.fpp.calculate_fpp_handler") as handler:
         handler.return_value = {"fpp": 0.1}
         calculate_fpp(
             cache=cache,
@@ -113,7 +113,7 @@ def test_calculate_fpp_passes_external_lightcurves_to_handler() -> None:
         flux_err=np.array([0.001, 0.001, 0.001]),
         filter="i",
     )
-    with patch("bittr_tess_vetter.api.fpp.calculate_fpp_handler") as handler:
+    with patch("tess_vetter.api.fpp.calculate_fpp_handler") as handler:
         handler.return_value = {"fpp": 0.1}
         calculate_fpp(
             cache=cache,
@@ -137,7 +137,7 @@ def test_calculate_fpp_passes_contrast_curve_to_handler() -> None:
         delta_mag=np.array([2.0, 5.0, 7.0]),
         filter="Ks",
     )
-    with patch("bittr_tess_vetter.api.fpp.calculate_fpp_handler") as handler:
+    with patch("tess_vetter.api.fpp.calculate_fpp_handler") as handler:
         handler.return_value = {"fpp": 0.1}
         calculate_fpp(
             cache=cache,

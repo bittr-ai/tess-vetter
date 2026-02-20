@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-import bittr_tess_vetter.api as btv
+import tess_vetter.api as btv
 
 
 def _make_lc_with_box_transit(

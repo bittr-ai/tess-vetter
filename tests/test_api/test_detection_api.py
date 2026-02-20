@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from bittr_tess_vetter.api.detection import (
+from tess_vetter.api.detection import (
     Detection,
     PeriodogramPeak,
     PeriodogramResult,

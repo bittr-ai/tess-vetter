@@ -4,9 +4,9 @@ import copy
 
 import pytest
 
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.report import build_report
-from bittr_tess_vetter.report._custom_view_hash import custom_view_hashes_by_id, custom_views_hash
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.report import build_report
+from tess_vetter.report._custom_view_hash import custom_view_hashes_by_id, custom_views_hash
 
 
 def _make_minimal_lc() -> LightCurve:

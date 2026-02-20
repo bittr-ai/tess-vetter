@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 from click.testing import CliRunner
 
-import bittr_tess_vetter.cli.enrich_cli as enrich_cli
-from bittr_tess_vetter.platform.catalogs.toi_resolution import LookupStatus
+import tess_vetter.cli.enrich_cli as enrich_cli
+from tess_vetter.platform.catalogs.toi_resolution import LookupStatus
 
 
 def test_resolve_stellar_with_tic_id_writes_payload(monkeypatch) -> None:
@@ -20,7 +20,7 @@ def test_resolve_stellar_with_tic_id_writes_payload(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.resolve_stellar_cli.load_auto_stellar_with_fallback",
+        "tess_vetter.cli.resolve_stellar_cli.load_auto_stellar_with_fallback",
         _fake_auto,
     )
 
@@ -42,7 +42,7 @@ def test_resolve_stellar_with_tic_id_writes_payload(monkeypatch) -> None:
 
 def test_resolve_stellar_with_toi_adds_echo_note(monkeypatch) -> None:
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.resolve_stellar_cli.resolve_toi_to_tic_ephemeris_depth",
+        "tess_vetter.cli.resolve_stellar_cli.resolve_toi_to_tic_ephemeris_depth",
         lambda toi: SimpleNamespace(
             status=LookupStatus.OK,
             toi_query=toi,
@@ -54,7 +54,7 @@ def test_resolve_stellar_with_toi_adds_echo_note(monkeypatch) -> None:
         ),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.resolve_stellar_cli.load_auto_stellar_with_fallback",
+        "tess_vetter.cli.resolve_stellar_cli.load_auto_stellar_with_fallback",
         lambda **_: (
             {"radius": 0.8, "mass": 0.7, "tmag": 12.0},
             {"selected_source": "exofop_toi_table", "echo_of_tic": True},
@@ -78,7 +78,7 @@ def test_resolve_stellar_with_toi_adds_echo_note(monkeypatch) -> None:
 
 def test_resolve_stellar_accepts_short_o_alias(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.resolve_stellar_cli.load_auto_stellar_with_fallback",
+        "tess_vetter.cli.resolve_stellar_cli.load_auto_stellar_with_fallback",
         lambda **_: (
             {"radius": 0.9, "mass": 0.8, "tmag": 11.0},
             {"selected_source": "tic_mast", "echo_of_tic": False},

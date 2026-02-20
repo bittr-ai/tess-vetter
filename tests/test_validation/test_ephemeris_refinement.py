@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.api.ephemeris_refinement import (
+from tess_vetter.api.ephemeris_refinement import (
     EphemerisRefinementCandidate,
     EphemerisRefinementConfig,
     refine_candidates_numpy,

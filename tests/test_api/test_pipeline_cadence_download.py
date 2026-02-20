@@ -3,10 +3,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-import bittr_tess_vetter.api.io as btv_io
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.features import FeatureConfig
-from bittr_tess_vetter.pipeline import enrich_candidate
+import tess_vetter.api.io as btv_io
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.features import FeatureConfig
+from tess_vetter.pipeline import enrich_candidate
 
 
 class _DummyTarget:

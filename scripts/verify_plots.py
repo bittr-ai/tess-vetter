@@ -26,7 +26,7 @@ import numpy as np
 # Add src to path if needed
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from bittr_tess_vetter.validation.result_schema import CheckResult
+from tess_vetter.validation.result_schema import CheckResult
 
 
 def ok_result(id: str, name: str, metrics: dict, raw: dict | None = None) -> CheckResult:
@@ -58,7 +58,7 @@ def create_output_dir(out_dir: str | Path | None) -> Path:
 
 def generate_v01_plot(output_dir: Path) -> None:
     """Generate V01 odd-even depth plot."""
-    from bittr_tess_vetter.plotting import plot_odd_even
+    from tess_vetter.plotting import plot_odd_even
 
     result = ok_result(
         id="V01",
@@ -88,7 +88,7 @@ def generate_v01_plot(output_dir: Path) -> None:
 
 def generate_v02_plot(output_dir: Path) -> None:
     """Generate V02 secondary eclipse plot."""
-    from bittr_tess_vetter.plotting import plot_secondary_eclipse
+    from tess_vetter.plotting import plot_secondary_eclipse
 
     np.random.seed(42)
     phase = np.linspace(0, 1, 500)
@@ -123,7 +123,7 @@ def generate_v02_plot(output_dir: Path) -> None:
 
 def generate_v04_plot(output_dir: Path) -> None:
     """Generate V04 depth stability plot."""
-    from bittr_tess_vetter.plotting import plot_depth_stability
+    from tess_vetter.plotting import plot_depth_stability
 
     np.random.seed(42)
     epochs = np.arange(1, 11)
@@ -155,7 +155,7 @@ def generate_v04_plot(output_dir: Path) -> None:
 
 def generate_v05_plot(output_dir: Path) -> None:
     """Generate V05 V-shape plot."""
-    from bittr_tess_vetter.plotting import plot_v_shape
+    from tess_vetter.plotting import plot_v_shape
 
     # Create binned transit shape
     phase = np.linspace(-0.05, 0.05, 20)
@@ -196,7 +196,7 @@ def generate_v05_plot(output_dir: Path) -> None:
 
 def generate_v08_plot(output_dir: Path) -> None:
     """Generate V08 centroid shift plot."""
-    from bittr_tess_vetter.plotting import plot_centroid_shift
+    from tess_vetter.plotting import plot_centroid_shift
 
     # Create mock TPF image
     np.random.seed(42)
@@ -234,7 +234,7 @@ def generate_v08_plot(output_dir: Path) -> None:
 
 def generate_v09_plot(output_dir: Path) -> None:
     """Generate V09 difference image plot."""
-    from bittr_tess_vetter.plotting import plot_difference_image
+    from tess_vetter.plotting import plot_difference_image
 
     # Create mock difference image
     np.random.seed(42)
@@ -267,7 +267,7 @@ def generate_v09_plot(output_dir: Path) -> None:
 
 def generate_v21_plot(output_dir: Path) -> None:
     """Generate V21 sector consistency plot."""
-    from bittr_tess_vetter.plotting import plot_sector_consistency
+    from tess_vetter.plotting import plot_sector_consistency
 
     result = ok_result(
         id="V21",
@@ -294,7 +294,7 @@ def generate_v21_plot(output_dir: Path) -> None:
 
 def generate_v03_plot(output_dir: Path) -> None:
     """Generate V03 duration consistency plot."""
-    from bittr_tess_vetter.plotting import plot_duration_consistency
+    from tess_vetter.plotting import plot_duration_consistency
 
     result = ok_result(
         id="V03",
@@ -320,7 +320,7 @@ def generate_v03_plot(output_dir: Path) -> None:
 
 def generate_v06_plot(output_dir: Path) -> None:
     """Generate V06 nearby EBs plot."""
-    from bittr_tess_vetter.plotting import plot_nearby_ebs
+    from tess_vetter.plotting import plot_nearby_ebs
 
     result = ok_result(
         id="V06",
@@ -349,7 +349,7 @@ def generate_v06_plot(output_dir: Path) -> None:
 
 def generate_v07_plot(output_dir: Path) -> None:
     """Generate V07 ExoFOP card plot."""
-    from bittr_tess_vetter.plotting import plot_exofop_card
+    from tess_vetter.plotting import plot_exofop_card
 
     result = ok_result(
         id="V07",
@@ -377,7 +377,7 @@ def generate_v07_plot(output_dir: Path) -> None:
 
 def generate_v10_plot(output_dir: Path) -> None:
     """Generate V10 aperture curve plot."""
-    from bittr_tess_vetter.plotting import plot_aperture_curve
+    from tess_vetter.plotting import plot_aperture_curve
 
     result = ok_result(
         id="V10",
@@ -402,7 +402,7 @@ def generate_v10_plot(output_dir: Path) -> None:
 
 def generate_v11_plot(output_dir: Path) -> None:
     """Generate V11 ModShift plot."""
-    from bittr_tess_vetter.plotting import plot_modshift
+    from tess_vetter.plotting import plot_modshift
 
     np.random.seed(42)
     phase_bins = np.linspace(0, 1, 200)
@@ -437,7 +437,7 @@ def generate_v11_plot(output_dir: Path) -> None:
 
 def generate_v12_plot(output_dir: Path) -> None:
     """Generate V12 SWEET plot."""
-    from bittr_tess_vetter.plotting import plot_sweet
+    from tess_vetter.plotting import plot_sweet
 
     np.random.seed(42)
     phase = np.linspace(0, 1, 300)
@@ -474,7 +474,7 @@ def generate_v12_plot(output_dir: Path) -> None:
 
 def generate_v13_plot(output_dir: Path) -> None:
     """Generate V13 data gaps plot."""
-    from bittr_tess_vetter.plotting import plot_data_gaps
+    from tess_vetter.plotting import plot_data_gaps
 
     result = ok_result(
         id="V13",
@@ -499,7 +499,7 @@ def generate_v13_plot(output_dir: Path) -> None:
 
 def generate_v15_plot(output_dir: Path) -> None:
     """Generate V15 asymmetry plot."""
-    from bittr_tess_vetter.plotting import plot_asymmetry
+    from tess_vetter.plotting import plot_asymmetry
 
     np.random.seed(42)
     phase = np.linspace(-0.1, 0.1, 200)
@@ -534,7 +534,7 @@ def generate_v15_plot(output_dir: Path) -> None:
 
 def generate_v16_plot(output_dir: Path) -> None:
     """Generate V16 model comparison plot."""
-    from bittr_tess_vetter.plotting import plot_model_comparison
+    from tess_vetter.plotting import plot_model_comparison
 
     np.random.seed(42)
     phase = np.linspace(-0.1, 0.1, 200)
@@ -576,7 +576,7 @@ def generate_v16_plot(output_dir: Path) -> None:
 
 def generate_v17_plot(output_dir: Path) -> None:
     """Generate V17 ephemeris reliability plot."""
-    from bittr_tess_vetter.plotting import plot_ephemeris_reliability
+    from tess_vetter.plotting import plot_ephemeris_reliability
 
     np.random.seed(42)
     phase_shifts = np.linspace(-0.5, 0.5, 100)
@@ -608,7 +608,7 @@ def generate_v17_plot(output_dir: Path) -> None:
 
 def generate_v18_plot(output_dir: Path) -> None:
     """Generate V18 sensitivity sweep plot."""
-    from bittr_tess_vetter.plotting import plot_sensitivity_sweep
+    from tess_vetter.plotting import plot_sensitivity_sweep
 
     sweep_table = [
         {
@@ -691,7 +691,7 @@ def generate_v18_plot(output_dir: Path) -> None:
 
 def generate_v19_plot(output_dir: Path) -> None:
     """Generate V19 alias diagnostics plot."""
-    from bittr_tess_vetter.plotting import plot_alias_diagnostics
+    from tess_vetter.plotting import plot_alias_diagnostics
 
     result = ok_result(
         id="V19",
@@ -716,7 +716,7 @@ def generate_v19_plot(output_dir: Path) -> None:
 
 def generate_v20_plot(output_dir: Path) -> None:
     """Generate V20 ghost features plot."""
-    from bittr_tess_vetter.plotting import plot_ghost_features
+    from tess_vetter.plotting import plot_ghost_features
 
     np.random.seed(42)
     diff_image = np.random.normal(0, 10, (11, 11))
@@ -749,8 +749,8 @@ def generate_v20_plot(output_dir: Path) -> None:
 
 def generate_full_lightcurve_plot(output_dir: Path) -> None:
     """Generate full light curve plot."""
-    from bittr_tess_vetter.plotting import plot_full_lightcurve
-    from bittr_tess_vetter.api.types import LightCurve, Candidate, Ephemeris
+    from tess_vetter.plotting import plot_full_lightcurve
+    from tess_vetter.api.types import LightCurve, Candidate, Ephemeris
 
     np.random.seed(42)
     # Create mock light curve with transits
@@ -780,8 +780,8 @@ def generate_full_lightcurve_plot(output_dir: Path) -> None:
 
 def generate_phase_folded_plot(output_dir: Path) -> None:
     """Generate phase-folded transit plot."""
-    from bittr_tess_vetter.plotting import plot_phase_folded
-    from bittr_tess_vetter.api.types import LightCurve, Candidate, Ephemeris
+    from tess_vetter.plotting import plot_phase_folded
+    from tess_vetter.api.types import LightCurve, Candidate, Ephemeris
 
     np.random.seed(42)
     # Create mock light curve with transits
@@ -811,8 +811,8 @@ def generate_phase_folded_plot(output_dir: Path) -> None:
 
 def generate_transit_fit_plot(output_dir: Path) -> None:
     """Generate transit fit overlay plot."""
-    from bittr_tess_vetter.plotting import plot_transit_fit
-    from bittr_tess_vetter.api.transit_fit import TransitFitResult
+    from tess_vetter.plotting import plot_transit_fit
+    from tess_vetter.api.transit_fit import TransitFitResult
 
     # Synthetic fitted model + data in phase space
     phase = np.linspace(-0.1, 0.1, 400)
@@ -857,9 +857,9 @@ def generate_transit_fit_plot(output_dir: Path) -> None:
 
 def generate_dvr_summary(output_dir: Path) -> None:
     """Generate DVR summary plot."""
-    from bittr_tess_vetter.plotting import plot_vetting_summary
-    from bittr_tess_vetter.api.types import LightCurve, Candidate, Ephemeris
-    from bittr_tess_vetter.validation.result_schema import VettingBundleResult
+    from tess_vetter.plotting import plot_vetting_summary
+    from tess_vetter.api.types import LightCurve, Candidate, Ephemeris
+    from tess_vetter.validation.result_schema import VettingBundleResult
 
     np.random.seed(42)
 

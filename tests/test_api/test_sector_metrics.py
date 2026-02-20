@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api import compute_sector_ephemeris_metrics
-from bittr_tess_vetter.api.sector_consistency import SectorMeasurement
-from bittr_tess_vetter.api.sector_metrics import (
+from tess_vetter.api import compute_sector_ephemeris_metrics
+from tess_vetter.api.sector_consistency import SectorMeasurement
+from tess_vetter.api.sector_metrics import (
     SECTOR_MEASUREMENTS_SCHEMA_VERSION,
     deserialize_v21_sector_measurements,
     serialize_v21_sector_measurements,

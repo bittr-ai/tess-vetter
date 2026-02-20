@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.cli import contrast_curve_support as shim
-from bittr_tess_vetter.contrast_curves import (
+from tess_vetter.cli import contrast_curve_support as shim
+from tess_vetter.contrast_curves import (
     build_ruling_summary,
     combine_normalized_curves,
     derive_contrast_verdict,

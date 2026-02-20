@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 def test_top_level_aliases_import_and_resolve() -> None:
-    from bittr_tess_vetter.api import (  # noqa: F401
+    from tess_vetter.api import (  # noqa: F401
         aperture_family_depth_curve,
         localize,
         periodogram,
@@ -18,8 +18,8 @@ def test_top_level_aliases_import_and_resolve() -> None:
 
 
 def test_api_surface_imports() -> None:
-    # Canonical surface is `bittr_tess_vetter.api` (full surface is first-class).
-    from bittr_tess_vetter.api import (  # noqa: F401
+    # Canonical surface is `tess_vetter.api` (full surface is first-class).
+    from tess_vetter.api import (  # noqa: F401
         Candidate,
         Ephemeris,
         LightCurve,

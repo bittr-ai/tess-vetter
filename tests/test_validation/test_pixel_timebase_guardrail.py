@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from bittr_tess_vetter.api import Candidate, Ephemeris, LightCurve, vet_candidate
+from tess_vetter.api import Candidate, Ephemeris, LightCurve, vet_candidate
 
 
 @dataclass(frozen=True)

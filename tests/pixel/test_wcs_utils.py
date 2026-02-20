@@ -1,4 +1,4 @@
-"""Tests for bittr_tess_vetter.pixel.wcs_utils module.
+"""Tests for tess_vetter.pixel.wcs_utils module.
 
 Tests the WCS utilities including:
 - WCS extraction from headers
@@ -19,7 +19,7 @@ import pytest
 from astropy.io import fits
 from astropy.wcs import WCS
 
-from bittr_tess_vetter.pixel.wcs_utils import (
+from tess_vetter.pixel.wcs_utils import (
     compute_angular_distance,
     compute_pixel_scale,
     compute_source_distances,
@@ -452,7 +452,7 @@ class TestModuleImports:
 
     def test_import_all_functions(self) -> None:
         """Can import all public functions from module."""
-        from bittr_tess_vetter.pixel.wcs_utils import (
+        from tess_vetter.pixel.wcs_utils import (
             compute_angular_distance,
             compute_pixel_scale,
             compute_source_distances,

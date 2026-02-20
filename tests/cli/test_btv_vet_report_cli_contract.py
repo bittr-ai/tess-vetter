@@ -8,15 +8,15 @@ import numpy as np
 import pytest
 from click.testing import CliRunner
 
-import bittr_tess_vetter.cli.enrich_cli as enrich_cli
-import bittr_tess_vetter.cli.report_cli as report_cli
-import bittr_tess_vetter.cli.vet_cli as vet_cli
-from bittr_tess_vetter.cli.progress_metadata import ProgressIOError
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.pipeline import make_candidate_key
-from bittr_tess_vetter.platform.catalogs.toi_resolution import LookupStatus
-from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
-from bittr_tess_vetter.validation.result_schema import CheckResult, VettingBundleResult
+import tess_vetter.cli.enrich_cli as enrich_cli
+import tess_vetter.cli.report_cli as report_cli
+import tess_vetter.cli.vet_cli as vet_cli
+from tess_vetter.cli.progress_metadata import ProgressIOError
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.pipeline import make_candidate_key
+from tess_vetter.platform.catalogs.toi_resolution import LookupStatus
+from tess_vetter.platform.io.mast_client import LightCurveNotFoundError
+from tess_vetter.validation.result_schema import CheckResult, VettingBundleResult
 
 
 def test_btv_help_lists_enrich_vet_report() -> None:
@@ -39,7 +39,7 @@ def test_btv_vet_success_writes_bundle_json(monkeypatch, tmp_path: Path) -> None
             "inputs_summary": {},
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     out_path = tmp_path / "vet.json"
     runner = CliRunner()
@@ -73,7 +73,7 @@ def test_btv_vet_runtime_error_maps_to_exit_2(monkeypatch) -> None:
     def _boom(**_kwargs):
         raise RuntimeError("pipeline exploded")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _boom)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _boom)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -106,9 +106,9 @@ def test_btv_vet_progress_error_maps_to_exit_3(monkeypatch, tmp_path: Path) -> N
     def _raise_progress(*_args, **_kwargs):
         raise ProgressIOError("disk full")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.vet_cli.write_progress_metadata_atomic",
+        "tess_vetter.cli.vet_cli.write_progress_metadata_atomic",
         _raise_progress,
     )
 
@@ -141,7 +141,7 @@ def test_btv_report_lightcurve_missing_maps_to_exit_4(monkeypatch, tmp_path: Pat
     def _missing(**_kwargs):
         raise LightCurveNotFoundError("missing")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _missing)
+    monkeypatch.setattr("tess_vetter.cli.report_cli._execute_report", _missing)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -168,7 +168,7 @@ def test_btv_report_timeout_maps_to_exit_5(monkeypatch, tmp_path: Path) -> None:
     def _timeout(**_kwargs):
         raise TimeoutError("timed out")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _timeout)
+    monkeypatch.setattr("tess_vetter.cli.report_cli._execute_report", _timeout)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -205,7 +205,7 @@ def test_btv_report_success_writes_payload_and_html(monkeypatch, tmp_path: Path)
             "html": "<html></html>",
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
+    monkeypatch.setattr("tess_vetter.cli.report_cli._execute_report", _ok)
 
     out_path = tmp_path / "report.json"
     plot_data_path = tmp_path / "report.json.plot_data.json"
@@ -252,7 +252,7 @@ def test_btv_report_execute_report_sets_wrapper_provenance_fields(monkeypatch) -
             self.sectors_used = [14, 15]
             self.vet_artifact_reuse = None
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli.generate_report", lambda **_kwargs: _FakeResult())
+    monkeypatch.setattr("tess_vetter.cli.report_cli.generate_report", lambda **_kwargs: _FakeResult())
 
     output = report_cli._execute_report(
         tic_id=123,
@@ -308,7 +308,7 @@ def test_btv_report_passes_through_diagnostic_json_artifacts(monkeypatch, tmp_pa
             "html": None,
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
+    monkeypatch.setattr("tess_vetter.cli.report_cli._execute_report", _ok)
 
     diag_path = tmp_path / "activity.json"
     diag_path.write_text(
@@ -441,7 +441,7 @@ def test_btv_report_forwards_vet_result_payload(monkeypatch, tmp_path: Path) -> 
             "html": None,
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
+    monkeypatch.setattr("tess_vetter.cli.report_cli._execute_report", _ok)
 
     vet_path = tmp_path / "vet.json"
     vet_path.write_text(
@@ -507,7 +507,7 @@ def test_btv_report_honors_plot_data_out_path(monkeypatch, tmp_path: Path) -> No
             "html": None,
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
+    monkeypatch.setattr("tess_vetter.cli.report_cli._execute_report", _ok)
 
     out_path = tmp_path / "report.json"
     plot_data_path = tmp_path / "custom_plot_data.json"
@@ -578,8 +578,8 @@ def test_btv_report_positional_toi_and_short_out_alias(monkeypatch, tmp_path: Pa
             "html": None,
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._resolve_report_candidate_inputs", _fake_resolve_candidate_inputs)
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
+    monkeypatch.setattr("tess_vetter.cli.report_cli._resolve_report_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("tess_vetter.cli.report_cli._execute_report", _ok)
 
     out_path = tmp_path / "report.json"
     runner = CliRunner()
@@ -642,8 +642,8 @@ def test_btv_report_toi_network_resolution_path(monkeypatch, tmp_path: Path) -> 
             "html": None,
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_seed.resolve_toi_to_tic_ephemeris_depth", _resolve_toi)
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
+    monkeypatch.setattr("tess_vetter.cli.report_seed.resolve_toi_to_tic_ephemeris_depth", _resolve_toi)
+    monkeypatch.setattr("tess_vetter.cli.report_cli._execute_report", _ok)
 
     out_path = tmp_path / "report.json"
     runner = CliRunner()
@@ -684,7 +684,7 @@ def test_btv_report_manual_ephemeris_with_toi_without_network_ok_still_runs(
             "html": None,
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
+    monkeypatch.setattr("tess_vetter.cli.report_cli._execute_report", _ok)
 
     out_path = tmp_path / "report_manual_toi.json"
     runner = CliRunner()
@@ -730,7 +730,7 @@ def test_btv_report_file_seeds_inputs_and_cli_overrides_take_precedence(monkeypa
             "html": None,
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _ok)
+    monkeypatch.setattr("tess_vetter.cli.report_cli._execute_report", _ok)
 
     report_file = tmp_path / "seed_report.json"
     report_file.write_text(
@@ -817,7 +817,7 @@ def test_btv_vet_resume_skips_when_progress_is_complete(monkeypatch, tmp_path: P
         calls.append("called")
         return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     candidate_key = make_candidate_key(123, 10.5, 2000.2)
     out_path = tmp_path / "vet.json"
@@ -884,7 +884,7 @@ def test_btv_report_resume_skips_when_progress_is_complete(monkeypatch, tmp_path
         calls.append("called")
         return {"report_json": {"schema_version": "1.0.0"}, "html": None}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_cli._execute_report", _fake_execute_report)
+    monkeypatch.setattr("tess_vetter.cli.report_cli._execute_report", _fake_execute_report)
 
     candidate_key = make_candidate_key(123, 10.5, 2000.2)
     out_path = tmp_path / "report.json"
@@ -951,7 +951,7 @@ def test_btv_vet_pipeline_config_flags_forwarded(monkeypatch, tmp_path: Path) ->
         captured.update(kwargs)
         return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     out_path = tmp_path / "vet.json"
     runner = CliRunner()
@@ -996,7 +996,7 @@ def test_btv_vet_stellar_flags_forwarded_and_emitted(monkeypatch, tmp_path: Path
         captured.update(kwargs)
         return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     out_path = tmp_path / "vet.json"
     runner = CliRunner()
@@ -1040,7 +1040,7 @@ def test_btv_vet_stellar_file_and_explicit_precedence(monkeypatch, tmp_path: Pat
         captured.update(kwargs)
         return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     stellar_path = tmp_path / "stellar.json"
     stellar_path.write_text(
@@ -1107,7 +1107,7 @@ def test_btv_vet_require_coordinates_timeout_maps_to_exit_5(monkeypatch) -> None
             message="coord lookup timeout",
         )
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.lookup_tic_coordinates", _timeout_lookup)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.lookup_tic_coordinates", _timeout_lookup)
     runner = CliRunner()
     result = runner.invoke(
         enrich_cli.cli,
@@ -1135,7 +1135,7 @@ def test_btv_vet_detrend_defaults_are_backward_compatible(monkeypatch, tmp_path:
         captured.update(kwargs)
         return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     out_path = tmp_path / "vet.json"
     runner = CliRunner()
@@ -1170,7 +1170,7 @@ def test_btv_vet_detrend_method_and_params_forwarded(monkeypatch, tmp_path: Path
         captured.update(kwargs)
         return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     out_path = tmp_path / "vet.json"
     runner = CliRunner()
@@ -1267,8 +1267,8 @@ def test_btv_vet_emits_detrend_provenance_when_enabled(monkeypatch, tmp_path: Pa
         captured["flux"] = np.asarray(kwargs["lc"].flux, dtype=np.float64)
         return VettingBundleResult(results=[], warnings=[], provenance={}, inputs_summary={})
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
 
     out_path = tmp_path / "vet.json"
     runner = CliRunner()
@@ -1346,9 +1346,9 @@ def test_btv_vet_detrend_depth_unavailable_sets_note(monkeypatch, tmp_path: Path
     def _fake_vet_candidate(**_kwargs):
         return VettingBundleResult(results=[], warnings=[], provenance={})
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.measure_transit_depth", lambda *_a, **_k: (float("nan"), 0.0))
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.measure_transit_depth", lambda *_a, **_k: (float("nan"), 0.0))
 
     out_path = tmp_path / "vet_detrend_unavailable.json"
     runner = CliRunner()
@@ -1397,8 +1397,8 @@ def test_btv_vet_warns_when_stellar_missing_with_network(monkeypatch, tmp_path: 
     def _fake_vet_candidate(**_kwargs):
         return VettingBundleResult(results=[], warnings=[], provenance={})
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
 
     out_path = tmp_path / "vet_missing_stellar_warning.json"
     runner = CliRunner()
@@ -1436,7 +1436,7 @@ def test_btv_vet_tpf_flags_forwarded(monkeypatch, tmp_path: Path) -> None:
         captured.update(kwargs)
         return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
     out_path = tmp_path / "vet.json"
     runner = CliRunner()
     result = runner.invoke(
@@ -1475,7 +1475,7 @@ def test_btv_vet_require_tpf_forces_fetch(monkeypatch, tmp_path: Path) -> None:
         captured.update(kwargs)
         return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
     out_path = tmp_path / "vet.json"
     runner = CliRunner()
     result = runner.invoke(
@@ -1505,7 +1505,7 @@ def test_btv_vet_require_tpf_missing_maps_to_exit_4(monkeypatch) -> None:
     def _missing(**_kwargs):
         raise LightCurveNotFoundError("TPF unavailable")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _missing)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _missing)
     runner = CliRunner()
     result = runner.invoke(
         enrich_cli.cli,
@@ -1583,8 +1583,8 @@ def test_btv_vet_default_emits_lc_summary_and_meta_enabled_computed(monkeypatch,
             inputs_summary={},
         )
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
 
     out_path = tmp_path / "vet_lc_summary_default.json"
     runner = CliRunner()
@@ -1637,8 +1637,8 @@ def test_btv_vet_no_lc_summary_sets_disabled_reason_code(monkeypatch, tmp_path: 
     def _fake_vet_candidate(**_kwargs):
         return VettingBundleResult(results=[], warnings=[], provenance={}, inputs_summary={})
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
 
     out_path = tmp_path / "vet_lc_summary_disabled.json"
     runner = CliRunner()
@@ -1694,9 +1694,9 @@ def test_btv_vet_lc_summary_compute_failure_degrades_with_stable_reason(monkeypa
     def _boom(*_args, **_kwargs):
         raise RuntimeError("report seam failed")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.build_report_with_vet_artifact", _boom)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.vet_candidate", _fake_vet_candidate)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.build_report_with_vet_artifact", _boom)
 
     out_path = tmp_path / "vet_lc_summary_compute_failed.json"
     runner = CliRunner()
@@ -1750,7 +1750,7 @@ def test_btv_vet_summary_surfaces_v04_instability_concerns(monkeypatch, tmp_path
             "inputs_summary": {},
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
     out_path = tmp_path / "vet_v04_summary.json"
     runner = CliRunner()
     result = runner.invoke(
@@ -1794,7 +1794,7 @@ def test_btv_vet_summary_surfaces_v21_missing_sector_measurements_reason(
             "inputs_summary": {},
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
     out_path = tmp_path / "vet_v21_skip_reason.json"
     runner = CliRunner()
     result = runner.invoke(
@@ -1854,7 +1854,7 @@ def test_btv_vet_sector_measurements_forwarded_and_emitted(monkeypatch, tmp_path
             "inputs_summary": {},
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     sector_path = tmp_path / "sector_measurements.json"
     sector_path.write_text(
@@ -1916,7 +1916,7 @@ def test_btv_vet_splits_plot_data_to_sidecar_for_file_output(monkeypatch, tmp_pa
             "inputs_summary": {},
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     out_path = tmp_path / "vet.json"
     runner = CliRunner()
@@ -1968,8 +1968,8 @@ def test_btv_vet_stdout_keeps_plot_data_inline(monkeypatch) -> None:
             "inputs_summary": {},
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.emit_progress", lambda *args, **kwargs: None)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.emit_progress", lambda *args, **kwargs: None)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -2034,8 +2034,8 @@ def test_btv_vet_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: Path)
     def _fake_execute_vet(**_kwargs):
         return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     out_path = tmp_path / "vet_positional.json"
     runner = CliRunner()
@@ -2065,7 +2065,7 @@ def test_resolve_candidate_inputs_skips_toi_lookup_when_manual_candidate_inputs_
     def _should_not_resolve(_toi: str):
         raise AssertionError("TOI lookup should not run when required candidate inputs are already provided")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli.resolve_toi_to_tic_ephemeris_depth", _should_not_resolve)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli.resolve_toi_to_tic_ephemeris_depth", _should_not_resolve)
 
     (
         tic_id,
@@ -2109,9 +2109,9 @@ def test_btv_vet_attaches_known_planet_match(monkeypatch, tmp_path: Path) -> Non
                 "matched_planet": {"name": "TOI-411 c", "period": 9.57307},
             }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.vet_cli.match_known_planet_ephemeris",
+        "tess_vetter.cli.vet_cli.match_known_planet_ephemeris",
         lambda **_kwargs: _FakeMatch(),
     )
 
@@ -2152,8 +2152,8 @@ def test_btv_vet_report_file_seeds_inputs_and_sectors(monkeypatch, tmp_path: Pat
         captured.update(kwargs)
         return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._resolve_candidate_inputs", _should_not_resolve)
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._resolve_candidate_inputs", _should_not_resolve)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     report_path = tmp_path / "report.json"
     report_path.write_text(
@@ -2207,7 +2207,7 @@ def test_btv_vet_emits_canonical_verdict_and_result_mirror(monkeypatch, tmp_path
     def _fake_execute_vet(**_kwargs):
         return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     out_path = tmp_path / "vet_verdict.json"
     runner = CliRunner()
@@ -2266,8 +2266,8 @@ def test_btv_vet_auto_measure_sectors_success_wires_v21(monkeypatch, tmp_path: P
             "inputs_summary": {},
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.measure_sectors_cli._execute_measure_sectors", _fake_measure)
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.measure_sectors_cli._execute_measure_sectors", _fake_measure)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     out_path = tmp_path / "vet_auto_measure.json"
     runner = CliRunner()
@@ -2306,8 +2306,8 @@ def test_btv_vet_auto_measure_sectors_failure_warns_and_continues(monkeypatch, t
         captured.update(kwargs)
         return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.measure_sectors_cli._execute_measure_sectors", _boom)
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.measure_sectors_cli._execute_measure_sectors", _boom)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     out_path = tmp_path / "vet_auto_measure_warn.json"
     runner = CliRunner()
@@ -2340,7 +2340,7 @@ def test_btv_vet_auto_measure_sectors_failure_respects_fail_fast(monkeypatch) ->
     def _boom(**_kwargs):
         raise RuntimeError("measurement boom")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.measure_sectors_cli._execute_measure_sectors", _boom)
+    monkeypatch.setattr("tess_vetter.cli.measure_sectors_cli._execute_measure_sectors", _boom)
 
     runner = CliRunner()
     result = runner.invoke(

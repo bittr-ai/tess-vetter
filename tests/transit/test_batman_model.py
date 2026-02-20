@@ -30,7 +30,7 @@ class TestQuickEstimate:
 
     def test_estimates_rp_rs_from_depth(self) -> None:
         """Correctly estimates Rp/Rs from transit depth."""
-        from bittr_tess_vetter.transit import quick_estimate
+        from tess_vetter.transit import quick_estimate
 
         # 1% depth = 10000 ppm -> Rp/Rs = 0.1
         result = quick_estimate(
@@ -44,7 +44,7 @@ class TestQuickEstimate:
 
     def test_estimates_a_rs_from_period(self) -> None:
         """Estimates a/Rs from period and stellar density."""
-        from bittr_tess_vetter.transit import quick_estimate
+        from tess_vetter.transit import quick_estimate
 
         result = quick_estimate(
             depth_ppm=1000,
@@ -59,7 +59,7 @@ class TestQuickEstimate:
 
     def test_returns_required_keys(self) -> None:
         """Returns all required initial guess keys."""
-        from bittr_tess_vetter.transit import quick_estimate
+        from tess_vetter.transit import quick_estimate
 
         result = quick_estimate(
             depth_ppm=5000,
@@ -74,7 +74,7 @@ class TestQuickEstimate:
 
     def test_handles_small_depth(self) -> None:
         """Handles small transit depths (Earth-like)."""
-        from bittr_tess_vetter.transit import quick_estimate
+        from tess_vetter.transit import quick_estimate
 
         # 100 ppm depth (Earth-like)
         result = quick_estimate(
@@ -88,7 +88,7 @@ class TestQuickEstimate:
 
     def test_initial_inclination_is_transiting(self) -> None:
         """Initial guess avoids a non-transiting (flat-model) geometry."""
-        from bittr_tess_vetter.transit import quick_estimate
+        from tess_vetter.transit import quick_estimate
 
         result = quick_estimate(
             depth_ppm=1000,
@@ -108,7 +108,7 @@ class TestDetectExposureTime:
 
     def test_detects_2min_cadence(self) -> None:
         """Correctly detects 2-minute cadence."""
-        from bittr_tess_vetter.transit.batman_model import detect_exposure_time
+        from tess_vetter.transit.batman_model import detect_exposure_time
 
         # 2-minute cadence
         time = np.arange(0, 1, 2.0 / 60 / 24)  # 2 min in days
@@ -120,7 +120,7 @@ class TestDetectExposureTime:
 
     def test_detects_20sec_cadence(self) -> None:
         """Correctly detects 20-second cadence."""
-        from bittr_tess_vetter.transit.batman_model import detect_exposure_time
+        from tess_vetter.transit.batman_model import detect_exposure_time
 
         # 20-second cadence
         time = np.arange(0, 0.5, 20.0 / 60 / 60 / 24)
@@ -131,7 +131,7 @@ class TestDetectExposureTime:
 
     def test_handles_short_array(self) -> None:
         """Returns default for very short arrays."""
-        from bittr_tess_vetter.transit.batman_model import detect_exposure_time
+        from tess_vetter.transit.batman_model import detect_exposure_time
 
         time = np.array([0.0])
         exp_time = detect_exposure_time(time)
@@ -146,7 +146,7 @@ class TestComputeBatmanModel:
 
     def test_generates_normalized_model(self) -> None:
         """Model is normalized to 1.0 out of transit."""
-        from bittr_tess_vetter.transit import compute_batman_model
+        from tess_vetter.transit import compute_batman_model
 
         time = np.linspace(-0.1, 0.1, 1000) + 100.0  # Around t0=100
         model = compute_batman_model(
@@ -165,7 +165,7 @@ class TestComputeBatmanModel:
 
     def test_transit_depth_correct(self) -> None:
         """Transit depth approximately matches (Rp/Rs)^2."""
-        from bittr_tess_vetter.transit import compute_batman_model
+        from tess_vetter.transit import compute_batman_model
 
         rp_rs = 0.1  # 1% depth expected
         time = np.linspace(-0.05, 0.05, 500) + 100.0
@@ -187,7 +187,7 @@ class TestComputeBatmanModel:
 
     def test_limb_darkening_affects_shape(self) -> None:
         """Limb darkening changes transit shape."""
-        from bittr_tess_vetter.transit import compute_batman_model
+        from tess_vetter.transit import compute_batman_model
 
         time = np.linspace(-0.05, 0.05, 500) + 100.0
 
@@ -225,7 +225,7 @@ class TestComputeDerivedParameters:
 
     def test_transit_depth_from_rp_rs(self) -> None:
         """Correctly computes transit depth in ppm."""
-        from bittr_tess_vetter.transit import compute_derived_parameters
+        from tess_vetter.transit import compute_derived_parameters
 
         result = compute_derived_parameters(
             rp_rs=0.1,  # 1% depth
@@ -239,7 +239,7 @@ class TestComputeDerivedParameters:
 
     def test_impact_parameter_calculation(self) -> None:
         """Correctly computes impact parameter."""
-        from bittr_tess_vetter.transit import compute_derived_parameters
+        from tess_vetter.transit import compute_derived_parameters
 
         # inc=90 -> b=0 (central transit)
         result_central = compute_derived_parameters(
@@ -262,7 +262,7 @@ class TestComputeDerivedParameters:
 
     def test_stellar_density_calculation(self) -> None:
         """Correctly computes stellar density."""
-        from bittr_tess_vetter.transit import compute_derived_parameters
+        from tess_vetter.transit import compute_derived_parameters
 
         # For solar-like star: a/Rs ~ 14.7 for P=5d
         result = compute_derived_parameters(
@@ -299,7 +299,7 @@ class TestFitTransitModelOptimize:
 
         # Generate transit model
         try:
-            from bittr_tess_vetter.transit import compute_batman_model
+            from tess_vetter.transit import compute_batman_model
 
             flux = compute_batman_model(time, period, t0, rp_rs, a_rs, inc, u)
         except ImportError:
@@ -327,7 +327,7 @@ class TestFitTransitModelOptimize:
     ) -> None:
         """Recovers Rp/Rs to within 10%."""
         try:
-            from bittr_tess_vetter.transit import fit_transit_model
+            from tess_vetter.transit import fit_transit_model
         except ImportError:
             pytest.skip("batman-package not installed")
 
@@ -365,7 +365,7 @@ class TestFitTransitModelOptimize:
     ) -> None:
         """Returns complete TransitFitResult."""
         try:
-            from bittr_tess_vetter.transit import fit_transit_model
+            from tess_vetter.transit import fit_transit_model
         except ImportError:
             pytest.skip("batman-package not installed")
 
@@ -423,7 +423,7 @@ class TestFitTransitModelMCMC:
         time = np.linspace(99.5, 100.5, 1000, dtype=np.float64)
 
         try:
-            from bittr_tess_vetter.transit import compute_batman_model
+            from tess_vetter.transit import compute_batman_model
 
             flux = compute_batman_model(time, period, t0, rp_rs, a_rs, inc, u)
         except ImportError:
@@ -450,7 +450,7 @@ class TestFitTransitModelMCMC:
     ) -> None:
         """MCMC provides meaningful uncertainties."""
         try:
-            from bittr_tess_vetter.transit import fit_transit_model
+            from tess_vetter.transit import fit_transit_model
         except ImportError:
             pytest.skip("batman-package and emcee not installed")
         try:
@@ -497,7 +497,7 @@ class TestFitTransitModelMCMC:
     ) -> None:
         """MCMC provides convergence diagnostics."""
         try:
-            from bittr_tess_vetter.transit import fit_transit_model
+            from tess_vetter.transit import fit_transit_model
         except ImportError:
             pytest.skip("batman-package, emcee, and arviz not installed")
         try:
@@ -545,7 +545,7 @@ class TestGetLDCoefficients:
 
     def test_returns_coefficients_and_errors(self) -> None:
         """Returns both coefficients and uncertainties."""
-        from bittr_tess_vetter.transit import get_ld_coefficients
+        from tess_vetter.transit import get_ld_coefficients
 
         (u1, u2), (u1_err, u2_err) = get_ld_coefficients(teff=5800, logg=4.44, feh=0.0)
 
@@ -557,7 +557,7 @@ class TestGetLDCoefficients:
 
     def test_solar_values_reasonable(self) -> None:
         """Solar-like star has reasonable LD coefficients."""
-        from bittr_tess_vetter.transit import get_ld_coefficients
+        from tess_vetter.transit import get_ld_coefficients
 
         (u1, u2), _ = get_ld_coefficients(teff=5800, logg=4.44, feh=0.0)
 
@@ -571,7 +571,7 @@ class TestTransitFitResultSerialization:
 
     def test_to_dict_returns_valid_structure(self) -> None:
         """to_dict returns proper dictionary structure."""
-        from bittr_tess_vetter.transit import ParameterEstimate, TransitFitResult
+        from tess_vetter.transit import ParameterEstimate, TransitFitResult
 
         result = TransitFitResult(
             fit_method="optimize",

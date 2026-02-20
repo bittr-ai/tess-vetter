@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from bittr_tess_vetter.report._data import _canonical_sha256
+from tess_vetter.report._data import _canonical_sha256
 
 
 FIXTURE_PATH = Path(__file__).resolve().parents[1] / "fixtures" / "report" / "canonical_hash_payload.json"

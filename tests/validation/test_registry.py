@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from bittr_tess_vetter.validation.registry import (
+from tess_vetter.validation.registry import (
     CheckConfig,
     CheckInputs,
     CheckRegistry,
@@ -12,7 +12,7 @@ from bittr_tess_vetter.validation.registry import (
     CheckTier,
     VettingCheck,
 )
-from bittr_tess_vetter.validation.result_schema import CheckResult, ok_result
+from tess_vetter.validation.result_schema import CheckResult, ok_result
 
 
 class MockCheck:

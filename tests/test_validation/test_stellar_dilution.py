@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from bittr_tess_vetter.api.catalogs import (
+from tess_vetter.api.catalogs import (
     compute_dilution_factor as compute_target_flux_fraction_crossmatch,
 )
-from bittr_tess_vetter.validation.stellar_dilution import (
+from tess_vetter.validation.stellar_dilution import (
     HostHypothesis,
     compute_depth_correction_factor_from_flux_fraction,
     compute_dilution_scenarios,

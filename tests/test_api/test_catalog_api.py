@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.api.catalog import vet_catalog
-from bittr_tess_vetter.api.types import Candidate, CheckResult, Ephemeris
+from tess_vetter.api.catalog import vet_catalog
+from tess_vetter.api.types import Candidate, CheckResult, Ephemeris
 
 
 def test_vet_catalog_network_disabled_returns_skipped() -> None:

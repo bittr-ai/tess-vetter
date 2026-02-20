@@ -16,7 +16,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.compute.model_competition import (
+from tess_vetter.compute.model_competition import (
     KNOWN_ARTIFACT_PERIODS,
     ArtifactPrior,
     ModelCompetitionResult,

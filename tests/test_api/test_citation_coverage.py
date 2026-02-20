@@ -4,22 +4,22 @@ from collections.abc import Callable
 
 import pytest
 
-from bittr_tess_vetter.api.catalog import vet_catalog
-from bittr_tess_vetter.api.exovetter import vet_exovetter
-from bittr_tess_vetter.api.lc_only import vet_lc_only
-from bittr_tess_vetter.api.pixel import vet_pixel
-from bittr_tess_vetter.api.pixel_localize import (
+from tess_vetter.api.catalog import vet_catalog
+from tess_vetter.api.exovetter import vet_exovetter
+from tess_vetter.api.lc_only import vet_lc_only
+from tess_vetter.api.pixel import vet_pixel
+from tess_vetter.api.pixel_localize import (
     localize_transit_host_multi_sector,
     localize_transit_host_single_sector,
     localize_transit_host_single_sector_with_baseline_check,
 )
-from bittr_tess_vetter.api.recovery import prepare_recovery_inputs, stack_transits
-from bittr_tess_vetter.api.references import get_function_references
-from bittr_tess_vetter.api.ttv_track_search import (
+from tess_vetter.api.recovery import prepare_recovery_inputs, stack_transits
+from tess_vetter.api.references import get_function_references
+from tess_vetter.api.ttv_track_search import (
     run_ttv_track_search,
     run_ttv_track_search_for_candidate,
 )
-from bittr_tess_vetter.api.vet import vet_many
+from tess_vetter.api.vet import vet_many
 
 
 def _ref_ids(refs: list[object]) -> set[str]:

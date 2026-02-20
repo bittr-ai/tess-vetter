@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.api.enrichment import candidate_key_from_row, validate_enriched_row
+from tess_vetter.api.enrichment import candidate_key_from_row, validate_enriched_row
 
 
 def test_candidate_key_from_row() -> None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.activity.rotation_context import build_rotation_context, estimate_v_eq_kms
+from tess_vetter.activity.rotation_context import build_rotation_context, estimate_v_eq_kms
 
 
 def test_estimate_v_eq_kms_returns_none_for_missing_inputs() -> None:

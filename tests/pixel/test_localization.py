@@ -1,12 +1,12 @@
-"""Tests for bittr_tess_vetter.pixel.localization (proxy localization diagnostics)."""
+"""Tests for tess_vetter.pixel.localization (proxy localization diagnostics)."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.pixel.aperture import TransitParams
-from bittr_tess_vetter.pixel.localization import compute_localization_diagnostics
+from tess_vetter.pixel.aperture import TransitParams
+from tess_vetter.pixel.localization import compute_localization_diagnostics
 
 
 def _make_simple_tpf(n_times: int = 200, n_rows: int = 11, n_cols: int = 11) -> np.ndarray:

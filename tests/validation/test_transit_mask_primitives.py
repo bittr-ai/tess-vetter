@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.validation.base import (
+from tess_vetter.validation.base import (
     count_transits,
     get_in_transit_mask,
     get_odd_even_transit_indices,

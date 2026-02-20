@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.api.lc_only import (
+from tess_vetter.api.lc_only import (
     data_gaps,
     odd_even_depth,
     secondary_eclipse,
@@ -10,8 +10,8 @@ from bittr_tess_vetter.api.lc_only import (
     v_shape,
     vet_lc_only,
 )
-from bittr_tess_vetter.api.transit_primitives import odd_even_result
-from bittr_tess_vetter.api.types import CheckResult, Ephemeris, LightCurve, VettingBundleResult
+from tess_vetter.api.transit_primitives import odd_even_result
+from tess_vetter.api.types import CheckResult, Ephemeris, LightCurve, VettingBundleResult
 
 
 def _make_box_transit_lc(

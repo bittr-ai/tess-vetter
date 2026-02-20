@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from bittr_tess_vetter.api.types import ok_result
-from bittr_tess_vetter.report import ReportData, TransitTimingPlotData
+from tess_vetter.api.types import ok_result
+from tess_vetter.report import ReportData, TransitTimingPlotData
 
 
 def test_timing_summary_deterministic_physics_invariants() -> None:

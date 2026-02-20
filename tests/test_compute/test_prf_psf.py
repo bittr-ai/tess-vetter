@@ -14,13 +14,13 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from bittr_tess_vetter.compute.prf_psf import (
+from tess_vetter.compute.prf_psf import (
     AVAILABLE_BACKENDS,
     ParametricPSF,
     PRFModel,
     get_prf_model,
 )
-from bittr_tess_vetter.compute.prf_schemas import (
+from tess_vetter.compute.prf_schemas import (
     BackgroundParams,
     PRFFitResult,
     PRFParams,

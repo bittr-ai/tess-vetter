@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.recovery import prepare_recovery_inputs, recover_transit
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.api.recovery import prepare_recovery_inputs, recover_transit
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.domain.lightcurve import LightCurveData
 
 
 def _make_sector(

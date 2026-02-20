@@ -6,8 +6,8 @@ from typing import Any
 
 from click.testing import CliRunner
 
-from bittr_tess_vetter.api.types import LightCurve
-from bittr_tess_vetter.cli.rv_feasibility_cli import rv_feasibility_command
+from tess_vetter.api.types import LightCurve
+from tess_vetter.cli.rv_feasibility_cli import rv_feasibility_command
 
 
 def test_btv_rv_feasibility_success_payload_contract(monkeypatch, tmp_path: Path) -> None:
@@ -37,15 +37,15 @@ def test_btv_rv_feasibility_success_payload_contract(monkeypatch, tmp_path: Path
         return _FakeActivityResult()
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.rv_feasibility_cli._download_and_stitch_lightcurve",
+        "tess_vetter.cli.rv_feasibility_cli._download_and_stitch_lightcurve",
         _fake_download_and_stitch_lightcurve,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.rv_feasibility_cli.characterize_activity",
+        "tess_vetter.cli.rv_feasibility_cli.characterize_activity",
         _fake_characterize_activity,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.rv_feasibility_cli.load_auto_stellar_with_fallback",
+        "tess_vetter.cli.rv_feasibility_cli.load_auto_stellar_with_fallback",
         lambda **_kwargs: ({"tmag": 9.2, "radius": 1.1, "mass": 1.0}, {"status": "ok"}),
     )
 
@@ -102,11 +102,11 @@ def test_btv_rv_feasibility_accepts_positional_toi_and_short_o(monkeypatch, tmp_
         return 123, {"source": "toi", "inputs": {"toi": kwargs.get("toi")}}
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.rv_feasibility_cli._resolve_tic_and_inputs",
+        "tess_vetter.cli.rv_feasibility_cli._resolve_tic_and_inputs",
         _fake_resolve_tic_and_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.rv_feasibility_cli._download_and_stitch_lightcurve",
+        "tess_vetter.cli.rv_feasibility_cli._download_and_stitch_lightcurve",
         lambda **_kwargs: (
             LightCurve(time=[1.0, 2.0], flux=[1.0, 1.0], flux_err=[0.001, 0.001]),
             [14],
@@ -114,11 +114,11 @@ def test_btv_rv_feasibility_accepts_positional_toi_and_short_o(monkeypatch, tmp_
         ),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.rv_feasibility_cli.characterize_activity",
+        "tess_vetter.cli.rv_feasibility_cli.characterize_activity",
         lambda **_kwargs: type("A", (), {"to_dict": lambda self: {"rotation_period": 5.0}})(),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.rv_feasibility_cli.load_auto_stellar_with_fallback",
+        "tess_vetter.cli.rv_feasibility_cli.load_auto_stellar_with_fallback",
         lambda **_kwargs: ({"tmag": 9.9}, {"status": "ok"}),
     )
 
@@ -169,11 +169,11 @@ def test_btv_rv_feasibility_report_file_inputs_override_toi(monkeypatch, tmp_pat
         )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.rv_feasibility_cli._download_and_stitch_lightcurve",
+        "tess_vetter.cli.rv_feasibility_cli._download_and_stitch_lightcurve",
         _fake_download_and_stitch_lightcurve,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.rv_feasibility_cli.characterize_activity",
+        "tess_vetter.cli.rv_feasibility_cli.characterize_activity",
         lambda **_kwargs: type(
             "A",
             (),
@@ -181,7 +181,7 @@ def test_btv_rv_feasibility_report_file_inputs_override_toi(monkeypatch, tmp_pat
         )(),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.rv_feasibility_cli._resolve_tic_and_inputs",
+        "tess_vetter.cli.rv_feasibility_cli._resolve_tic_and_inputs",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve TOI with report file")),
     )
 
@@ -211,7 +211,7 @@ def test_btv_rv_feasibility_report_file_inputs_override_toi(monkeypatch, tmp_pat
 
 def test_btv_rv_feasibility_hard_line_broadening_downgrades_verdict(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.rv_feasibility_cli._download_and_stitch_lightcurve",
+        "tess_vetter.cli.rv_feasibility_cli._download_and_stitch_lightcurve",
         lambda **_kwargs: (
             LightCurve(time=[1.0, 2.0, 3.0], flux=[1.0, 1.0, 1.0], flux_err=[0.001, 0.001, 0.001]),
             [14],
@@ -219,7 +219,7 @@ def test_btv_rv_feasibility_hard_line_broadening_downgrades_verdict(monkeypatch,
         ),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.rv_feasibility_cli.characterize_activity",
+        "tess_vetter.cli.rv_feasibility_cli.characterize_activity",
         lambda **_kwargs: type(
             "A",
             (),
@@ -233,7 +233,7 @@ def test_btv_rv_feasibility_hard_line_broadening_downgrades_verdict(monkeypatch,
         )(),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.rv_feasibility_cli.load_auto_stellar_with_fallback",
+        "tess_vetter.cli.rv_feasibility_cli.load_auto_stellar_with_fallback",
         lambda **_kwargs: ({"tmag": 8.2, "radius": 1.6}, {"status": "ok"}),
     )
 

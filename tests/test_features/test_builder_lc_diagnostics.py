@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.features import FeatureConfig
-from bittr_tess_vetter.features.builder import build_features
+from tess_vetter.features import FeatureConfig
+from tess_vetter.features.builder import build_features
 
 
 def test_builder_exports_lc_diagnostics_and_check_scalars() -> None:

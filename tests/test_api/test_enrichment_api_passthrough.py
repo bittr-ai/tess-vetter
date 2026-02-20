@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.api import enrichment as enrichment_api
-from bittr_tess_vetter.features import FeatureConfig
-from bittr_tess_vetter.pipeline import (
+from tess_vetter.api import enrichment as enrichment_api
+from tess_vetter.features import FeatureConfig
+from tess_vetter.pipeline import (
     EnrichmentSummary as PipelineEnrichmentSummary,
 )
-from bittr_tess_vetter.pipeline import (
+from tess_vetter.pipeline import (
     enrich_candidate as pipeline_enrich_candidate,
 )
-from bittr_tess_vetter.pipeline import (
+from tess_vetter.pipeline import (
     enrich_worklist as pipeline_enrich_worklist,
 )
-from bittr_tess_vetter.pipeline import (
+from tess_vetter.pipeline import (
     make_candidate_key as pipeline_make_candidate_key,
 )
 

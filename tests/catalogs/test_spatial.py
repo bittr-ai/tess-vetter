@@ -1,4 +1,4 @@
-"""Tests for bittr_tess_vetter.catalogs.spatial module.
+"""Tests for tess_vetter.catalogs.spatial module.
 
 Comprehensive tests for the SpatialIndex class including:
 - Basic cone search functionality
@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.platform.catalogs.spatial import SpatialIndex
+from tess_vetter.platform.catalogs.spatial import SpatialIndex
 
 # =============================================================================
 # Fixtures

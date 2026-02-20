@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.domain.detection import TransitCandidate
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.features import FeatureConfig
-from bittr_tess_vetter.features.builder import build_features
-from bittr_tess_vetter.validation.exovetter_checks import run_modshift
+from tess_vetter.domain.detection import TransitCandidate
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.features import FeatureConfig
+from tess_vetter.features.builder import build_features
+from tess_vetter.validation.exovetter_checks import run_modshift
 
 
 def _make_synthetic_lc(*, with_secondary: bool) -> LightCurveData:

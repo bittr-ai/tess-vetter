@@ -11,14 +11,14 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-from bittr_tess_vetter.transit import (
+from tess_vetter.transit import (
     TransitTime,
     TTVResult,
     compute_ttv_statistics,
     measure_all_transit_times,
     measure_single_transit,
 )
-from bittr_tess_vetter.transit.timing import measure_all_transit_times_with_diagnostics
+from tess_vetter.transit.timing import measure_all_transit_times_with_diagnostics
 
 
 class TestMeasureSingleTransit:

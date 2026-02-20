@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.data_sources.sector_selection import select_sectors
+from tess_vetter.data_sources.sector_selection import select_sectors
 
 
 def test_select_sectors_default_selects_all() -> None:

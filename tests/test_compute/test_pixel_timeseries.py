@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from bittr_tess_vetter.compute.pixel_timeseries import (
+from tess_vetter.compute.pixel_timeseries import (
     DEFAULT_MARGIN_THRESHOLD,
     PixelTimeseriesFit,
     TimeseriesEvidence,

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.api.ephemeris_reliability import compute_reliability_regime_numpy
-from bittr_tess_vetter.api.ephemeris_specificity import SmoothTemplateConfig
+from tess_vetter.api.ephemeris_reliability import compute_reliability_regime_numpy
+from tess_vetter.api.ephemeris_specificity import SmoothTemplateConfig
 
 
 def _inject_box_transit(

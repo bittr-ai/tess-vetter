@@ -7,8 +7,8 @@ from typing import Any
 import numpy as np
 from click.testing import CliRunner
 
-from bittr_tess_vetter.cli.transit_fit_cli import fit_command
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.cli.transit_fit_cli import fit_command
+from tess_vetter.domain.lightcurve import LightCurveData
 
 
 def _make_lc(*, tic_id: int, sector: int, start: float) -> LightCurveData:
@@ -63,9 +63,9 @@ def test_btv_fit_success_contract_payload(monkeypatch, tmp_path: Path) -> None:
         seen["fit_kwargs"] = kwargs
         return _FakeFitResult()
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.transit_fit_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.transit_fit_cli.stitch_lightcurve_data", _fake_stitch)
-    monkeypatch.setattr("bittr_tess_vetter.cli.transit_fit_cli.api.transit_fit.fit_transit", _fake_fit_transit)
+    monkeypatch.setattr("tess_vetter.cli.transit_fit_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.transit_fit_cli.stitch_lightcurve_data", _fake_stitch)
+    monkeypatch.setattr("tess_vetter.cli.transit_fit_cli.api.transit_fit.fit_transit", _fake_fit_transit)
 
     out_path = tmp_path / "fit.json"
     runner = CliRunner()
@@ -128,9 +128,9 @@ def test_btv_fit_api_error_status_exits_zero_and_surfaces_error(monkeypatch, tmp
                 ),
             }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.transit_fit_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.transit_fit_cli.MASTClient", _FakeMASTClient)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.transit_fit_cli.api.transit_fit.fit_transit",
+        "tess_vetter.cli.transit_fit_cli.api.transit_fit.fit_transit",
         lambda **_kwargs: _FakeFitResult(),
     )
 

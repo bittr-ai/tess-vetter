@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
-from bittr_tess_vetter.compute.primitives import (
+from tess_vetter.compute.primitives import (
     AstroPrimitives,
     astro,
     box_model,
@@ -587,7 +587,7 @@ class TestAstroInstance:
 
     def test_astro_instance_exists(self):
         """Module-level astro instance should exist."""
-        from bittr_tess_vetter.compute.primitives import astro
+        from tess_vetter.compute.primitives import astro
 
         assert astro is not None
 

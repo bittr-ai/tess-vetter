@@ -1,4 +1,4 @@
-"""Tests for bittr_tess_vetter.catalogs.crossmatch module.
+"""Tests for tess_vetter.catalogs.crossmatch module.
 
 Comprehensive tests for crossmatch functionality including:
 - KnownObjectMatch, ContaminationRisk, and CrossmatchReport models
@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from bittr_tess_vetter.platform.catalogs.crossmatch import (
+from tess_vetter.platform.catalogs.crossmatch import (
     KNOWN_OBJECT_TYPES,
     CatalogData,
     CatalogEntry,
@@ -1165,8 +1165,8 @@ class TestModuleImports:
     """Tests for module imports and exports."""
 
     def test_import_from_crossmatch_module(self) -> None:
-        """Can import from bittr_tess_vetter.platform.catalogs.crossmatch module."""
-        from bittr_tess_vetter.platform.catalogs.crossmatch import (
+        """Can import from tess_vetter.platform.catalogs.crossmatch module."""
+        from tess_vetter.platform.catalogs.crossmatch import (
             CrossmatchReport,
             crossmatch,
         )
@@ -1175,8 +1175,8 @@ class TestModuleImports:
         assert crossmatch is not None
 
     def test_import_from_catalogs_package(self) -> None:
-        """Can import crossmatch from bittr_tess_vetter.platform.catalogs package."""
-        from bittr_tess_vetter.platform.catalogs import (
+        """Can import crossmatch from tess_vetter.platform.catalogs package."""
+        from tess_vetter.platform.catalogs import (
             CrossmatchReport,
             crossmatch,
         )

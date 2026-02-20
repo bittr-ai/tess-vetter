@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.validation.lc_checks import check_depth_stability
-from bittr_tess_vetter.validation.lc_false_alarm_checks import (
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.validation.lc_checks import check_depth_stability
+from tess_vetter.validation.lc_false_alarm_checks import (
     check_data_gaps,
     check_transit_asymmetry,
 )

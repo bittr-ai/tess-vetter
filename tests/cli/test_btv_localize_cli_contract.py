@@ -7,10 +7,10 @@ from typing import Any
 import numpy as np
 from click.testing import CliRunner
 
-from bittr_tess_vetter.cli.localize_cli import localize_command
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.platform.catalogs.toi_resolution import LookupStatus
-from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
+from tess_vetter.cli.localize_cli import localize_command
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.platform.catalogs.toi_resolution import LookupStatus
+from tess_vetter.platform.io.mast_client import LightCurveNotFoundError
 
 
 def _make_lc_data(*, tic_id: int, sector: int) -> LightCurveData:
@@ -62,13 +62,13 @@ def test_btv_localize_success_writes_contract_json(monkeypatch, tmp_path: Path) 
             return {"verdict": "ON_TARGET", "bootstrap_seed": 17}
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.localize_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.localize_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.localize_cli._select_tpf_sectors", lambda **_kwargs: [14])
+    monkeypatch.setattr("tess_vetter.cli.localize_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.localize_cli._select_tpf_sectors", lambda **_kwargs: [14])
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_cli.localize_transit_source",
+        "tess_vetter.cli.localize_cli.localize_transit_source",
         lambda **_kwargs: _FakeLocalizationResult(),
     )
 
@@ -118,11 +118,11 @@ def test_btv_localize_data_unavailable_when_tpf_missing_exits_4(monkeypatch) -> 
             raise LightCurveNotFoundError("no tpf")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.localize_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.localize_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.localize_cli._select_tpf_sectors", lambda **_kwargs: [14])
+    monkeypatch.setattr("tess_vetter.cli.localize_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.localize_cli._select_tpf_sectors", lambda **_kwargs: [14])
 
     runner = CliRunner()
     result = runner.invoke(
@@ -199,17 +199,17 @@ def test_btv_localize_tic_lookup_fallback_success(monkeypatch, tmp_path: Path) -
             return {"verdict": "ON_TARGET"}
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.localize_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.localize_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.localize_cli._select_tpf_sectors", lambda **_kwargs: [14])
+    monkeypatch.setattr("tess_vetter.cli.localize_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.localize_cli._select_tpf_sectors", lambda **_kwargs: [14])
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_cli.lookup_tic_coordinates",
+        "tess_vetter.cli.localize_cli.lookup_tic_coordinates",
         lambda tic_id: _LookupResult(),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_cli.localize_transit_source",
+        "tess_vetter.cli.localize_cli.localize_transit_source",
         lambda **_kwargs: _FakeLocalizationResult(),
     )
 
@@ -262,13 +262,13 @@ def test_btv_localize_missing_coordinates_exits_1_when_lookup_unavailable(monkey
             return time, flux, flux_err, _FakeWCS(), aperture, quality
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.localize_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.localize_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.localize_cli._select_tpf_sectors", lambda **_kwargs: [14])
+    monkeypatch.setattr("tess_vetter.cli.localize_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.localize_cli._select_tpf_sectors", lambda **_kwargs: [14])
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_cli.lookup_tic_coordinates",
+        "tess_vetter.cli.localize_cli.lookup_tic_coordinates",
         lambda tic_id: (_ for _ in ()).throw(AssertionError(f"lookup should not run for TIC {tic_id}")),
     )
 
@@ -319,17 +319,17 @@ def test_btv_localize_cli_coordinates_set_coordinate_source_cli(monkeypatch, tmp
             return {"verdict": "ON_TARGET"}
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.localize_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.localize_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.localize_cli._select_tpf_sectors", lambda **_kwargs: [14])
+    monkeypatch.setattr("tess_vetter.cli.localize_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.localize_cli._select_tpf_sectors", lambda **_kwargs: [14])
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_cli.lookup_tic_coordinates",
+        "tess_vetter.cli.localize_cli.lookup_tic_coordinates",
         lambda tic_id: (_ for _ in ()).throw(AssertionError(f"lookup should not run for TIC {tic_id}")),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_cli.localize_transit_source",
+        "tess_vetter.cli.localize_cli.localize_transit_source",
         lambda **_kwargs: _FakeLocalizationResult(),
     )
 
@@ -390,13 +390,13 @@ def test_btv_localize_lookup_data_unavailable_exits_4(monkeypatch) -> None:
         message = "no coordinates"
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.localize_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.localize_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.localize_cli._select_tpf_sectors", lambda **_kwargs: [14])
+    monkeypatch.setattr("tess_vetter.cli.localize_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.localize_cli._select_tpf_sectors", lambda **_kwargs: [14])
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_cli.lookup_tic_coordinates",
+        "tess_vetter.cli.localize_cli.lookup_tic_coordinates",
         lambda tic_id: _LookupResult(),
     )
 

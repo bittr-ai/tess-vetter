@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.validation.ephemeris_sensitivity_sweep import (
+from tess_vetter.validation.ephemeris_sensitivity_sweep import (
     compute_sensitivity_sweep_numpy,
 )
-from bittr_tess_vetter.validation.ephemeris_specificity import SmoothTemplateConfig
+from tess_vetter.validation.ephemeris_specificity import SmoothTemplateConfig
 
 
 def test_sweep_drops_non_finite_points_before_scoring() -> None:
@@ -55,7 +55,7 @@ def test_sweep_marks_variant_failed_when_score_outputs_non_finite(monkeypatch) -
         return float("nan"), 123.0, 45.0
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.validation.ephemeris_sensitivity_sweep._score_variant",
+        "tess_vetter.validation.ephemeris_sensitivity_sweep._score_variant",
         _fake_score_variant,
     )
 

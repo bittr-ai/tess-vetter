@@ -1,7 +1,7 @@
 import numpy as np
 
-from bittr_tess_vetter.api.transit_primitives import odd_even_result
-from bittr_tess_vetter.api.types import Ephemeris, LightCurve
+from tess_vetter.api.transit_primitives import odd_even_result
+from tess_vetter.api.types import Ephemeris, LightCurve
 
 
 def _inject_transits_by_epoch_parity(

@@ -1,4 +1,4 @@
-"""Tests for bittr_tess_vetter.plotting._core module."""
+"""Tests for tess_vetter.plotting._core module."""
 
 from __future__ import annotations
 
@@ -7,14 +7,14 @@ import pytest
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from bittr_tess_vetter.plotting._core import (
+from tess_vetter.plotting._core import (
     compute_subplot_grid,
     ensure_ax,
     extract_plot_data,
     get_sector_color,
     style_context,
 )
-from bittr_tess_vetter.plotting._styles import STYLES
+from tess_vetter.plotting._styles import STYLES
 
 
 class TestEnsureAx:

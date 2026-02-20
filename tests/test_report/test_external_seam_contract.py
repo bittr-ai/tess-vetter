@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import copy
 
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.report import ReportPayloadModel, build_report
-from bittr_tess_vetter.report._custom_view_paths import is_allowed_custom_view_path
-from bittr_tess_vetter.report._data import _canonical_sha256
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.report import ReportPayloadModel, build_report
+from tess_vetter.report._custom_view_paths import is_allowed_custom_view_path
+from tess_vetter.report._data import _canonical_sha256
 
 
 def _make_minimal_lc() -> LightCurve:

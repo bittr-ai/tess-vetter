@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.api import Candidate, Ephemeris, LightCurve, vet_many
+from tess_vetter.api import Candidate, Ephemeris, LightCurve, vet_many
 
 
 def test_vet_many_returns_bundles_and_summary_rows() -> None:

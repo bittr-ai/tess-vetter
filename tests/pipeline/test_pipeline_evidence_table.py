@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from bittr_tess_vetter.pipeline_composition.executor import _write_evidence_table
+from tess_vetter.pipeline_composition.executor import _write_evidence_table
 
 
 def _write_step(path: Path, payload: dict) -> str:

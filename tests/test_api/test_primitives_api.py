@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.api.primitives import PRIMITIVES_CATALOG, list_primitives
+from tess_vetter.api.primitives import PRIMITIVES_CATALOG, list_primitives
 
 
 def test_list_primitives_filters_unimplemented_by_default() -> None:

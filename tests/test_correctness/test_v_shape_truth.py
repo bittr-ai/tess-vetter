@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.validation.lc_checks import VShapeConfig, check_v_shape
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.validation.lc_checks import VShapeConfig, check_v_shape
 
 
 def _trapezoid_flux(

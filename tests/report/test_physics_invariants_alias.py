@@ -3,10 +3,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.types import LightCurve
-from bittr_tess_vetter.report import AliasHarmonicSummaryData, ReportData
-from bittr_tess_vetter.validation.alias_diagnostics import HarmonicScore, classify_alias
-from bittr_tess_vetter.validation.report_bridge import compute_alias_diagnostics
+from tess_vetter.api.types import LightCurve
+from tess_vetter.report import AliasHarmonicSummaryData, ReportData
+from tess_vetter.validation.alias_diagnostics import HarmonicScore, classify_alias
+from tess_vetter.validation.report_bridge import compute_alias_diagnostics
 
 _SCORE_ABS_TOL = 0.01
 _RATIO_ABS_TOL = 0.01

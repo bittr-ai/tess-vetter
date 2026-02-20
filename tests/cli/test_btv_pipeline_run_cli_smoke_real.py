@@ -5,8 +5,8 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from bittr_tess_vetter.cli.enrich_cli import cli
-from bittr_tess_vetter.cli.progress_metadata import (
+from tess_vetter.cli.enrich_cli import cli
+from tess_vetter.cli.progress_metadata import (
     build_single_candidate_progress,
     write_progress_metadata_atomic,
 )

@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.types import (
+from tess_vetter.api.types import (
     CheckResult,
     Ephemeris,
     LightCurve,
@@ -11,7 +11,7 @@ from bittr_tess_vetter.api.types import (
     ok_result,
     skipped_result,
 )
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.domain.lightcurve import LightCurveData
 
 
 class TestEphemeris:
@@ -256,7 +256,7 @@ class TestStellarParams:
 
     def test_stellar_params_is_stellar_parameters(self) -> None:
         """Test that StellarParams is an alias for StellarParameters."""
-        from bittr_tess_vetter.domain.target import StellarParameters
+        from tess_vetter.domain.target import StellarParameters
 
         assert StellarParams is StellarParameters
 

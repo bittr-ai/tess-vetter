@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.api.alias_diagnostics import (
+from tess_vetter.api.alias_diagnostics import (
     classify_alias,
     compute_harmonic_scores,
     compute_secondary_significance,
     detect_phase_shift_events,
     harmonic_power_summary,
 )
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 
 
 def _box_events(time: np.ndarray, *, period: float, t0: float, duration_days: float) -> np.ndarray:

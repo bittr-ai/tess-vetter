@@ -20,14 +20,14 @@ try:
     with open(pyproject_path, "rb") as f:
         pyproject = tomllib.load(f)
     project_meta = pyproject.get("project", {})
-    project = project_meta.get("name", "bittr-tess-vetter")
+    project = project_meta.get("name", "tess-vetter")
     release = project_meta.get("version", "0.0.1")
 except Exception:
-    project = "bittr-tess-vetter"
+    project = "tess-vetter"
     release = "0.0.1"
 
-copyright = "2026, bittr-tess-vetter contributors"
-author = "bittr-tess-vetter contributors"
+copyright = "2026, tess-vetter contributors"
+author = "tess-vetter contributors"
 version = release
 
 # -- General configuration ---------------------------------------------------

@@ -7,10 +7,10 @@ from typing import Any
 import numpy as np
 from click.testing import CliRunner
 
-import bittr_tess_vetter.cli.timing_cli as timing_cli
-from bittr_tess_vetter.cli.timing_cli import timing_command
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.transit.result import TransitTime
+import tess_vetter.cli.timing_cli as timing_cli
+from tess_vetter.cli.timing_cli import timing_command
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.transit.result import TransitTime
 
 
 def _make_lc(*, tic_id: int, sector: int, start: float) -> LightCurveData:
@@ -130,20 +130,20 @@ def test_btv_timing_success_contract_payload(monkeypatch, tmp_path: Path) -> Non
 
         return _Series()
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.timing_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("tess_vetter.cli.timing_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.timing_cli.load_lightcurves_with_sector_policy",
+        "tess_vetter.cli.timing_cli.load_lightcurves_with_sector_policy",
         _fake_load_lightcurves_with_sector_policy,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.timing_cli.stitch_lightcurve_data", _fake_stitch)
+    monkeypatch.setattr("tess_vetter.cli.timing_cli.stitch_lightcurve_data", _fake_stitch)
     monkeypatch.setattr(timing_cli.api.timing, "analyze_ttvs", _fake_analyze_ttvs)
     monkeypatch.setattr(timing_cli.api.timing, "timing_series", _fake_timing_series)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.timing_cli._compute_schedulability_scalar",
+        "tess_vetter.cli.timing_cli._compute_schedulability_scalar",
         lambda **_kwargs: 0.61,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.timing_cli._prealign_candidate",
+        "tess_vetter.cli.timing_cli._prealign_candidate",
         _fake_prealign_candidate,
     )
 
@@ -356,13 +356,13 @@ def test_btv_timing_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: Pa
         seen.update(kwargs)
         return 123, 9.5, 2456.25, 2.75, 640.0, {"source": "toi", "inputs": {"toi": kwargs.get("toi")}}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.timing_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("tess_vetter.cli.timing_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.timing_cli.load_lightcurves_with_sector_policy",
+        "tess_vetter.cli.timing_cli.load_lightcurves_with_sector_policy",
         lambda **kwargs: ([_make_lc(tic_id=kwargs["tic_id"], sector=14, start=2000.0)], "mast_discovery"),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.timing_cli._prealign_candidate",
+        "tess_vetter.cli.timing_cli._prealign_candidate",
         lambda **kwargs: (
             kwargs["candidate"],
             [],
@@ -391,7 +391,7 @@ def test_btv_timing_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: Pa
         lambda **_kwargs: type("S", (), {"to_dict": lambda self: {"n_points": 0}})(),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.timing_cli._compute_schedulability_scalar",
+        "tess_vetter.cli.timing_cli._compute_schedulability_scalar",
         lambda **_kwargs: 0.22,
     )
 
@@ -425,18 +425,18 @@ def test_btv_timing_report_file_inputs_override_toi(monkeypatch, tmp_path: Path)
     )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.timing_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.timing_cli._resolve_candidate_inputs",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve TOI with report file")),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.timing_cli.load_lightcurves_with_sector_policy",
+        "tess_vetter.cli.timing_cli.load_lightcurves_with_sector_policy",
         lambda **kwargs: (
             [(_make_lc(tic_id=kwargs["tic_id"], sector=40, start=2000.0))],
             "mast_filtered",
         ),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.timing_cli._prealign_candidate",
+        "tess_vetter.cli.timing_cli._prealign_candidate",
         lambda **kwargs: (
             kwargs["candidate"],
             [],
@@ -457,7 +457,7 @@ def test_btv_timing_report_file_inputs_override_toi(monkeypatch, tmp_path: Path)
     monkeypatch.setattr(timing_cli.api.timing, "analyze_ttvs", lambda **_kwargs: type("R", (), {"to_dict": lambda self: {}})())
     monkeypatch.setattr(timing_cli.api.timing, "timing_series", lambda **_kwargs: type("S", (), {"to_dict": lambda self: {}})())
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.timing_cli._compute_schedulability_scalar",
+        "tess_vetter.cli.timing_cli._compute_schedulability_scalar",
         lambda **_kwargs: 0.44,
     )
 
@@ -484,7 +484,7 @@ def test_btv_timing_report_file_inputs_override_toi(monkeypatch, tmp_path: Path)
 
 def test_btv_timing_explicit_sectors_cache_miss_exits_4(monkeypatch) -> None:
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.timing_cli.load_lightcurves_with_sector_policy",
+        "tess_vetter.cli.timing_cli.load_lightcurves_with_sector_policy",
         lambda **_kwargs: (_ for _ in ()).throw(
             timing_cli.BtvCliError(
                 "Cache-only sector load failed for TIC 123. Missing cached light curve for sector(s): 14.",

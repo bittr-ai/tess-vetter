@@ -5,8 +5,8 @@ import types
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.transit_fit import fit_transit
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve, StellarParams
+from tess_vetter.api.transit_fit import fit_transit
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve, StellarParams
 
 
 def _minimal_inputs() -> tuple[LightCurve, Candidate, StellarParams]:
@@ -46,7 +46,7 @@ def test_fit_transit_applies_valid_mask_and_computes_t0_offset(
     # Provide a fake batman module so the wrapper doesn't short-circuit.
     monkeypatch.setitem(sys.modules, "batman", types.ModuleType("batman"))
 
-    import bittr_tess_vetter.transit.batman_model as bm
+    import tess_vetter.transit.batman_model as bm
 
     lc, cand, stellar = _minimal_inputs()
 
@@ -126,7 +126,7 @@ def test_fit_transit_mcmc_falls_back_to_optimize_if_emcee_missing(
 
     monkeypatch.setattr(builtins, "__import__", _fake_import)
 
-    import bittr_tess_vetter.transit.batman_model as bm
+    import tess_vetter.transit.batman_model as bm
 
     lc, cand, stellar = _minimal_inputs()
     seen: dict[str, object] = {}

@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from bittr_tess_vetter.platform.catalogs.models import SourceRecord
-from bittr_tess_vetter.platform.catalogs.simbad_client import (
+from tess_vetter.platform.catalogs.models import SourceRecord
+from tess_vetter.platform.catalogs.simbad_client import (
     SimbadIdentifiers,
     SimbadObjectType,
     SimbadQueryResult,

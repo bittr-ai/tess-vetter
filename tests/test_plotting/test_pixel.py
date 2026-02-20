@@ -13,12 +13,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from bittr_tess_vetter.plotting.pixel import (
+from tess_vetter.plotting.pixel import (
     plot_aperture_curve,
     plot_centroid_shift,
     plot_difference_image,
 )
-from bittr_tess_vetter.validation.result_schema import ok_result
+from tess_vetter.validation.result_schema import ok_result
 
 # =============================================================================
 # Fixtures

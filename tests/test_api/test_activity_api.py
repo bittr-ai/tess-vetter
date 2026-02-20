@@ -1,7 +1,7 @@
 import numpy as np
 
-from bittr_tess_vetter.api.activity import characterize_activity, mask_flares
-from bittr_tess_vetter.api.types import LightCurve
+from tess_vetter.api.activity import characterize_activity, mask_flares
+from tess_vetter.api.types import LightCurve
 
 
 def test_characterize_activity_recovers_rotation_period_on_sinusoid() -> None:

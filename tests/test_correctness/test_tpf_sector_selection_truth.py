@@ -5,8 +5,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from bittr_tess_vetter.pipeline import enrich_candidate
-from bittr_tess_vetter.features import FeatureConfig
+from tess_vetter.pipeline import enrich_candidate
+from tess_vetter.features import FeatureConfig
 
 
 @dataclass(frozen=True)
@@ -48,7 +48,7 @@ class _FakeMASTClient:
         flux_err = np.full_like(time, 2e-4, dtype=np.float64)
         quality = np.zeros_like(time, dtype=np.int32)
         valid = np.ones_like(time, dtype=bool)
-        from bittr_tess_vetter.domain.lightcurve import LightCurveData
+        from tess_vetter.domain.lightcurve import LightCurveData
 
         return LightCurveData(
             time=time,
@@ -98,14 +98,14 @@ class _FakeMASTClient:
 
 def test_pipeline_tries_other_tpf_sector_when_first_has_no_transit_coverage(monkeypatch) -> None:
     # Patch the API MASTClient used by enrich_candidate.
-    import bittr_tess_vetter.api.io as io_api
+    import tess_vetter.api.io as io_api
 
     monkeypatch.setattr(io_api, "MASTClient", _FakeMASTClient)
 
     # Patch vetting to avoid running the full check suite; keep it deterministic.
     import importlib
 
-    vet_mod = importlib.import_module("bittr_tess_vetter.api.vet")
+    vet_mod = importlib.import_module("tess_vetter.api.vet")
 
     def _fake_vet(*args, **kwargs):
         checks = [_FakeCheck("V09", {"distance_to_target_pixels": 0.2, "localization_reliable": True})]

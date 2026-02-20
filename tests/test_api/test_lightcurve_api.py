@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 from pydantic import ValidationError
 
-from bittr_tess_vetter.api.lightcurve import LightCurveRef, make_data_ref
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.api.lightcurve import LightCurveRef, make_data_ref
+from tess_vetter.domain.lightcurve import LightCurveData
 
 
 def test_make_data_ref_matches_expected_format() -> None:

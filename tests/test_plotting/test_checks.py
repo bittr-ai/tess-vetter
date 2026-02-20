@@ -12,7 +12,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 
-from bittr_tess_vetter.plotting.checks import (
+from tess_vetter.plotting.checks import (
     plot_depth_stability,
     plot_duration_consistency,
     plot_odd_even,

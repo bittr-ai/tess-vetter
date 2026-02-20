@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.validation.modshift_uniqueness import run_modshift_uniqueness
+from tess_vetter.validation.modshift_uniqueness import run_modshift_uniqueness
 
 
 def make_synthetic_lc(

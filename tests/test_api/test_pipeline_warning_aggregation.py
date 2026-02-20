@@ -7,9 +7,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.features import FeatureConfig
-from bittr_tess_vetter.pipeline import enrich_candidate
-from bittr_tess_vetter.validation.result_schema import VettingBundleResult, ok_result
+from tess_vetter.features import FeatureConfig
+from tess_vetter.pipeline import enrich_candidate
+from tess_vetter.validation.result_schema import VettingBundleResult, ok_result
 
 
 def _write_sector_csv(path: Path, *, time_btjd: np.ndarray, flux: np.ndarray) -> None:
@@ -62,7 +62,7 @@ def test_pipeline_adds_u14_u15_u17_warnings_deterministically(
             inputs_summary={},
         )
 
-    vet_mod = importlib.import_module("bittr_tess_vetter.api.vet")
+    vet_mod = importlib.import_module("tess_vetter.api.vet")
 
     monkeypatch.setattr(vet_mod, "vet_candidate", _fake_vet_candidate)
 

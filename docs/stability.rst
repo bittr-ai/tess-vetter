@@ -1,7 +1,7 @@
 API Stability
 =============
 
-This document describes the stability guarantees for bittr-tess-vetter's public API.
+This document describes the stability guarantees for tess-vetter's public API.
 
 Stability Tiers
 ---------------
@@ -23,7 +23,7 @@ Stability Tiers
 
 **Internal** - Not covered by stability guarantees:
 
-* Anything not exported in ``bittr_tess_vetter.api.__all__``
+* Anything not exported in ``tess_vetter.api.__all__``
 * Modules under ``platform/``
 * Private functions (``_prefixed``)
 

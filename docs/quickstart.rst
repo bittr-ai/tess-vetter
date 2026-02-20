@@ -1,7 +1,7 @@
 Quickstart
 ==========
 
-This guide will help you get started with bittr-tess-vetter for TESS transit
+This guide will help you get started with tess-vetter for TESS transit
 detection and vetting.
 
 Import Convention
@@ -11,18 +11,18 @@ The recommended import alias follows patterns from astropy (``import astropy.uni
 
 .. code-block:: python
 
-   import bittr_tess_vetter.api as btv
+   import tess_vetter.api as btv
 
 Core Types
 ----------
 
 The API provides several core data types:
 
-- :class:`~bittr_tess_vetter.api.LightCurve`: Time-series photometry container
-- :class:`~bittr_tess_vetter.api.Ephemeris`: Transit ephemeris (period, t0, duration)
-- :class:`~bittr_tess_vetter.api.Candidate`: Transit candidate container
-- :class:`~bittr_tess_vetter.api.CheckResult`: Individual vetting check result
-- :class:`~bittr_tess_vetter.api.VettingBundleResult`: Complete vetting pipeline output
+- :class:`~tess_vetter.api.LightCurve`: Time-series photometry container
+- :class:`~tess_vetter.api.Ephemeris`: Transit ephemeris (period, t0, duration)
+- :class:`~tess_vetter.api.Candidate`: Transit candidate container
+- :class:`~tess_vetter.api.CheckResult`: Individual vetting check result
+- :class:`~tess_vetter.api.VettingBundleResult`: Complete vetting pipeline output
 
 Basic Transit Detection
 -----------------------
@@ -32,7 +32,7 @@ Run a periodogram search to find transit signals:
 .. code-block:: python
 
    import numpy as np
-   import bittr_tess_vetter.api as btv
+   import tess_vetter.api as btv
 
    # Your light curve data
    time = np.array([...])      # Time in BTJD
@@ -54,7 +54,7 @@ Once you have a candidate, run the vetting pipeline:
 
 .. code-block:: python
 
-   import bittr_tess_vetter.api as btv
+   import tess_vetter.api as btv
 
    # Create light curve object
    lc = btv.LightCurve(time=time, flux=flux, flux_err=flux_err)
@@ -87,7 +87,7 @@ The ``btv vet`` help text points to this page and the API reference:
 
 .. code-block:: bash
 
-   uv run python -m bittr_tess_vetter.cli.enrich_cli vet --help
+   uv run python -m tess_vetter.cli.enrich_cli vet --help
 
 Quick ExoFOP TOI catalog query from CLI:
 
@@ -224,7 +224,7 @@ Vetting Check Categories
 ------------------------
 
 The vetting pipeline includes several categories of checks. By default,
-:func:`~bittr_tess_vetter.api.vet_candidate` runs a 15-check "default" preset.
+:func:`~tess_vetter.api.vet_candidate` runs a 15-check "default" preset.
 You can opt into additional diagnostics by passing ``preset="extended"``.
 
 LC-Only Checks (V01-V05, V13, V15)
@@ -273,7 +273,7 @@ These checks analyze pixel-level data:
 False Positive Probability (TRICERATOPS+)
 -----------------------------------------
 
-For statistical validation-style workflows, compute FPP/NFPP via :func:`~bittr_tess_vetter.api.calculate_fpp`.
+For statistical validation-style workflows, compute FPP/NFPP via :func:`~tess_vetter.api.calculate_fpp`.
 For stability, use ``replicates`` and review the returned ``fpp_summary`` / ``nfpp_summary``.
 
 Exovetter Checks (V11-V12)
@@ -313,7 +313,7 @@ If V16 indicates model-competition concern, you can pass a prior vet summary int
 
 .. code-block:: bash
 
-   uv run python -m bittr_tess_vetter.cli.enrich_cli detrend-grid \
+   uv run python -m tess_vetter.cli.enrich_cli detrend-grid \
      --tic-id 123 --period-days 10 --t0-btjd 2000 --duration-hours 2 \
      --vet-summary-path path/to/vet.json
 
@@ -324,7 +324,7 @@ The API provides convenient short aliases for common operations:
 
 .. code-block:: python
 
-   import bittr_tess_vetter.api as btv
+   import tess_vetter.api as btv
 
    # btv.vet is an alias for btv.vet_candidate
    bundle = btv.vet(lc, candidate)
@@ -364,7 +364,7 @@ For active stars with significant variability, use the recovery module:
 
 .. code-block:: python
 
-   import bittr_tess_vetter.api as btv
+   import tess_vetter.api as btv
 
    # Detrend the light curve
    detrended = btv.detrend(time, flux, flux_err)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.platform.catalogs.exofop_toi_table import (
+from tess_vetter.platform.catalogs.exofop_toi_table import (
     ExoFOPToiTable,
     query_exofop_toi_rows,
 )

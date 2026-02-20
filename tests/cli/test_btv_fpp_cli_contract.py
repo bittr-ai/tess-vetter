@@ -10,9 +10,9 @@ import numpy as np
 import pytest
 from click.testing import CliRunner
 
-import bittr_tess_vetter.cli.enrich_cli as enrich_cli
-from bittr_tess_vetter.domain.lightcurve import LightCurveData, make_data_ref
-from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
+import tess_vetter.cli.enrich_cli as enrich_cli
+from tess_vetter.domain.lightcurve import LightCurveData, make_data_ref
+from tess_vetter.platform.io.mast_client import LightCurveNotFoundError
 
 
 def _make_lc(*, tic_id: int, sector: int, start: float) -> LightCurveData:
@@ -44,8 +44,8 @@ def test_build_cache_for_fpp_prefers_persistent_cache_for_requested_sectors(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    from bittr_tess_vetter.cli import fpp_cli
-    from bittr_tess_vetter.platform.io import PersistentCache
+    from tess_vetter.cli import fpp_cli
+    from tess_vetter.platform.io import PersistentCache
 
     seen = {"network_calls": 0, "cached_calls": 0}
 
@@ -65,7 +65,7 @@ def test_build_cache_for_fpp_prefers_persistent_cache_for_requested_sectors(
     cache.put(make_data_ref(123, 14, "pdcsap"), _make_lc(tic_id=123, sector=14, start=2000.0))
     cache.put(make_data_ref(123, 15, "pdcsap"), _make_lc(tic_id=123, sector=15, start=2001.0))
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.MASTClient", _FakeMASTClient)
 
     built_cache, sectors_loaded = fpp_cli._build_cache_for_fpp(
         tic_id=123,
@@ -95,11 +95,11 @@ def test_btv_fpp_success_plumbs_api_params_and_emits_contract(monkeypatch, tmp_p
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp",
+        "tess_vetter.cli.fpp_cli._build_cache_for_fpp",
         _fake_build_cache_for_fpp,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli.calculate_fpp",
+        "tess_vetter.cli.fpp_cli.calculate_fpp",
         _fake_calculate_fpp,
     )
 
@@ -183,8 +183,8 @@ def test_btv_fpp_standard_preset_defaults_timeout_900(monkeypatch, tmp_path: Pat
         seen.update(kwargs)
         return {"fpp": 0.123, "nfpp": 0.001, "base_seed": 99}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_standard_default_timeout.json"
     runner = CliRunner()
@@ -230,8 +230,8 @@ def test_btv_fpp_tutorial_preset_plumbs_and_runtime_reflects_tutorial(monkeypatc
         seen.update(kwargs)
         return {"fpp": 0.02, "nfpp": 0.001, "base_seed": 7}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_tutorial_preset.json"
     runner = CliRunner()
@@ -276,8 +276,8 @@ def test_btv_fpp_standard_degenerate_emits_retry_guidance(monkeypatch, tmp_path:
             "posterior_prob_nan_count": 30,
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_standard_degenerate_retry_guidance.json"
     runner = CliRunner()
@@ -330,8 +330,8 @@ def test_btv_fpp_standard_non_degenerate_omits_retry_guidance(monkeypatch, tmp_p
             "posterior_prob_nan_count": 0,
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_standard_non_degenerate.json"
     runner = CliRunner()
@@ -389,8 +389,8 @@ def test_btv_fpp_degenerate_guard_succeeds_on_retry_with_reduced_max_points(
             "posterior_prob_nan_count": 0,
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_guard_success_on_retry.json"
     runner = CliRunner()
@@ -456,8 +456,8 @@ def test_btv_fpp_degenerate_guard_failure_after_bounded_retries(monkeypatch, tmp
             "posterior_prob_nan_count": 8,
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_guard_failure_after_retries.json"
     runner = CliRunner()
@@ -504,8 +504,8 @@ def test_btv_fpp_contrast_curve_tbl_parsed_and_passed(monkeypatch, tmp_path: Pat
         seen.update(kwargs)
         return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     cc_path = tmp_path / "contrast.tbl"
     cc_path.write_text(
@@ -568,8 +568,8 @@ def test_btv_fpp_contrast_curve_fits_parsed_and_passed(monkeypatch, tmp_path: Pa
         seen.update(kwargs)
         return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     cc_path = tmp_path / "TIC149302744I-at20190714_soarspeckle.fits"
     rng = np.random.default_rng(123)
@@ -619,8 +619,8 @@ def test_btv_fpp_overrides_are_forwarded(monkeypatch, tmp_path: Path) -> None:
         seen.update(kwargs)
         return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_with_overrides.json"
     runner = CliRunner()
@@ -665,8 +665,8 @@ def test_btv_fpp_drop_scenario_forwarded(monkeypatch, tmp_path: Path) -> None:
         seen.update(kwargs)
         return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_with_drop_scenario.json"
     runner = CliRunner()
@@ -708,8 +708,8 @@ def test_btv_fpp_drop_scenario_mixed_case_label_accepted(monkeypatch, tmp_path: 
         seen.update(kwargs)
         return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_with_drop_scenario_mixed_case.json"
     runner = CliRunner()
@@ -802,8 +802,8 @@ def test_btv_fpp_drop_scenario_override_only(monkeypatch, tmp_path: Path) -> Non
         seen.update(kwargs)
         return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_drop_scenario_override_only.json"
     runner = CliRunner()
@@ -843,8 +843,8 @@ def test_btv_fpp_drop_scenario_explicit_flag_wins_over_override(monkeypatch, tmp
         seen.update(kwargs)
         return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_drop_scenario_precedence.json"
     runner = CliRunner()
@@ -910,7 +910,7 @@ def test_btv_fpp_detrend_implies_detrend_cache(monkeypatch, tmp_path: Path) -> N
         seen.update(kwargs)
         return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}, [14]
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._execute_fpp", _fake_execute_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._execute_fpp", _fake_execute_fpp)
 
     out_path = tmp_path / "fpp_detrend_implies_cache.json"
     runner = CliRunner()
@@ -951,10 +951,10 @@ def test_btv_fpp_timeout_maps_to_exit_5(monkeypatch) -> None:
         raise TimeoutError("timed out")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp",
+        "tess_vetter.cli.fpp_cli._build_cache_for_fpp",
         _fake_build_cache_for_fpp,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _timeout)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _timeout)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -982,7 +982,7 @@ def test_btv_fpp_missing_depth_from_toi_maps_to_exit_4(monkeypatch) -> None:
         return 123, 7.5, 2500.25, 3.0, None, {"source": "toi_catalog", "resolved_from": "exofop"}
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
 
@@ -1016,10 +1016,10 @@ def test_btv_fpp_uses_detrended_depth_before_catalog(monkeypatch, tmp_path: Path
     def _fake_detrended_depth(**_kwargs: Any) -> tuple[float | None, dict[str, Any]]:
         return 777.0, {"method": "transit_masked_bin_median"}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._estimate_detrended_depth_ppm", _fake_detrended_depth)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._estimate_detrended_depth_ppm", _fake_detrended_depth)
 
     out_path = tmp_path / "detrended.json"
     runner = CliRunner()
@@ -1067,10 +1067,10 @@ def test_btv_fpp_depth_precedence_explicit_over_detrended(monkeypatch, tmp_path:
         seen["detrended_called"] = True
         return 777.0, {"method": "transit_masked_bin_median"}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._estimate_detrended_depth_ppm", _fake_detrended_depth)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._estimate_detrended_depth_ppm", _fake_detrended_depth)
 
     out_path = tmp_path / "explicit.json"
     runner = CliRunner()
@@ -1120,9 +1120,9 @@ def test_btv_fpp_stellar_precedence_explicit_over_file_over_auto(monkeypatch, tm
     def _fake_auto(_tic_id: int) -> dict[str, float | None]:
         return {"radius": 1.1, "mass": 1.0, "tmag": 11.0}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._load_auto_stellar_inputs", _fake_auto)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._load_auto_stellar_inputs", _fake_auto)
 
     out_path = tmp_path / "stellar_out.json"
     runner = CliRunner()
@@ -1168,7 +1168,7 @@ def test_btv_fpp_lightcurve_missing_maps_to_exit_4(monkeypatch) -> None:
         raise LightCurveNotFoundError("missing sectors")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp",
+        "tess_vetter.cli.fpp_cli._build_cache_for_fpp",
         _missing_cache,
     )
 
@@ -1219,10 +1219,10 @@ def test_build_cache_for_fpp_stores_requested_sector_products(monkeypatch, tmp_p
         def put(self, key: str, value: object) -> None:
             self.records[key] = value
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.PersistentCache", _FakePersistentCache)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.PersistentCache", _FakePersistentCache)
 
-    from bittr_tess_vetter.cli.fpp_cli import _build_cache_for_fpp
+    from tess_vetter.cli.fpp_cli import _build_cache_for_fpp
 
     cache, loaded = _build_cache_for_fpp(tic_id=123, sectors=[14, 15], cache_dir=tmp_path)
     assert loaded == [14, 15]
@@ -1270,9 +1270,9 @@ def test_btv_fpp_report_file_with_toi_prefers_toi_candidate_inputs(monkeypatch, 
         seen["fpp"] = kwargs
         return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_report_with_toi_prefers_toi.json"
     runner = CliRunner()
@@ -1345,9 +1345,9 @@ def test_btv_fpp_report_file_only_supports_cli_report_schema(monkeypatch, tmp_pa
         seen["fpp"] = kwargs
         return {"fpp": 0.05, "nfpp": 0.005, "base_seed": 3}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_report_only.json"
     runner = CliRunner()
@@ -1402,13 +1402,13 @@ def test_btv_fpp_explicit_sectors_use_network_download_by_default(monkeypatch, t
     def _fake_calculate_fpp(**_kwargs: Any) -> dict[str, Any]:
         return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.MASTClient", _FakeMASTClient)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._detrend_lightcurve_for_vetting",
+        "tess_vetter.cli.fpp_cli._detrend_lightcurve_for_vetting",
         _fake_detrend_lightcurve_for_vetting,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.measure_transit_depth", _fake_measure_transit_depth)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.measure_transit_depth", _fake_measure_transit_depth)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_explicit_sectors_download_default.json"
     runner = CliRunner()
@@ -1465,13 +1465,13 @@ def test_btv_fpp_explicit_sectors_cache_only_when_requested(monkeypatch, tmp_pat
     def _fake_calculate_fpp(**_kwargs: Any) -> dict[str, Any]:
         return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.MASTClient", _FakeMASTClient)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._detrend_lightcurve_for_vetting",
+        "tess_vetter.cli.fpp_cli._detrend_lightcurve_for_vetting",
         _fake_detrend_lightcurve_for_vetting,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.measure_transit_depth", _fake_measure_transit_depth)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.measure_transit_depth", _fake_measure_transit_depth)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_explicit_sectors_cache_only.json"
     runner = CliRunner()
@@ -1513,8 +1513,8 @@ def test_btv_fpp_supports_positional_toi_and_short_o(monkeypatch, tmp_path: Path
     def _fake_calculate_fpp(**_kwargs: Any) -> dict[str, Any]:
         return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_positional_toi_short_o.json"
     runner = CliRunner()
@@ -1544,7 +1544,7 @@ def test_btv_fpp_supports_positional_toi_and_short_o(monkeypatch, tmp_path: Path
 
 
 def test_runtime_artifacts_ready_true_when_cached_target_has_trilegal(monkeypatch, tmp_path: Path) -> None:
-    from bittr_tess_vetter.cli import fpp_cli
+    from tess_vetter.cli import fpp_cli
 
     trilegal_path = tmp_path / "tri.csv"
     trilegal_path.write_text("a,b\n1,2\n", encoding="utf-8")
@@ -1553,7 +1553,7 @@ def test_runtime_artifacts_ready_true_when_cached_target_has_trilegal(monkeypatc
         trilegal_fname = str(trilegal_path)
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli.load_cached_triceratops_target",
+        "tess_vetter.cli.fpp_cli.load_cached_triceratops_target",
         lambda **_kwargs: _Target(),
     )
 
@@ -1570,7 +1570,7 @@ def test_runtime_artifacts_ready_true_when_cached_target_has_trilegal(monkeypatc
 
 
 def test_runtime_artifacts_ready_waits_for_prepare_lock(monkeypatch, tmp_path: Path) -> None:
-    from bittr_tess_vetter.cli import fpp_cli
+    from tess_vetter.cli import fpp_cli
 
     trilegal_path = tmp_path / "tri_lock_wait.csv"
     trilegal_path.write_text("a,b\n1,2\n", encoding="utf-8")
@@ -1581,7 +1581,7 @@ def test_runtime_artifacts_ready_waits_for_prepare_lock(monkeypatch, tmp_path: P
         trilegal_fname = str(trilegal_path)
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli.load_cached_triceratops_target",
+        "tess_vetter.cli.fpp_cli.load_cached_triceratops_target",
         lambda **_kwargs: _Target(),
     )
 
@@ -1629,9 +1629,9 @@ def test_btv_fpp_run_require_prepared_fails_when_runtime_artifacts_missing(monke
     manifest_path = tmp_path / "manifest.json"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._cache_missing_sectors", lambda **_kwargs: [])
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._cache_missing_sectors", lambda **_kwargs: [])
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._runtime_artifacts_ready",
+        "tess_vetter.cli.fpp_cli._runtime_artifacts_ready",
         lambda **_kwargs: (
             False,
             {"target_cached": False, "trilegal_cached": False, "trilegal_csv_path": None},
@@ -1681,9 +1681,9 @@ def test_btv_fpp_run_require_prepared_rejects_non_ok_stage_state(monkeypatch, tm
     class _Target:
         trilegal_fname = str(trilegal_path)
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._cache_missing_sectors", lambda **_kwargs: [])
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._cache_missing_sectors", lambda **_kwargs: [])
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli.load_cached_triceratops_target",
+        "tess_vetter.cli.fpp_cli.load_cached_triceratops_target",
         lambda **_kwargs: _Target(),
     )
 
@@ -1723,7 +1723,7 @@ def test_btv_fpp_run_emits_replicate_progress(monkeypatch, tmp_path: Path) -> No
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli.resolve_stellar_inputs",
+        "tess_vetter.cli.fpp_cli.resolve_stellar_inputs",
         lambda **_kwargs: ({}, {"source": "cli", "resolved_from": "cli"}),
     )
 
@@ -1752,7 +1752,7 @@ def test_btv_fpp_run_emits_replicate_progress(monkeypatch, tmp_path: Path) -> No
             )
         return {"fpp": 0.01, "nfpp": 0.001, "base_seed": 101}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     runner = CliRunner()
     out_path = tmp_path / "fpp_run_progress.json"
@@ -1804,13 +1804,13 @@ def test_btv_fpp_run_contrast_curve_fits_parsed_and_passed(monkeypatch, tmp_path
     image[100, 100] += 2.0
     fits.PrimaryHDU(data=image).writeto(cc_path)
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._cache_missing_sectors", lambda **_kwargs: [])
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._cache_missing_sectors", lambda **_kwargs: [])
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._runtime_artifacts_ready",
+        "tess_vetter.cli.fpp_cli._runtime_artifacts_ready",
         lambda **_kwargs: (True, {"target_cached": True, "trilegal_cached": True, "trilegal_csv_path": "ok.csv"}),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli.resolve_stellar_inputs",
+        "tess_vetter.cli.fpp_cli.resolve_stellar_inputs",
         lambda **_kwargs: ({}, {"source": "cli", "resolved_from": "cli"}),
     )
 
@@ -1818,7 +1818,7 @@ def test_btv_fpp_run_contrast_curve_fits_parsed_and_passed(monkeypatch, tmp_path
         seen.update(kwargs)
         return {"fpp": 0.01, "nfpp": 0.001, "base_seed": 101}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     out_path = tmp_path / "fpp_run_with_fits_cc.json"
     runner = CliRunner()
@@ -1863,12 +1863,12 @@ def test_btv_fpp_run_can_execute_twice_with_same_manifest(monkeypatch, tmp_path:
     seen: dict[str, int] = {"calls": 0}
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli.resolve_stellar_inputs",
+        "tess_vetter.cli.fpp_cli.resolve_stellar_inputs",
         lambda **_kwargs: ({}, {"source": "cli", "resolved_from": "cli"}),
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli._cache_missing_sectors", lambda **_kwargs: [])
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._cache_missing_sectors", lambda **_kwargs: [])
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._runtime_artifacts_ready",
+        "tess_vetter.cli.fpp_cli._runtime_artifacts_ready",
         lambda **_kwargs: (True, {"target_cached": True, "trilegal_cached": True, "trilegal_csv_path": "ok.csv"}),
     )
 
@@ -1876,7 +1876,7 @@ def test_btv_fpp_run_can_execute_twice_with_same_manifest(monkeypatch, tmp_path:
         seen["calls"] += 1
         return {"fpp": 0.01, "nfpp": 0.001, "base_seed": 101}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
 
     runner = CliRunner()
     out1 = tmp_path / "fpp_run_1.json"
@@ -1910,7 +1910,7 @@ def test_btv_fpp_run_can_execute_twice_with_same_manifest(monkeypatch, tmp_path:
 
 
 def test_btv_fpp_prepare_supports_short_o(monkeypatch, tmp_path: Path) -> None:
-    from bittr_tess_vetter.platform.io import PersistentCache
+    from tess_vetter.platform.io import PersistentCache
 
     def _fake_resolve_candidate_inputs(**_kwargs: Any):
         return (123, 7.5, 2500.25, 3.0, 900.0, {"source": "cli", "resolved_from": "cli"})
@@ -1920,11 +1920,11 @@ def test_btv_fpp_prepare_supports_short_o(monkeypatch, tmp_path: Path) -> None:
         return cache, [14, 15]
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp",
+        "tess_vetter.cli.fpp_cli._build_cache_for_fpp",
         _fake_build_cache_for_fpp,
     )
 
@@ -1958,7 +1958,7 @@ def test_btv_fpp_prepare_supports_short_o(monkeypatch, tmp_path: Path) -> None:
 def test_btv_fpp_prepare_retries_after_transient_failure_with_failed_state_file_present(
     monkeypatch, tmp_path: Path
 ) -> None:
-    from bittr_tess_vetter.platform.io import PersistentCache
+    from tess_vetter.platform.io import PersistentCache
 
     def _fake_resolve_candidate_inputs(**_kwargs: Any):
         return (123, 7.5, 2500.25, 3.0, 900.0, {"source": "cli", "resolved_from": "cli"})
@@ -1981,15 +1981,15 @@ def test_btv_fpp_prepare_retries_after_transient_failure_with_failed_state_file_
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp",
+        "tess_vetter.cli.fpp_cli._build_cache_for_fpp",
         _fake_build_cache_for_fpp,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli.stage_triceratops_runtime_artifacts",
+        "tess_vetter.cli.fpp_cli.stage_triceratops_runtime_artifacts",
         _fake_stage_runtime,
     )
 
@@ -2063,7 +2063,7 @@ def test_btv_fpp_prepare_passes_timeout_seconds_to_runtime_staging(
 ) -> None:
     seen: dict[str, Any] = {}
 
-    from bittr_tess_vetter.platform.io import PersistentCache
+    from tess_vetter.platform.io import PersistentCache
 
     def _fake_resolve_candidate_inputs(**_kwargs: Any):
         return (123, 7.5, 2500.25, 3.0, 900.0, {"source": "cli", "resolved_from": "cli"})
@@ -2082,15 +2082,15 @@ def test_btv_fpp_prepare_passes_timeout_seconds_to_runtime_staging(
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp",
+        "tess_vetter.cli.fpp_cli._build_cache_for_fpp",
         _fake_build_cache_for_fpp,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli.stage_triceratops_runtime_artifacts",
+        "tess_vetter.cli.fpp_cli.stage_triceratops_runtime_artifacts",
         _fake_stage_runtime,
     )
 
@@ -2149,7 +2149,7 @@ def test_btv_fpp_prepare_with_toi_prefers_toi_candidate_inputs(monkeypatch, tmp_
         encoding="utf-8",
     )
 
-    from bittr_tess_vetter.platform.io import PersistentCache
+    from tess_vetter.platform.io import PersistentCache
 
     def _fake_resolve_candidate_inputs(**kwargs: Any):
         seen["resolve"] = kwargs
@@ -2161,15 +2161,15 @@ def test_btv_fpp_prepare_with_toi_prefers_toi_candidate_inputs(monkeypatch, tmp_
         return cache, [20, 21]
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli._build_cache_for_fpp",
+        "tess_vetter.cli.fpp_cli._build_cache_for_fpp",
         _fake_build_cache_for_fpp,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.fpp_cli.stage_triceratops_runtime_artifacts",
+        "tess_vetter.cli.fpp_cli.stage_triceratops_runtime_artifacts",
         lambda **_kwargs: {
             "trilegal_csv_path": str(tmp_path / "cache" / "triceratops" / "fake.csv"),
             "target_cache_hit": True,

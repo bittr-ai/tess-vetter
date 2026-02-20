@@ -3,7 +3,7 @@ import importlib.util
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api import transit_fit_primitives as tfp
+from tess_vetter.api import transit_fit_primitives as tfp
 
 
 def test_detect_exposure_time_ignores_large_gaps_and_nans() -> None:
@@ -45,5 +45,5 @@ def test_transit_fit_primitives_exports_have_references_metadata() -> None:
 def test_transit_fit_primitives_module_imports_without_optional_deps() -> None:
     # This is a smoke test that the facade module can be imported even if optional
     # libraries like batman/ldtk/emcee aren't installed in minimal environments.
-    spec = importlib.util.find_spec("bittr_tess_vetter.api.transit_fit_primitives")
+    spec = importlib.util.find_spec("tess_vetter.api.transit_fit_primitives")
     assert spec is not None

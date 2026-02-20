@@ -1,1 +1,1 @@
-"""Tests for the bittr-tess-vetter public API."""
+"""Tests for the tess-vetter public API."""

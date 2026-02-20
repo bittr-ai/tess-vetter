@@ -7,7 +7,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from bittr_tess_vetter.validation.result_schema import (
+from tess_vetter.validation.result_schema import (
     CheckResult,
     VettingBundleResult,
     error_result,

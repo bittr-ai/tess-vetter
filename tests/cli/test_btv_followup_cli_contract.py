@@ -6,7 +6,7 @@ from typing import Any
 
 from click.testing import CliRunner
 
-from bittr_tess_vetter.cli.followup_cli import followup_command
+from tess_vetter.cli.followup_cli import followup_command
 
 
 def test_btv_followup_success_contract_payload(monkeypatch, tmp_path: Path) -> None:
@@ -47,11 +47,11 @@ def test_btv_followup_success_contract_payload(monkeypatch, tmp_path: Path) -> N
         return _executor
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.followup_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.followup_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.followup_cli._resolve_followup_executor",
+        "tess_vetter.cli.followup_cli._resolve_followup_executor",
         _fake_resolve_followup_executor,
     )
 
@@ -137,11 +137,11 @@ def test_btv_followup_report_file_inputs_override_toi(monkeypatch, tmp_path: Pat
     )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.followup_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.followup_cli._resolve_candidate_inputs",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve TOI with report file")),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.followup_cli._resolve_followup_executor",
+        "tess_vetter.cli.followup_cli._resolve_followup_executor",
         lambda: (lambda _request: {"files": [], "vetting_notes": [], "summary": {}}),
     )
 

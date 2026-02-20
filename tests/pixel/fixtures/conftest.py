@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData
+from tess_vetter.pixel.tpf_fits import TPFFitsData
 from tests.pixel.fixtures.synthetic_cubes import (
     StarSpec,
     TransitSpec,

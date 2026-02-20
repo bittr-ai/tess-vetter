@@ -13,8 +13,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve, StellarParams
-from bittr_tess_vetter.api.vet import vet_candidate
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve, StellarParams
+from tess_vetter.api.vet import vet_candidate
 
 # =============================================================================
 # Test Fixtures and Helpers

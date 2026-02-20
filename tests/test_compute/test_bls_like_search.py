@@ -16,7 +16,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.compute.bls_like_search import (
+from tess_vetter.compute.bls_like_search import (
     BlsLikeCandidate,
     BlsLikeSearchResult,
     _bls_score_from_binned_flux,

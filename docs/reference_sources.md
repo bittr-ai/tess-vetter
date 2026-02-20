@@ -3,10 +3,10 @@
 This document defines the standardized `reference_sources.v1` JSON payload used for neighbor-resolution outputs and downstream host-localization/dilution workflows.
 
 Implementation references:
-- `src/bittr_tess_vetter/cli/reference_sources.py`
-- `src/bittr_tess_vetter/cli/resolve_neighbors_cli.py`
-- `src/bittr_tess_vetter/cli/localize_host_cli.py`
-- `src/bittr_tess_vetter/cli/dilution_cli.py`
+- `src/tess_vetter/cli/reference_sources.py`
+- `src/tess_vetter/cli/resolve_neighbors_cli.py`
+- `src/tess_vetter/cli/localize_host_cli.py`
+- `src/tess_vetter/cli/dilution_cli.py`
 
 ## Top-level contract
 

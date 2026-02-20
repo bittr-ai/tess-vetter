@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.domain.detection import TransitCandidate
-from bittr_tess_vetter.validation.checks_pixel import (
+from tess_vetter.domain.detection import TransitCandidate
+from tess_vetter.validation.checks_pixel import (
     check_aperture_dependence_with_tpf,
     check_pixel_level_lc_with_tpf,
     compute_pixel_level_depths_ppm,

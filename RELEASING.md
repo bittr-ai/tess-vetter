@@ -1,4 +1,4 @@
-# Releasing `bittr-tess-vetter`
+# Releasing `tess-vetter`
 
 ## Local preflight
 
@@ -11,7 +11,7 @@ Run the full local smoke suite:
 ## Versioning
 
 1. Bump `version` in `pyproject.toml`.
-2. Bump `__version__` in `src/bittr_tess_vetter/__init__.py` to match.
+2. Bump `__version__` in `src/tess_vetter/__init__.py` to match.
 3. Run the packaging guardrail test:
 
 ```bash

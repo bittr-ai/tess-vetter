@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.compute.aperture_prediction import (
+from tess_vetter.compute.aperture_prediction import (
     ApertureConflict,
     AperturePrediction,
     compute_aperture_chi2,
@@ -22,7 +22,7 @@ from bittr_tess_vetter.compute.aperture_prediction import (
     predict_depth_vs_aperture,
     propagate_aperture_uncertainty,
 )
-from bittr_tess_vetter.compute.prf_psf import get_prf_model
+from tess_vetter.compute.prf_psf import get_prf_model
 
 # =============================================================================
 # Fixtures

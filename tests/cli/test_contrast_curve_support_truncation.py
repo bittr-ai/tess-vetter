@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from bittr_tess_vetter.api.fpp import ContrastCurve
-from bittr_tess_vetter.contrast_curves import (
+from tess_vetter.api.fpp import ContrastCurve
+from tess_vetter.contrast_curves import (
     ContrastCurveParseError,
     build_ruling_summary,
     normalize_contrast_curve,

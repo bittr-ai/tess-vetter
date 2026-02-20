@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.pixel.aperture_family import (
+from tess_vetter.pixel.aperture_family import (
     DEFAULT_RADII_PX,
     SLOPE_SIGNIFICANCE_THRESHOLD,
     ApertureFamilyResult,

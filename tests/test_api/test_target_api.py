@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from bittr_tess_vetter.api.target import StellarParameters, Target
+from tess_vetter.api.target import StellarParameters, Target
 
 
 @pytest.fixture

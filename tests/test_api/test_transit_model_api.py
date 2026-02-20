@@ -1,7 +1,7 @@
 import numpy as np
 
-from bittr_tess_vetter.api.periodogram import compute_transit_model as compute_transit_model_legacy
-from bittr_tess_vetter.api.transit_model import compute_transit_model
+from tess_vetter.api.periodogram import compute_transit_model as compute_transit_model_legacy
+from tess_vetter.api.transit_model import compute_transit_model
 
 
 def test_compute_transit_model_is_available_via_dedicated_module_and_legacy_path() -> None:

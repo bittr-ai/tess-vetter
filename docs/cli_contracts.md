@@ -3,10 +3,10 @@
 This page defines machine-consumer JSON contract conventions for `btv` commands and catalogs key `schema_version` values.
 
 Implementation references:
-- `src/bittr_tess_vetter/cli/common_cli.py`
-- command modules under `src/bittr_tess_vetter/cli/`
-- `src/bittr_tess_vetter/api/report_vet_reuse.py`
-- `src/bittr_tess_vetter/pipeline_composition/executor.py`
+- `src/tess_vetter/cli/common_cli.py`
+- command modules under `src/tess_vetter/cli/`
+- `src/tess_vetter/api/report_vet_reuse.py`
+- `src/tess_vetter/pipeline_composition/executor.py`
 
 ## JSON envelope conventions
 

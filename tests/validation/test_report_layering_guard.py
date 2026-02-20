@@ -4,7 +4,7 @@ import ast
 from pathlib import Path
 
 
-REPORT_SRC = Path(__file__).resolve().parents[2] / "src" / "bittr_tess_vetter" / "report"
+REPORT_SRC = Path(__file__).resolve().parents[2] / "src" / "tess_vetter" / "report"
 
 
 def _forbidden_imports(module_path: Path) -> list[str]:
@@ -15,12 +15,12 @@ def _forbidden_imports(module_path: Path) -> list[str]:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 name = alias.name
-                if name == "bittr_tess_vetter.api" or name.startswith("bittr_tess_vetter.api."):
+                if name == "tess_vetter.api" or name.startswith("tess_vetter.api."):
                     violations.append(f"import {name}")
 
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
-            if module == "bittr_tess_vetter.api" or module.startswith("bittr_tess_vetter.api."):
+            if module == "tess_vetter.api" or module.startswith("tess_vetter.api."):
                 violations.append(f"from {module} import ...")
             if node.level > 0 and (module == "api" or module.startswith("api.")):
                 violations.append(f"from {'.' * node.level}{module} import ...")

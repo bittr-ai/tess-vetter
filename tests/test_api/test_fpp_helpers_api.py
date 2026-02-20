@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-import bittr_tess_vetter.api as btv
+import tess_vetter.api as btv
 
 
 def test_load_contrast_curve_exofop_tbl_parses_numeric_rows(tmp_path: Path) -> None:

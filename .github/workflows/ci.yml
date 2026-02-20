@@ -46,7 +46,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
       - name: Type check with mypy
-        run: uv run mypy src/bittr_tess_vetter
+        run: uv run mypy src/tess_vetter
 
   test-core:
     runs-on: ubuntu-latest

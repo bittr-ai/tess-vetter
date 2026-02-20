@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bittr_tess_vetter.followup.processing import (
+from tess_vetter.followup.processing import (
     classify_followup_file,
     detect_render_capabilities,
     extract_fits_header,
@@ -25,7 +25,7 @@ def test_detect_render_capabilities_prefers_pdftoppm(monkeypatch) -> None:
             return "/usr/bin/gs"
         return None
 
-    monkeypatch.setattr("bittr_tess_vetter.followup.processing.shutil.which", _which)
+    monkeypatch.setattr("tess_vetter.followup.processing.shutil.which", _which)
     caps = detect_render_capabilities()
 
     assert caps.can_render_pdf is True
@@ -33,7 +33,7 @@ def test_detect_render_capabilities_prefers_pdftoppm(monkeypatch) -> None:
 
 
 def test_detect_render_capabilities_marks_missing_tools(monkeypatch) -> None:
-    monkeypatch.setattr("bittr_tess_vetter.followup.processing.shutil.which", lambda _name: None)
+    monkeypatch.setattr("tess_vetter.followup.processing.shutil.which", lambda _name: None)
 
     caps = detect_render_capabilities()
 

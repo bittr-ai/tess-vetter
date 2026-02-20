@@ -1,4 +1,4 @@
-from bittr_tess_vetter.api.pixel_prf import (
+from tess_vetter.api.pixel_prf import (
     PRFParams,
     build_prf_model,
     get_prf_model,

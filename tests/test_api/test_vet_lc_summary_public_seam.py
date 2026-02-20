@@ -4,10 +4,10 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-from bittr_tess_vetter.api.generate_report import generate_report
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.domain.target import StellarParameters, Target
-from bittr_tess_vetter.report import build_vet_lc_summary_blocks
+from tess_vetter.api.generate_report import generate_report
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.domain.target import StellarParameters, Target
+from tess_vetter.report import build_vet_lc_summary_blocks
 
 
 def _make_lc_data() -> LightCurveData:

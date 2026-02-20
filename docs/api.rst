@@ -1,20 +1,20 @@
 API Reference
 =============
 
-This page documents the public API of bittr-tess-vetter.
+This page documents the public API of tess-vetter.
 
 The recommended import pattern is:
 
 .. code-block:: python
 
-   import bittr_tess_vetter.api as btv
+   import tess_vetter.api as btv
 
 Core Types
 ----------
 
 Data containers and type definitions used throughout the API.
 
-.. currentmodule:: bittr_tess_vetter.api
+.. currentmodule:: tess_vetter.api
 
 .. autosummary::
    :toctree: _autosummary
@@ -205,8 +205,8 @@ Additional LC-only checks are available via the pipeline registry:
 - ``V13``: ``data_gaps`` (missing-cadence fraction near each transit epoch)
 - ``V15``: ``transit_asymmetry`` (left/right asymmetry in transit window)
 
-Use :func:`~bittr_tess_vetter.api.vet_candidate` with ``checks=["V13", "V15"]`` or
-discover check IDs via :func:`~bittr_tess_vetter.api.list_checks`.
+Use :func:`~tess_vetter.api.vet_candidate` with ``checks=["V13", "V15"]`` or
+discover check IDs via :func:`~tess_vetter.api.list_checks`.
 
 Notes on V13 (data gaps):
 
@@ -292,7 +292,7 @@ Extended Metrics Checks (V16-V21)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Optional, metrics-only diagnostic checks. These are not part of the default preset.
-Enable them with :func:`~bittr_tess_vetter.api.vet_candidate` using ``preset="extended"``.
+Enable them with :func:`~tess_vetter.api.vet_candidate` using ``preset="extended"``.
 
 - ``V16``: model competition (transit vs alternatives)
 - ``V17``: ephemeris reliability regime (quality diagnostics for fixed ephemeris scoring)

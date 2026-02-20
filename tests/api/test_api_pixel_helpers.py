@@ -4,7 +4,7 @@ import numpy as np
 
 
 def test_default_cadence_mask_is_public() -> None:
-    from bittr_tess_vetter.api import default_cadence_mask
+    from tess_vetter.api import default_cadence_mask
 
     time = np.linspace(0.0, 1.0, 5, dtype=np.float64)
     flux = np.ones((5, 2, 2), dtype=np.float64)
@@ -16,7 +16,7 @@ def test_default_cadence_mask_is_public() -> None:
 
 
 def test_create_circular_aperture_mask_matches_internal() -> None:
-    from bittr_tess_vetter.api.aperture import (
+    from tess_vetter.api.aperture import (
         _create_circular_aperture_mask,
         create_circular_aperture_mask,
     )
@@ -39,8 +39,8 @@ def test_create_circular_aperture_mask_matches_internal() -> None:
 
 
 def test_get_out_of_transit_mask_windowed_matches_pixel_impl() -> None:
-    from bittr_tess_vetter.api import get_out_of_transit_mask_windowed
-    from bittr_tess_vetter.pixel.aperture_family import (
+    from tess_vetter.api import get_out_of_transit_mask_windowed
+    from tess_vetter.pixel.aperture_family import (
         _compute_out_of_transit_mask as _compute_out_of_transit_mask_windowed,
     )
 
@@ -76,8 +76,8 @@ def test_get_out_of_transit_mask_windowed_matches_pixel_impl() -> None:
 
 
 def test_compute_difference_image_centroid_diagnostics_contract() -> None:
-    from bittr_tess_vetter.api.wcs_localization import compute_difference_image_centroid_diagnostics
-    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+    from tess_vetter.api.wcs_localization import compute_difference_image_centroid_diagnostics
+    from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 
     # Minimal synthetic TPF: constant flux with a small injected dip in one pixel "in-transit"
     n = 200

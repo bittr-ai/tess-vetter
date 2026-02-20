@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
-title: "bittr-tess-vetter"
+title: "tess-vetter"
 version: 0.1.0
 date-released: 2026-01-14
 license: BSD-3-Clause
@@ -16,4 +16,4 @@ keywords:
   - vetting
   - astrophysics
 authors:
-  - name: "bittr-tess-vetter contributors"
+  - name: "tess-vetter contributors"

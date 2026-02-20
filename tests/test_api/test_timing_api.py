@@ -1,7 +1,7 @@
 import numpy as np
 
-from bittr_tess_vetter.api.timing import analyze_ttvs, measure_transit_times, timing_series
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.api.timing import analyze_ttvs, measure_transit_times, timing_series
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 
 
 def _inject_box_transits(

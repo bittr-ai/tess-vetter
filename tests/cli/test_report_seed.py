@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from bittr_tess_vetter.cli.common_cli import BtvCliError
-from bittr_tess_vetter.cli.report_seed import ReportSeed, resolve_candidate_inputs_with_report_seed
+from tess_vetter.cli.common_cli import BtvCliError
+from tess_vetter.cli.report_seed import ReportSeed, resolve_candidate_inputs_with_report_seed
 
 
 def test_resolve_candidate_inputs_with_report_seed_toi_no_network_requires_resolution_inputs() -> None:
@@ -26,7 +26,7 @@ def test_resolve_candidate_inputs_with_report_seed_uses_manual_inputs_without_to
     def _should_not_resolve(_toi: str):
         raise AssertionError("TOI lookup should not run when manual candidate inputs are complete")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_seed.resolve_toi_to_tic_ephemeris_depth", _should_not_resolve)
+    monkeypatch.setattr("tess_vetter.cli.report_seed.resolve_toi_to_tic_ephemeris_depth", _should_not_resolve)
 
     tic_id, period_days, t0_btjd, duration_hours, depth_ppm, input_resolution = resolve_candidate_inputs_with_report_seed(
         network_ok=False,
@@ -52,7 +52,7 @@ def test_resolve_candidate_inputs_with_report_seed_uses_report_seed_without_toi_
     def _should_not_resolve(_toi: str):
         raise AssertionError("TOI lookup should not run when report seed already provides candidate inputs")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.report_seed.resolve_toi_to_tic_ephemeris_depth", _should_not_resolve)
+    monkeypatch.setattr("tess_vetter.cli.report_seed.resolve_toi_to_tic_ephemeris_depth", _should_not_resolve)
 
     seed = ReportSeed(
         tic_id=999,

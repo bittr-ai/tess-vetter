@@ -13,11 +13,11 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.validation.triceratops_fpp import (
+from tess_vetter.validation.triceratops_fpp import (
     _aggregate_replicate_results,
     _is_result_degenerate,
 )
-from bittr_tess_vetter.platform.network.timeout import NetworkTimeoutError
+from tess_vetter.platform.network.timeout import NetworkTimeoutError
 
 # =============================================================================
 # Test _is_result_degenerate helper
@@ -298,7 +298,7 @@ def test_vendor_triceratops_has_no_unconditional_griz_print() -> None:
     from pathlib import Path
 
     vendor_file = Path(
-        "src/bittr_tess_vetter/ext/triceratops_plus_vendor/triceratops/triceratops.py"
+        "src/tess_vetter/ext/triceratops_plus_vendor/triceratops/triceratops.py"
     )
     text = vendor_file.read_text(encoding="utf-8")
     assert 'print("griz mags:' not in text
@@ -328,7 +328,7 @@ def make_valid_target(fpp: float = 0.01, seed: int = 0) -> MockTriceratopsTarget
 
 # Check if TRICERATOPS vendor is available
 try:
-    from bittr_tess_vetter.ext.triceratops_plus_vendor.triceratops import (
+    from tess_vetter.ext.triceratops_plus_vendor.triceratops import (
         triceratops as _tr,  # noqa: F401
     )
 
@@ -375,11 +375,11 @@ class TestCalculateFppHandlerReplicates:
 
         return cache
 
-    @patch("bittr_tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
-    @patch("bittr_tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
     def test_single_replicate_valid_result(self, mock_save, mock_load, mock_cache):
         """Single replicate with valid result should return success."""
-        from bittr_tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+        from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
 
         # Mock target loading
         mock_load.return_value = make_valid_target(fpp=0.01, seed=42)
@@ -401,11 +401,11 @@ class TestCalculateFppHandlerReplicates:
         assert result["n_success"] == 1
         assert result["n_fail"] == 0
 
-    @patch("bittr_tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
-    @patch("bittr_tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
     def test_single_replicate_degenerate_returns_error(self, mock_save, mock_load, mock_cache):
         """Single replicate with degenerate result should return error."""
-        from bittr_tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+        from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
 
         # Mock target loading with degenerate target
         mock_load.return_value = make_degenerate_target()
@@ -427,11 +427,11 @@ class TestCalculateFppHandlerReplicates:
         assert result["replicate_success_rate"] == 0.0
         assert "warning_note" in result
 
-    @patch("bittr_tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
-    @patch("bittr_tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
     def test_multiple_replicates_aggregation(self, mock_save, mock_load, mock_cache):
         """Multiple replicates should aggregate to median/CI."""
-        from bittr_tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+        from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
 
         # Create a target that varies per call
         call_count = [0]
@@ -461,11 +461,11 @@ class TestCalculateFppHandlerReplicates:
         assert "replicate_success_rate" in result
         assert "fpp_summary" in result or result["n_success"] == 1
 
-    @patch("bittr_tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
-    @patch("bittr_tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
     def test_all_replicates_degenerate_returns_error(self, mock_save, mock_load, mock_cache):
         """All degenerate replicates should return degenerate_posterior error."""
-        from bittr_tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+        from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
 
         # All calls return degenerate
         mock_load.return_value = make_degenerate_target()
@@ -489,11 +489,11 @@ class TestCalculateFppHandlerReplicates:
         assert "degenerate_reasons" in result
         assert "warning_note" in result
 
-    @patch("bittr_tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
-    @patch("bittr_tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
     def test_all_replicates_timeout_returns_timeout_error(self, mock_save, mock_load, mock_cache):
         """Timeout-only replicate failures should return high-level timeout semantics."""
-        from bittr_tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+        from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
 
         mock_load.return_value = make_timeout_target()
 
@@ -519,11 +519,11 @@ class TestCalculateFppHandlerReplicates:
             err.get("error_type") == "timeout" for err in result.get("replicate_errors", [])
         )
 
-    @patch("bittr_tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
-    @patch("bittr_tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
     def test_seed_reproducibility(self, mock_save, mock_load, mock_cache):
         """Same seed should produce same base_seed in output."""
-        from bittr_tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+        from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
 
         mock_load.return_value = make_valid_target(fpp=0.01, seed=42)
 
@@ -551,11 +551,11 @@ class TestCalculateFppHandlerReplicates:
 
         assert result1.get("base_seed") == result2.get("base_seed") == 12345
 
-    @patch("bittr_tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
-    @patch("bittr_tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
     def test_drop_scenario_forwarding_and_provenance(self, mock_save, mock_load, mock_cache):
         """drop_scenario should be forwarded to calc_probs and written to runtime provenance."""
-        from bittr_tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+        from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
 
         target = make_valid_target(fpp=0.01, seed=42)
         mock_load.return_value = target

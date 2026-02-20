@@ -3,7 +3,7 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-import bittr_tess_vetter
+import tess_vetter
 
 
 def _load_project_table() -> dict[str, object]:
@@ -14,7 +14,7 @@ def _load_project_table() -> dict[str, object]:
 
 def test_package_version_matches_pyproject() -> None:
     project = _load_project_table()
-    assert bittr_tess_vetter.__version__ == project["version"]
+    assert tess_vetter.__version__ == project["version"]
 
 
 def test_all_extra_does_not_self_reference_package_name() -> None:

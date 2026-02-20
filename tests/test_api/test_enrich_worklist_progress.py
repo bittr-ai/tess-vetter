@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from bittr_tess_vetter.features import FeatureConfig
-from bittr_tess_vetter.pipeline import enrich_worklist
+from tess_vetter.features import FeatureConfig
+from tess_vetter.pipeline import enrich_worklist
 
 
 def test_enrich_worklist_writes_progress_manifest(tmp_path: Path) -> None:

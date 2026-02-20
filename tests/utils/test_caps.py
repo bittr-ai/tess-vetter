@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.utils.caps import cap_neighbors, cap_plots, cap_top_k
+from tess_vetter.utils.caps import cap_neighbors, cap_plots, cap_top_k
 
 
 def test_caps_do_not_truncate_when_under_limit(caplog) -> None:

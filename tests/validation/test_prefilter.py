@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.validation.prefilter import (
+from tess_vetter.validation.prefilter import (
     compute_depth_over_depth_err_snr,
     compute_phase_coverage,
 )

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.api.reliability_curves import (
+from tess_vetter.api.reliability_curves import (
     compute_conditional_rates,
     compute_reliability_curves,
     recommend_thresholds,

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.domain.detection import TransitCandidate
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.validation.lc_checks import check_odd_even_depth
+from tess_vetter.domain.detection import TransitCandidate
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.validation.lc_checks import check_odd_even_depth
 
 
 def _make_lightcurve_with_box_transits(
