@@ -4,7 +4,12 @@ import contextlib
 import importlib
 from pathlib import Path
 
+import pytest
+
 from tess_vetter.validation import triceratops_fpp as mod
+
+pytest.importorskip("lightkurve")
+pytest.importorskip("pytransit")
 
 
 class _FakeCache:

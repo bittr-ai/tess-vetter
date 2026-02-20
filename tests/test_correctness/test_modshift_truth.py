@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from tess_vetter.domain.detection import TransitCandidate
 from tess_vetter.domain.lightcurve import LightCurveData
 from tess_vetter.features import FeatureConfig
 from tess_vetter.features.builder import build_features
 from tess_vetter.validation.exovetter_checks import run_modshift
+
+pytest.importorskip("exovetter")
 
 
 def _make_synthetic_lc(*, with_secondary: bool) -> LightCurveData:
