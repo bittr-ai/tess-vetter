@@ -193,6 +193,13 @@ Catalog-backed checks are always opt-in. You must pass `network=True` (and provi
 
 Many public API entry points and vetting checks include a list of literature references in their results. The full reference list lives in `REFERENCES.md` (and is also available programmatically via `tess_vetter.api.references`).
 
+### Project DOI (Zenodo)
+
+`TODO(DOI-before-release):` After Zenodo mints the GitHub release DOI, add it here as:
+
+- `DOI: 10.5281/zenodo.<record-id>`
+- Link: `https://doi.org/10.5281/zenodo.<record-id>`
+
 ## Code map
 
 - `src/tess_vetter/api/`: stable host-facing facade (recommended import surface)

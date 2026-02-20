@@ -4,6 +4,11 @@ type: software
 title: "tess-vetter"
 version: 0.2.2
 date-released: 2026-02-20
+# TODO(DOI-before-release): replace placeholder with minted Zenodo DOI for this release.
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.<record-id>"
+    description: "Zenodo DOI for this release"
 license: BSD-3-Clause
 repository-code: "https://github.com/bittr-ai/bittr-tess-vetter"
 url: "https://github.com/bittr-ai/bittr-tess-vetter"
