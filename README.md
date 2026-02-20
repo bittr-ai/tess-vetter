@@ -21,6 +21,8 @@
 
 # tess-vetter
 
+[![Coverage](https://codecov.io/gh/bittr-ai/bittr-tess-vetter/branch/main/graph/badge.svg)](https://codecov.io/gh/bittr-ai/bittr-tess-vetter)
+
 Domain-first Python library for TESS transit detection + vetting (array-in/array-out).
 
 This package follows a "domain-first" design: array-in/array-out astronomy algorithms with optional platform helpers. The core `api/`, `compute/`, and `validation/` modules are pure functions; the `platform/` module provides opt-in I/O and network clients when needed.

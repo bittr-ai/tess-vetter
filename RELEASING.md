@@ -8,6 +8,14 @@ Run the full local smoke suite:
 ./scripts/release_smoke.sh
 ```
 
+## Coverage gate (required)
+
+Before tagging a release:
+
+1. Coverage reporting in Codecov must be enabled for the repository.
+2. The release commit must pass the configured Codecov/status-check coverage gate on the default branch.
+3. The README coverage badge must resolve to a live coverage value (not `unknown`).
+
 ## Versioning
 
 1. Bump `version` in `pyproject.toml`.
@@ -56,4 +64,4 @@ Pushing a `v*` tag triggers `.github/workflows/release.yml`, which:
 ## First-time setup checklist (maintainers)
 
 - Configure PyPI trusted publishing for this repo (see the comment in `release.yml`).
-- Decide whether you want coverage reporting and configure Codecov (optional).
+- Configure Codecov coverage reporting and enforce a required coverage status check.
