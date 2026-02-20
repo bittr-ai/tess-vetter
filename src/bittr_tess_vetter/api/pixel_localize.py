@@ -10,12 +10,15 @@ All functions are compute-only (no I/O, no network).
 from __future__ import annotations
 
 import time as _time
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, TypedDict, cast
 
 import numpy as np
 
 from bittr_tess_vetter.api.pixel_prf import (
     MARGIN_RESOLVE_THRESHOLD,
+    HypothesisScore,
+    MultiSectorConsensus,
+    PRFBackend,
     PRFParams,
     aggregate_multi_sector,
     prf_params_from_dict,
@@ -46,6 +49,9 @@ class ReferenceSource(TypedDict, total=False):
     # Optional pixel coordinates for WCS-less/testing flows.
     row: float
     col: float
+    delta_mag: float
+    g_mag: float
+    meta: dict[str, Any]
 
 
 class BaselineConsistencyResult(TypedDict):
@@ -92,6 +98,9 @@ class PixelLocalizeSectorResult(TypedDict, total=False):
     diagnostics: dict[str, Any]
     baseline_consistency: BaselineConsistencyResult
     baseline_global: dict[str, Any] | None
+    sector: int
+    tpf_fits_ref: str
+    cadence_summary: dict[str, Any]
 
 
 class PixelLocalizeMultiSectorResult(TypedDict):
@@ -285,7 +294,7 @@ def _apply_brightness_prior(
         )
         fit_loss_raw = row.get("fit_loss")
         try:
-            fit_loss_f = float(fit_loss_raw)
+            fit_loss_f = float(cast(Any, fit_loss_raw))
             if not np.isfinite(fit_loss_f):
                 fit_loss_f = float("inf")
         except Exception:
@@ -377,7 +386,7 @@ def _annotate_fit_physical(hypotheses: list[dict[str, Any]]) -> None:
         if "fit_amplitude" not in row:
             continue
         try:
-            fit_amplitude = float(row.get("fit_amplitude"))
+            fit_amplitude = float(cast(Any, row.get("fit_amplitude")))
         except Exception:
             continue
         if np.isfinite(fit_amplitude):
@@ -414,7 +423,7 @@ def localize_transit_host_single_sector(
         float(compute_pixel_scale(tpf_fits.wcs)) if getattr(tpf_fits, "wcs", None) else 21.0
     )
 
-    prf_backend_used: str = prf_backend
+    prf_backend_used: PRFBackend = prf_backend
     prf_params_obj: PRFParams | None = None
     if prf_backend != "prf_lite":
         try:
@@ -520,22 +529,20 @@ def localize_transit_host_single_sector(
     if len(hyp_for_scoring) == 0:
         ranked = []
     elif prf_backend_used == "prf_lite":
-        ranked = list(
-            score_hypotheses_prf_lite(
-                diff_image.astype(np.float64), hyp_for_scoring, seed=random_seed
-            )
+        ranked_scores: list[HypothesisScore] = score_hypotheses_prf_lite(
+            diff_image.astype(np.float64), hyp_for_scoring, seed=random_seed
         )
+        ranked = cast(list[dict[str, Any]], ranked_scores)
     else:
-        ranked = list(
-            score_hypotheses_with_prf(
-                diff_image.astype(np.float64),
-                hyp_for_scoring,
-                prf_backend=prf_backend_used,  # type: ignore[arg-type]
-                prf_params=prf_params_obj,
-                fit_background=True,
-                seed=random_seed,
-            )
+        ranked_scores = score_hypotheses_with_prf(
+            diff_image.astype(np.float64),
+            hyp_for_scoring,
+            prf_backend=prf_backend_used,
+            prf_params=prf_params_obj,
+            fit_background=True,
+            seed=random_seed,
         )
+        ranked = cast(list[dict[str, Any]], ranked_scores)
 
     ranking_changed_by_prior = False
     if ranked and bool(brightness_prior_enabled):
@@ -734,8 +741,27 @@ def localize_transit_host_single_sector_with_baseline_check(
         )
         return local
 
-    rc_local = (float(local.get("centroid_row")), float(local.get("centroid_col")))
-    rc_global = (float(global_res.get("centroid_row")), float(global_res.get("centroid_col")))
+    local_row = local.get("centroid_row")
+    local_col = local.get("centroid_col")
+    global_row = global_res.get("centroid_row")
+    global_col = global_res.get("centroid_col")
+    if None in (local_row, local_col, global_row, global_col):
+        local["baseline_consistency"] = BaselineConsistencyResult(
+            checked=False,
+            centroid_shift_pixels=None,
+            centroid_shift_threshold_pixels=float(centroid_shift_threshold_pixels),
+            verdict_local=str(local.get("verdict") or "INVALID"),
+            verdict_global=str(global_res.get("verdict") or "INVALID"),
+            inconsistent=None,
+        )
+        return local
+
+    assert local_row is not None
+    assert local_col is not None
+    assert global_row is not None
+    assert global_col is not None
+    rc_local = (float(local_row), float(local_col))
+    rc_global = (float(global_row), float(global_col))
     shift_px = float(np.hypot(rc_local[0] - rc_global[0], rc_local[1] - rc_global[1]))
     verdict_local = str(local.get("verdict") or "INVALID")
     verdict_global = str(global_res.get("verdict") or "INVALID")
@@ -856,7 +882,10 @@ def localize_transit_host_multi_sector(
             r["interpretation_code"] = "INSUFFICIENT_DISCRIMINATION"
         per_sector_results.append(r)
 
-    consensus = aggregate_multi_sector(per_sector_results)
+    consensus = cast(
+        dict[str, Any],
+        cast(MultiSectorConsensus, aggregate_multi_sector(cast(list[dict[str, Any]], per_sector_results))),
+    )
     consensus_reliability_flags = sorted(
         {
             str(flag)

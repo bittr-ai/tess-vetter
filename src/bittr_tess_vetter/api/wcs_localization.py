@@ -13,7 +13,7 @@ References:
 
 from __future__ import annotations
 
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, TypedDict, cast
 
 import numpy as np
 
@@ -103,13 +103,15 @@ def localize_transit_source(
 ) -> LocalizationResult:
     """Localize the transit source using WCS-aware difference imaging."""
     # TypedDict is runtime-compatible with the underlying list[dict] contract.
+    reference_sources_payload = cast(list[dict[str, Any]], reference_sources)
+    method_payload = cast(Literal["centroid", "gaussian_fit"], method)
     return _localize_transit_source(
         tpf_fits=tpf_fits,
         period=period,
         t0=t0,
         duration_hours=duration_hours,
-        reference_sources=reference_sources,  # type: ignore[arg-type]
-        method=method,
+        reference_sources=reference_sources_payload,
+        method=method_payload,
         bootstrap_draws=bootstrap_draws,
         bootstrap_seed=bootstrap_seed,
         oot_margin_mult=oot_margin_mult,

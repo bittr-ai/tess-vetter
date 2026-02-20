@@ -112,6 +112,9 @@ For `btv pipeline run`, contract consumers should treat these behaviors as stabl
   - CLI summary line reports counts as `ok`, `partial`, `failed`.
   - A TOI with at least one failed step and continued execution is labeled `status: "partial"` in both manifest results and per-TOI `pipeline_result.json`.
   - Failed steps are labeled `status: "failed"` in `pipeline_result.json.steps`, while subsequent steps may still be `status: "ok"`.
+  - For multi-TOI runs, counts and per-TOI statuses are independent; mixed outcomes are expected (for example, `n_tois=2 ok=1 partial=1 failed=0`).
+  - In mixed-outcome runs resumed with `--resume`, previously `ok` TOIs can be fully checkpoint-reused (`skipped_resume: true` on all successful steps) while previously `partial` TOIs rerun only steps without reusable success markers.
+  - A resumed mixed-outcome run can converge to all-`ok` when prior failed steps succeed; this is reflected in manifest counts and per-TOI `status` updates.
 
 #### Evidence table schema highlights (`pipeline.evidence_table.v5`)
 - Per-row key `stellar_contamination_risk_scalar` is included in JSON rows and CSV columns.
