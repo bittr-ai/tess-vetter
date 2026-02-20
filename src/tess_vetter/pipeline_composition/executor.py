@@ -475,6 +475,11 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
             return False
         return number == number and number not in {float("inf"), float("-inf")}
 
+    def _to_finite_float(value: Any) -> float | None:
+        if not _is_finite_number(value):
+            return None
+        return float(value)
+
     def _is_transit_like_verdict(verdict: Any) -> bool:
         if verdict is None:
             return False
@@ -741,9 +746,11 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
             if isinstance(result, dict):
                 fpp_detrended = result.get("fpp")
 
-    fpp_delta_detrended_minus_raw = None
-    if _is_finite_number(fpp_raw) and _is_finite_number(fpp_detrended):
-        fpp_delta_detrended_minus_raw = float(fpp_detrended) - float(fpp_raw)
+    fpp_raw_value = _to_finite_float(fpp_raw)
+    fpp_detrended_value = _to_finite_float(fpp_detrended)
+    fpp_delta_detrended_minus_raw: float | None = None
+    if fpp_raw_value is not None and fpp_detrended_value is not None:
+        fpp_delta_detrended_minus_raw = fpp_detrended_value - fpp_raw_value
 
     model_compete_raw_verdict = _extract_verdict(model_compete_raw)
     model_compete_detrended_verdict = _extract_verdict(model_compete_detrended)
@@ -755,9 +762,9 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
     if robustness_present:
         robustness_recommended_variant = "raw"
         if (
-            _is_finite_number(fpp_raw)
-            and _is_finite_number(fpp_detrended)
-            and float(fpp_detrended) < float(fpp_raw)
+            fpp_raw_value is not None
+            and fpp_detrended_value is not None
+            and fpp_detrended_value < fpp_raw_value
             and _is_transit_like_verdict(model_compete_detrended_verdict)
         ):
             robustness_recommended_variant = "detrended"
@@ -777,8 +784,8 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
             if model_compete_detrended_verdict is not None
             else None
         )
-        if _is_finite_number(fpp_delta_detrended_minus_raw):
-            detrend_invariance_policy_observed_fpp_delta_abs = abs(float(fpp_delta_detrended_minus_raw))
+        if fpp_delta_detrended_minus_raw is not None:
+            detrend_invariance_policy_observed_fpp_delta_abs = abs(fpp_delta_detrended_minus_raw)
         if raw_verdict_norm is not None and detrended_verdict_norm is not None:
             detrend_invariance_policy_observed_model_verdict_changed = raw_verdict_norm != detrended_verdict_norm
         if (

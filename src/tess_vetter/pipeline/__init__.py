@@ -43,7 +43,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from importlib import metadata
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from tess_vetter.domain.lightcurve import LightCurveData
@@ -222,7 +222,12 @@ def enrich_candidate(
 
     from tess_vetter.api.aperture_family import compute_aperture_family_depth_curve
     from tess_vetter.api.ghost_features import compute_ghost_features
-    from tess_vetter.api.io import LightCurveNotFoundError, MASTClient, MASTClientError
+    from tess_vetter.api.io import (
+        LightCurveNotFoundError,
+        MASTClient,
+        MASTClientError,
+        SearchResult,
+    )
     from tess_vetter.api.localization import TransitParams, compute_localization_diagnostics
     from tess_vetter.api.evidence_contracts import compute_code_hash
     from tess_vetter.api.stellar_dilution import (
@@ -243,7 +248,7 @@ def enrich_candidate(
     )
     from tess_vetter.data_sources.sector_selection import select_sectors
     from tess_vetter.features import FEATURE_SCHEMA_VERSION
-    from tess_vetter.features.evidence import make_skip_block
+    from tess_vetter.features.evidence import SkipBlock, make_skip_block
     from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
     from tess_vetter.platform.catalogs.gaia_client import query_gaia_by_position_sync
 
@@ -381,7 +386,7 @@ def enrich_candidate(
         try:
             client = _make_mast_client()
             if config.no_download and config.cache_dir:
-                search_results = client.search_lightcurve_cached(tic_id)
+                search_results: list[SearchResult] = client.search_lightcurve_cached(tic_id)
             else:
                 search_results = client.search_lightcurve(tic_id)
         except MASTClientError as e:
@@ -408,7 +413,7 @@ def enrich_candidate(
             available_sectors=available_sectors,
             requested_sectors=sectors,
             allow_20s=config.allow_20s,
-            search_results=search_results,
+            search_results=cast(list[object], search_results),
         )
         selection_summary = {
             "available_sectors": selection.available_sectors,
@@ -535,8 +540,8 @@ def enrich_candidate(
         #
         # We compute the nearest epoch to the sector midpoint by shifting t0 by an integer number of periods.
         t_mid = 0.5 * (t_min + t_max)
-        n = int(np.round((t_mid - float(t0_btjd)) / period_days_f)) if period_days_f > 0 else 0
-        t0_eff = float(t0_btjd) + float(n) * period_days_f
+        epoch_index = int(np.round((t_mid - float(t0_btjd)) / period_days_f)) if period_days_f > 0 else 0
+        t0_eff = float(t0_btjd) + float(epoch_index) * period_days_f
         if not (t_min <= t0_eff <= t_max):
             _exclude_sector(sector, "insufficient_time_coverage")
             continue
@@ -623,7 +628,7 @@ def enrich_candidate(
                     t0_btjd=float(t0_btjd),
                     duration_hours=float(duration_hours),
                 )
-                ref = refine_one_candidate_numpy(
+                refinement_result = refine_one_candidate_numpy(
                     time=np.asarray(stitched_lc_data.time, dtype=np.float64),
                     flux=np.asarray(stitched_lc_data.flux, dtype=np.float64),
                     flux_err=np.asarray(stitched_lc_data.flux_err, dtype=np.float64)
@@ -635,22 +640,23 @@ def enrich_candidate(
                 # Accept only if it actually yields in-transit cadences and meaningfully improves score.
                 n_in_ref, _n_out_ref = _count_in_out(
                     time_arr=t_valid,
-                    t0=float(ref.t0_refined_btjd),
-                    dur_h=float(ref.duration_refined_hours),
+                    t0=float(refinement_result.t0_refined_btjd),
+                    dur_h=float(refinement_result.duration_refined_hours),
                 )
                 if (
-                    float(ref.score_z) >= float(getattr(config, "t0_refine_min_delta_score", 2.0))
+                    float(refinement_result.score_z)
+                    >= float(getattr(config, "t0_refine_min_delta_score", 2.0))
                     and n_in_ref > 0
                 ):
                     logger.info(
                         "Refined t0 for TIC %d: t0 %.6f -> %.6f (score_z=%.2f)",
                         tic_id,
                         float(t0_btjd),
-                        float(ref.t0_refined_btjd),
-                        float(ref.score_z),
+                        float(refinement_result.t0_refined_btjd),
+                        float(refinement_result.score_z),
                     )
-                    t0_btjd = float(ref.t0_refined_btjd)
-                    duration_hours = float(ref.duration_refined_hours)
+                    t0_btjd = float(refinement_result.t0_refined_btjd)
+                    duration_hours = float(refinement_result.duration_refined_hours)
                 else:
                     raise ValueError("t0_refine did not recover any in-transit cadences")
             except Exception as e:
@@ -673,7 +679,7 @@ def enrich_candidate(
     stellar = None
     ra_deg: float | None = None
     dec_deg: float | None = None
-    candidate_evidence: dict[str, Any] = make_skip_block("network_disabled")
+    candidate_evidence: dict[str, Any] | SkipBlock = make_skip_block("network_disabled")
 
     if config.network_ok:
         try:
@@ -741,9 +747,9 @@ def enrich_candidate(
             target_flux_fraction: float | None = None
             if primary_mag is not None:
                 mags: list[float] = [float(primary_mag)]
-                for n in neighbors_21:
-                    if n.phot_g_mean_mag is not None:
-                        mags.append(float(n.phot_g_mean_mag))
+                for neighbor in neighbors_21:
+                    if neighbor.phot_g_mean_mag is not None:
+                        mags.append(float(neighbor.phot_g_mean_mag))
                 if mags:
                     target_flux_fraction = float(
                         compute_flux_fraction_from_mag_list(float(primary_mag), mags)
@@ -931,11 +937,11 @@ def enrich_candidate(
             fallback_sectors: list[int] = []
             try:
                 if config.no_download and config.cache_dir:
-                    res = tpf_client.search_tpf_cached(tic_id)
-                    fallback_sectors = sorted({int(r.sector) for r in res}, reverse=True)
+                    tpf_search_results = tpf_client.search_tpf_cached(tic_id)
+                    fallback_sectors = sorted({int(r.sector) for r in tpf_search_results}, reverse=True)
                 else:
-                    res = tpf_client.search_tpf(tic_id)
-                    fallback_sectors = sorted({int(r.sector) for r in res}, reverse=True)
+                    tpf_search_results = tpf_client.search_tpf(tic_id)
+                    fallback_sectors = sorted({int(r.sector) for r in tpf_search_results}, reverse=True)
             except Exception:
                 fallback_sectors = []
 
@@ -963,9 +969,9 @@ def enrich_candidate(
 
     # Step 4c: Compute pixel-level diagnostics into evidence packet fields.
     # Use explicit skip blocks instead of None for auditability.
-    localization: dict[str, Any] = make_skip_block("tpf_unavailable")
-    pixel_host_hypotheses: dict[str, Any] = make_skip_block("tpf_unavailable")
-    sector_quality_report: dict[str, Any] = make_skip_block("tpf_unavailable")
+    localization: dict[str, Any] | SkipBlock = make_skip_block("tpf_unavailable")
+    pixel_host_hypotheses: dict[str, Any] | SkipBlock = make_skip_block("tpf_unavailable")
+    sector_quality_report: dict[str, Any] | SkipBlock = make_skip_block("tpf_unavailable")
 
     if tpf_stamp is not None and tpf_sector_used is not None:
         if tpf_no_transit_coverage:
@@ -1078,7 +1084,7 @@ def enrich_candidate(
             try:
                 from astropy.wcs import WCS
 
-                ref = TPFFitsRef(
+                tpf_ref = TPFFitsRef(
                     tic_id=int(tic_id),
                     sector=int(tpf_sector_used),
                     author="spoc",
@@ -1090,7 +1096,7 @@ def enrich_candidate(
                     else WCS(naxis=2)
                 )
                 tpf_fits = TPFFitsData(
-                    ref=ref,
+                    ref=tpf_ref,
                     time=np.asarray(tpf_stamp.time, dtype=np.float64),
                     flux=np.asarray(tpf_stamp.flux, dtype=np.float64),
                     flux_err=np.asarray(tpf_stamp.flux_err, dtype=np.float64)
@@ -1201,16 +1207,20 @@ def enrich_candidate(
                             return None
 
                         max_neighbors = max(0, int(config.pixel_timeseries_max_hypotheses) - 1)
-                        for n in neighbors:
+                        for neighbor in neighbors:
                             if len(hypotheses) - 1 >= max_neighbors:
                                 break
-                            rrcc = _world_to_pixel(float(n.ra), float(n.dec))
+                            rrcc = _world_to_pixel(float(neighbor.ra), float(neighbor.dec))
                             if rrcc is None:
                                 continue
-                            r, c = rrcc
-                            if 0 <= r < n_rows and 0 <= c < n_cols:
+                            row_px, col_px = rrcc
+                            if 0 <= row_px < n_rows and 0 <= col_px < n_cols:
                                 hypotheses.append(
-                                    {"source_id": str(int(n.source_id)), "row": float(r), "col": float(c)}
+                                    {
+                                        "source_id": str(int(neighbor.source_id)),
+                                        "row": float(row_px),
+                                        "col": float(col_px),
+                                    }
                                 )
 
                     # Always add at least one competitor hypothesis for a finite delta_chi2.
@@ -1286,21 +1296,23 @@ def enrich_candidate(
                 # Estimate stellar radius (solar radii) for implied-size checks.
                 radius_rsun = None
                 if stellar is not None and getattr(stellar, "radius", None) is not None:
-                    radius_rsun = float(stellar.radius)
+                    stellar_radius = getattr(stellar, "radius", None)
+                    if isinstance(stellar_radius, (int, float)):
+                        radius_rsun = float(stellar_radius)
                 elif gaia.astrophysical is not None and gaia.astrophysical.radius_gspphot is not None:
                     radius_rsun = float(gaia.astrophysical.radius_gspphot)
 
-                mags: list[float] = []
+                host_mags: list[float] = []
                 if primary_mag is not None:
-                    mags.append(float(primary_mag))
-                for n in gaia.neighbors:
-                    if n.phot_g_mean_mag is not None:
-                        mags.append(float(n.phot_g_mean_mag))
+                    host_mags.append(float(primary_mag))
+                for neighbor in gaia.neighbors:
+                    if neighbor.phot_g_mean_mag is not None:
+                        host_mags.append(float(neighbor.phot_g_mean_mag))
 
                 def _flux_fraction(mag: float | None) -> float | None:
-                    if mag is None or not mags:
+                    if mag is None or not host_mags:
                         return None
-                    return float(compute_flux_fraction_from_mag_list(float(mag), mags))
+                    return float(compute_flux_fraction_from_mag_list(float(mag), host_mags))
 
                 primary_id = str(gaia.source.source_id) if gaia.source else f"tic:{int(tic_id)}"
                 primary_h = HostHypothesis(
@@ -1312,14 +1324,16 @@ def enrich_candidate(
                     radius_rsun=radius_rsun,
                 )
                 companions: list[HostHypothesis] = []
-                for n in gaia.neighbors:
+                for neighbor in gaia.neighbors:
                     companions.append(
                         HostHypothesis(
-                            source_id=int(n.source_id),
+                            source_id=int(neighbor.source_id),
                             name="neighbor",
-                            separation_arcsec=float(n.separation_arcsec),
-                            g_mag=float(n.phot_g_mean_mag) if n.phot_g_mean_mag is not None else None,
-                            estimated_flux_fraction=float(_flux_fraction(n.phot_g_mean_mag) or 0.0),
+                            separation_arcsec=float(neighbor.separation_arcsec),
+                            g_mag=float(neighbor.phot_g_mean_mag)
+                            if neighbor.phot_g_mean_mag is not None
+                            else None,
+                            estimated_flux_fraction=float(_flux_fraction(neighbor.phot_g_mean_mag) or 0.0),
                             radius_rsun=None,
                         )
                     )
@@ -1419,8 +1433,11 @@ def enrich_candidate(
             metrics = getattr(r, "metrics", None)
             if not isinstance(metrics, dict):
                 continue
+            raw_metric = metrics.get(metric_key)
+            if raw_metric is None:
+                return None
             try:
-                val = float(metrics.get(metric_key))
+                val = float(raw_metric)
             except Exception:
                 return None
             return val if np.isfinite(val) else None
@@ -1577,10 +1594,13 @@ def enrich_candidate(
         # U17: Warn when measured PF01 depth differs strongly from catalog/input depth.
         if primary_depth_ppm is not None:
             measured_depth_ppm_raw = pf01_metrics.get("depth_est_ppm")
-            try:
-                measured_depth_ppm = float(measured_depth_ppm_raw)
-            except Exception:
+            if measured_depth_ppm_raw is None:
                 measured_depth_ppm = None
+            else:
+                try:
+                    measured_depth_ppm = float(measured_depth_ppm_raw)
+                except Exception:
+                    measured_depth_ppm = None
             if (
                 measured_depth_ppm is not None
                 and np.isfinite(measured_depth_ppm)
@@ -1656,6 +1676,9 @@ def enrich_candidate(
         return t, f, fe, stats
 
     prepared = _prepare_lc_for_diagnostics()
+    ephemeris_specificity: dict[str, Any] | SkipBlock
+    alias_diagnostics: dict[str, Any] | SkipBlock
+    systematics_proxy: dict[str, Any] | SkipBlock
     if prepared is None:
         ephemeris_specificity = make_skip_block("lc_unavailable")
         alias_diagnostics = make_skip_block("lc_unavailable")
@@ -1664,7 +1687,6 @@ def enrich_candidate(
     else:
         lc_t, lc_f, lc_fe, lc_stats = prepared
 
-        ephemeris_specificity: dict[str, Any]
         if not getattr(config, "enable_ephemeris_specificity", False):
             ephemeris_specificity = make_skip_block("disabled")
         else:
@@ -1677,7 +1699,7 @@ def enrich_candidate(
                 )
 
                 st_cfg = SmoothTemplateConfig()
-                res = score_fixed_period_numpy(
+                specificity_result = score_fixed_period_numpy(
                     time=lc_t,
                     flux=lc_f,
                     flux_err=lc_fe,
@@ -1693,7 +1715,7 @@ def enrich_candidate(
                     period_days=float(period_days),
                     t0_btjd=float(t0_btjd),
                     duration_hours=float(duration_hours),
-                    observed_score=float(res.score),
+                    observed_score=float(specificity_result.score),
                     n_trials=int(getattr(config, "ephemeris_specificity_n_phase_shifts", 80)),
                     strategy="grid",
                     random_seed=0,
@@ -1703,18 +1725,18 @@ def enrich_candidate(
                     time=lc_t,
                     flux=lc_f,
                     flux_err=lc_fe,
-                    template=res.template,
+                    template=specificity_result.template,
                     period_days=float(period_days),
                     t0_btjd=float(t0_btjd),
                     duration_hours=float(duration_hours),
                 )
 
                 ephemeris_specificity = {
-                    "smooth_score": float(res.score),
+                    "smooth_score": float(specificity_result.score),
                     "null_pvalue": float(null.p_value_one_sided),
                     "few_point_fraction": float(conc.top_5_fraction_abs),
-                    "depth_hat_ppm": float(res.depth_hat * 1e6),
-                    "depth_sigma_ppm": float(res.depth_sigma * 1e6),
+                    "depth_hat_ppm": float(specificity_result.depth_hat * 1e6),
+                    "depth_sigma_ppm": float(specificity_result.depth_sigma * 1e6),
                     "null_z": float(null.z_score),
                     "null_n_trials": int(null.n_trials),
                     "in_transit_contribution_abs": float(conc.in_transit_contribution_abs),
@@ -1727,7 +1749,6 @@ def enrich_candidate(
                     error=str(e),
                 )
 
-        alias_diagnostics: dict[str, Any]
         if not getattr(config, "enable_alias_diagnostics", False):
             alias_diagnostics = make_skip_block("disabled")
         else:
@@ -1774,7 +1795,6 @@ def enrich_candidate(
                     error=str(e),
                 )
 
-        systematics_proxy: dict[str, Any]
         if not getattr(config, "enable_systematics_proxy", False):
             systematics_proxy = make_skip_block("disabled")
         else:

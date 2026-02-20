@@ -14,9 +14,10 @@ from .aggregates import (
     PixelTimeseriesInput,
     V09Metrics,
     build_aggregates,
+    normalize_verdict,
 )
 from .config import FeatureConfig
-from .evidence import RawEvidencePacket, is_skip_block
+from .evidence import RawEvidencePacket, SkipBlock, is_skip_block
 from .schema import FEATURE_SCHEMA_VERSION, EnrichedRow
 
 # -----------------------------------------------------------------------------
@@ -73,7 +74,7 @@ def _as_int(x: Any) -> int | None:
 
 
 def _extract_ghost_sectors(
-    pixel_host_hypotheses: dict[str, Any] | None,
+    pixel_host_hypotheses: dict[str, Any] | SkipBlock | None,
 ) -> list[GhostSectorInput] | None:
     """Extract ghost sector inputs from pixel_host_hypotheses."""
     if not isinstance(pixel_host_hypotheses, dict) or is_skip_block(pixel_host_hypotheses):
@@ -104,7 +105,7 @@ def _extract_ghost_sectors(
 
 
 def _extract_localization(
-    localization: dict[str, Any] | None,
+    localization: dict[str, Any] | SkipBlock | None,
 ) -> LocalizationInput | None:
     """Extract localization input from top-level localization dict."""
     if not isinstance(localization, dict) or is_skip_block(localization):
@@ -112,7 +113,7 @@ def _extract_localization(
     result: LocalizationInput = {}
     verdict = localization.get("verdict")
     if verdict is not None:
-        result["verdict"] = verdict
+        result["verdict"] = str(verdict)
     target_dist = _as_float(localization.get("target_distance_arcsec"))
     if target_dist is not None:
         result["target_distance_arcsec"] = target_dist
@@ -147,7 +148,7 @@ def _extract_v09_metrics(check_results: list[dict[str, Any]]) -> V09Metrics | No
 
 
 def _extract_pixel_host(
-    pixel_host_hypotheses: dict[str, Any] | None,
+    pixel_host_hypotheses: dict[str, Any] | SkipBlock | None,
     check_results: list[dict[str, Any]],
 ) -> PixelHostInput | None:
     """Extract pixel host input from pixel_host_hypotheses and check results."""
@@ -181,7 +182,9 @@ def _extract_pixel_host(
     if any(v is not None for v in [ts_verdict, ts_delta, ts_best, ts_n_windows, ts_agrees]):
         ts_input: PixelTimeseriesInput = {}
         if ts_verdict is not None:
-            ts_input["verdict"] = ts_verdict
+            normalized_verdict = normalize_verdict(str(ts_verdict))
+            if normalized_verdict is not None:
+                ts_input["verdict"] = normalized_verdict
         if ts_delta is not None:
             ts_input["delta_chi2"] = ts_delta
         if ts_best is not None:
@@ -198,9 +201,8 @@ def _extract_pixel_host(
         result["ghost_by_sector"] = ghost_sectors
 
     # Host plausibility
-    host_plaus = _extract_host_plausibility_from_auto(
-        pixel_host_hypotheses.get("host_plausibility_auto")
-    )
+    raw_host_plaus = pixel_host_hypotheses.get("host_plausibility_auto")
+    host_plaus = _extract_host_plausibility_from_auto(raw_host_plaus if isinstance(raw_host_plaus, dict) else None)
     if host_plaus:
         result["host_plausibility"] = host_plaus
 
