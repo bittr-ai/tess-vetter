@@ -99,7 +99,7 @@ Follow-up context assembly from cached artifacts and optional notes:
 
 .. code-block:: bash
 
-   btv followup TOI-123.01 --cache-dir persistent_cache --headers-only --notes-file working_docs/followup_notes.txt -o outputs/followup/toi-123.01.json
+   btv followup TOI-123.01 --cache-dir persistent_cache --headers-only --notes-file outputs/followup/notes/toi-123.01.txt -o outputs/followup/toi-123.01.json
 
 Use :doc:`verification/confidence_semantics` as the canonical reference for:
 
@@ -224,7 +224,7 @@ Supported commands:
 - ``btv dilution``
 - ``btv fit``
 - ``btv contrast-curves``
-- ``btv contrast-curves summarize``
+- ``btv contrast-curve-summary``
 - ``btv pipeline run``
 - ``btv pipeline profiles``
 - ``btv pipeline validate``

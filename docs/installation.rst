@@ -39,23 +39,17 @@ for development:
    cd bittr-tess-vetter
    uv sync --all-extras --group dev
 
-Namespace Migration (Breaking Change)
--------------------------------------
+Python Imports
+--------------
 
-The legacy ``bittr_tess_vetter`` import path is removed. Only ``tess_vetter`` is supported.
-
-Update imports as follows:
+Use ``tess_vetter`` imports:
 
 .. code-block:: python
 
    import tess_vetter
    import tess_vetter.api as btv
 
-If you still import from ``bittr_tess_vetter``, update those imports to ``tess_vetter``.
-
-Clean break: persisted Python-object serialization (for example, pickle artifacts containing
-``bittr_tess_vetter.*`` module paths) is not supported after the rename. Regenerate those
-artifacts under ``tess_vetter``.
+Persisted Python-object serialization should be regenerated under the current package version.
 
 Optional Dependencies
 ---------------------

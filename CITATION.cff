@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
 title: "tess-vetter"
-version: 0.1.0
-date-released: 2026-01-14
+version: 0.2.2
+date-released: 2026-02-20
 license: BSD-3-Clause
 repository-code: "https://github.com/bittr-ai/bittr-tess-vetter"
 url: "https://github.com/bittr-ai/bittr-tess-vetter"
