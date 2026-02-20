@@ -181,6 +181,11 @@ def assemble_summary(ctx: ReportAssemblyContext) -> tuple[dict[str, Any], dict[s
         summary[block.key] = block.builder(ctx)
         if block.reference_block is not None:
             reference_ids.update(refs_for_summary_block(block.reference_block))
+    contamination_summary = summary.get("stellar_contamination_summary")
+    if isinstance(contamination_summary, dict):
+        summary["stellar_contamination_risk_scalar"] = contamination_summary.get("risk_scalar")
+    else:
+        summary["stellar_contamination_risk_scalar"] = None
     summary["references"] = reference_entries(reference_ids)
 
     if ctx.bundle is not None:

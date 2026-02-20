@@ -139,6 +139,10 @@ def test_btv_timing_success_contract_payload(monkeypatch, tmp_path: Path) -> Non
     monkeypatch.setattr(timing_cli.api.timing, "analyze_ttvs", _fake_analyze_ttvs)
     monkeypatch.setattr(timing_cli.api.timing, "timing_series", _fake_timing_series)
     monkeypatch.setattr(
+        "bittr_tess_vetter.cli.timing_cli._compute_schedulability_scalar",
+        lambda **_kwargs: 0.61,
+    )
+    monkeypatch.setattr(
         "bittr_tess_vetter.cli.timing_cli._prealign_candidate",
         _fake_prealign_candidate,
     )
@@ -190,6 +194,8 @@ def test_btv_timing_success_contract_payload(monkeypatch, tmp_path: Path) -> Non
     assert payload["alignment"]["n_transits_post"] == 2
     assert payload["diagnostics"]["selected"]["accepted_epochs"] == 2
     assert payload["next_actions"][0]["code"] == "TIMING_MEASURABLE"
+    assert payload["schedulability_scalar"] == 0.61
+    assert payload["result"]["schedulability_scalar"] == 0.61
     assert payload["result"]["next_actions"][0]["code"] == "TIMING_MEASURABLE"
     assert payload["result"]["transit_times"] == payload["transit_times"]
     assert payload["result"]["ttv"] == payload["ttv"]
@@ -384,6 +390,10 @@ def test_btv_timing_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: Pa
         "timing_series",
         lambda **_kwargs: type("S", (), {"to_dict": lambda self: {"n_points": 0}})(),
     )
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.timing_cli._compute_schedulability_scalar",
+        lambda **_kwargs: 0.22,
+    )
 
     out_path = tmp_path / "timing_positional.json"
     runner = CliRunner()
@@ -413,8 +423,6 @@ def test_btv_timing_report_file_inputs_override_toi(monkeypatch, tmp_path: Path)
         ),
         encoding="utf-8",
     )
-
-    seen: dict[str, Any] = {}
 
     monkeypatch.setattr(
         "bittr_tess_vetter.cli.timing_cli._resolve_candidate_inputs",
@@ -448,6 +456,10 @@ def test_btv_timing_report_file_inputs_override_toi(monkeypatch, tmp_path: Path)
     )
     monkeypatch.setattr(timing_cli.api.timing, "analyze_ttvs", lambda **_kwargs: type("R", (), {"to_dict": lambda self: {}})())
     monkeypatch.setattr(timing_cli.api.timing, "timing_series", lambda **_kwargs: type("S", (), {"to_dict": lambda self: {}})())
+    monkeypatch.setattr(
+        "bittr_tess_vetter.cli.timing_cli._compute_schedulability_scalar",
+        lambda **_kwargs: 0.44,
+    )
 
     out_path = tmp_path / "timing_report_file.json"
     runner = CliRunner()

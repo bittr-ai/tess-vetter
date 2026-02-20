@@ -159,6 +159,8 @@ def test_btv_ephemeris_reliability_success_contract_payload(monkeypatch, tmp_pat
     assert isinstance(payload["result"]["schedulability_summary"]["scalar"], float)
     assert isinstance(payload["result"]["schedulability_summary"]["components"], dict)
     assert isinstance(payload["result"]["schedulability_summary"]["provenance"], dict)
+    assert payload["schedulability_scalar"] == 0.73
+    assert payload["result"]["schedulability_scalar"] == 0.73
     assert "verdict" in payload
     assert "verdict_source" in payload
     assert payload["verdict"] == "ok"

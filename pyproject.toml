@@ -267,7 +267,6 @@ module = [
   "bittr_tess_vetter.api.pixel_localize",
   "bittr_tess_vetter.api.transit_fit",
   "bittr_tess_vetter.api.wcs_localization",
-  "bittr_tess_vetter.api.evidence",
   "bittr_tess_vetter.transit.batman_model",
   "bittr_tess_vetter.compute.periodogram",
   "bittr_tess_vetter.compute.mlx_detection",

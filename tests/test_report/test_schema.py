@@ -82,6 +82,7 @@ def test_report_to_json_has_no_unknown_summary_or_plot_data_keys() -> None:
         "references",
         "secondary_scan_summary",
         "stellar_contamination_summary",
+        "stellar_contamination_risk_scalar",
         "ephemeris_schedulability_summary",
         "stellar",
         "tic_id",
@@ -212,6 +213,7 @@ def test_report_payload_schema_includes_new_deterministic_summary_blocks() -> No
     assert "timing_summary" in summary_props
     assert "secondary_scan_summary" in summary_props
     assert "stellar_contamination_summary" in summary_props
+    assert "stellar_contamination_risk_scalar" in summary_props
     assert "ephemeris_schedulability_summary" in summary_props
     assert "data_gap_summary" in summary_props
     assert "check_execution" in summary_props
@@ -255,10 +257,12 @@ def test_report_payload_accepts_stellar_contamination_summary_scalars_and_nulls(
         "provenance": {"source_blocks": ["summary.variability_summary", "summary.noise_summary"]},
         "semantics": {"threshold_free": True},
     }
+    payload["summary"]["stellar_contamination_risk_scalar"] = 0.37
 
     parsed = ReportPayloadModel.model_validate(payload)
     assert parsed.summary.stellar_contamination_summary is not None
     assert parsed.summary.stellar_contamination_summary.risk_scalar == pytest.approx(0.37)
+    assert parsed.summary.stellar_contamination_risk_scalar == pytest.approx(0.37)
     assert (
         parsed.summary.stellar_contamination_summary.components["variability_index"].transformed_value
         is None
@@ -417,6 +421,7 @@ def test_report_payload_rejects_non_scalar_values_in_new_summary_blocks() -> Non
         "provenance": [],
         "semantics": {"threshold_free": True},
     }
+    payload["summary"]["stellar_contamination_risk_scalar"] = {"bad": 0.2}
     payload["summary"]["ephemeris_schedulability_summary"] = {
         "scalar": {"bad": 0.5},
         "components": {"signal_vs_phase_null": "high"},

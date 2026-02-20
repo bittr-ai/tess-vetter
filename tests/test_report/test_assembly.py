@@ -80,6 +80,11 @@ def test_assemble_summary_adds_check_method_refs_and_references() -> None:
     assert isinstance(summary["references"], list)
     assert summary["odd_even_summary"]["depth_diff_ppm"] == 100.0
     assert "stellar_contamination_summary" in summary
+    assert "stellar_contamination_risk_scalar" in summary
+    assert (
+        summary["stellar_contamination_risk_scalar"]
+        == summary["stellar_contamination_summary"]["risk_scalar"]
+    )
     assert "ephemeris_schedulability_summary" in summary
     assert summary["verdict"] == "ALL_CHECKS_PASSED"
     assert summary["verdict_source"] == "$.summary.checks"
@@ -126,6 +131,7 @@ def test_stellar_contamination_summary_is_present_and_null_safe_when_inputs_miss
     contamination = summary["stellar_contamination_summary"]
 
     assert contamination["risk_scalar"] is None
+    assert summary["stellar_contamination_risk_scalar"] is None
     assert contamination["n_components_available"] == 0
     assert contamination["n_components_total"] == 4
     assert contamination["components"]["variability_index"]["raw_value"] is None

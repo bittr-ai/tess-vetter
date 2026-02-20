@@ -22,6 +22,15 @@ def test_evidence_table_extracts_mixed_top_level_and_nested_fields(tmp_path: Pat
     systematics_path = _write_step(toi_dir / "02_systematics.json", {"result": {"verdict": "SYSTEMATICS_OK"}})
     ephemeris_path = _write_step(toi_dir / "03_ephemeris.json", {"verdict": "EPHEMERIS_OK"})
     timing_path = _write_step(toi_dir / "04_timing.json", {"result": {"verdict": "TIMING_OK"}})
+    report_path = _write_step(
+        toi_dir / "04b_report.json",
+        {
+            "summary": {
+                "stellar_contamination_summary": {"risk_scalar": 0.37},
+                "stellar_contamination_risk_scalar": 0.37,
+            }
+        },
+    )
     localize_path = _write_step(
         toi_dir / "05_localize.json",
         {
@@ -70,6 +79,7 @@ def test_evidence_table_extracts_mixed_top_level_and_nested_fields(tmp_path: Pat
             {"op": "systematics_proxy", "status": "ok", "step_output_path": systematics_path},
             {"op": "ephemeris_reliability", "status": "ok", "step_output_path": ephemeris_path},
             {"op": "timing", "status": "ok", "step_output_path": timing_path},
+            {"op": "report", "status": "ok", "step_output_path": report_path},
             {"op": "localize_host", "status": "ok", "step_output_path": localize_path},
             {"op": "dilution", "status": "ok", "step_output_path": dilution_path},
             {"op": "fpp_run", "status": "ok", "step_output_path": fpp_path},
@@ -96,6 +106,7 @@ def test_evidence_table_extracts_mixed_top_level_and_nested_fields(tmp_path: Pat
     assert row["known_planet_status"] == "confirmed_same_planet"
     assert row["known_planet_name"] == "TOI-411 c"
     assert row["known_planet_period"] == pytest.approx(9.57307)
+    assert row["stellar_contamination_risk_scalar"] == pytest.approx(0.37)
 
 
 def test_evidence_table_extracts_contrast_curve_fields_and_selected_metadata(tmp_path: Path) -> None:

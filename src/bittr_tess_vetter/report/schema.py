@@ -241,6 +241,7 @@ class ReportSummaryModel(BaseModel):
     noise_summary: NoiseSummaryModel | None = None
     variability_summary: VariabilitySummaryModel | None = None
     stellar_contamination_summary: StellarContaminationSummaryModel | None = None
+    stellar_contamination_risk_scalar: float | None = None
     ephemeris_schedulability_summary: EphemerisSchedulabilitySummaryModel | None = None
     references: list[ReferenceEntryModel] = Field(default_factory=list)
     enrichment: dict[str, Any] | None = None

@@ -10,6 +10,8 @@ import numpy as np
 
 from bittr_tess_vetter import api
 from bittr_tess_vetter.api import ephemeris_refinement as ephemeris_refinement_api
+from bittr_tess_vetter.api import ephemeris_reliability as ephemeris_reliability_api
+from bittr_tess_vetter.api.ephemeris_specificity import SmoothTemplateConfig
 from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
 from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 from bittr_tess_vetter.cli.common_cli import (
@@ -52,6 +54,37 @@ def _derive_timing_verdict(next_actions: Any) -> tuple[str | None, str | None]:
             if action is not None:
                 return str(action), "$.next_actions[0].action"
     return None, None
+
+
+def _compute_schedulability_scalar(
+    *,
+    lc: LightCurve,
+    candidate: Candidate,
+) -> float | None:
+    try:
+        internal_lc = lc.to_internal()
+        time = np.asarray(internal_lc.time, dtype=np.float64)
+        flux = np.asarray(internal_lc.flux, dtype=np.float64)
+        flux_err = np.asarray(internal_lc.flux_err, dtype=np.float64)
+        valid = np.asarray(internal_lc.valid_mask, dtype=bool)
+        finite = np.isfinite(time) & np.isfinite(flux) & np.isfinite(flux_err)
+        mask = valid & finite
+        if not np.any(mask):
+            return None
+        regime = ephemeris_reliability_api.compute_reliability_regime_numpy(
+            time=time[mask],
+            flux=flux[mask],
+            flux_err=flux_err[mask],
+            period_days=float(candidate.ephemeris.period_days),
+            t0_btjd=float(candidate.ephemeris.t0_btjd),
+            duration_hours=float(candidate.ephemeris.duration_hours),
+            config=SmoothTemplateConfig(),
+        )
+        summary = ephemeris_reliability_api.compute_schedulability_summary_from_regime_result(regime)
+        scalar = float(summary.scalar)
+        return scalar if np.isfinite(scalar) else None
+    except Exception:
+        return None
 
 
 def _transit_times_to_dicts(transit_times: list[Any]) -> list[dict[str, Any]]:
@@ -533,6 +566,11 @@ def timing_command(
             min_snr=float(min_snr),
         ),
     }
+    schedulability_scalar = _compute_schedulability_scalar(
+        lc=lc,
+        candidate=candidate_for_timing,
+    )
+    result_payload["schedulability_scalar"] = schedulability_scalar
     verdict, verdict_source = _derive_timing_verdict(result_payload["next_actions"])
     result_payload["verdict"] = verdict
     result_payload["verdict_source"] = verdict_source
@@ -547,6 +585,7 @@ def timing_command(
         "next_actions": result_payload["next_actions"],
         "verdict": verdict,
         "verdict_source": verdict_source,
+        "schedulability_scalar": schedulability_scalar,
         "inputs_summary": {
             "input_resolution": input_resolution,
         },

@@ -78,8 +78,46 @@ Backward compatibility note:
 - `btv fetch cache-sectors`: `cli.cache_sectors.v1`
 - `btv toi-query`: `cli.toi_query.v1`
 
+## Timing and Ephemeris fields
+
+### `btv ephemeris-reliability` (`cli.ephemeris_reliability.v1`)
+- Additive canonical scalar fields are emitted in both locations:
+- top-level: `schedulability_scalar`
+- nested: `result.schedulability_scalar`
+- Source: `result.schedulability_summary.scalar` (from schedulability summary computation).
+- Nullability: may be `null` when summary scalar cannot be derived.
+
+### `btv timing` (`cli.timing.v1`)
+- Additive canonical scalar fields are emitted in both locations:
+- top-level: `schedulability_scalar`
+- nested: `result.schedulability_scalar`
+- Source: ephemeris reliability regime + schedulability summary computation evaluated on the timing candidate/series.
+- Nullability: may be `null` when schedulability computation is unavailable.
+
 ### Pipeline outputs relevant to release contracts
 - Pipeline evidence table JSON: `pipeline.evidence_table.v5`
+- Pipeline run manifest JSON: `pipeline.run_manifest.v1`
+- Per-TOI pipeline result JSON: `pipeline.result.v1`
+
+## Pipeline-Run Contract Notes
+
+For `btv pipeline run`, contract consumers should treat these behaviors as stable:
+
+- Manifest options include `resume`:
+  - `run_manifest.json` records `options.resume` exactly from CLI (`--resume` => `true`).
+- Resume step semantics:
+  - When `--resume` reuses completed checkpoints, per-step rows in `pipeline_result.json` retain `status: "ok"` and set `skipped_resume: true`.
+  - Checkpoint marker files remain under `<out_dir>/<toi>/checkpoints/*.done.json` and are used as the resume source of truth with matching input fingerprints.
+- Partial-failure semantics with `--continue-on-error`:
+  - CLI summary line reports counts as `ok`, `partial`, `failed`.
+  - A TOI with at least one failed step and continued execution is labeled `status: "partial"` in both manifest results and per-TOI `pipeline_result.json`.
+  - Failed steps are labeled `status: "failed"` in `pipeline_result.json.steps`, while subsequent steps may still be `status: "ok"`.
+
+#### Evidence table schema highlights (`pipeline.evidence_table.v5`)
+- Per-row key `stellar_contamination_risk_scalar` is included in JSON rows and CSV columns.
+- Source mapping:
+  - preferred: `summary.stellar_contamination_risk_scalar`
+  - fallback: `summary.stellar_contamination_summary.risk_scalar`
 
 ## Consumer guidance
 

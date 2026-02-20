@@ -5,14 +5,26 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, is_dataclass
 from enum import Enum
-from typing import Any
+from typing import TypeAlias, TypedDict
 
 import numpy as np
 
 from bittr_tess_vetter.api.types import CheckResult
 
+JsonScalar: TypeAlias = str | int | float | bool | None
+JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
 
-def _jsonable(value: Any) -> Any:
+
+class EvidenceItem(TypedDict):
+    id: str
+    name: str
+    passed: bool | None
+    confidence: float | None
+    metrics_only: bool
+    details: JsonValue
+
+
+def _jsonable(value: object) -> JsonValue:
     if value is None:
         return None
     if isinstance(value, (str, int, float, bool)):
@@ -23,7 +35,7 @@ def _jsonable(value: Any) -> Any:
         return value.item()
     if isinstance(value, np.ndarray):
         return value.tolist()
-    if is_dataclass(value):
+    if is_dataclass(value) and not isinstance(value, type):
         return _jsonable(asdict(value))
     if isinstance(value, Mapping):
         return {str(k): _jsonable(v) for k, v in value.items()}
@@ -33,7 +45,7 @@ def _jsonable(value: Any) -> Any:
     return str(value)
 
 
-def checks_to_evidence_items(checks: list[CheckResult]) -> list[dict[str, Any]]:
+def checks_to_evidence_items(checks: list[CheckResult]) -> list[EvidenceItem]:
     """Convert CheckResult objects to JSON-serializable evidence-like dicts.
 
     The canonical CheckResult uses status-based semantics (ok/skipped/error).
@@ -42,7 +54,7 @@ def checks_to_evidence_items(checks: list[CheckResult]) -> list[dict[str, Any]]:
     - status="error" -> passed=False
     - status="skipped" -> passed=None
     """
-    items: list[dict[str, Any]] = []
+    items: list[EvidenceItem] = []
     for c in checks:
         # The .details property combines metrics/flags/notes/raw for backward compat
         details = dict(c.details)

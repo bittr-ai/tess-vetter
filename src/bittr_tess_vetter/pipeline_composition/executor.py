@@ -15,7 +15,11 @@ from typing import Any
 
 from bittr_tess_vetter.cli.common_cli import EXIT_RUNTIME_ERROR, BtvCliError
 from bittr_tess_vetter.pipeline_composition.ref_resolver import extract_path, resolve_value
-from bittr_tess_vetter.pipeline_composition.schema import CompositionSpec, StepSpec, composition_digest
+from bittr_tess_vetter.pipeline_composition.schema import (
+    CompositionSpec,
+    StepSpec,
+    composition_digest,
+)
 
 _OP_TO_COMMAND = {
     "vet": "vet",
@@ -584,6 +588,12 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
         payloads_by_step_id=payloads_by_step_id,
         payloads_by_step_id_and_op=payloads_by_step_id_and_op,
     )
+    report_payload = _maybe_load_step(
+        "report",
+        payloads_by_op=payloads_by_op,
+        payloads_by_step_id=payloads_by_step_id,
+        payloads_by_step_id_and_op=payloads_by_step_id_and_op,
+    )
     dilution = _maybe_load_step(
         "dilution",
         payloads_by_op=payloads_by_op,
@@ -812,7 +822,29 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
     known_planet_name = matched_planet.get("name")
     known_planet_period = matched_planet.get("period")
 
-    concern_flags = set(str(x) for x in (toi_result.get("concern_flags") or []) if x is not None)
+    stellar_contamination_risk_scalar = _extract_value_from_payload(
+        report_payload,
+        "stellar_contamination_risk_scalar",
+    )
+    if stellar_contamination_risk_scalar is None:
+        stellar_contamination_risk_scalar = _extract_value_from_payload(
+            vet_payload,
+            "stellar_contamination_risk_scalar",
+        )
+    if stellar_contamination_risk_scalar is None:
+        contamination_summary = _extract_value_from_payload(
+            report_payload,
+            "stellar_contamination_summary",
+        )
+        if not isinstance(contamination_summary, dict):
+            contamination_summary = _extract_value_from_payload(
+                vet_payload,
+                "stellar_contamination_summary",
+            )
+        if isinstance(contamination_summary, dict):
+            stellar_contamination_risk_scalar = contamination_summary.get("risk_scalar")
+
+    concern_flags = {str(x) for x in (toi_result.get("concern_flags") or []) if x is not None}
     for payload in payloads_by_step_id.values():
         concern_flags.update(_extract_concern_flags(payload))
     for payload in payloads_by_op.values():
@@ -861,6 +893,7 @@ def _extract_evidence_row(toi_result: dict[str, Any], *, out_dir: Path) -> dict[
         "known_planet_status": known_planet_status,
         "known_planet_name": known_planet_name,
         "known_planet_period": known_planet_period,
+        "stellar_contamination_risk_scalar": stellar_contamination_risk_scalar,
         "concern_flags": sorted(concern_flags),
     }
     return row
@@ -917,6 +950,7 @@ def _write_evidence_table(*, out_dir: Path, toi_results: list[dict[str, Any]]) -
         "known_planet_status",
         "known_planet_name",
         "known_planet_period",
+        "stellar_contamination_risk_scalar",
         "concern_flags",
     ]
     with csv_path.open("w", encoding="utf-8", newline="") as fh:

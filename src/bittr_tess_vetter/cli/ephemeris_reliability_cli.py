@@ -43,6 +43,24 @@ def _derive_ephemeris_reliability_verdict(result_payload: Any) -> tuple[str | No
     return None, None
 
 
+def _extract_schedulability_scalar(result_payload: Any) -> float | None:
+    if not isinstance(result_payload, dict):
+        return None
+    summary = result_payload.get("schedulability_summary")
+    if not isinstance(summary, dict):
+        return None
+    scalar = summary.get("scalar")
+    if scalar is None:
+        return None
+    try:
+        scalar_value = float(scalar)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(scalar_value):
+        return None
+    return scalar_value
+
+
 @click.command("ephemeris-reliability")
 @click.argument("toi_arg", required=False)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
@@ -289,11 +307,14 @@ def ephemeris_reliability_command(
     verdict, verdict_source = _derive_ephemeris_reliability_verdict(result_payload)
     result_payload["verdict"] = verdict
     result_payload["verdict_source"] = verdict_source
+    schedulability_scalar = _extract_schedulability_scalar(result_payload)
+    result_payload["schedulability_scalar"] = schedulability_scalar
     payload = {
         "schema_version": "cli.ephemeris_reliability.v1",
         "result": result_payload,
         "verdict": verdict,
         "verdict_source": verdict_source,
+        "schedulability_scalar": schedulability_scalar,
         "inputs_summary": {
             "input_resolution": input_resolution,
         },
