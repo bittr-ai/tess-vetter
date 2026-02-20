@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import numpy as np
 
@@ -37,6 +37,15 @@ _REQUIRED_METRIC_KEYS_BY_CHECK: dict[str, tuple[str, ...]] = {
 }
 
 
+class _ContaminationComponentSpec(TypedDict):
+    raw_value: float | None
+    weight: float
+    offset: float
+    scale: float
+    unit: str
+    source_path: str
+
+
 def _model_dump_like(value: Any) -> Any:
     """Serialize model-like objects without requiring pydantic at call sites."""
     if hasattr(value, "model_dump"):
@@ -48,7 +57,8 @@ def _model_dump_like(value: Any) -> Any:
 
 def _build_odd_even_summary(checks: dict[str, CheckResult]) -> dict[str, Any]:
     """Build deterministic odd/even summary from V01 metrics."""
-    metrics = checks.get("V01").metrics if checks.get("V01") is not None else {}
+    check_v01 = checks.get("V01")
+    metrics = check_v01.metrics if check_v01 is not None else {}
     odd_depth_ppm = _coerce_finite_float(metrics.get("depth_odd_ppm"))
     if odd_depth_ppm is None:
         odd_depth_ppm = _coerce_finite_float(metrics.get("odd_depth"), scale=1e6)
@@ -283,7 +293,7 @@ def _build_stellar_contamination_summary(
     )
     noise_summary = _build_noise_summary(lc_summary=lc_summary, lc_robustness=lc_robustness)
 
-    component_specs = {
+    component_specs: dict[str, _ContaminationComponentSpec] = {
         "variability_index": {
             "raw_value": _coerce_finite_float(variability_summary.get("variability_index")),
             "weight": 0.35,
@@ -636,7 +646,9 @@ def _build_timing_summary(
     for epoch, snr in zip(epochs, snr_values, strict=False):
         if snr is None:
             continue
-        if best_snr is None or snr > best_snr or (snr == best_snr and epoch < deepest_epoch):
+        if best_snr is None or snr > best_snr or (
+            snr == best_snr and deepest_epoch is not None and epoch < deepest_epoch
+        ):
             best_snr = snr
             deepest_epoch = int(epoch)
 
@@ -708,7 +720,8 @@ def _build_secondary_scan_summary(
 
 def _build_data_gap_summary(checks: dict[str, CheckResult]) -> dict[str, Any]:
     """Build scalar V13 in-coverage data-gap summary."""
-    metrics = checks.get("V13").metrics if checks.get("V13") is not None else {}
+    check_v13 = checks.get("V13")
+    metrics = check_v13.metrics if check_v13 is not None else {}
     return {
         "missing_frac_max_in_coverage": _coerce_finite_float(
             metrics.get("missing_frac_max_in_coverage")

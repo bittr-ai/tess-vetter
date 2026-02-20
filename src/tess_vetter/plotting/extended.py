@@ -330,7 +330,7 @@ def plot_ephemeris_reliability(
         # Period neighborhood inset (optional)
         if show_period_neighborhood and len(periods) > 0 and len(period_scores) > 0:
             try:
-                inset = ax.inset_axes([0.58, 0.10, 0.40, 0.35])
+                inset = ax.inset_axes((0.58, 0.10, 0.40, 0.35))
                 inset.plot(periods, period_scores, color=score_color, alpha=0.9, linewidth=1.2)
                 best_idx = int(np.argmax(period_scores))
                 inset.scatter([periods[best_idx]], [period_scores[best_idx]], color=score_color, s=20, zorder=5)
@@ -592,7 +592,8 @@ def plot_sensitivity_sweep(
             from contextlib import suppress
 
             with suppress(Exception):
-                fig.tight_layout()
+                if hasattr(fig, "tight_layout"):
+                    fig.tight_layout()
 
     return ax
 

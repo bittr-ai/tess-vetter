@@ -626,6 +626,7 @@ def _build_lc_robustness_data(
     half_window_days = baseline_window_mult * duration_days
     in_half_days = duration_days / 2.0
 
+    cadence_days: float | None
     if len(time) > 1:
         cadence_days = float(np.median(np.diff(np.sort(time))))
         if cadence_days <= 0 or not np.isfinite(cadence_days):

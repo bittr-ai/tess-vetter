@@ -17,7 +17,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, Literal, overload
 
 import numpy as np
 
@@ -719,6 +719,32 @@ def _run_catalog_context(
             "coordinates_available": bool(target is not None and getattr(target, "ra", None) is not None and getattr(target, "dec", None) is not None),
         },
     )
+
+
+@overload
+def _select_tpf_sectors(
+    *,
+    strategy: str,
+    sectors_used: list[int],
+    requested: list[int] | None,
+    lc_api: LightCurve,
+    candidate_api: Candidate,
+    sector_times: dict[int, np.ndarray] | None = None,
+    return_scores: Literal[True],
+) -> tuple[list[int], dict[int, float]]: ...
+
+
+@overload
+def _select_tpf_sectors(
+    *,
+    strategy: str,
+    sectors_used: list[int],
+    requested: list[int] | None,
+    lc_api: LightCurve,
+    candidate_api: Candidate,
+    sector_times: dict[int, np.ndarray] | None = None,
+    return_scores: Literal[False] = False,
+) -> list[int]: ...
 
 
 def _select_tpf_sectors(

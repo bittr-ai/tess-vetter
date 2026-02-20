@@ -557,7 +557,8 @@ def _custom_views_section(data: dict[str, Any]) -> str:
         declared_status = (
             str(quality.get("status") if isinstance(quality, dict) else "").strip().lower()
         )
-        flags = quality.get("flags") if isinstance(quality, dict) else []
+        raw_flags = quality.get("flags") if isinstance(quality, dict) else []
+        flags = raw_flags if isinstance(raw_flags, list) else []
         reason = ", ".join(str(flag) for flag in flags if str(flag).strip())
 
         status = "ready"
