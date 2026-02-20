@@ -45,6 +45,12 @@ The `platform/` module is entirely optional and only used when explicitly import
 
 Requires Python 3.11–3.12.
 
+Breaking change: the legacy `bittr_tess_vetter` import path is removed. Use only `tess_vetter`.
+
+Migration:
+- Replace `import bittr_tess_vetter` with `import tess_vetter`.
+- Replace `from bittr_tess_vetter...` with `from tess_vetter...`.
+
 ### Minimal install (basic vetting)
 ```bash
 pip install tess-vetter

@@ -39,6 +39,20 @@ for development:
    cd bittr-tess-vetter
    uv sync --all-extras --group dev
 
+Namespace Migration (Breaking Change)
+-------------------------------------
+
+The legacy ``bittr_tess_vetter`` import path is removed. Only ``tess_vetter`` is supported.
+
+Update imports as follows:
+
+.. code-block:: python
+
+   import tess_vetter
+   import tess_vetter.api as btv
+
+If you still import from ``bittr_tess_vetter``, update those imports to ``tess_vetter``.
+
 Optional Dependencies
 ---------------------
 

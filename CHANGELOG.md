@@ -2,6 +2,12 @@
 
 This project follows semantic versioning (SemVer).
 
+## Unreleased
+
+- **Breaking change:** The legacy `bittr_tess_vetter` import path has been removed.
+- Only the `tess_vetter` namespace is supported.
+- Migration: replace `import bittr_tess_vetter` with `import tess_vetter` and replace `from bittr_tess_vetter...` with `from tess_vetter...`.
+
 ## 0.2.2 (2026-01-20)
 
 - Add static tutorial companion `docs/tutorials/10-toi-5807-check-by-check.md` so plots render in any IDE without running a notebook.
