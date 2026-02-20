@@ -77,12 +77,23 @@ jobs:
         run: |
           pip install dist/*.whl
 
-      - name: Test import
+      - name: Test import (wheel)
+        run: |
+          python -c "import tess_vetter.api as btv; print('Import successful')"
+          python -c "from tess_vetter.api import Ephemeris, LightCurve, Candidate; print('Types imported')"
+
+      - name: Install from sdist
+        run: |
+          pip uninstall -y tess-vetter || true
+          pip install dist/*.tar.gz
+
+      - name: Test import (sdist)
         run: |
           python -c "import tess_vetter.api as btv; print('Import successful')"
           python -c "from tess_vetter.api import Ephemeris, LightCurve, Candidate; print('Types imported')"
 
   publish-pypi:
+    if: ${{ !contains(github.ref_name, 'rc') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'alpha') }}
     needs: [build, test-build]
     runs-on: ubuntu-latest
     environment:
