@@ -3,12 +3,15 @@ from __future__ import annotations
 import numpy as np
 
 from tess_vetter.validation.base import (
+    bin_phase_curve,
     count_transits,
     get_in_transit_mask,
     get_odd_even_transit_indices,
     get_out_of_transit_mask,
     measure_transit_depth,
     phase_fold,
+    search_secondary_eclipse,
+    sigma_clip,
 )
 
 
@@ -35,6 +38,13 @@ def test_in_transit_mask_selects_expected_points() -> None:
     mask = get_in_transit_mask(time, period, t0, duration_hours)
     expected = np.array([False, True, False, False, True, False])
     np.testing.assert_array_equal(mask, expected)
+
+
+def test_in_transit_mask_excludes_exact_duration_boundary() -> None:
+    # duration_hours=2.4 -> half window = 0.05 d for period=1.
+    time = np.array([0.45, 0.50, 0.55], dtype=np.float64)
+    mask = get_in_transit_mask(time, period=1.0, t0=0.5, duration_hours=2.4)
+    np.testing.assert_array_equal(mask, np.array([False, True, False]))
 
 
 def test_out_of_transit_mask_is_complement_of_in_transit() -> None:
@@ -85,6 +95,15 @@ def test_measure_transit_depth_recovers_known_depth() -> None:
     assert np.isclose(depth, injected_depth, rtol=0.2)
 
 
+def test_measure_transit_depth_returns_default_for_empty_or_invalid_masks() -> None:
+    flux = np.array([1.0, np.nan, 0.9998], dtype=np.float64)
+    in_mask = np.array([False, True, False])
+    out_mask = np.array([False, False, False])
+    depth, depth_err = measure_transit_depth(flux, in_mask, out_mask)
+    assert depth == 0.0
+    assert depth_err == 1.0
+
+
 def test_count_transits_counts_covered_events() -> None:
     # 27 days baseline, period 3 => ~9 transits. With 10-min cadence and 3-hr duration,
     # min_points=3 should count most of them.
@@ -98,6 +117,11 @@ def test_count_transits_counts_covered_events() -> None:
     assert 7 <= n <= 10
 
 
+def test_count_transits_returns_zero_for_non_finite_time() -> None:
+    time = np.array([np.nan, np.inf, -np.inf], dtype=np.float64)
+    assert count_transits(time, period=2.0, t0=0.0, duration_hours=2.0) == 0
+
+
 def test_odd_even_transit_indices_parity_at_transit_centers() -> None:
     period = 2.0
     t0 = 1.0
@@ -106,3 +130,67 @@ def test_odd_even_transit_indices_parity_at_transit_centers() -> None:
     orbit_numbers, is_odd = get_odd_even_transit_indices(centers, period, t0)
     np.testing.assert_array_equal(orbit_numbers, np.arange(6))
     np.testing.assert_array_equal(is_odd, np.array([False, True, False, True, False, True]))
+
+
+def test_odd_even_transit_indices_handles_non_finite_inputs() -> None:
+    time = np.array([0.0, np.nan, 2.0, np.inf], dtype=np.float64)
+    orbit_numbers, is_odd = get_odd_even_transit_indices(time, period=2.0, t0=0.0)
+    np.testing.assert_array_equal(orbit_numbers, np.array([0, 0, 1, 0]))
+    np.testing.assert_array_equal(is_odd, np.array([False, False, True, False]))
+
+
+def test_bin_phase_curve_marks_empty_bins_with_nan() -> None:
+    phase = np.array([-0.5, 0.0, 0.5], dtype=np.float64)
+    flux = np.array([1.0, 0.99, 1.0], dtype=np.float64)
+    _, means, stds = bin_phase_curve(phase, flux, n_bins=4)
+    # The right edge (phase max) is excluded by binning's strict upper bound.
+    assert np.isnan(means[-1])
+    assert np.isnan(stds[-1])
+
+
+def test_sigma_clip_clips_outlier_and_keeps_constant_series() -> None:
+    values = np.array([0.0, 0.0, 0.0, 10.0], dtype=np.float64)
+    mask = sigma_clip(values, sigma=2.0, max_iters=5)
+    np.testing.assert_array_equal(mask, np.array([True, True, True, False]))
+
+    constant = np.array([1.23, 1.23, 1.23], dtype=np.float64)
+    constant_mask = sigma_clip(constant)
+    np.testing.assert_array_equal(constant_mask, np.array([True, True, True]))
+
+
+def test_sigma_clip_all_non_finite_returns_all_false() -> None:
+    values = np.array([np.nan, np.inf, -np.inf], dtype=np.float64)
+    mask = sigma_clip(values)
+    np.testing.assert_array_equal(mask, np.array([False, False, False]))
+
+
+def test_search_secondary_eclipse_recovers_injected_depth() -> None:
+    rng = np.random.default_rng(1)
+    time = np.linspace(0.0, 8.0, 4000, dtype=np.float64)
+    flux = np.ones_like(time) + rng.normal(0, 5e-5, size=time.size)
+    period = 2.0
+    t0 = 0.2
+    duration_hours = 2.0
+    injected_depth = 250e-6
+
+    secondary_mask = get_in_transit_mask(
+        time,
+        period=period,
+        t0=t0 + 0.5 * period,
+        duration_hours=duration_hours,
+    )
+    flux[secondary_mask] -= injected_depth
+
+    depth, depth_err, snr = search_secondary_eclipse(
+        time=time,
+        flux=flux,
+        period=period,
+        t0=t0,
+        duration_hours=duration_hours,
+        phase_offset=0.5,
+    )
+
+    assert depth > 0
+    assert depth_err > 0
+    assert snr > 0
+    assert np.isclose(depth, injected_depth, rtol=0.25)

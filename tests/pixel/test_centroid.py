@@ -11,16 +11,22 @@ import math
 import numpy as np
 import pytest
 
+import tess_vetter.pixel.centroid as centroid_mod
 from tess_vetter.pixel.centroid import (
     TESS_PIXEL_SCALE_ARCSEC,
     WINDOW_POLICIES,
     CentroidResult,
     CentroidShiftConfig,
     TransitParams,
+    _compute_flux_weighted_centroid_single_frame,
+    _compute_shift_significance_analytic,
+    _compute_shift_significance_bootstrap,
+    _compute_shift_significance_permutation,
     _compute_flux_weighted_centroid,
     _compute_per_cadence_centroids,
     _get_transit_masks,
     _reject_outliers,
+    compute_data_quality_confidence,
     compute_centroid_shift,
     detect_saturation_risk,
     robust_centroid_estimate,
@@ -1382,3 +1388,335 @@ class TestConfigObjectUsage:
         # Config should take precedence
         assert result.centroid_method == "mean"
         assert result.significance_method == "analytic"
+
+
+class TestCentroidBranchCoverage:
+    """Additional deterministic tests for uncovered control-flow branches."""
+
+    def test_single_frame_infinite_flux_returns_nan_centroid(self) -> None:
+        """Non-finite total flux returns (nan, nan)."""
+        frame = np.array([[np.inf, 0.0], [1.0, 2.0]], dtype=float)
+        cx, cy = _compute_flux_weighted_centroid_single_frame(frame)
+        assert math.isnan(cx)
+        assert math.isnan(cy)
+
+    def test_reject_outliers_uses_std_fallback_when_mad_zero(self) -> None:
+        """Constant centroid streams trigger MAD->std fallback and keep points."""
+        centroids_x = np.array([5.0, 5.0, 5.0, 5.0, 5.0, 5.2], dtype=float)
+        centroids_y = np.array([3.0, 3.0, 3.0, 3.0, 3.0, 3.2], dtype=float)
+        filtered_x, filtered_y, n_rejected = _reject_outliers(centroids_x, centroids_y, sigma=2.0)
+        assert n_rejected >= 0
+        assert len(filtered_x) >= 5
+        assert len(filtered_y) >= 5
+
+    def test_robust_centroid_returns_nan_when_outlier_rejection_leaves_too_few(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Outlier filtering path with <3 remaining centroids returns NaNs."""
+        tpf = np.zeros((6, 11, 11), dtype=float)
+        tpf[:, 5, 5] = 1000.0
+        mask = np.ones(6, dtype=bool)
+
+        def _forced_reject(
+            centroids_x: np.ndarray, centroids_y: np.ndarray, sigma: float = 3.0
+        ) -> tuple[np.ndarray, np.ndarray, int]:
+            return centroids_x[:2], centroids_y[:2], len(centroids_x) - 2
+
+        monkeypatch.setattr(centroid_mod, "_reject_outliers", _forced_reject)
+
+        cx, cy, se_x, se_y, n_rejected = robust_centroid_estimate(
+            tpf, mask, method="median", outlier_sigma=1.0
+        )
+        assert math.isnan(cx)
+        assert math.isnan(cy)
+        assert math.isnan(se_x)
+        assert math.isnan(se_y)
+        assert n_rejected >= 2
+
+    def test_huber_method_handles_zero_mad(self) -> None:
+        """Huber location branch where MAD==0 returns finite centroid."""
+        tpf = np.zeros((6, 11, 11), dtype=float)
+        tpf[:, 4, 6] = 1000.0
+        mask = np.ones(6, dtype=bool)
+
+        cx, cy, se_x, se_y, n_rejected = robust_centroid_estimate(tpf, mask, method="huber")
+        assert cx == pytest.approx(6.0)
+        assert cy == pytest.approx(4.0)
+        assert se_x >= 0.0
+        assert se_y >= 0.0
+        assert n_rejected == 0
+
+    def test_bootstrap_returns_nan_with_insufficient_cadences(self) -> None:
+        """Bootstrap helper returns NaNs when either group has <3 cadences."""
+        tpf = np.ones((4, 3, 3), dtype=float)
+        in_mask = np.array([True, True, False, False], dtype=bool)
+        out_mask = np.array([False, False, True, True], dtype=bool)
+
+        result = _compute_shift_significance_bootstrap(
+            tpf, in_mask, out_mask, observed_shift=0.2, n_bootstrap=20
+        )
+        assert all(math.isnan(v) for v in result)
+
+    def test_bootstrap_returns_nan_when_too_few_iterations(self) -> None:
+        """Bootstrap helper requires at least 10 resamples."""
+        tpf = np.ones((10, 3, 3), dtype=float)
+        in_mask = np.array([True, True, True, True, False, False, False, False, False, False])
+        out_mask = ~in_mask
+        result = _compute_shift_significance_bootstrap(
+            tpf, in_mask, out_mask, observed_shift=0.2, n_bootstrap=5
+        )
+        assert all(math.isnan(v) for v in result)
+
+    def test_bootstrap_zero_significance_for_nonfinite_observed_shift(self) -> None:
+        """Non-finite observed shift takes the guarded 0.0 significance path."""
+        tpf = np.ones((12, 3, 3), dtype=float)
+        in_mask = np.array([True] * 6 + [False] * 6, dtype=bool)
+        out_mask = ~in_mask
+        significance, shift_se, ci_low, ci_high = _compute_shift_significance_bootstrap(
+            tpf,
+            in_mask,
+            out_mask,
+            observed_shift=np.nan,
+            n_bootstrap=20,
+            rng=np.random.default_rng(1),
+        )
+        assert significance == 0.0
+        assert np.isfinite(shift_se)
+        assert np.isfinite(ci_low)
+        assert np.isfinite(ci_high)
+
+    def test_permutation_helper_returns_nan_for_too_few_permutations(self) -> None:
+        """Permutation helper returns NaNs when permutation count is too small."""
+        tpf = np.ones((12, 3, 3), dtype=float)
+        in_mask = np.array([True] * 6 + [False] * 6, dtype=bool)
+        out_mask = ~in_mask
+        result = _compute_shift_significance_permutation(
+            tpf, in_mask, out_mask, observed_shift=0.2, n_permutations=5
+        )
+        assert all(math.isnan(v) for v in result)
+
+    def test_permutation_helper_returns_nan_with_insufficient_group_size(self) -> None:
+        """Permutation helper returns NaNs when a group has fewer than 3 cadences."""
+        tpf = np.ones((6, 3, 3), dtype=float)
+        in_mask = np.array([True, True, False, False, False, False], dtype=bool)
+        out_mask = ~in_mask
+        result = _compute_shift_significance_permutation(
+            tpf, in_mask, out_mask, observed_shift=0.2, n_permutations=30
+        )
+        assert all(math.isnan(v) for v in result)
+
+    def test_permutation_helper_returns_finite_outputs(self) -> None:
+        """Permutation helper returns finite p-value/significance under valid inputs."""
+        rng = np.random.default_rng(7)
+        tpf = np.ones((30, 5, 5), dtype=float)
+        tpf[:15, 2, 2] += 30.0
+        tpf[15:, 3, 3] += 30.0
+        # Add small deterministic noise to avoid exact ties in null distribution.
+        tpf += rng.normal(0, 0.1, tpf.shape)
+        in_mask = np.array([True] * 15 + [False] * 15, dtype=bool)
+        out_mask = ~in_mask
+
+        significance, p_value, null_sigma, ci_low, ci_high = _compute_shift_significance_permutation(
+            tpf,
+            in_mask,
+            out_mask,
+            observed_shift=0.3,
+            n_permutations=30,
+            rng=np.random.default_rng(11),
+            centroid_method="mean",
+        )
+        assert np.isfinite(significance)
+        assert 0.0 <= p_value <= 1.0
+        assert np.isfinite(null_sigma)
+        assert np.isfinite(ci_low)
+        assert np.isfinite(ci_high)
+
+    def test_permutation_helper_median_aggregation_branch(self) -> None:
+        """Permutation helper median branch returns finite statistics."""
+        rng = np.random.default_rng(19)
+        tpf = np.ones((24, 5, 5), dtype=float)
+        tpf[:12, 2, 2] += 20.0
+        tpf[12:, 3, 3] += 20.0
+        tpf += rng.normal(0, 0.05, tpf.shape)
+        in_mask = np.array([True] * 12 + [False] * 12, dtype=bool)
+        out_mask = ~in_mask
+        significance, p_value, null_sigma, ci_low, ci_high = _compute_shift_significance_permutation(
+            tpf,
+            in_mask,
+            out_mask,
+            observed_shift=0.2,
+            n_permutations=20,
+            rng=np.random.default_rng(23),
+            centroid_method="median",
+        )
+        assert np.isfinite(significance)
+        assert 0.0 <= p_value <= 1.0
+        assert np.isfinite(null_sigma)
+        assert np.isfinite(ci_low)
+        assert np.isfinite(ci_high)
+
+    def test_analytic_significance_edge_paths(self) -> None:
+        """Exercise analytic guard branches for empty masks and zero shift."""
+        tpf = np.ones((6, 3, 3), dtype=float)
+        empty_mask = np.zeros(6, dtype=bool)
+        full_mask = np.ones(6, dtype=bool)
+
+        sig_empty, se_empty = _compute_shift_significance_analytic(
+            tpf,
+            empty_mask,
+            full_mask,
+            in_centroid=(1.0, 1.0),
+            out_centroid=(1.0, 1.0),
+            observed_shift=0.2,
+            in_centroid_se=(0.1, 0.1),
+            out_centroid_se=(0.1, 0.1),
+        )
+        assert math.isnan(sig_empty)
+        assert math.isnan(se_empty)
+
+        sig_zero, se_zero = _compute_shift_significance_analytic(
+            tpf,
+            full_mask,
+            full_mask,
+            in_centroid=(1.0, 1.0),
+            out_centroid=(1.0, 1.0),
+            observed_shift=0.0,
+            in_centroid_se=(0.1, 0.1),
+            out_centroid_se=(0.1, 0.1),
+        )
+        assert sig_zero == 0.0
+        assert se_zero == 0.0
+
+    def test_analytic_significance_returns_nan_for_zero_uncertainty(self) -> None:
+        """When propagated uncertainty is zero, significance is undefined (NaN)."""
+        tpf = np.ones((8, 3, 3), dtype=float)
+        mask = np.ones(8, dtype=bool)
+
+        significance, shift_se = _compute_shift_significance_analytic(
+            tpf,
+            mask,
+            mask,
+            in_centroid=(1.2, 1.0),
+            out_centroid=(1.0, 1.0),
+            observed_shift=0.2,
+            in_centroid_se=(0.0, 0.0),
+            out_centroid_se=(0.0, 0.0),
+        )
+        assert math.isnan(significance)
+        assert shift_se == 0.0
+
+    def test_analytic_significance_without_precomputed_se_nan_variance_path(self) -> None:
+        """No precomputed SE with too few cadences per group returns NaNs."""
+        tpf = np.ones((4, 3, 3), dtype=float)
+        in_mask = np.array([True, False, False, False], dtype=bool)
+        out_mask = np.array([False, True, True, True], dtype=bool)
+        significance, shift_se = _compute_shift_significance_analytic(
+            tpf,
+            in_mask,
+            out_mask,
+            in_centroid=(1.0, 1.0),
+            out_centroid=(1.1, 1.0),
+            observed_shift=0.1,
+            in_centroid_se=None,
+            out_centroid_se=None,
+        )
+        assert math.isnan(significance)
+        assert math.isnan(shift_se)
+
+    def test_data_quality_confidence_threshold_branches(self) -> None:
+        """Exercise confidence penalties and warning generation branches."""
+        conf1, warnings1 = compute_data_quality_confidence(n_in=12, n_out=60)
+        assert conf1 == pytest.approx(0.7)
+        assert warnings1 == []
+
+        conf2, warnings2 = compute_data_quality_confidence(n_in=12, n_out=40)
+        assert conf2 == pytest.approx(0.63)
+        assert any("marginal_n_out_transit" in w for w in warnings2)
+
+        conf3, warnings3 = compute_data_quality_confidence(
+            n_in=12, n_out=40, saturation_risk=True, has_warnings=True
+        )
+        assert conf3 == pytest.approx(0.4536)
+        assert "saturation_risk" in warnings3
+
+        conf4, warnings4 = compute_data_quality_confidence(n_in=25, n_out=60)
+        assert conf4 == pytest.approx(0.85)
+        assert warnings4 == []
+
+    def test_huber_fallback_branch_on_value_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Huber estimator falls back to median/std path on ValueError."""
+        tpf = np.zeros((6, 11, 11), dtype=float)
+        tpf[:, 5, 5] = 1000.0
+        mask = np.ones(6, dtype=bool)
+        original_median = centroid_mod.np.median
+        state = {"calls": 0}
+
+        # Keep rejection stage deterministic and away from the forced ValueError.
+        monkeypatch.setattr(
+            centroid_mod,
+            "_reject_outliers",
+            lambda x, y, sigma=3.0: (x, y, 0),
+        )
+
+        def _raising_median(*args: object, **kwargs: object) -> float:
+            state["calls"] += 1
+            if state["calls"] == 4:
+                raise ValueError("forced median failure")
+            return float(original_median(*args, **kwargs))
+
+        monkeypatch.setattr(centroid_mod.np, "median", _raising_median)
+        cx, cy, se_x, se_y, _ = robust_centroid_estimate(tpf, mask, method="huber")
+        assert np.isfinite(cx)
+        assert np.isfinite(cy)
+        assert np.isfinite(se_x)
+        assert np.isfinite(se_y)
+
+    def test_compute_centroid_shift_returns_insufficient_valid_cadences_warning(self) -> None:
+        """Early return path when cadence mask keeps fewer than 3 cadences."""
+        tpf = np.ones((6, 3, 3), dtype=float)
+        tpf[0] = np.nan
+        tpf[1] = np.nan
+        tpf[2] = np.nan
+        tpf[3] = np.nan
+        time = np.linspace(0.0, 1.0, 6)
+        params = TransitParams(period=2.0, t0=0.5, duration=2.0)
+
+        result = compute_centroid_shift(tpf, time, params)
+        assert math.isnan(result.centroid_shift_pixels)
+        assert result.warnings == ("dropped_invalid_cadences (4 of 6)",)
+
+    def test_compute_centroid_shift_permutation_method_records_pvalue_warning(
+        self, shifted_star_tpf: tuple[np.ndarray, np.ndarray, TransitParams]
+    ) -> None:
+        """Permutation significance path adds permutation p-value warning."""
+        tpf, time, params = shifted_star_tpf
+
+        result = compute_centroid_shift(
+            tpf,
+            time,
+            params,
+            significance_method="permutation",
+            n_bootstrap=30,
+            bootstrap_seed=123,
+            centroid_method="mean",
+        )
+        assert result.significance_method == "permutation"
+        assert any(w.startswith("permutation_p=") for w in result.warnings)
+
+    def test_compute_centroid_shift_permutation_without_finite_pvalue_skips_warning(self) -> None:
+        """Permutation path with too few in-transit cadences should not emit p-value warning."""
+        tpf = np.ones((40, 7, 7), dtype=float)
+        time = np.linspace(0.0, 2.0, 40)
+        params = TransitParams(period=10.0, t0=0.5, duration=0.5)
+        result = compute_centroid_shift(
+            tpf,
+            time,
+            params,
+            significance_method="permutation",
+            n_bootstrap=30,
+            centroid_method="mean",
+        )
+        assert result.significance_method == "permutation"
+        assert all(not w.startswith("permutation_p=") for w in result.warnings)
