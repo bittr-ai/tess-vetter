@@ -12,7 +12,7 @@ All functions use pure numpy/scipy with no I/O operations.
 from __future__ import annotations
 
 from collections import Counter
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 import numpy as np
 from scipy.optimize import minimize
@@ -26,6 +26,21 @@ from tess_vetter.transit.result import (
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
+
+
+class TransitMeasurementDetails(TypedDict):
+    tc: float
+    tc_err: float
+    depth: float
+    duration_hours_measured: float
+    snr: float
+    snr_method: str
+    converged: bool
+    n_window_points: int
+    n_valid_points: int
+    window_factor_used: float
+    reject_reason: str | None
+    stages: list[dict[str, object]]
 
 
 def _robust_scatter_mad(values: NDArray[np.float64]) -> float:
@@ -149,7 +164,7 @@ def _measure_single_transit_detailed(
     duration_hours: float,
     *,
     window_factors: tuple[float, ...] = (2.0, 4.0, 6.0),
-) -> dict[str, object]:
+) -> TransitMeasurementDetails:
     duration_days = duration_hours / 24.0
     final_reason = "no_successful_stage"
     stage_rows: list[dict[str, object]] = []

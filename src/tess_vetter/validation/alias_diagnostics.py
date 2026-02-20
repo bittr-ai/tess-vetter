@@ -108,7 +108,7 @@ def _compute_box_depth(
 
     # Prefer weighted estimates when uncertainties are usable; fall back
     # to robust OOT-scatter noise when flux_err is missing/zero.
-    has_usable_err = (
+    has_usable_err = bool(
         np.all(np.isfinite(err_in))
         and np.all(np.isfinite(err_out))
         and np.all(err_in > 0)

@@ -16,7 +16,7 @@ Check IDs (proposed):
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -56,6 +56,13 @@ def _smooth_template_config(extra: dict[str, Any]) -> Any:
         ingress_egress_fraction=float(extra.get("ingress_egress_fraction", 0.2)),
         sharpness=float(extra.get("sharpness", 30.0)),
     )
+
+
+def _phase_shift_strategy(extra: dict[str, Any]) -> Literal["grid", "random"]:
+    strategy = str(extra.get("phase_shift_strategy", "grid"))
+    if strategy == "random":
+        return "random"
+    return "grid"
 
 
 def _phase_fold_01(*, time: np.ndarray, period_days: float, t0_btjd: float) -> np.ndarray:
@@ -163,7 +170,7 @@ class ModelCompetitionCheck:
                 flags.append("MODEL_PREFERS_NON_TRANSIT")
 
             notes = list(res.warnings)
-            provenance = {
+            provenance: dict[str, float | int | str | bool | None] = {
                 "bic_threshold": float(extra.get("bic_threshold", 10.0)),
                 "n_harmonics": int(extra.get("n_harmonics", 2)),
                 "alias_tolerance": float(extra.get("alias_tolerance", 0.01)),
@@ -237,7 +244,7 @@ class EphemerisReliabilityRegimeCheck:
     name = "Ephemeris Reliability Regime"
     tier = CheckTier.AUX
     requirements = CheckRequirements()
-    citations = []
+    citations: list[str] = []
 
     def run(self, inputs: CheckInputs, config: CheckConfig) -> CheckResult:
         try:
@@ -261,7 +268,7 @@ class EphemerisReliabilityRegimeCheck:
                 duration_hours=float(inputs.candidate.duration_hours),
                 config=stc,
                 n_phase_shifts=int(extra.get("n_phase_shifts", 200)),
-                phase_shift_strategy=str(extra.get("phase_shift_strategy", "grid")),
+                phase_shift_strategy=_phase_shift_strategy(extra),
                 random_seed=int(config.random_seed or 0),
                 period_jitter_frac=float(extra.get("period_jitter_frac", 0.002)),
                 period_jitter_n=int(extra.get("period_jitter_n", 21)),
@@ -322,7 +329,7 @@ class EphemerisReliabilityRegimeCheck:
             t0_btjd = float(inputs.candidate.t0)
             duration_hours = float(inputs.candidate.duration_hours)
             n_shifts = int(extra.get("n_phase_shifts", 200))
-            strategy = str(extra.get("phase_shift_strategy", "grid"))
+            strategy = _phase_shift_strategy(extra)
 
             t0s = phase_shift_t0s(
                 t0=t0_btjd,
@@ -352,7 +359,7 @@ class EphemerisReliabilityRegimeCheck:
                 "period_neighborhood": [float(x) for x in res.period_neighborhood.period_grid_days],
                 "neighborhood_scores": [float(x) for x in res.period_neighborhood.scores],
             }
-            provenance = {
+            provenance: dict[str, float | int | str | bool | None] = {
                 "ingress_egress_fraction": float(stc.ingress_egress_fraction),
                 "sharpness": float(stc.sharpness),
             }
@@ -422,7 +429,7 @@ class EphemerisSensitivitySweepCheck:
                 "n_variants_ok": int(raw.get("n_variants_ok", 0) or 0),
                 "sweep_table": list(raw.get("sweep_table") or []),
             }
-            provenance = {
+            provenance: dict[str, float | int | str | bool | None] = {
                 "ingress_egress_fraction": float(stc.ingress_egress_fraction),
                 "sharpness": float(stc.sharpness),
             }
@@ -532,7 +539,7 @@ class AliasDiagnosticsCheck:
                     "harmonic_scores": [float(s.score) for s in scores],
                 },
             }
-            provenance = {
+            provenance: dict[str, float | int | str | bool | None] = {
                 "n_phase_bins": int(extra.get("n_phase_bins", 10)),
                 "event_sigma_threshold": float(extra.get("event_sigma_threshold", 3.0)),
                 "systematic_period_threshold_fraction": systematic_threshold,
