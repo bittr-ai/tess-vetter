@@ -7,6 +7,7 @@ This project follows semantic versioning (SemVer).
 - **Breaking change:** The legacy `bittr_tess_vetter` import path has been removed.
 - Only the `tess_vetter` namespace is supported.
 - Migration: replace `import bittr_tess_vetter` with `import tess_vetter` and replace `from bittr_tess_vetter...` with `from tess_vetter...`.
+- Clean break: persisted Python-object serialization (for example, pickle artifacts containing `bittr_tess_vetter.*` module paths) is not supported after the rename and must be regenerated under `tess_vetter`.
 
 ## 0.2.2 (2026-01-20)
 

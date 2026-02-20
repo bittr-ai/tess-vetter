@@ -53,6 +53,10 @@ Update imports as follows:
 
 If you still import from ``bittr_tess_vetter``, update those imports to ``tess_vetter``.
 
+Clean break: persisted Python-object serialization (for example, pickle artifacts containing
+``bittr_tess_vetter.*`` module paths) is not supported after the rename. Regenerate those
+artifacts under ``tess_vetter``.
+
 Optional Dependencies
 ---------------------
 

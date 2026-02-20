@@ -50,6 +50,7 @@ Breaking change: the legacy `bittr_tess_vetter` import path is removed. Use only
 Migration:
 - Replace `import bittr_tess_vetter` with `import tess_vetter`.
 - Replace `from bittr_tess_vetter...` with `from tess_vetter...`.
+- Clean break: persisted Python-object serialization (for example, pickle artifacts that reference `bittr_tess_vetter.*` module paths) is not supported after the rename; regenerate those artifacts under `tess_vetter`.
 
 ### Minimal install (basic vetting)
 ```bash
