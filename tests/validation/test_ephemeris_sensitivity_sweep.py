@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import types
+
 import numpy as np
 
 import tess_vetter.validation.ephemeris_sensitivity_sweep as sweep
@@ -7,6 +9,7 @@ from tess_vetter.validation.ephemeris_sensitivity_sweep import (
     SweepRow,
     _apply_detrend,
     _apply_outlier_policy,
+    _celerite2_sho_variant,
     _clean_finite_inputs,
     compute_sensitivity_sweep_numpy,
 )
@@ -270,3 +273,257 @@ def test_compute_sensitivity_sweep_adds_note_when_gp_variant_fails(monkeypatch) 
     assert len(gp_rows) == 1
     assert gp_rows[0].status == "failed"
     assert any("celerite2_sho variant failed: synthetic gp failure" == note for note in result.notes)
+
+
+def _make_gp_test_arrays(n: int = 120) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    time = np.linspace(0.0, 20.0, n, dtype=np.float64)
+    flux = np.ones(n, dtype=np.float64) + 1e-4 * np.sin(time)
+    flux_err = np.full(n, 1e-4, dtype=np.float64)
+    return time, flux, flux_err
+
+
+class _DummySHOTerm:
+    def __init__(self, *, sigma: float, rho: float, tau: float) -> None:
+        self.sigma = sigma
+        self.rho = rho
+        self.tau = tau
+
+
+class _DummyGP:
+    def __init__(self, kernel: object, mean: float) -> None:
+        self.kernel = kernel
+        self.mean = mean
+        self._n = 0
+
+    def compute(self, time: np.ndarray, diag: np.ndarray) -> None:
+        self._n = int(len(time))
+        _ = diag
+
+    def log_likelihood(self, flux: np.ndarray) -> float:
+        return -float(np.sum((flux - 1.0) ** 2))
+
+    def predict(self, flux: np.ndarray, t: np.ndarray, return_cov: bool = False) -> np.ndarray:
+        _ = flux, return_cov
+        return np.zeros_like(t, dtype=np.float64)
+
+
+def test_celerite2_variant_success_path(monkeypatch) -> None:
+    time, flux, flux_err = _make_gp_test_arrays()
+    monkeypatch.setattr(sweep, "CELERITE2_AVAILABLE", True)
+    monkeypatch.setattr(
+        sweep,
+        "celerite2_terms",
+        types.SimpleNamespace(SHOTerm=_DummySHOTerm),
+    )
+    monkeypatch.setattr(
+        sweep,
+        "celerite2",
+        types.SimpleNamespace(GaussianProcess=_DummyGP),
+    )
+
+    class _Result:
+        success = True
+        x = np.array([1e-3, 1.0, 1.0, 1e-4], dtype=np.float64)
+        fun = 1.23
+        nit = 5
+        message = "ok"
+
+    monkeypatch.setattr("scipy.optimize.minimize", lambda *args, **kwargs: _Result())
+    monkeypatch.setattr(
+        sweep,
+        "_score_variant",
+        lambda **kwargs: (12.0, 200.0, 30.0),
+    )
+
+    row = _celerite2_sho_variant(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        period_days=2.0,
+        t0_btjd=0.5,
+        duration_hours=2.0,
+        config=SmoothTemplateConfig(),
+        max_iterations=20,
+        timeout_seconds=1.0,
+        seed=1,
+    )
+    assert row.status == "ok"
+    assert row.score == 12.0
+    assert row.depth_hat_ppm == 200.0
+    assert row.depth_err_ppm == 30.0
+    assert row.gp_hyperparams is not None
+
+
+def test_celerite2_variant_handles_fit_timeout(monkeypatch) -> None:
+    time, flux, flux_err = _make_gp_test_arrays()
+    monkeypatch.setattr(sweep, "CELERITE2_AVAILABLE", True)
+    monkeypatch.setattr(
+        sweep,
+        "celerite2_terms",
+        types.SimpleNamespace(SHOTerm=_DummySHOTerm),
+    )
+    monkeypatch.setattr(
+        sweep,
+        "celerite2",
+        types.SimpleNamespace(GaussianProcess=_DummyGP),
+    )
+
+    class _StuckThread:
+        def __init__(self, target, daemon: bool) -> None:
+            self._target = target
+            self._alive = True
+
+        def start(self) -> None:
+            return None
+
+        def join(self, timeout: float | None = None) -> None:
+            _ = timeout
+            self._alive = True
+
+        def is_alive(self) -> bool:
+            return self._alive
+
+    monkeypatch.setattr("threading.Thread", _StuckThread)
+
+    row = _celerite2_sho_variant(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        period_days=2.0,
+        t0_btjd=0.5,
+        duration_hours=2.0,
+        config=SmoothTemplateConfig(),
+        max_iterations=10,
+        timeout_seconds=0.01,
+        seed=1,
+    )
+    assert row.status == "failed"
+    assert row.failure_reason is not None
+    assert "fit timeout" in row.failure_reason
+
+
+def test_celerite2_variant_handles_fit_exception(monkeypatch) -> None:
+    time, flux, flux_err = _make_gp_test_arrays()
+    monkeypatch.setattr(sweep, "CELERITE2_AVAILABLE", True)
+    monkeypatch.setattr(
+        sweep,
+        "celerite2_terms",
+        types.SimpleNamespace(SHOTerm=_DummySHOTerm),
+    )
+    monkeypatch.setattr(
+        sweep,
+        "celerite2",
+        types.SimpleNamespace(GaussianProcess=_DummyGP),
+    )
+    monkeypatch.setattr(
+        "scipy.optimize.minimize",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("minimize boom")),
+    )
+
+    row = _celerite2_sho_variant(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        period_days=2.0,
+        t0_btjd=0.5,
+        duration_hours=2.0,
+        config=SmoothTemplateConfig(),
+        max_iterations=10,
+        timeout_seconds=1.0,
+        seed=1,
+    )
+    assert row.status == "failed"
+    assert row.failure_reason is not None
+    assert "fit exception:" in row.failure_reason
+
+
+def test_celerite2_variant_handles_missing_fit_params(monkeypatch) -> None:
+    time, flux, flux_err = _make_gp_test_arrays()
+    monkeypatch.setattr(sweep, "CELERITE2_AVAILABLE", True)
+    monkeypatch.setattr(
+        sweep,
+        "celerite2_terms",
+        types.SimpleNamespace(SHOTerm=_DummySHOTerm),
+    )
+    monkeypatch.setattr(
+        sweep,
+        "celerite2",
+        types.SimpleNamespace(GaussianProcess=_DummyGP),
+    )
+
+    class _NoRunThread:
+        def __init__(self, target, daemon: bool) -> None:
+            self._target = target
+            self._alive = False
+
+        def start(self) -> None:
+            return None
+
+        def join(self, timeout: float | None = None) -> None:
+            _ = timeout
+            self._alive = False
+
+        def is_alive(self) -> bool:
+            return self._alive
+
+    monkeypatch.setattr("threading.Thread", _NoRunThread)
+
+    row = _celerite2_sho_variant(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        period_days=2.0,
+        t0_btjd=0.5,
+        duration_hours=2.0,
+        config=SmoothTemplateConfig(),
+        max_iterations=10,
+        timeout_seconds=0.2,
+        seed=1,
+    )
+    assert row.status == "failed"
+    assert row.failure_reason == "fit returned no parameters"
+
+
+def test_celerite2_variant_handles_non_finite_score_outputs(monkeypatch) -> None:
+    time, flux, flux_err = _make_gp_test_arrays()
+    monkeypatch.setattr(sweep, "CELERITE2_AVAILABLE", True)
+    monkeypatch.setattr(
+        sweep,
+        "celerite2_terms",
+        types.SimpleNamespace(SHOTerm=_DummySHOTerm),
+    )
+    monkeypatch.setattr(
+        sweep,
+        "celerite2",
+        types.SimpleNamespace(GaussianProcess=_DummyGP),
+    )
+
+    class _Result:
+        success = True
+        x = np.array([1e-3, 1.0, 1.0, 1e-4], dtype=np.float64)
+        fun = 0.5
+        nit = 3
+        message = "ok"
+
+    monkeypatch.setattr("scipy.optimize.minimize", lambda *args, **kwargs: _Result())
+    monkeypatch.setattr(
+        sweep,
+        "_score_variant",
+        lambda **kwargs: (float("nan"), 100.0, 20.0),
+    )
+
+    row = _celerite2_sho_variant(
+        time=time,
+        flux=flux,
+        flux_err=flux_err,
+        period_days=2.0,
+        t0_btjd=0.5,
+        duration_hours=2.0,
+        config=SmoothTemplateConfig(),
+        max_iterations=20,
+        timeout_seconds=1.0,
+        seed=1,
+    )
+    assert row.status == "failed"
+    assert row.failure_reason is not None
+    assert "non-finite score outputs" in row.failure_reason
