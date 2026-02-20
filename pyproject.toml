@@ -123,7 +123,7 @@ all = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/tess_vetter", "src/bittr_tess_vetter"]
+packages = ["src/tess_vetter"]
 include = ["src/tess_vetter/py.typed"]
 
 [tool.hatch.build.targets.sdist]

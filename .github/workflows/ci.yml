@@ -61,23 +61,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: uv sync --group dev
-      - name: Legacy import compatibility smoke test
-        run: |
-          uv run python - <<'PY'
-          import importlib
-          import warnings
-
-          warnings.simplefilter("ignore", DeprecationWarning)
-
-          old_first = importlib.import_module("bittr_tess_vetter.api")
-          new_after = importlib.import_module("tess_vetter.api")
-          assert old_first is new_after
-
-          importlib.invalidate_caches()
-          new_first = importlib.import_module("tess_vetter.cli.enrich_cli")
-          old_after = importlib.import_module("bittr_tess_vetter.cli.enrich_cli")
-          assert new_first is old_after
-          PY
       - name: Run tests
         run: uv run pytest -q -m "not slow"
 
