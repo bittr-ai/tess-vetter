@@ -5,8 +5,8 @@ title: "tess-vetter"
 version: 0.1.0
 date-released: 2026-01-14
 license: BSD-3-Clause
-repository-code: "https://github.com/bittr-ai/tess-vetter"
-url: "https://github.com/bittr-ai/tess-vetter"
+repository-code: "https://github.com/bittr-ai/bittr-tess-vetter"
+url: "https://github.com/bittr-ai/bittr-tess-vetter"
 abstract: "Domain-only TESS transit detection and vetting library providing array-in/array-out algorithms for exoplanet candidate validation."
 keywords:
   - tess
