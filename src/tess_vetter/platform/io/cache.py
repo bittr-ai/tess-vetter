@@ -60,18 +60,18 @@ def _default_cache_dir() -> Path:
     """Choose a default on-disk cache directory.
 
     Preference order:
-    1) `BITTR_TESS_VETTER_CACHE_DIR` (explicit override)
-    2) `BITTR_TESS_VETTER_CACHE_ROOT` (repo-local cache root)
+    1) `TESS_VETTER_CACHE_DIR` (explicit override)
+    2) `TESS_VETTER_CACHE_ROOT` (repo-local cache root)
     3) OS-appropriate user cache directory (via platformdirs, if available)
     4) `.tess-vetter/cache/persistent_cache` under current working directory
     """
     # 1. Explicit override
-    explicit = os.getenv("BITTR_TESS_VETTER_CACHE_DIR")
+    explicit = os.getenv("TESS_VETTER_CACHE_DIR")
     if explicit:
         return Path(explicit).expanduser()
 
     # 2. Repo-local override
-    root = os.getenv("BITTR_TESS_VETTER_CACHE_ROOT")
+    root = os.getenv("TESS_VETTER_CACHE_ROOT")
     if root:
         return Path(root).expanduser() / "persistent_cache"
 

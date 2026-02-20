@@ -47,7 +47,7 @@ _FALSE_POSITIVE_CODES = {"FP", "FA", "FALSE_POSITIVE", "FALSEPOSITIVE"}
 
 
 def _default_cache_dir() -> Path:
-    root = os.getenv("BITTR_TESS_VETTER_CACHE_ROOT") or os.getenv("ASTRO_ARC_CACHE_ROOT")
+    root = os.getenv("TESS_VETTER_CACHE_ROOT") or os.getenv("ASTRO_ARC_CACHE_ROOT")
     if root:
         return Path(root)
     return Path.cwd() / ".tess-vetter" / "cache"

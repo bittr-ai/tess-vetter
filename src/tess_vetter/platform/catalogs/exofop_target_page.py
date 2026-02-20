@@ -72,7 +72,7 @@ def _extract_followup_counts(badges: dict[str, int]) -> dict[str, int]:
 
 
 def _default_cache_dir() -> Path:
-    root = os.getenv("BITTR_TESS_VETTER_CACHE_ROOT") or os.getenv("ASTRO_ARC_CACHE_ROOT")
+    root = os.getenv("TESS_VETTER_CACHE_ROOT") or os.getenv("ASTRO_ARC_CACHE_ROOT")
     if root:
         return Path(root)
     return Path.cwd() / ".tess-vetter" / "cache"

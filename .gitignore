@@ -6,7 +6,7 @@ __pycache__/
 .uv-cache/
 .DS_Store
 .astro-arc/
-.bittr-tess-vetter/
+.tess-vetter/
 dist/
 build/
 *.egg-info/
