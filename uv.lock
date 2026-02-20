@@ -3122,7 +3122,6 @@ dependencies = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "pydantic" },
-    { name = "pytransit" },
     { name = "requests" },
     { name = "scipy" },
 ]
@@ -3252,7 +3251,6 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.4.0" },
     { name = "pyrr", marker = "extra == 'all'", specifier = ">=0.10.3" },
     { name = "pyrr", marker = "extra == 'triceratops'", specifier = ">=0.10.3" },
-    { name = "pytransit", specifier = ">=2.6.17" },
     { name = "pytransit", marker = "extra == 'all'", specifier = ">=2.2" },
     { name = "pytransit", marker = "extra == 'triceratops'", specifier = ">=2.2" },
     { name = "requests", specifier = ">=2.32.4" },
