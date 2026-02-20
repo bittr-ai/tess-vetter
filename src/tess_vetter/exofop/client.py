@@ -79,7 +79,10 @@ class ExoFopClient:
 
         summary = payload.get("summary") if isinstance(payload, dict) else None
         if isinstance(summary, dict) and summary.get("status") == "OK":
-            tic_id = int(summary.get("TIC"))
+            tic_raw = summary.get("TIC")
+            if tic_raw is None:
+                raise ValueError(f"ExoFOP resolved '{target_str}' but did not return a TIC in summary payload")
+            tic_id = int(tic_raw)
             aliases: dict[str, str] = {}
             for k in ("GAIADR2", "GAIADR3", "KIC", "EPIC"):
                 if summary.get(k):
@@ -90,7 +93,10 @@ class ExoFopClient:
         params = {"target": target_str, "json": "1"}
         payload = self._get_json(url, params=params)
         if isinstance(payload, dict) and payload.get("status") == "OK":
-            tic_id = int(payload.get("TIC"))
+            tic_raw = payload.get("TIC")
+            if tic_raw is None:
+                raise ValueError(f"ExoFOP resolved '{target_str}' but did not return a TIC in fallback payload")
+            tic_id = int(tic_raw)
             aliases = {}
             for k in ("GaiaDR2", "GAIADR2", "KIC", "EPIC"):
                 if payload.get(k):
@@ -489,8 +495,11 @@ class ExoFopClient:
             filename = str(item.get("fname") or "").strip()
             if not filename:
                 continue
+            fid_raw = item.get("fid")
+            if fid_raw is None:
+                continue
             try:
-                file_id = int(float(item.get("fid")))
+                file_id = int(float(fid_raw))
             except Exception:
                 continue
             tic_value = item.get("tic_id") or item.get("tic") or fallback_tic_id
@@ -570,7 +579,7 @@ class ExoFopClient:
         header_line = lines[0]
         delimiter = ","
         header_scores = {candidate: header_line.count(candidate) for candidate in [",", "|", "\t", ";"]}
-        best_header_delim = max(header_scores, key=header_scores.get)
+        best_header_delim = max(header_scores, key=lambda candidate: header_scores[candidate])
         if header_scores.get(best_header_delim, 0) > 0:
             delimiter = best_header_delim
         else:
@@ -940,11 +949,11 @@ class ExoFopClient:
         files_meta: list[dict[str, Any]] = []
         downloaded_set = {Path(p).name for p in downloaded_files}
         for row in file_rows:
-            local_path = (
-                extracted_files.get(row.filename)
-                if extracted_files is not None and row.filename in extracted_files
-                else files_dir / Path(row.filename).name
-            )
+            local_path: Path
+            if extracted_files is not None and row.filename in extracted_files:
+                local_path = extracted_files[row.filename]
+            else:
+                local_path = files_dir / Path(row.filename).name
             entry: dict[str, Any] = {
                 "file_id": row.file_id,
                 "filename": row.filename,

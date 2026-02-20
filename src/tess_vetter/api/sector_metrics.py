@@ -279,9 +279,8 @@ def serialize_v21_sector_measurements(
         }
 
     rows: list[V21SectorMeasurementRow] = []
-    first = measurements[0]
-    if isinstance(first, SectorEphemerisMetrics):
-        for m in cast(list[SectorEphemerisMetrics], measurements):
+    for m in measurements:
+        if isinstance(m, SectorEphemerisMetrics):
             rows.append(
                 {
                     "sector": int(m.sector),
@@ -294,20 +293,20 @@ def serialize_v21_sector_measurements(
                     "quality_weight": 1.0 if int(m.n_transits) > 0 else 0.0,
                 }
             )
-    else:
-        for m in cast(list[SectorMeasurement], measurements):
-            rows.append(
-                {
-                    "sector": int(m.sector),
-                    "depth_ppm": float(m.depth_ppm),
-                    "depth_err_ppm": float(m.depth_err_ppm),
-                    "duration_hours": float(m.duration_hours),
-                    "duration_err_hours": float(m.duration_err_hours),
-                    "n_transits": int(m.n_transits),
-                    "shape_metric": float(m.shape_metric),
-                    "quality_weight": float(m.quality_weight),
-                }
-            )
+            continue
+        sm = cast(SectorMeasurement, m)
+        rows.append(
+            {
+                "sector": int(sm.sector),
+                "depth_ppm": float(sm.depth_ppm),
+                "depth_err_ppm": float(sm.depth_err_ppm),
+                "duration_hours": float(sm.duration_hours),
+                "duration_err_hours": float(sm.duration_err_hours),
+                "n_transits": int(sm.n_transits),
+                "shape_metric": float(sm.shape_metric),
+                "quality_weight": float(sm.quality_weight),
+            }
+        )
 
     return {
         "schema_version": SECTOR_MEASUREMENTS_SCHEMA_VERSION,

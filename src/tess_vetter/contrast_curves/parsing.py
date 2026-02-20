@@ -299,7 +299,9 @@ def _extract_azimuthal_contrast_curve(
 
     masked = np.where(finite_mask, img, -np.inf)
     peak_index = int(np.argmax(masked))
-    y0, x0 = np.unravel_index(peak_index, img.shape)
+    y0_raw, x0_raw = np.unravel_index(peak_index, img.shape)
+    y0 = int(y0_raw)
+    x0 = int(x0_raw)
 
     y_min = max(0, y0 - int(core_radius_px))
     y_max = min(img.shape[0], y0 + int(core_radius_px) + 1)
