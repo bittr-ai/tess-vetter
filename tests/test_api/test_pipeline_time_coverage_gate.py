@@ -5,8 +5,8 @@ from pathlib import Path
 
 import numpy as np
 
-from bittr_tess_vetter.features import FeatureConfig
-from bittr_tess_vetter.pipeline import enrich_candidate
+from tess_vetter.features import FeatureConfig
+from tess_vetter.pipeline import enrich_candidate
 
 
 def _write_sector_csv(path: Path, *, time_btjd: np.ndarray, flux: np.ndarray) -> None:

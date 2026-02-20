@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.report import build_report, build_vet_lc_summary_blocks
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.report import build_report, build_vet_lc_summary_blocks
 
 
 def _make_lightcurve() -> LightCurve:

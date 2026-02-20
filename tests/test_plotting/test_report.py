@@ -16,13 +16,13 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.plotting.report import (
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.plotting.report import (
     _render_metrics_table,
     plot_vetting_summary,
     save_vetting_report,
 )
-from bittr_tess_vetter.validation.result_schema import (
+from tess_vetter.validation.result_schema import (
     VettingBundleResult,
     ok_result,
 )

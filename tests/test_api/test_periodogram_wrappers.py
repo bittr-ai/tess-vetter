@@ -3,8 +3,8 @@ import importlib.util
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.periodogram import refine_period, run_periodogram
-from bittr_tess_vetter.api.transit_model import compute_transit_model
+from tess_vetter.api.periodogram import refine_period, run_periodogram
+from tess_vetter.api.transit_model import compute_transit_model
 
 TLS_AVAILABLE = importlib.util.find_spec("transitleastsquares") is not None
 

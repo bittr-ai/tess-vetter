@@ -13,17 +13,17 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-import bittr_tess_vetter.api.generate_report as generate_report_api
-from bittr_tess_vetter.api.generate_report import (
+import tess_vetter.api.generate_report as generate_report_api
+from tess_vetter.api.generate_report import (
     EnrichmentConfig,
     GenerateReportResult,
     generate_report,
 )
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.domain.target import StellarParameters, Target
-from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
-from bittr_tess_vetter.validation.result_schema import CheckResult
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.domain.target import StellarParameters, Target
+from tess_vetter.platform.io.mast_client import LightCurveNotFoundError
+from tess_vetter.validation.result_schema import CheckResult
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -567,7 +567,7 @@ def test_report_reuses_complete_vet_artifact_without_incremental_checks(monkeypa
     def _no_incremental(**kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("incremental checks should not run for complete artifact")
 
-    monkeypatch.setattr("bittr_tess_vetter.api.report_vet_reuse.run_lc_checks", _no_incremental)
+    monkeypatch.setattr("tess_vetter.api.report_vet_reuse.run_lc_checks", _no_incremental)
     artifact = _mock_vet_artifact(["V01", "V02", "V04", "V05", "V13", "V15"])
     result = generate_report(
         123456789,
@@ -602,7 +602,7 @@ def test_report_partial_vet_artifact_runs_only_missing_checks(monkeypatch) -> No
             )
         ]
 
-    monkeypatch.setattr("bittr_tess_vetter.api.report_vet_reuse.run_lc_checks", _only_missing)
+    monkeypatch.setattr("tess_vetter.api.report_vet_reuse.run_lc_checks", _only_missing)
     artifact = _mock_vet_artifact(["V01", "V02", "V04", "V05", "V15"])
     result = generate_report(
         123456789,
@@ -626,7 +626,7 @@ def test_enrichment_fail_open_true_recovers_block_errors(monkeypatch) -> None:
         raise RuntimeError("boom")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.api.generate_report._run_catalog_context",
+        "tess_vetter.api.generate_report._run_catalog_context",
         _boom,
     )
     cfg = EnrichmentConfig(fail_open=True, include_catalog_context=True)
@@ -649,7 +649,7 @@ def test_enrichment_fail_open_false_raises(monkeypatch) -> None:
         raise RuntimeError("boom")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.api.generate_report._run_catalog_context",
+        "tess_vetter.api.generate_report._run_catalog_context",
         _boom,
     )
     cfg = EnrichmentConfig(fail_open=False, include_catalog_context=True)
@@ -705,7 +705,7 @@ def test_pixel_point_budget_enforced_before_pixel_checks(monkeypatch) -> None:
     def _boom(**kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("pixel check tier should not run when budget exceeded")
 
-    monkeypatch.setattr("bittr_tess_vetter.api.generate_report._tier_bundle", _boom)
+    monkeypatch.setattr("tess_vetter.api.generate_report._tier_bundle", _boom)
     cfg = EnrichmentConfig(
         include_pixel_diagnostics=True,
         include_catalog_context=False,
@@ -750,7 +750,7 @@ def test_pixel_point_budget_downsamples_when_feasible(monkeypatch) -> None:
         return generate_report_api.VettingBundleResult.from_checks([])
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.api.generate_report._tier_bundle",
+        "tess_vetter.api.generate_report._tier_bundle",
         _fake_tier_bundle,
     )
     cfg = EnrichmentConfig(
@@ -784,7 +784,7 @@ def test_enrichment_uses_explicit_stellar_when_tic_lookup_skipped(monkeypatch) -
         return generate_report_api._skipped_enrichment_block("CATALOG_TEST")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.api.generate_report._run_catalog_context",
+        "tess_vetter.api.generate_report._run_catalog_context",
         _fake_catalog_context,
     )
     cfg = EnrichmentConfig(
@@ -816,7 +816,7 @@ def test_enrichment_timeout_sets_timeout_flag_when_fail_open_true(monkeypatch) -
         return generate_report_api._skipped_enrichment_block("SLOW_CATALOG")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.api.generate_report._run_catalog_context",
+        "tess_vetter.api.generate_report._run_catalog_context",
         _slow_catalog,
     )
     cfg = EnrichmentConfig(
@@ -858,11 +858,11 @@ def test_enrichment_total_budget_exhaustion_skips_remaining_blocks(monkeypatch) 
         return generate_report_api._skipped_enrichment_block("PIXEL_DONE")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.api.generate_report._run_catalog_context",
+        "tess_vetter.api.generate_report._run_catalog_context",
         _slow_catalog,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.api.generate_report._run_pixel_diagnostics",
+        "tess_vetter.api.generate_report._run_pixel_diagnostics",
         _slow_pixel,
     )
     cfg = EnrichmentConfig(
@@ -903,11 +903,11 @@ def test_enrichment_honors_max_concurrent_requests(monkeypatch) -> None:
         return generate_report_api._skipped_enrichment_block("PIXEL_DONE")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.api.generate_report._run_catalog_context",
+        "tess_vetter.api.generate_report._run_catalog_context",
         _slow_catalog,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.api.generate_report._run_pixel_diagnostics",
+        "tess_vetter.api.generate_report._run_pixel_diagnostics",
         _slow_pixel,
     )
 

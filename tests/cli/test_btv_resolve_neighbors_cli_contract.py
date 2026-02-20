@@ -7,8 +7,8 @@ from typing import Any
 
 from click.testing import CliRunner
 
-from bittr_tess_vetter.cli.resolve_neighbors_cli import resolve_neighbors_command
-from bittr_tess_vetter.platform.catalogs.models import SourceRecord
+from tess_vetter.cli.resolve_neighbors_cli import resolve_neighbors_command
+from tess_vetter.platform.catalogs.models import SourceRecord
 
 
 class _FakeSource:
@@ -91,7 +91,7 @@ def test_btv_resolve_neighbors_success_payload_contract(monkeypatch, tmp_path: P
         )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.resolve_neighbors_cli.query_gaia_by_position_sync",
+        "tess_vetter.cli.resolve_neighbors_cli.query_gaia_by_position_sync",
         _fake_query_gaia_by_position_sync,
     )
 
@@ -141,7 +141,7 @@ def test_btv_resolve_neighbors_gaia_error_falls_back_to_target_only(monkeypatch,
         raise RuntimeError("Gaia down")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.resolve_neighbors_cli.query_gaia_by_position_sync",
+        "tess_vetter.cli.resolve_neighbors_cli.query_gaia_by_position_sync",
         _fake_query_gaia_by_position_sync,
     )
 
@@ -197,7 +197,7 @@ def test_btv_resolve_neighbors_emits_elevated_multiplicity_risk(monkeypatch, tmp
         )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.resolve_neighbors_cli.query_gaia_by_position_sync",
+        "tess_vetter.cli.resolve_neighbors_cli.query_gaia_by_position_sync",
         _fake_query_gaia_by_position_sync,
     )
 
@@ -239,7 +239,7 @@ def test_btv_resolve_neighbors_accepts_positional_toi_and_short_o(monkeypatch, t
         return 123, None
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.resolve_neighbors_cli._resolve_tic_id",
+        "tess_vetter.cli.resolve_neighbors_cli._resolve_tic_id",
         _fake_resolve_tic_id,
     )
 
@@ -311,7 +311,7 @@ def test_btv_resolve_neighbors_report_file_inputs_override_candidate_flags(monke
     )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.resolve_neighbors_cli._resolve_tic_id",
+        "tess_vetter.cli.resolve_neighbors_cli._resolve_tic_id",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve TOI with report file")),
     )
 
@@ -324,7 +324,7 @@ def test_btv_resolve_neighbors_report_file_inputs_override_candidate_flags(monke
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.resolve_neighbors_cli._execute_resolve_neighbors",
+        "tess_vetter.cli.resolve_neighbors_cli._execute_resolve_neighbors",
         _fake_execute_resolve_neighbors,
     )
 

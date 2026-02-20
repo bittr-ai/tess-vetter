@@ -5,10 +5,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.compute.pixel_hypothesis_prf import (
+from tess_vetter.compute.pixel_hypothesis_prf import (
     score_hypotheses_with_prf,
 )
-from bittr_tess_vetter.compute.prf_schemas import PRFParams
+from tess_vetter.compute.prf_schemas import PRFParams
 
 
 class TestScoreHypothesesWithPRF:

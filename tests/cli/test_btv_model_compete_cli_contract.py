@@ -7,10 +7,10 @@ from typing import Any
 import numpy as np
 from click.testing import CliRunner
 
-import bittr_tess_vetter.cli.model_compete_cli as model_compete_cli
-from bittr_tess_vetter.cli.model_compete_cli import model_compete_command
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.api.types import LightCurve
+import tess_vetter.cli.model_compete_cli as model_compete_cli
+from tess_vetter.cli.model_compete_cli import model_compete_command
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.api.types import LightCurve
 
 
 def _make_lc(
@@ -115,11 +115,11 @@ def test_btv_model_compete_success_payload_contract(monkeypatch, tmp_path: Path)
         return _Prior()
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.model_compete_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.model_compete_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.model_compete_cli.stitch_lightcurve_data", _fake_stitch)
+    monkeypatch.setattr("tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.model_compete_cli.stitch_lightcurve_data", _fake_stitch)
     monkeypatch.setattr(model_compete_cli.model_competition_api, "run_model_competition", _fake_run_model_competition)
     monkeypatch.setattr(model_compete_cli.model_competition_api, "compute_artifact_prior", _fake_compute_artifact_prior)
 
@@ -235,10 +235,10 @@ def test_btv_model_compete_report_file_inputs_override_toi(monkeypatch, tmp_path
         )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.model_compete_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.model_compete_cli._resolve_candidate_inputs",
         _unexpected_resolve,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.model_compete_cli._download_and_prepare_arrays", _fake_download)
+    monkeypatch.setattr("tess_vetter.cli.model_compete_cli._download_and_prepare_arrays", _fake_download)
     monkeypatch.setattr(
         model_compete_cli.model_competition_api,
         "run_model_competition",
@@ -284,7 +284,7 @@ def test_btv_model_compete_explicit_sectors_cache_miss_exits_4(monkeypatch) -> N
         def download_all_sectors(self, *_args: Any, **_kwargs: Any):
             raise AssertionError("download_all_sectors should not be called when --sectors is provided")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -336,7 +336,7 @@ def test_btv_model_compete_no_valid_cadences_exits_4(monkeypatch) -> None:
                 )
             ]
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -363,11 +363,11 @@ def test_btv_model_compete_accepts_positional_toi_and_short_o(monkeypatch, tmp_p
         return 123, 7.25, 2450.1, 3.5, None, {"source": "toi", "inputs": {"toi": kwargs.get("toi")}}
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.model_compete_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.model_compete_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.model_compete_cli._download_and_prepare_arrays",
+        "tess_vetter.cli.model_compete_cli._download_and_prepare_arrays",
         lambda **_kwargs: (
             np.array([1.0, 2.0], dtype=np.float64),
             np.array([1.0, 0.999], dtype=np.float64),
@@ -408,7 +408,7 @@ def test_btv_model_compete_detrend_wiring_and_provenance(monkeypatch, tmp_path: 
     seen: dict[str, Any] = {}
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.model_compete_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.model_compete_cli._resolve_candidate_inputs",
         lambda **_kwargs: (
             123,
             7.25,
@@ -419,7 +419,7 @@ def test_btv_model_compete_detrend_wiring_and_provenance(monkeypatch, tmp_path: 
         ),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.model_compete_cli._download_and_prepare_arrays",
+        "tess_vetter.cli.model_compete_cli._download_and_prepare_arrays",
         lambda **_kwargs: (
             np.array([1.0, 2.0, 3.0], dtype=np.float64),
             np.array([1.0, 0.999, 1.001], dtype=np.float64),
@@ -448,7 +448,7 @@ def test_btv_model_compete_detrend_wiring_and_provenance(monkeypatch, tmp_path: 
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.model_compete_cli._detrend_lightcurve_for_vetting",
+        "tess_vetter.cli.model_compete_cli._detrend_lightcurve_for_vetting",
         _fake_detrend_lightcurve_for_vetting,
     )
     monkeypatch.setattr(

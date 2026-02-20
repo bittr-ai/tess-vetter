@@ -7,10 +7,10 @@ from typing import Any
 import numpy as np
 from click.testing import CliRunner
 
-import bittr_tess_vetter.cli.localize_host_cli as localize_host_cli
-from bittr_tess_vetter.cli.localize_host_cli import localize_host_command
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
+import tess_vetter.cli.localize_host_cli as localize_host_cli
+from tess_vetter.cli.localize_host_cli import localize_host_command
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.platform.io.mast_client import LightCurveNotFoundError
 
 
 def _make_lc_data(*, tic_id: int, sector: int) -> LightCurveData:
@@ -57,11 +57,11 @@ def test_btv_localize_host_success_writes_contract_json(monkeypatch, tmp_path: P
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_host_cli._execute_localize_host",
+        "tess_vetter.cli.localize_host_cli._execute_localize_host",
         _fake_execute_localize_host,
     )
 
@@ -111,11 +111,11 @@ def test_btv_localize_host_accepts_short_o_alias(monkeypatch, tmp_path: Path) ->
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_host_cli._execute_localize_host",
+        "tess_vetter.cli.localize_host_cli._execute_localize_host",
         _fake_execute_localize_host,
     )
 
@@ -158,11 +158,11 @@ def test_btv_localize_host_accepts_positional_toi(monkeypatch, tmp_path: Path) -
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_host_cli._execute_localize_host",
+        "tess_vetter.cli.localize_host_cli._execute_localize_host",
         _fake_execute_localize_host,
     )
 
@@ -188,7 +188,7 @@ def test_btv_localize_host_rejects_mismatched_positional_and_option_toi(monkeypa
         raise AssertionError("should fail before resolving candidate inputs")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
 
@@ -228,7 +228,7 @@ def test_btv_localize_host_report_file_inputs_override_candidate_flags(monkeypat
     )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve TOI with report file")),
     )
 
@@ -241,7 +241,7 @@ def test_btv_localize_host_report_file_inputs_override_candidate_flags(monkeypat
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_host_cli._execute_localize_host",
+        "tess_vetter.cli.localize_host_cli._execute_localize_host",
         _fake_execute_localize_host,
     )
 
@@ -274,10 +274,10 @@ def test_btv_localize_host_data_unavailable_when_tpf_missing_exits_4(monkeypatch
         raise LightCurveNotFoundError("TPF unavailable for TIC 123")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.localize_host_cli._execute_localize_host", _missing_tpf)
+    monkeypatch.setattr("tess_vetter.cli.localize_host_cli._execute_localize_host", _missing_tpf)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -324,7 +324,7 @@ def test_btv_localize_host_no_network_requires_explicit_sectors(monkeypatch) -> 
         return 123, 10.5, 2000.2, 2.5, None, {"source": "cli"}
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
 
@@ -625,11 +625,11 @@ def test_btv_localize_host_toi5807_style_faint_neighbor_artifact_suppresses_off_
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_host_cli._execute_localize_host",
+        "tess_vetter.cli.localize_host_cli._execute_localize_host",
         _fake_execute_localize_host,
     )
 
@@ -683,11 +683,11 @@ def test_btv_localize_host_loads_reference_sources_file(monkeypatch, tmp_path: P
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.localize_host_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.localize_host_cli._execute_localize_host",
+        "tess_vetter.cli.localize_host_cli._execute_localize_host",
         _fake_execute_localize_host,
     )
 

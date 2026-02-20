@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.features.aggregates.host import build_host_plausibility_summary
-from bittr_tess_vetter.validation.stellar_dilution import (
+from tess_vetter.features.aggregates.host import build_host_plausibility_summary
+from tess_vetter.validation.stellar_dilution import (
     HostHypothesis,
     compute_dilution_scenarios,
     evaluate_physics_flags,

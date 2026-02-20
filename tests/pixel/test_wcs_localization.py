@@ -1,4 +1,4 @@
-"""Tests for bittr_tess_vetter.pixel.wcs_localization module.
+"""Tests for tess_vetter.pixel.wcs_localization module.
 
 Tests the WCS-aware transit localization algorithms including:
 - Difference image centroid computation
@@ -15,8 +15,8 @@ import numpy as np
 import pytest
 from astropy.wcs import WCS
 
-from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData
-from bittr_tess_vetter.pixel.wcs_localization import (
+from tess_vetter.pixel.tpf_fits import TPFFitsData
+from tess_vetter.pixel.wcs_localization import (
     LocalizationResult,
     LocalizationVerdict,
     bootstrap_centroid_uncertainty,
@@ -821,8 +821,8 @@ class TestModuleImports:
     """Tests for module imports and exports."""
 
     def test_import_from_wcs_localization_module(self) -> None:
-        """Can import from bittr_tess_vetter.pixel.wcs_localization module."""
-        from bittr_tess_vetter.pixel.wcs_localization import (
+        """Can import from tess_vetter.pixel.wcs_localization module."""
+        from tess_vetter.pixel.wcs_localization import (
             LocalizationResult,
             LocalizationVerdict,
             bootstrap_centroid_uncertainty,
@@ -839,8 +839,8 @@ class TestModuleImports:
         assert localize_transit_source is not None
 
     def test_import_from_pixel_package(self) -> None:
-        """Can import from bittr_tess_vetter.pixel package."""
-        from bittr_tess_vetter.pixel import (
+        """Can import from tess_vetter.pixel package."""
+        from tess_vetter.pixel import (
             LocalizationResult,
             LocalizationVerdict,
             localize_transit_source,

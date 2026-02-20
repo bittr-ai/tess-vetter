@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.platform.io.mast_client import MASTClient
+from tess_vetter.platform.io.mast_client import MASTClient
 
 
 class _FakeTPF:

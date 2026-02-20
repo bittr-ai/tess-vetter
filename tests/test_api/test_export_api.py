@@ -6,9 +6,9 @@ from io import StringIO
 
 import numpy as np
 
-from bittr_tess_vetter.api.export import export_bundle
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.api.vet import vet_candidate
+from tess_vetter.api.export import export_bundle
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.api.vet import vet_candidate
 
 
 def _bundle_one_check() -> tuple[LightCurve, Candidate]:

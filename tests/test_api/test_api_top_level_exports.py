@@ -18,7 +18,7 @@ import pytest
 
 def test_golden_path_core_types() -> None:
     """Golden path: Core types should be exported from api module."""
-    from bittr_tess_vetter.api import (  # noqa: F401
+    from tess_vetter.api import (  # noqa: F401
         Candidate,
         Ephemeris,
         LightCurve,
@@ -36,7 +36,7 @@ def test_golden_path_core_types() -> None:
 
 def test_golden_path_result_types() -> None:
     """Golden path: Result types should be exported (CheckResult, VettingBundleResult)."""
-    from bittr_tess_vetter.api import (  # noqa: F401
+    from tess_vetter.api import (  # noqa: F401
         CheckResult,
         VettingBundleResult,
     )
@@ -49,7 +49,7 @@ def test_golden_path_result_types() -> None:
 
 def test_golden_path_entry_points() -> None:
     """Golden path: Entry points should be exported."""
-    from bittr_tess_vetter.api import (  # noqa: F401
+    from tess_vetter.api import (  # noqa: F401
         VettingPipeline,
         calculate_fpp,
         fit_transit,
@@ -69,7 +69,7 @@ def test_golden_path_entry_points() -> None:
 
 def test_golden_path_introspection() -> None:
     """Golden path: Introspection functions should be exported."""
-    from bittr_tess_vetter.api import (  # noqa: F401
+    from tess_vetter.api import (  # noqa: F401
         describe_checks,
         list_checks,
     )
@@ -78,8 +78,8 @@ def test_golden_path_introspection() -> None:
     assert describe_checks is not None
 
     # Verify list_checks returns a list
-    from bittr_tess_vetter.validation.register_defaults import register_all_defaults
-    from bittr_tess_vetter.validation.registry import CheckRegistry
+    from tess_vetter.validation.register_defaults import register_all_defaults
+    from tess_vetter.validation.registry import CheckRegistry
 
     registry = CheckRegistry()
     register_all_defaults(registry)
@@ -90,7 +90,7 @@ def test_golden_path_introspection() -> None:
 
 def test_golden_path_registry_types() -> None:
     """Golden path: Registry types should be exported for extensibility."""
-    from bittr_tess_vetter.api import (  # noqa: F401
+    from tess_vetter.api import (  # noqa: F401
         CheckRegistry,
         CheckRequirements,
         CheckTier,
@@ -108,7 +108,7 @@ def test_golden_path_registry_types() -> None:
 def test_golden_path_aliases() -> None:
     """Golden path: Short aliases should be exported for convenience."""
     # Aliases should resolve to their targets
-    from bittr_tess_vetter.api import (  # noqa: F401
+    from tess_vetter.api import (  # noqa: F401
         localize,  # -> localize_transit_source
         localize_transit_source,
         periodogram,  # -> run_periodogram
@@ -124,7 +124,7 @@ def test_golden_path_aliases() -> None:
 
 def test_golden_path_mlx_available_flag() -> None:
     """Golden path: MLX_AVAILABLE flag should always be exported."""
-    from bittr_tess_vetter.api import MLX_AVAILABLE  # noqa: F401
+    from tess_vetter.api import MLX_AVAILABLE  # noqa: F401
 
     # Should be a boolean
     assert isinstance(MLX_AVAILABLE, bool)
@@ -137,7 +137,7 @@ def test_golden_path_mlx_available_flag() -> None:
 
 def test_primitives_submodule_exists() -> None:
     """Primitives submodule should exist and export key functions."""
-    from bittr_tess_vetter.api.primitives import (  # noqa: F401
+    from tess_vetter.api.primitives import (  # noqa: F401
         check_odd_even_depth,
         check_secondary_eclipse,
         fold,
@@ -152,7 +152,7 @@ def test_primitives_submodule_exists() -> None:
 
 def test_pipeline_submodule_exists() -> None:
     """Pipeline submodule should exist and export VettingPipeline."""
-    from bittr_tess_vetter.api.pipeline import (  # noqa: F401
+    from tess_vetter.api.pipeline import (  # noqa: F401
         PipelineConfig,
         VettingPipeline,
         describe_checks,
@@ -167,7 +167,7 @@ def test_pipeline_submodule_exists() -> None:
 
 def test_types_submodule_exists() -> None:
     """Types submodule should exist and export API types."""
-    from bittr_tess_vetter.api.types import (  # noqa: F401
+    from tess_vetter.api.types import (  # noqa: F401
         Candidate,
         CheckResult,
         Ephemeris,
@@ -189,7 +189,7 @@ def test_types_submodule_exists() -> None:
 
 def test_api_top_level_exports_import() -> None:
     """This test ensures host applications can avoid deep imports."""
-    from bittr_tess_vetter.api import (  # noqa: F401
+    from tess_vetter.api import (  # noqa: F401
         ConsistencyClass,
         ControlType,
         EphemerisEntry,
@@ -238,7 +238,7 @@ def test_api_top_level_exports_import() -> None:
 
 def _get_api_all() -> list[str]:
     """Get the __all__ list from api module."""
-    from bittr_tess_vetter import api
+    from tess_vetter import api
 
     return list(api.__all__)
 
@@ -250,7 +250,7 @@ def test_all_exports_resolve(name: str) -> None:
     This test ensures that all 229+ symbols declared in api.__all__ can actually
     be accessed via getattr(api, name), catching any typos or missing imports.
     """
-    from bittr_tess_vetter import api
+    from tess_vetter import api
 
     assert hasattr(api, name), (
         f"Export {name!r} declared in __all__ but not accessible on api module"

@@ -1,1 +1,1 @@
-"""Tests for bittr_tess_vetter.pixel module."""
+"""Tests for tess_vetter.pixel module."""

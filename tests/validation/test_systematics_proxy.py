@@ -1,10 +1,10 @@
-"""Tests for `bittr_tess_vetter.validation.systematics_proxy`."""
+"""Tests for `tess_vetter.validation.systematics_proxy`."""
 
 from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.validation.systematics_proxy import compute_systematics_proxy
+from tess_vetter.validation.systematics_proxy import compute_systematics_proxy
 
 
 def _inject_box_transit(

@@ -1,4 +1,4 @@
-"""Tests for bittr_tess_vetter.pixel.centroid module.
+"""Tests for tess_vetter.pixel.centroid module.
 
 Tests centroid shift analysis for transit detection in TPF data,
 including flux-weighted centroid computation and significance estimation.
@@ -11,7 +11,7 @@ import math
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.pixel.centroid import (
+from tess_vetter.pixel.centroid import (
     TESS_PIXEL_SCALE_ARCSEC,
     WINDOW_POLICIES,
     CentroidResult,

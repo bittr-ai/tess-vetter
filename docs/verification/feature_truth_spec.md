@@ -28,7 +28,7 @@ The canonical `modshift_secondary_primary_ratio` is computed from exovetter outp
 
 This is the behavior implemented in:
 
-- `src/bittr_tess_vetter/validation/exovetter_checks.py:run_modshift`
+- `src/tess_vetter/validation/exovetter_checks.py:run_modshift`
 
 References:
 
@@ -76,7 +76,7 @@ Given one or more transit windows extracted from a TPF:
 
 This is implemented in:
 
-- `src/bittr_tess_vetter/compute/pixel_timeseries.py`
+- `src/tess_vetter/compute/pixel_timeseries.py`
 
 ### Correctness tests
 
@@ -110,10 +110,10 @@ We then flag scenarios as inconsistent if implied radius exceeds conservative bo
 
 Implementation:
 
-- `src/bittr_tess_vetter/validation/stellar_dilution.py`
+- `src/tess_vetter/validation/stellar_dilution.py`
 - Aggregation for “best feasible host”:
   - choose the non-impossible scenario with **lowest depth correction factor** (largest flux fraction)
-  - `src/bittr_tess_vetter/features/aggregates/host.py`
+  - `src/tess_vetter/features/aggregates/host.py`
 
 ### Correctness tests
 

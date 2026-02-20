@@ -347,156 +347,6 @@ wheels = [
 ]
 
 [[package]]
-name = "bittr-tess-vetter"
-version = "0.2.2"
-source = { editable = "." }
-dependencies = [
-    { name = "astropy" },
-    { name = "click" },
-    { name = "filelock" },
-    { name = "mechanicalsoup" },
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "pydantic" },
-    { name = "pytransit" },
-    { name = "requests" },
-    { name = "scipy" },
-]
-
-[package.optional-dependencies]
-all = [
-    { name = "arviz" },
-    { name = "astroquery" },
-    { name = "batman-package" },
-    { name = "celerite" },
-    { name = "corner" },
-    { name = "emcee" },
-    { name = "exovetter" },
-    { name = "ldtk" },
-    { name = "lightkurve" },
-    { name = "matplotlib" },
-    { name = "mechanicalsoup" },
-    { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "numba" },
-    { name = "pandas" },
-    { name = "pyrr" },
-    { name = "pytransit" },
-    { name = "seaborn" },
-    { name = "transitleastsquares" },
-    { name = "wotan" },
-]
-batman = [
-    { name = "batman-package" },
-]
-docs = [
-    { name = "furo" },
-    { name = "ipykernel" },
-    { name = "myst-parser" },
-    { name = "nbconvert" },
-    { name = "nbformat" },
-    { name = "sphinx" },
-    { name = "sphinx-autodoc-typehints" },
-]
-exovetter = [
-    { name = "exovetter" },
-]
-fit = [
-    { name = "arviz" },
-    { name = "emcee" },
-]
-ldtk = [
-    { name = "ldtk" },
-]
-mlx = [
-    { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-]
-plotting = [
-    { name = "matplotlib" },
-]
-tls = [
-    { name = "numba" },
-    { name = "transitleastsquares" },
-]
-triceratops = [
-    { name = "astroquery" },
-    { name = "celerite" },
-    { name = "corner" },
-    { name = "lightkurve" },
-    { name = "matplotlib" },
-    { name = "mechanicalsoup" },
-    { name = "pandas" },
-    { name = "pyrr" },
-    { name = "pytransit" },
-    { name = "seaborn" },
-]
-wotan = [
-    { name = "wotan" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "hatch" },
-    { name = "mypy" },
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "arviz", marker = "extra == 'fit'", specifier = ">=0.23.0" },
-    { name = "astropy", specifier = ">=5.0.0" },
-    { name = "astroquery", marker = "extra == 'triceratops'", specifier = ">=0.4.6" },
-    { name = "batman-package", marker = "extra == 'batman'", specifier = ">=2.4.0" },
-    { name = "bittr-tess-vetter", extras = ["tls", "fit", "wotan", "batman", "mlx", "exovetter", "ldtk", "triceratops", "plotting"], marker = "extra == 'all'" },
-    { name = "celerite", marker = "extra == 'triceratops'", specifier = ">=0.4.0" },
-    { name = "click", specifier = ">=8.0.0" },
-    { name = "corner", marker = "extra == 'triceratops'", specifier = ">=2.2.1" },
-    { name = "emcee", marker = "extra == 'fit'", specifier = ">=3.1.6" },
-    { name = "exovetter", marker = "extra == 'exovetter'", specifier = ">=0.0.0" },
-    { name = "filelock", specifier = ">=3.12.0" },
-    { name = "furo", marker = "extra == 'docs'" },
-    { name = "ipykernel", marker = "extra == 'docs'", specifier = ">=6.29.0" },
-    { name = "ldtk", marker = "extra == 'ldtk'", specifier = ">=1.8.5" },
-    { name = "lightkurve", marker = "extra == 'triceratops'", specifier = ">=2.0.0" },
-    { name = "matplotlib", marker = "extra == 'plotting'", specifier = ">=3.5.1" },
-    { name = "matplotlib", marker = "extra == 'triceratops'", specifier = ">=3.5.1" },
-    { name = "mechanicalsoup", specifier = ">=1.4.0" },
-    { name = "mechanicalsoup", marker = "extra == 'triceratops'", specifier = ">=1.0.0" },
-    { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'mlx'", specifier = ">=0.0.0" },
-    { name = "myst-parser", marker = "extra == 'docs'" },
-    { name = "nbconvert", marker = "extra == 'docs'", specifier = ">=7.16.0" },
-    { name = "nbformat", marker = "extra == 'docs'", specifier = ">=5.10.0" },
-    { name = "numba", marker = "extra == 'tls'", specifier = ">=0.63.0" },
-    { name = "numpy", specifier = ">=1.24.0,<2.4.0" },
-    { name = "pandas", specifier = ">=2.3.3" },
-    { name = "pandas", marker = "extra == 'triceratops'", specifier = ">=2.0.0" },
-    { name = "pydantic", specifier = ">=2.4.0" },
-    { name = "pyrr", marker = "extra == 'triceratops'", specifier = ">=0.10.3" },
-    { name = "pytransit", specifier = ">=2.6.17" },
-    { name = "pytransit", marker = "extra == 'triceratops'", specifier = ">=2.2" },
-    { name = "requests", specifier = ">=2.32.4" },
-    { name = "scipy", specifier = ">=1.10.0" },
-    { name = "seaborn", marker = "extra == 'triceratops'", specifier = ">=0.13.0" },
-    { name = "sphinx", marker = "extra == 'docs'", specifier = ">=7.0" },
-    { name = "sphinx-autodoc-typehints", marker = "extra == 'docs'" },
-    { name = "transitleastsquares", marker = "extra == 'tls'", specifier = ">=1.32" },
-    { name = "wotan", marker = "extra == 'wotan'", specifier = ">=1.1" },
-]
-provides-extras = ["tls", "fit", "wotan", "batman", "mlx", "exovetter", "ldtk", "triceratops", "docs", "plotting", "all"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "hatch", specifier = ">=1.16.2" },
-    { name = "mypy", specifier = ">=1.0.0" },
-    { name = "pre-commit", specifier = ">=4.0.0" },
-    { name = "pytest", specifier = ">=9.0.2" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "ruff", specifier = ">=0.14.10" },
-]
-
-[[package]]
 name = "bleach"
 version = "6.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3258,6 +3108,174 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/0a/d4/2b0cd0fe285e14b36db076e78c93766ff1d529d70408bd1d2a5a84f1d929/tenacity-9.1.2.tar.gz", hash = "sha256:1169d376c297e7de388d18b4481760d478b0e99a777cad3a9c86e556f4b697cb", size = 48036, upload-time = "2025-04-02T08:25:09.966Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e5/30/643397144bfbfec6f6ef821f36f33e57d35946c44a2352d3c9f0ae847619/tenacity-9.1.2-py3-none-any.whl", hash = "sha256:f77bf36710d8b73a50b2dd155c97b870017ad21afe6ab300326b0371b3b05138", size = 28248, upload-time = "2025-04-02T08:25:07.678Z" },
+]
+
+[[package]]
+name = "tess-vetter"
+version = "0.2.2"
+source = { editable = "." }
+dependencies = [
+    { name = "astropy" },
+    { name = "click" },
+    { name = "filelock" },
+    { name = "mechanicalsoup" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "pydantic" },
+    { name = "pytransit" },
+    { name = "requests" },
+    { name = "scipy" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "arviz" },
+    { name = "astroquery" },
+    { name = "batman-package" },
+    { name = "celerite" },
+    { name = "corner" },
+    { name = "emcee" },
+    { name = "exovetter" },
+    { name = "ldtk" },
+    { name = "lightkurve" },
+    { name = "matplotlib" },
+    { name = "mechanicalsoup" },
+    { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "numba" },
+    { name = "pandas" },
+    { name = "pyrr" },
+    { name = "pytransit" },
+    { name = "seaborn" },
+    { name = "transitleastsquares" },
+    { name = "wotan" },
+]
+batman = [
+    { name = "batman-package" },
+]
+docs = [
+    { name = "furo" },
+    { name = "ipykernel" },
+    { name = "myst-parser" },
+    { name = "nbconvert" },
+    { name = "nbformat" },
+    { name = "sphinx" },
+    { name = "sphinx-autodoc-typehints" },
+]
+exovetter = [
+    { name = "exovetter" },
+]
+fit = [
+    { name = "arviz" },
+    { name = "emcee" },
+]
+ldtk = [
+    { name = "ldtk" },
+]
+mlx = [
+    { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+]
+plotting = [
+    { name = "matplotlib" },
+]
+tls = [
+    { name = "numba" },
+    { name = "transitleastsquares" },
+]
+triceratops = [
+    { name = "astroquery" },
+    { name = "celerite" },
+    { name = "corner" },
+    { name = "lightkurve" },
+    { name = "matplotlib" },
+    { name = "mechanicalsoup" },
+    { name = "pandas" },
+    { name = "pyrr" },
+    { name = "pytransit" },
+    { name = "seaborn" },
+]
+wotan = [
+    { name = "wotan" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "hatch" },
+    { name = "mypy" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "arviz", marker = "extra == 'all'", specifier = ">=0.23.0" },
+    { name = "arviz", marker = "extra == 'fit'", specifier = ">=0.23.0" },
+    { name = "astropy", specifier = ">=5.0.0" },
+    { name = "astroquery", marker = "extra == 'all'", specifier = ">=0.4.6" },
+    { name = "astroquery", marker = "extra == 'triceratops'", specifier = ">=0.4.6" },
+    { name = "batman-package", marker = "extra == 'all'", specifier = ">=2.4.0" },
+    { name = "batman-package", marker = "extra == 'batman'", specifier = ">=2.4.0" },
+    { name = "celerite", marker = "extra == 'all'", specifier = ">=0.4.0" },
+    { name = "celerite", marker = "extra == 'triceratops'", specifier = ">=0.4.0" },
+    { name = "click", specifier = ">=8.0.0" },
+    { name = "corner", marker = "extra == 'all'", specifier = ">=2.2.1" },
+    { name = "corner", marker = "extra == 'triceratops'", specifier = ">=2.2.1" },
+    { name = "emcee", marker = "extra == 'all'", specifier = ">=3.1.6" },
+    { name = "emcee", marker = "extra == 'fit'", specifier = ">=3.1.6" },
+    { name = "exovetter", marker = "extra == 'all'", specifier = ">=0.0.0" },
+    { name = "exovetter", marker = "extra == 'exovetter'", specifier = ">=0.0.0" },
+    { name = "filelock", specifier = ">=3.12.0" },
+    { name = "furo", marker = "extra == 'docs'" },
+    { name = "ipykernel", marker = "extra == 'docs'", specifier = ">=6.29.0" },
+    { name = "ldtk", marker = "extra == 'all'", specifier = ">=1.8.5" },
+    { name = "ldtk", marker = "extra == 'ldtk'", specifier = ">=1.8.5" },
+    { name = "lightkurve", marker = "extra == 'all'", specifier = ">=2.0.0" },
+    { name = "lightkurve", marker = "extra == 'triceratops'", specifier = ">=2.0.0" },
+    { name = "matplotlib", marker = "extra == 'all'", specifier = ">=3.5.1" },
+    { name = "matplotlib", marker = "extra == 'plotting'", specifier = ">=3.5.1" },
+    { name = "matplotlib", marker = "extra == 'triceratops'", specifier = ">=3.5.1" },
+    { name = "mechanicalsoup", specifier = ">=1.4.0" },
+    { name = "mechanicalsoup", marker = "extra == 'all'", specifier = ">=1.0.0" },
+    { name = "mechanicalsoup", marker = "extra == 'triceratops'", specifier = ">=1.0.0" },
+    { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'all'", specifier = ">=0.0.0" },
+    { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'mlx'", specifier = ">=0.0.0" },
+    { name = "myst-parser", marker = "extra == 'docs'" },
+    { name = "nbconvert", marker = "extra == 'docs'", specifier = ">=7.16.0" },
+    { name = "nbformat", marker = "extra == 'docs'", specifier = ">=5.10.0" },
+    { name = "numba", marker = "extra == 'all'", specifier = ">=0.63.0" },
+    { name = "numba", marker = "extra == 'tls'", specifier = ">=0.63.0" },
+    { name = "numpy", specifier = ">=1.24.0,<2.4.0" },
+    { name = "pandas", specifier = ">=2.3.3" },
+    { name = "pandas", marker = "extra == 'all'", specifier = ">=2.0.0" },
+    { name = "pandas", marker = "extra == 'triceratops'", specifier = ">=2.0.0" },
+    { name = "pydantic", specifier = ">=2.4.0" },
+    { name = "pyrr", marker = "extra == 'all'", specifier = ">=0.10.3" },
+    { name = "pyrr", marker = "extra == 'triceratops'", specifier = ">=0.10.3" },
+    { name = "pytransit", specifier = ">=2.6.17" },
+    { name = "pytransit", marker = "extra == 'all'", specifier = ">=2.2" },
+    { name = "pytransit", marker = "extra == 'triceratops'", specifier = ">=2.2" },
+    { name = "requests", specifier = ">=2.32.4" },
+    { name = "scipy", specifier = ">=1.10.0" },
+    { name = "seaborn", marker = "extra == 'all'", specifier = ">=0.13.0" },
+    { name = "seaborn", marker = "extra == 'triceratops'", specifier = ">=0.13.0" },
+    { name = "sphinx", marker = "extra == 'docs'", specifier = ">=7.0" },
+    { name = "sphinx-autodoc-typehints", marker = "extra == 'docs'" },
+    { name = "transitleastsquares", marker = "extra == 'all'", specifier = ">=1.32" },
+    { name = "transitleastsquares", marker = "extra == 'tls'", specifier = ">=1.32" },
+    { name = "wotan", marker = "extra == 'all'", specifier = ">=1.1" },
+    { name = "wotan", marker = "extra == 'wotan'", specifier = ">=1.1" },
+]
+provides-extras = ["tls", "fit", "wotan", "batman", "mlx", "exovetter", "ldtk", "triceratops", "docs", "plotting", "all"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "hatch", specifier = ">=1.16.2" },
+    { name = "mypy", specifier = ">=1.0.0" },
+    { name = "pre-commit", specifier = ">=4.0.0" },
+    { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
+    { name = "ruff", specifier = ">=0.14.10" },
 ]
 
 [[package]]

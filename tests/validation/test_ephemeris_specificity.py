@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.validation.ephemeris_specificity import (
+from tess_vetter.validation.ephemeris_specificity import (
     SmoothTemplateConfig,
     compute_concentration_metrics,
     compute_local_t0_sensitivity_numpy,

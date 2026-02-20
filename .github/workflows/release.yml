@@ -27,7 +27,7 @@ jobs:
         run: uv run ruff check .
 
       - name: Type check
-        run: uv run mypy src/bittr_tess_vetter
+        run: uv run mypy src/tess_vetter
 
       - name: Tests (non-slow)
         run: uv run pytest -q -m "not slow"
@@ -79,15 +79,15 @@ jobs:
 
       - name: Test import
         run: |
-          python -c "import bittr_tess_vetter.api as btv; print('Import successful')"
-          python -c "from bittr_tess_vetter.api import Ephemeris, LightCurve, Candidate; print('Types imported')"
+          python -c "import tess_vetter.api as btv; print('Import successful')"
+          python -c "from tess_vetter.api import Ephemeris, LightCurve, Candidate; print('Types imported')"
 
   publish-pypi:
     needs: [build, test-build]
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/bittr-tess-vetter
+      url: https://pypi.org/p/tess-vetter
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -98,7 +98,7 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         # Uses trusted publishing (OIDC) - no token needed
-        # Configure at: https://pypi.org/manage/project/bittr-tess-vetter/settings/publishing/
+        # Configure at: https://pypi.org/manage/project/tess-vetter/settings/publishing/
 
   github-release:
     needs: [build, test-build]
@@ -134,7 +134,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/bittr-tess-vetter
+      url: https://test.pypi.org/p/tess-vetter
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@v4

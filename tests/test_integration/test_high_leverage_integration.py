@@ -3,12 +3,12 @@ import importlib.util
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.lc_only import vet_lc_only
-from bittr_tess_vetter.api.periodogram import run_periodogram
-from bittr_tess_vetter.api.stitch import stitch_lightcurve_data
-from bittr_tess_vetter.api.types import Ephemeris, LightCurve
-from bittr_tess_vetter.compute.transit import detect_transit, get_transit_mask
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.api.lc_only import vet_lc_only
+from tess_vetter.api.periodogram import run_periodogram
+from tess_vetter.api.stitch import stitch_lightcurve_data
+from tess_vetter.api.types import Ephemeris, LightCurve
+from tess_vetter.compute.transit import detect_transit, get_transit_mask
+from tess_vetter.domain.lightcurve import LightCurveData
 
 TLS_AVAILABLE = importlib.util.find_spec("transitleastsquares") is not None
 

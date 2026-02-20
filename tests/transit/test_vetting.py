@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-from bittr_tess_vetter.transit import (
+from tess_vetter.transit import (
     OddEvenResult,
     compare_odd_even_depths,
     compute_odd_even_result,

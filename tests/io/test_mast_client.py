@@ -28,9 +28,9 @@ import pytest
 with contextlib.suppress(ImportError):
     import astroquery.mast  # noqa: F401
 
-from bittr_tess_vetter.api.lightcurve import LightCurveData
-from bittr_tess_vetter.api.target import StellarParameters, Target
-from bittr_tess_vetter.platform.io.mast_client import (
+from tess_vetter.api.lightcurve import LightCurveData
+from tess_vetter.api.target import StellarParameters, Target
+from tess_vetter.platform.io.mast_client import (
     DEFAULT_QUALITY_MASK,
     LightCurveNotFoundError,
     MASTClient,

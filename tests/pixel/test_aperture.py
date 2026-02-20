@@ -1,4 +1,4 @@
-"""Tests for bittr_tess_vetter.pixel.aperture module.
+"""Tests for tess_vetter.pixel.aperture module.
 
 Tests the aperture dependence analysis functionality including:
 - Circular aperture mask creation
@@ -17,7 +17,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.pixel.aperture import (
+from tess_vetter.pixel.aperture import (
     DEFAULT_APERTURE_RADII,
     ApertureDependenceResult,
     TransitParams,

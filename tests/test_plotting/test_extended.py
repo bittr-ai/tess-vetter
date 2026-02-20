@@ -13,7 +13,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from bittr_tess_vetter.plotting.extended import (
+from tess_vetter.plotting.extended import (
     plot_alias_diagnostics,
     plot_ephemeris_reliability,
     plot_ghost_features,
@@ -21,7 +21,7 @@ from bittr_tess_vetter.plotting.extended import (
     plot_sector_consistency,
     plot_sensitivity_sweep,
 )
-from bittr_tess_vetter.validation.result_schema import ok_result
+from tess_vetter.validation.result_schema import ok_result
 
 
 @pytest.fixture

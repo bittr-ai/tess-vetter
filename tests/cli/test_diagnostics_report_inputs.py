@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from bittr_tess_vetter.cli.diagnostics_report_inputs import load_lightcurves_with_sector_policy
+from tess_vetter.cli.diagnostics_report_inputs import load_lightcurves_with_sector_policy
 
 
 def _lc(sector: int) -> Any:
@@ -25,7 +25,7 @@ def test_load_lightcurves_with_sector_policy_cache_first_all_hit(monkeypatch: py
             seen["download_all_called"] = True
             return []
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
 
     lightcurves, path = load_lightcurves_with_sector_policy(
         tic_id=123,
@@ -53,7 +53,7 @@ def test_load_lightcurves_with_sector_policy_cache_first_partial_fallback(monkey
             seen["download_all"] = {"tic_id": tic_id, "flux_type": flux_type, "sectors": sectors}
             return [_lc(22)]
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
 
     lightcurves, path = load_lightcurves_with_sector_policy(
         tic_id=123,
@@ -83,7 +83,7 @@ def test_load_lightcurves_with_sector_policy_cache_discovery_without_network(mon
             seen["download_all_called"] = True
             return []
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
 
     lightcurves, path = load_lightcurves_with_sector_policy(
         tic_id=123,
@@ -115,7 +115,7 @@ def test_load_lightcurves_with_sector_policy_cache_discovery_falls_back_to_mast(
             seen["download_all"] = {"tic_id": tic_id, "flux_type": flux_type, "sectors": sectors}
             return [_lc(21)]
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
 
     lightcurves, path = load_lightcurves_with_sector_policy(
         tic_id=123,
@@ -139,7 +139,7 @@ def test_load_lightcurves_with_sector_policy_no_network_fails_on_partial_cache_m
                 return _lc(21)
             raise RuntimeError("cache miss")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
 
     with pytest.raises(Exception) as excinfo:
         load_lightcurves_with_sector_policy(
@@ -160,7 +160,7 @@ def test_load_lightcurves_with_sector_policy_no_network_fails_without_cached_dis
             _ = tic_id
             return []
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
 
     with pytest.raises(Exception) as excinfo:
         load_lightcurves_with_sector_policy(
@@ -186,7 +186,7 @@ def test_load_lightcurves_with_sector_policy_passes_cache_dir_to_client(
         def download_all_sectors(self, *_args: Any, **_kwargs: Any) -> list[Any]:
             return [_lc(42)]
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
 
     cache_dir = str(tmp_path / "cache_root")
     lightcurves, path = load_lightcurves_with_sector_policy(

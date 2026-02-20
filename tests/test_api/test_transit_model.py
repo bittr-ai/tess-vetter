@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.transit_model import compute_transit_model
-from bittr_tess_vetter.compute.periodogram import compute_bls_model
+from tess_vetter.api.transit_model import compute_transit_model
+from tess_vetter.compute.periodogram import compute_bls_model
 
 
 def test_compute_transit_model_perfect_box_has_zero_residuals() -> None:

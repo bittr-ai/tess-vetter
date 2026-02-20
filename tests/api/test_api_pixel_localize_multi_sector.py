@@ -4,8 +4,8 @@ import numpy as np
 
 
 def test_localize_transit_host_multi_sector_returns_consensus_and_labels() -> None:
-    from bittr_tess_vetter.api.pixel_localize import localize_transit_host_multi_sector
-    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+    from tess_vetter.api.pixel_localize import localize_transit_host_multi_sector
+    from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 
     n = 200
     time = np.linspace(0.0, 10.0, n, dtype=np.float64)
@@ -59,8 +59,8 @@ def test_localize_transit_host_multi_sector_returns_consensus_and_labels() -> No
 
 
 def test_localize_multi_sector_sets_insufficient_discrimination_interpretation(monkeypatch) -> None:
-    from bittr_tess_vetter.api import pixel_localize as px
-    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+    from tess_vetter.api import pixel_localize as px
+    from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 
     def _fake_single_sector(*, tpf_fits: TPFFitsData, **_kwargs):
         _ = tpf_fits
@@ -132,8 +132,8 @@ def test_localize_multi_sector_sets_insufficient_discrimination_interpretation(m
 
 
 def test_localize_multi_sector_sets_action_hint_when_on_target_supported(monkeypatch) -> None:
-    from bittr_tess_vetter.api import pixel_localize as px
-    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+    from tess_vetter.api import pixel_localize as px
+    from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 
     def _fake_single_sector(*, tpf_fits: TPFFitsData, **_kwargs):
         _ = tpf_fits
@@ -203,8 +203,8 @@ def test_localize_multi_sector_sets_action_hint_when_on_target_supported(monkeyp
 
 
 def test_localize_multi_sector_low_absolute_margin_sets_review_with_dilution(monkeypatch) -> None:
-    from bittr_tess_vetter.api import pixel_localize as px
-    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+    from tess_vetter.api import pixel_localize as px
+    from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 
     def _fake_single_sector(*, tpf_fits: TPFFitsData, **_kwargs):
         _ = tpf_fits
@@ -274,8 +274,8 @@ def test_localize_multi_sector_low_absolute_margin_sets_review_with_dilution(mon
 
 
 def test_localize_multi_sector_flags_high_cadence_dropout(monkeypatch) -> None:
-    from bittr_tess_vetter.api import pixel_localize as px
-    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+    from tess_vetter.api import pixel_localize as px
+    from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 
     def _fake_single_sector(*, tpf_fits: TPFFitsData, **_kwargs):
         _ = tpf_fits
@@ -337,8 +337,8 @@ def test_localize_multi_sector_flags_high_cadence_dropout(monkeypatch) -> None:
 
 
 def test_localize_multi_sector_prior_effect_minor_when_one_sector_changes(monkeypatch) -> None:
-    from bittr_tess_vetter.api import pixel_localize as px
-    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+    from tess_vetter.api import pixel_localize as px
+    from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 
     calls = {"n": 0}
 

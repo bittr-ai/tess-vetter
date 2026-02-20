@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from bittr_tess_vetter.api.datasets import load_local_dataset
+from tess_vetter.api.datasets import load_local_dataset
 
 
 def _write_sector_csv(path: Path, *, sector: int) -> None:

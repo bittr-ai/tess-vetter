@@ -7,11 +7,11 @@ from types import SimpleNamespace
 import pytest
 from click.testing import CliRunner
 
-from bittr_tess_vetter.cli.contrast_curves_cli import (
+from tess_vetter.cli.contrast_curves_cli import (
     contrast_curve_summary_command,
     contrast_curves_command,
 )
-from bittr_tess_vetter.exofop.types import ExoFopFileRow
+from tess_vetter.exofop.types import ExoFopFileRow
 
 
 def test_btv_contrast_curve_summary_success_contract(monkeypatch, tmp_path: Path) -> None:
@@ -239,7 +239,7 @@ def test_btv_contrast_curves_success_contract(monkeypatch, tmp_path: Path) -> No
                 warnings=[],
             )
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.contrast_curves_cli.ExoFopClient", _FakeExoFopClient)
+    monkeypatch.setattr("tess_vetter.cli.contrast_curves_cli.ExoFopClient", _FakeExoFopClient)
 
     out_path = tmp_path / "contrast_curves.json"
     runner = CliRunner()
@@ -302,7 +302,7 @@ def test_btv_contrast_curves_no_data_behavior(monkeypatch, tmp_path: Path) -> No
                 warnings=[],
             )
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.contrast_curves_cli.ExoFopClient", _FakeExoFopClient)
+    monkeypatch.setattr("tess_vetter.cli.contrast_curves_cli.ExoFopClient", _FakeExoFopClient)
 
     out_path = tmp_path / "contrast_curves_no_data.json"
     runner = CliRunner()
@@ -378,7 +378,7 @@ def test_btv_contrast_curves_skips_non_table_image_artifacts(monkeypatch, tmp_pa
                 warnings=[],
             )
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.contrast_curves_cli.ExoFopClient", _FakeExoFopClient)
+    monkeypatch.setattr("tess_vetter.cli.contrast_curves_cli.ExoFopClient", _FakeExoFopClient)
 
     out_path = tmp_path / "contrast_curves_skip_ps.json"
     runner = CliRunner()

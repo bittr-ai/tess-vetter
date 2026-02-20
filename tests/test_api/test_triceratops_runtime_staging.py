@@ -4,7 +4,7 @@ import contextlib
 import importlib
 from pathlib import Path
 
-from bittr_tess_vetter.validation import triceratops_fpp as mod
+from tess_vetter.validation import triceratops_fpp as mod
 
 
 class _FakeCache:
@@ -32,7 +32,7 @@ def test_stage_runtime_artifacts_requeries_trilegal_on_expired_or_empty(monkeypa
     monkeypatch.setattr(mod, "_gather_light_curves", lambda *_args, **_kwargs: ({"time": [0.0]}, [5, 6]))
     monkeypatch.setattr(mod, "_load_cached_triceratops_target", lambda **_kwargs: target)
     monkeypatch.setattr(mod, "_save_cached_triceratops_target", lambda **_kwargs: None)
-    funcs_mod = importlib.import_module("bittr_tess_vetter.ext.triceratops_plus_vendor.triceratops.funcs")
+    funcs_mod = importlib.import_module("tess_vetter.ext.triceratops_plus_vendor.triceratops.funcs")
     monkeypatch.setattr(funcs_mod, "query_TRILEGAL", lambda *_args, **_kwargs: "http://stev.oapd.inaf.it/tmp/fresh.dat")
 
     def _fake_prefetch(*, trilegal_url: str, **_kwargs):
@@ -81,7 +81,7 @@ def test_stage_runtime_artifacts_allows_explicit_timeout_to_expand_stage_budgets
         trilegal_url = "http://stev.oapd.inaf.it/tmp/fresh.dat"
         stars = {"ra": [123.45], "dec": [-12.34]}
 
-    tr_mod = importlib.import_module("bittr_tess_vetter.ext.triceratops_plus_vendor.triceratops.triceratops")
+    tr_mod = importlib.import_module("tess_vetter.ext.triceratops_plus_vendor.triceratops.triceratops")
     monkeypatch.setattr(tr_mod, "target", lambda **_kwargs: _FreshTarget())
 
     def _fake_prefetch(**_kwargs):

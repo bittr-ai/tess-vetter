@@ -5,8 +5,8 @@ from pathlib import Path
 import click
 from click.testing import CliRunner
 
-import bittr_tess_vetter.cli.enrich_cli as enrich_cli
-from bittr_tess_vetter.pipeline import EnrichmentSummary
+import tess_vetter.cli.enrich_cli as enrich_cli
+from tess_vetter.pipeline import EnrichmentSummary
 
 
 def _worklist_file(tmp_path: Path) -> Path:
@@ -38,7 +38,7 @@ def test_btv_enrich_happy_path_forwards_resume_and_progress(monkeypatch, tmp_pat
             error_class_counts={},
         )
 
-    monkeypatch.setattr("bittr_tess_vetter.pipeline.enrich_worklist", _fake_enrich_worklist)
+    monkeypatch.setattr("tess_vetter.pipeline.enrich_worklist", _fake_enrich_worklist)
 
     runner = CliRunner()
     input_path = _worklist_file(tmp_path)
@@ -78,7 +78,7 @@ def test_btv_enrich_failure_from_pipeline_returns_exit_1(monkeypatch, tmp_path: 
     def _boom(*args, **kwargs):
         raise RuntimeError("simulated failure")
 
-    monkeypatch.setattr("bittr_tess_vetter.pipeline.enrich_worklist", _boom)
+    monkeypatch.setattr("tess_vetter.pipeline.enrich_worklist", _boom)
 
     runner = CliRunner()
     input_path = _worklist_file(tmp_path)

@@ -15,7 +15,7 @@ import warnings as python_warnings
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api import (
+from tess_vetter.api import (
     Candidate,
     Ephemeris,
     LightCurve,
@@ -29,7 +29,7 @@ from bittr_tess_vetter.api import (
 
 def test_stub_symbols_not_exported_from_validation() -> None:
     """Stub functions (V06-V10) should NOT be exported from validation module."""
-    from bittr_tess_vetter import validation
+    from tess_vetter import validation
 
     # These stub symbols should NOT be in __all__
     stub_symbols = [
@@ -58,7 +58,7 @@ def test_stub_symbols_not_importable_from_validation() -> None:
         "run_all_checks",
     ]
 
-    from bittr_tess_vetter import validation
+    from tess_vetter import validation
 
     for symbol in stub_symbols:
         assert not hasattr(validation, symbol), (
@@ -68,7 +68,7 @@ def test_stub_symbols_not_importable_from_validation() -> None:
 
 def test_lc_checks_only_contains_v01_v05() -> None:
     """lc_checks module should only contain V01-V05 implementations."""
-    from bittr_tess_vetter.validation import lc_checks
+    from tess_vetter.validation import lc_checks
 
     # V01-V05 should be present
     expected_functions = [
@@ -143,9 +143,9 @@ def test_vet_candidate_no_warnings_by_default(
         )
 
         # Filter out unrelated warnings (from numpy, etc.)
-        bittr_warnings = [warning for warning in w if "bittr_tess_vetter" in str(warning.filename)]
+        bittr_warnings = [warning for warning in w if "tess_vetter" in str(warning.filename)]
 
-        # Should not emit any bittr-tess-vetter warnings
+        # Should not emit any tess-vetter warnings
         assert len(bittr_warnings) == 0, (
             f"vet_candidate emitted unexpected warnings: {[str(w.message) for w in bittr_warnings]}"
         )
@@ -183,7 +183,7 @@ def test_skipped_checks_have_structured_info(
 
 def test_deprecated_policy_mode_emits_warning() -> None:
     """Using deprecated policy_mode should emit FutureWarning."""
-    from bittr_tess_vetter.api.lc_only import odd_even_depth
+    from tess_vetter.api.lc_only import odd_even_depth
 
     np.random.seed(42)
     time = np.linspace(0, 27, 2000)

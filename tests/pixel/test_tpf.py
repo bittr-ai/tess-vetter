@@ -1,4 +1,4 @@
-"""Tests for bittr_tess_vetter.pixel.tpf module.
+"""Tests for tess_vetter.pixel.tpf module.
 
 Tests the TPF (Target Pixel File) handling including:
 - TPFRef creation and validation
@@ -16,8 +16,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.errors import ErrorType
-from bittr_tess_vetter.pixel import (
+from tess_vetter.errors import ErrorType
+from tess_vetter.pixel import (
     CachedTPFHandler,
     TPFCache,
     TPFData,
@@ -615,8 +615,8 @@ class TestModuleImports:
     """Tests for module imports and exports."""
 
     def test_import_from_pixel_package(self) -> None:
-        """Can import from bittr_tess_vetter.pixel package."""
-        from bittr_tess_vetter.pixel import (
+        """Can import from tess_vetter.pixel package."""
+        from tess_vetter.pixel import (
             CachedTPFHandler,
             TPFCache,
             TPFHandler,
@@ -631,8 +631,8 @@ class TestModuleImports:
         assert TPFNotFoundError is not None
 
     def test_import_from_tpf_module(self) -> None:
-        """Can import from bittr_tess_vetter.pixel.tpf module."""
-        from bittr_tess_vetter.pixel.tpf import (
+        """Can import from tess_vetter.pixel.tpf module."""
+        from tess_vetter.pixel.tpf import (
             CachedTPFHandler,
             TPFCache,
             TPFHandler,

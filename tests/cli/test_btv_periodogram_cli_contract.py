@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 from click.testing import CliRunner
 
-from bittr_tess_vetter.cli.periodogram_cli import periodogram_command
+from tess_vetter.cli.periodogram_cli import periodogram_command
 
 
 def test_btv_periodogram_search_mode_success_payload(monkeypatch, tmp_path: Path) -> None:
@@ -40,12 +40,12 @@ def test_btv_periodogram_search_mode_success_payload(monkeypatch, tmp_path: Path
             }
         )
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.periodogram_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
+    monkeypatch.setattr("tess_vetter.cli.periodogram_cli._resolve_candidate_inputs", _fake_resolve_candidate_inputs)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.periodogram_cli._download_and_stitch_lightcurve",
+        "tess_vetter.cli.periodogram_cli._download_and_stitch_lightcurve",
         _fake_download_and_stitch_lightcurve,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.periodogram_cli.run_periodogram", _fake_run_periodogram)
+    monkeypatch.setattr("tess_vetter.cli.periodogram_cli.run_periodogram", _fake_run_periodogram)
 
     out_path = tmp_path / "periodogram_search.json"
     runner = CliRunner()
@@ -115,10 +115,10 @@ def test_btv_periodogram_refine_mode_success_payload(monkeypatch, tmp_path: Path
         return 5.01, 2100.2, 12.3
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.periodogram_cli._download_and_stitch_lightcurve",
+        "tess_vetter.cli.periodogram_cli._download_and_stitch_lightcurve",
         _fake_download_and_stitch_lightcurve,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.periodogram_cli.refine_period", _fake_refine_period)
+    monkeypatch.setattr("tess_vetter.cli.periodogram_cli.refine_period", _fake_refine_period)
 
     out_path = tmp_path / "periodogram_refine.json"
     runner = CliRunner()

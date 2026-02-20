@@ -1,4 +1,4 @@
-"""Tests for bittr_tess_vetter.pixel.difference module.
+"""Tests for tess_vetter.pixel.difference module.
 
 Comprehensive tests for difference imaging including:
 - TransitParams validation
@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.pixel.difference import (
+from tess_vetter.pixel.difference import (
     DifferenceImageResult,
     TransitParams,
     compute_difference_image,

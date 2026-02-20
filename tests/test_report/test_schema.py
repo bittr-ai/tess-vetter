@@ -4,8 +4,8 @@ import copy
 
 import pytest
 
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.report import (
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.report import (
     FIELD_CATALOG,
     FieldKey,
     ReportPayloadModel,

@@ -3,16 +3,16 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.alias_diagnostics import harmonic_power_summary
-from bittr_tess_vetter.api.lc_only import vet_lc_only
-from bittr_tess_vetter.api.timing import timing_series
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.validation.alias_diagnostics import (
+from tess_vetter.api.alias_diagnostics import harmonic_power_summary
+from tess_vetter.api.lc_only import vet_lc_only
+from tess_vetter.api.timing import timing_series
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.validation.alias_diagnostics import (
     classify_alias,
     compute_secondary_significance,
     detect_phase_shift_events,
 )
-from bittr_tess_vetter.validation.report_bridge import (
+from tess_vetter.validation.report_bridge import (
     AliasDiagnosticsConfig,
     compute_alias_diagnostics,
     compute_alias_scalar_signals,

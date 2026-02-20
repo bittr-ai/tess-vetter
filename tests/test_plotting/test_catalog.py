@@ -12,8 +12,8 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 
-from bittr_tess_vetter.plotting.catalog import plot_exofop_card, plot_nearby_ebs
-from bittr_tess_vetter.validation.result_schema import CheckResult, ok_result
+from tess_vetter.plotting.catalog import plot_exofop_card, plot_nearby_ebs
+from tess_vetter.validation.result_schema import CheckResult, ok_result
 
 
 @pytest.fixture

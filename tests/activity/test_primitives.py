@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-from bittr_tess_vetter.activity.primitives import (
+from tess_vetter.activity.primitives import (
     classify_variability,
     compute_activity_index,
     compute_phase_amplitude,

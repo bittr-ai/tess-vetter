@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from bittr_tess_vetter.pipeline_composition.executor import _build_cli_args, _run_step_with_retries
-from bittr_tess_vetter.pipeline_composition.schema import StepSpec
+from tess_vetter.pipeline_composition.executor import _build_cli_args, _run_step_with_retries
+from tess_vetter.pipeline_composition.schema import StepSpec
 
 
 def _step() -> StepSpec:
@@ -98,15 +98,15 @@ def test_run_step_with_retries_uses_backoff_jitter_for_retryable_errors(monkeypa
         return {"ok": True}
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.pipeline_composition.executor._run_step_command",
+        "tess_vetter.pipeline_composition.executor._run_step_command",
         _fake_run_step_command,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.pipeline_composition.executor.random.uniform",
+        "tess_vetter.pipeline_composition.executor.random.uniform",
         lambda a, b: 0.01,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.pipeline_composition.executor.time.sleep",
+        "tess_vetter.pipeline_composition.executor.time.sleep",
         lambda seconds: sleep_calls.append(float(seconds)),
     )
 

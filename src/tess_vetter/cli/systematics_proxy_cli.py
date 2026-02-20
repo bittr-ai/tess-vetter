@@ -1,0 +1,268 @@
+"""`btv systematics-proxy` command for LC-only systematics proxy diagnostics."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import click
+import numpy as np
+
+from tess_vetter.api import systematics as systematics_api
+from tess_vetter.api.stitch import stitch_lightcurve_data
+from tess_vetter.cli.common_cli import (
+    EXIT_DATA_UNAVAILABLE,
+    EXIT_INPUT_ERROR,
+    EXIT_RUNTIME_ERROR,
+    BtvCliError,
+    dump_json_output,
+    resolve_optional_output_path,
+)
+from tess_vetter.cli.diagnostics_report_inputs import (
+    choose_effective_sectors,
+    load_lightcurves_with_sector_policy,
+    resolve_inputs_from_report_file,
+)
+from tess_vetter.cli.vet_cli import _resolve_candidate_inputs
+from tess_vetter.platform.io.mast_client import LightCurveNotFoundError, TargetNotFoundError
+
+
+def _to_jsonable_result(result: Any) -> Any:
+    if result is None:
+        return None
+    if hasattr(result, "model_dump"):
+        return result.model_dump(mode="json", exclude_none=True)
+    if hasattr(result, "to_dict"):
+        return result.to_dict()
+    return result
+
+
+def _derive_systematics_proxy_verdict(systematics_proxy_payload: Any) -> tuple[str | None, str | None]:
+    if not isinstance(systematics_proxy_payload, dict):
+        return None, None
+    interpretation_label = systematics_proxy_payload.get("interpretation_label")
+    if interpretation_label is not None:
+        return str(interpretation_label), "$.systematics_proxy.interpretation_label"
+    score = systematics_proxy_payload.get("score")
+    try:
+        score_value = float(score) if score is not None else None
+    except (TypeError, ValueError):
+        score_value = None
+    if score_value is not None:
+        if score_value >= 0.7:
+            return "HIGH_SYSTEMATICS_RISK", "$.systematics_proxy.score"
+        if score_value >= 0.4:
+            return "MODERATE_SYSTEMATICS_RISK", "$.systematics_proxy.score"
+        return "LOW_SYSTEMATICS_RISK", "$.systematics_proxy.score"
+    return None, None
+
+
+def _download_and_prepare_arrays(
+    *,
+    tic_id: int,
+    sectors: list[int] | None,
+    sectors_explicit: bool,
+    flux_type: str,
+    network_ok: bool,
+    cache_dir: Path | None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[int], str]:
+    lightcurves, sector_load_path = load_lightcurves_with_sector_policy(
+        tic_id=int(tic_id),
+        sectors=sectors,
+        flux_type=str(flux_type).lower(),
+        explicit_sectors=bool(sectors_explicit),
+        network_ok=bool(network_ok),
+        cache_dir=cache_dir,
+    )
+
+    if len(lightcurves) == 1:
+        lc = lightcurves[0]
+    else:
+        lc, _stitched = stitch_lightcurve_data(lightcurves, tic_id=int(tic_id))
+
+    time = np.asarray(lc.time, dtype=np.float64)
+    flux = np.asarray(lc.flux, dtype=np.float64)
+    quality = (
+        np.asarray(lc.quality, dtype=np.int32)
+        if getattr(lc, "quality", None) is not None
+        else np.zeros_like(flux, dtype=np.int32)
+    )
+    lc_valid_mask = (
+        np.asarray(lc.valid_mask, dtype=bool)
+        if getattr(lc, "valid_mask", None) is not None
+        else np.ones_like(flux, dtype=bool)
+    )
+    valid_mask = lc_valid_mask & (quality == 0) & np.isfinite(time) & np.isfinite(flux)
+    if not np.any(valid_mask):
+        raise LightCurveNotFoundError(f"No valid finite cadences available for TIC {tic_id}")
+
+    sectors_used = sorted({int(item.sector) for item in lightcurves if getattr(item, "sector", None) is not None})
+    return time, flux, valid_mask, sectors_used, sector_load_path
+
+
+@click.command("systematics-proxy")
+@click.argument("toi_arg", required=False)
+@click.option("--tic-id", type=int, default=None, help="TIC identifier.")
+@click.option("--period-days", type=float, default=None, help="Orbital period in days.")
+@click.option("--t0-btjd", type=float, default=None, help="Reference epoch in BTJD.")
+@click.option("--duration-hours", type=float, default=None, help="Transit duration in hours.")
+@click.option("--depth-ppm", type=float, default=None, help="Transit depth in ppm.")
+@click.option("--toi", type=str, default=None, help="Optional TOI label to resolve candidate inputs.")
+@click.option("--report-file", type=str, default=None, help="Optional report JSON path for candidate inputs.")
+@click.option(
+    "--network-ok/--no-network",
+    default=False,
+    show_default=True,
+    help="Allow network-dependent TOI resolution.",
+)
+@click.option(
+    "--cache-dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help="Optional cache directory for MAST/lightkurve products.",
+)
+@click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
+@click.option(
+    "--flux-type",
+    type=click.Choice(["pdcsap", "sap"], case_sensitive=False),
+    default="pdcsap",
+    show_default=True,
+)
+@click.option(
+    "-o",
+    "--out",
+    "output_path_arg",
+    type=str,
+    default="-",
+    show_default=True,
+    help="JSON output path; '-' writes to stdout.",
+)
+def systematics_proxy_command(
+    toi_arg: str | None,
+    tic_id: int | None,
+    period_days: float | None,
+    t0_btjd: float | None,
+    duration_hours: float | None,
+    depth_ppm: float | None,
+    toi: str | None,
+    report_file: str | None,
+    network_ok: bool,
+    cache_dir: Path | None,
+    sectors: tuple[int, ...],
+    flux_type: str,
+    output_path_arg: str,
+) -> None:
+    """Compute LC-only systematics proxy diagnostics and emit JSON."""
+    out_path = resolve_optional_output_path(output_path_arg)
+    if (
+        report_file is None
+        and toi_arg is not None
+        and toi is not None
+        and str(toi_arg).strip() != str(toi).strip()
+    ):
+        raise BtvCliError(
+            "Positional TOI argument and --toi must match when both are provided.",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    resolved_toi_arg = toi if toi is not None else toi_arg
+
+    report_file_path: str | None = None
+    report_sectors_used: list[int] | None = None
+    if report_file is not None:
+        if resolved_toi_arg is not None:
+            click.echo(
+                "Warning: --report-file provided; ignoring --toi and using report-file candidate inputs.",
+                err=True,
+            )
+        resolved_from_report = resolve_inputs_from_report_file(str(report_file))
+        resolved_tic_id = int(resolved_from_report.tic_id)
+        resolved_period_days = float(resolved_from_report.period_days)
+        resolved_t0_btjd = float(resolved_from_report.t0_btjd)
+        resolved_duration_hours = float(resolved_from_report.duration_hours)
+        input_resolution = dict(resolved_from_report.input_resolution)
+        report_file_path = str(resolved_from_report.report_file_path)
+        report_sectors_used = (
+            [int(s) for s in resolved_from_report.sectors_used]
+            if resolved_from_report.sectors_used is not None
+            else None
+        )
+    else:
+        (
+            resolved_tic_id,
+            resolved_period_days,
+            resolved_t0_btjd,
+            resolved_duration_hours,
+            _resolved_depth_ppm,
+            input_resolution,
+        ) = _resolve_candidate_inputs(
+            network_ok=bool(network_ok),
+            toi=resolved_toi_arg,
+            tic_id=tic_id,
+            period_days=period_days,
+            t0_btjd=t0_btjd,
+            duration_hours=duration_hours,
+            depth_ppm=depth_ppm,
+        )
+
+    effective_sectors, sectors_explicit, sector_selection_source = choose_effective_sectors(
+        sectors_arg=sectors,
+        report_sectors_used=report_sectors_used,
+    )
+
+    try:
+        time, flux, valid_mask, sectors_used, sector_load_path = _download_and_prepare_arrays(
+            tic_id=int(resolved_tic_id),
+            sectors=effective_sectors,
+            sectors_explicit=bool(sectors_explicit),
+            flux_type=str(flux_type).lower(),
+            network_ok=bool(network_ok),
+            cache_dir=cache_dir,
+        )
+        systematics_proxy = systematics_api.compute_systematics_proxy(
+            time=time,
+            flux=flux,
+            valid_mask=valid_mask,
+            period_days=float(resolved_period_days),
+            t0_btjd=float(resolved_t0_btjd),
+            duration_hours=float(resolved_duration_hours),
+        )
+    except (LightCurveNotFoundError, TargetNotFoundError) as exc:
+        raise BtvCliError(str(exc), exit_code=EXIT_DATA_UNAVAILABLE) from exc
+    except BtvCliError:
+        raise
+    except Exception as exc:
+        raise BtvCliError(str(exc), exit_code=EXIT_RUNTIME_ERROR) from exc
+
+    options = {
+        "network_ok": bool(network_ok),
+        "sectors": [int(s) for s in effective_sectors] if effective_sectors else None,
+        "flux_type": str(flux_type).lower(),
+    }
+    systematics_proxy_payload = _to_jsonable_result(systematics_proxy)
+    verdict, verdict_source = _derive_systematics_proxy_verdict(systematics_proxy_payload)
+    payload = {
+        "schema_version": "cli.systematics_proxy.v1",
+        "result": {
+            "systematics_proxy": systematics_proxy_payload,
+            "verdict": verdict,
+            "verdict_source": verdict_source,
+        },
+        "systematics_proxy": systematics_proxy_payload,
+        "verdict": verdict,
+        "verdict_source": verdict_source,
+        "inputs_summary": {
+            "input_resolution": input_resolution,
+        },
+        "provenance": {
+            "sectors_used": sectors_used,
+            "inputs_source": "report_file" if report_file_path is not None else str(input_resolution.get("source")),
+            "report_file": report_file_path,
+            "sector_selection_source": sector_selection_source,
+            "sector_load_path": sector_load_path,
+            "options": options,
+        },
+    }
+    dump_json_output(payload, out_path)
+
+
+__all__ = ["systematics_proxy_command"]

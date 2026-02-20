@@ -1,6 +1,6 @@
 import numpy as np
 
-from bittr_tess_vetter.api import PeriodogramResult, auto_periodogram
+from tess_vetter.api import PeriodogramResult, auto_periodogram
 
 
 def test_auto_periodogram_is_exposed_via_api() -> None:

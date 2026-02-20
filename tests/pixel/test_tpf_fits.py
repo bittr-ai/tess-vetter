@@ -1,4 +1,4 @@
-"""Tests for bittr_tess_vetter.pixel.tpf_fits module.
+"""Tests for tess_vetter.pixel.tpf_fits module.
 
 Tests the FITS-preserving TPF handling including:
 - TPFFitsRef creation and validation
@@ -16,8 +16,8 @@ import numpy as np
 import pytest
 from astropy.wcs import WCS
 
-from bittr_tess_vetter.errors import ErrorType
-from bittr_tess_vetter.pixel.tpf_fits import (
+from tess_vetter.errors import ErrorType
+from tess_vetter.pixel.tpf_fits import (
     VALID_AUTHORS,
     TPFFitsCache,
     TPFFitsData,
@@ -620,8 +620,8 @@ class TestModuleImports:
     """Tests for module imports and exports."""
 
     def test_import_from_tpf_fits_module(self) -> None:
-        """Can import from bittr_tess_vetter.pixel.tpf_fits module."""
-        from bittr_tess_vetter.pixel.tpf_fits import (
+        """Can import from tess_vetter.pixel.tpf_fits module."""
+        from tess_vetter.pixel.tpf_fits import (
             VALID_AUTHORS,
             TPFFitsCache,
             TPFFitsData,

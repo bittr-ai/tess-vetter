@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from bittr_tess_vetter.compute.pixel_host_hypotheses import (
+from tess_vetter.compute.pixel_host_hypotheses import (
     FLIP_RATE_MIXED_THRESHOLD,
     FLIP_RATE_UNSTABLE_THRESHOLD,
     MARGIN_RESOLVE_THRESHOLD,

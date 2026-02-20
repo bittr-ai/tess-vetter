@@ -7,8 +7,8 @@ from typing import Any
 import numpy as np
 from click.testing import CliRunner
 
-import bittr_tess_vetter.cli.systematics_proxy_cli as systematics_proxy_cli
-from bittr_tess_vetter.cli.systematics_proxy_cli import systematics_proxy_command
+import tess_vetter.cli.systematics_proxy_cli as systematics_proxy_cli
+from tess_vetter.cli.systematics_proxy_cli import systematics_proxy_command
 
 
 def test_btv_systematics_proxy_success_payload_contract(monkeypatch, tmp_path: Path) -> None:
@@ -51,11 +51,11 @@ def test_btv_systematics_proxy_success_payload_contract(monkeypatch, tmp_path: P
         return _FakeSystematicsProxyResult()
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.systematics_proxy_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.systematics_proxy_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.systematics_proxy_cli._download_and_prepare_arrays",
+        "tess_vetter.cli.systematics_proxy_cli._download_and_prepare_arrays",
         _fake_download_and_prepare_arrays,
     )
     monkeypatch.setattr(
@@ -126,11 +126,11 @@ def test_btv_systematics_proxy_accepts_positional_toi_and_short_o(monkeypatch, t
         return 123, 7.25, 2450.1, 3.5, None, {"source": "toi", "inputs": {"toi": kwargs.get("toi")}}
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.systematics_proxy_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.systematics_proxy_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.systematics_proxy_cli._download_and_prepare_arrays",
+        "tess_vetter.cli.systematics_proxy_cli._download_and_prepare_arrays",
         lambda **_kwargs: (
             np.array([1.0, 2.0], dtype=np.float64),
             np.array([1.0, 0.999], dtype=np.float64),
@@ -197,11 +197,11 @@ def test_btv_systematics_proxy_report_file_inputs_override_toi(monkeypatch, tmp_
         )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.systematics_proxy_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.systematics_proxy_cli._resolve_candidate_inputs",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve TOI with report file")),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.systematics_proxy_cli._download_and_prepare_arrays",
+        "tess_vetter.cli.systematics_proxy_cli._download_and_prepare_arrays",
         _fake_download_and_prepare_arrays,
     )
     monkeypatch.setattr(
@@ -243,7 +243,7 @@ def test_btv_systematics_proxy_explicit_sectors_cache_miss_exits_4(monkeypatch) 
         def download_all_sectors(self, *_args: Any, **_kwargs: Any):
             raise AssertionError("download_all_sectors should not be called when --sectors is provided")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
 
     runner = CliRunner()
     result = runner.invoke(

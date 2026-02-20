@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.validation.triceratops_fpp import _normalize_triceratops_filter
+from tess_vetter.validation.triceratops_fpp import _normalize_triceratops_filter
 
 
 def test_normalize_triceratops_filter_handles_common_exofop_labels() -> None:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.contrast_curves import (
+from tess_vetter.contrast_curves import (
     ContrastCurveParseError,
     combine_normalized_curves,
     parse_contrast_curve_file,

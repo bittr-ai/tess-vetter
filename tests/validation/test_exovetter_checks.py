@@ -5,9 +5,9 @@ from unittest.mock import patch
 
 import numpy as np
 
-from bittr_tess_vetter.domain.detection import TransitCandidate
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.validation.exovetter_checks import (
+from tess_vetter.domain.detection import TransitCandidate
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.validation.exovetter_checks import (
     _as_jsonable_metrics,
     _is_likely_folded,
     run_modshift,

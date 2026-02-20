@@ -6,11 +6,11 @@ from typing import Any
 
 from click.testing import CliRunner
 
-import bittr_tess_vetter.cli.enrich_cli as enrich_cli
-import bittr_tess_vetter.cli.vet_cli as vet_cli
-from bittr_tess_vetter.cli.progress_metadata import ProgressIOError
-from bittr_tess_vetter.platform.catalogs.toi_resolution import LookupStatus
-from bittr_tess_vetter.platform.io.mast_client import LightCurveNotFoundError
+import tess_vetter.cli.enrich_cli as enrich_cli
+import tess_vetter.cli.vet_cli as vet_cli
+from tess_vetter.cli.progress_metadata import ProgressIOError
+from tess_vetter.platform.catalogs.toi_resolution import LookupStatus
+from tess_vetter.platform.io.mast_client import LightCurveNotFoundError
 
 
 def _fake_vet_payload(
@@ -66,10 +66,10 @@ def test_cli001_toi_resolution_and_override_precedence(monkeypatch, tmp_path: Pa
         return _fake_vet_payload(input_resolution=kwargs.get("input_resolution"))
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.vet_cli.resolve_toi_to_tic_ephemeris_depth",
+        "tess_vetter.cli.vet_cli.resolve_toi_to_tic_ephemeris_depth",
         lambda *_a, **_k: _ToiResult(),
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     out_path = tmp_path / "vet.json"
     runner = CliRunner()
@@ -116,7 +116,7 @@ def test_cli002_summary_block_is_present_and_deduplicates_concerns(monkeypatch, 
             include_summary=True,
         )
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     out_path = tmp_path / "vet.json"
     runner = CliRunner()
@@ -147,7 +147,7 @@ def test_cli002_network_errors_counted_separately(monkeypatch, tmp_path: Path) -
             include_summary=True,
         )
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     out_path = tmp_path / "vet_network_summary.json"
     runner = CliRunner()
@@ -170,7 +170,7 @@ def test_cli002_high_salience_flags_include_v17_and_v09(monkeypatch, tmp_path: P
             include_summary=True,
         )
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
     out_path = tmp_path / "vet_salience.json"
     runner = CliRunner()
     result = runner.invoke(enrich_cli.cli, [*_base_vet_args(), "--out", str(out_path)])
@@ -197,9 +197,9 @@ def test_cli003_coordinate_auto_resolution_from_tic(monkeypatch, tmp_path: Path)
         captured.update(kwargs)
         return _fake_vet_payload(coordinate_resolution=kwargs.get("coordinate_resolution"))
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.vet_cli.lookup_tic_coordinates",
+        "tess_vetter.cli.vet_cli.lookup_tic_coordinates",
         lambda **_kwargs: _CoordResult(),
     )
 
@@ -227,7 +227,7 @@ def test_cli003_require_coordinates_failure_path(monkeypatch) -> None:
         message = "no coords"
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.vet_cli.lookup_tic_coordinates",
+        "tess_vetter.cli.vet_cli.lookup_tic_coordinates",
         lambda **_kwargs: _CoordResult(),
     )
 
@@ -272,9 +272,9 @@ def test_cli004_describe_checks_text_and_json(monkeypatch) -> None:
         },
     ]
 
-    monkeypatch.setattr("bittr_tess_vetter.api.pipeline.list_checks", lambda *_a, **_k: checks_payload)
+    monkeypatch.setattr("tess_vetter.api.pipeline.list_checks", lambda *_a, **_k: checks_payload)
     monkeypatch.setattr(
-        "bittr_tess_vetter.api.pipeline.describe_checks",
+        "tess_vetter.api.pipeline.describe_checks",
         lambda *_a, **_k: "Available vetting checks:\n\n  V01: Odd Even Depth\n  V06: Nearby EB Search\n",
     )
 
@@ -296,7 +296,7 @@ def test_cli006_exit_codes_0_through_5(monkeypatch, tmp_path: Path) -> None:
     runner = CliRunner()
     out_path = tmp_path / "vet.json"
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", lambda **_k: _fake_vet_payload())
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", lambda **_k: _fake_vet_payload())
     ok = runner.invoke(enrich_cli.cli, [*_base_vet_args(), "--out", str(out_path)])
     assert ok.exit_code == 0, ok.output
 
@@ -304,15 +304,15 @@ def test_cli006_exit_codes_0_through_5(monkeypatch, tmp_path: Path) -> None:
     assert input_error.exit_code == 1
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.vet_cli._execute_vet",
+        "tess_vetter.cli.vet_cli._execute_vet",
         lambda **_k: (_ for _ in ()).throw(RuntimeError("boom")),
     )
     runtime_error = runner.invoke(enrich_cli.cli, _base_vet_args())
     assert runtime_error.exit_code == 2
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", lambda **_k: _fake_vet_payload())
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", lambda **_k: _fake_vet_payload())
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.vet_cli.write_progress_metadata_atomic",
+        "tess_vetter.cli.vet_cli.write_progress_metadata_atomic",
         lambda *_a, **_k: (_ for _ in ()).throw(ProgressIOError("disk full")),
     )
     progress_error = runner.invoke(
@@ -322,14 +322,14 @@ def test_cli006_exit_codes_0_through_5(monkeypatch, tmp_path: Path) -> None:
     assert progress_error.exit_code == 3
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.vet_cli._execute_vet",
+        "tess_vetter.cli.vet_cli._execute_vet",
         lambda **_k: (_ for _ in ()).throw(LightCurveNotFoundError("missing required data")),
     )
     missing_data = runner.invoke(enrich_cli.cli, _base_vet_args())
     assert missing_data.exit_code == 4
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.vet_cli._execute_vet",
+        "tess_vetter.cli.vet_cli._execute_vet",
         lambda **_k: (_ for _ in ()).throw(TimeoutError("timed out")),
     )
     timeout = runner.invoke(enrich_cli.cli, _base_vet_args())

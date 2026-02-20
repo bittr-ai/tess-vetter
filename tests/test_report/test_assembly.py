@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import pytest
 
-from bittr_tess_vetter.api.types import ok_result
-from bittr_tess_vetter.report._assembly import (
+from tess_vetter.api.types import ok_result
+from tess_vetter.report._assembly import (
     SUMMARY_BLOCK_REGISTRY,
     ReportAssemblyContext,
     assemble_plot_data,
     assemble_summary,
 )
-from bittr_tess_vetter.report._data import (
+from tess_vetter.report._data import (
     LCFPSignals,
     LCRobustnessData,
     LCRobustnessMetrics,
     LCRobustnessRedNoiseMetrics,
 )
-from bittr_tess_vetter.report._references import refs_for_check
+from tess_vetter.report._references import refs_for_check
 
 
 def _base_context(*, lc_robustness: LCRobustnessData | None = None) -> ReportAssemblyContext:

@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from bittr_tess_vetter.pipeline_composition.executor import _build_cli_args, run_composition
-from bittr_tess_vetter.pipeline_composition.registry import get_profile, list_profiles
-from bittr_tess_vetter.pipeline_composition.schema import StepSpec, validate_composition_payload
+from tess_vetter.pipeline_composition.executor import _build_cli_args, run_composition
+from tess_vetter.pipeline_composition.registry import get_profile, list_profiles
+from tess_vetter.pipeline_composition.schema import StepSpec, validate_composition_payload
 
 
 def test_profile_registry_contains_mvp_profiles() -> None:
@@ -119,7 +119,7 @@ def test_run_composition_report_from_and_ports_and_resume(monkeypatch, tmp_path:
         return row, 1
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.pipeline_composition.executor._run_step_with_retries",
+        "tess_vetter.pipeline_composition.executor._run_step_with_retries",
         _fake_run_step_with_retries,
     )
 
@@ -150,7 +150,7 @@ def test_run_composition_report_from_and_ports_and_resume(monkeypatch, tmp_path:
         raise AssertionError("step runner should not be called in resume mode")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.pipeline_composition.executor._run_step_with_retries",
+        "tess_vetter.pipeline_composition.executor._run_step_with_retries",
         _fail_if_called,
     )
 
@@ -203,7 +203,7 @@ def test_run_composition_step_failure_respects_on_error_continue(monkeypatch, tm
         return row, 1
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.pipeline_composition.executor._run_step_with_retries",
+        "tess_vetter.pipeline_composition.executor._run_step_with_retries",
         _fake_run_step_with_retries,
     )
 
@@ -255,7 +255,7 @@ def test_run_composition_multi_toi_aggregation_includes_partial(monkeypatch, tmp
         return row, 1
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.pipeline_composition.executor._run_step_with_retries",
+        "tess_vetter.pipeline_composition.executor._run_step_with_retries",
         _fake_run_step_with_retries,
     )
 
@@ -317,7 +317,7 @@ def test_run_composition_does_not_forward_retry_defaults_to_step_inputs(monkeypa
         return row, 1
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.pipeline_composition.executor._run_step_with_retries",
+        "tess_vetter.pipeline_composition.executor._run_step_with_retries",
         _fake_run_step_with_retries,
     )
 

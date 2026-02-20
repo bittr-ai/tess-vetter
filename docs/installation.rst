@@ -17,14 +17,14 @@ Install the base package:
 
 .. code-block:: bash
 
-   pip install bittr-tess-vetter
+   pip install tess-vetter
 
 Or install from source:
 
 .. code-block:: bash
 
-   git clone https://github.com/bittr-ai/bittr-tess-vetter.git
-   cd bittr-tess-vetter
+   git clone https://github.com/bittr-ai/tess-vetter.git
+   cd tess-vetter
    pip install -e .
 
 Using uv (recommended for development)
@@ -35,8 +35,8 @@ for development:
 
 .. code-block:: bash
 
-   git clone https://github.com/bittr-ai/bittr-tess-vetter.git
-   cd bittr-tess-vetter
+   git clone https://github.com/bittr-ai/tess-vetter.git
+   cd tess-vetter
    uv sync --all-extras --group dev
 
 Optional Dependencies
@@ -51,7 +51,7 @@ For transit searches using Transit Least Squares:
 
 .. code-block:: bash
 
-   pip install "bittr-tess-vetter[tls]"
+   pip install "tess-vetter[tls]"
 
 Fitting (MCMC)
 ^^^^^^^^^^^^^^
@@ -60,7 +60,7 @@ For MCMC fitting utilities (emcee + arviz):
 
 .. code-block:: bash
 
-   pip install "bittr-tess-vetter[fit]"
+   pip install "tess-vetter[fit]"
 
 Batman (physical transit model)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -69,7 +69,7 @@ For limb-darkened transit modeling using ``batman``:
 
 .. code-block:: bash
 
-   pip install "bittr-tess-vetter[batman]"
+   pip install "tess-vetter[batman]"
 
 Wotan (detrending)
 ^^^^^^^^^^^^^^^^^^
@@ -78,7 +78,7 @@ For advanced detrending using the Wotan library:
 
 .. code-block:: bash
 
-   pip install "bittr-tess-vetter[wotan]"
+   pip install "tess-vetter[wotan]"
 
 LDTK (limb darkening)
 ^^^^^^^^^^^^^^^^^^^^^
@@ -87,7 +87,7 @@ For limb darkening coefficient estimation:
 
 .. code-block:: bash
 
-   pip install "bittr-tess-vetter[ldtk]"
+   pip install "tess-vetter[ldtk]"
 
 .. note::
 
@@ -101,7 +101,7 @@ For GPU-accelerated detection on Apple Silicon (macOS):
 
 .. code-block:: bash
 
-   pip install "bittr-tess-vetter[mlx]"
+   pip install "tess-vetter[mlx]"
 
 TRICERATOPS (FPP)
 ^^^^^^^^^^^^^^^^^
@@ -110,7 +110,7 @@ For false positive probability estimation using TRICERATOPS+:
 
 .. code-block:: bash
 
-   pip install "bittr-tess-vetter[triceratops]"
+   pip install "tess-vetter[triceratops]"
 
 Exovetter (ModShift/SWEET)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -119,7 +119,7 @@ For integration with the external ``exovetter`` package (V11-V12 checks):
 
 .. code-block:: bash
 
-   pip install "bittr-tess-vetter[exovetter]"
+   pip install "tess-vetter[exovetter]"
 
 All extras
 ^^^^^^^^^^
@@ -128,7 +128,7 @@ To install all optional dependencies:
 
 .. code-block:: bash
 
-   pip install "bittr-tess-vetter[all]"
+   pip install "tess-vetter[all]"
 
 Development Installation
 ------------------------
@@ -164,11 +164,11 @@ After installation, verify that the package is working:
 
 .. code-block:: python
 
-   import bittr_tess_vetter
-   import bittr_tess_vetter.api as btv
+   import tess_vetter
+   import tess_vetter.api as btv
 
    # Check version
-   print(bittr_tess_vetter.__version__)
+   print(tess_vetter.__version__)
 
    # List available functions
    print(dir(btv))

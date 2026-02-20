@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api import (
+from tess_vetter.api import (
     Candidate,
     Ephemeris,
     LightCurve,
@@ -26,9 +26,9 @@ from bittr_tess_vetter.api import (
     list_checks,
     vet_candidate,
 )
-from bittr_tess_vetter.validation.register_defaults import register_all_defaults
-from bittr_tess_vetter.validation.registry import CheckRegistry
-from bittr_tess_vetter.validation.result_schema import CheckResult, VettingBundleResult
+from tess_vetter.validation.register_defaults import register_all_defaults
+from tess_vetter.validation.registry import CheckRegistry
+from tess_vetter.validation.result_schema import CheckResult, VettingBundleResult
 
 
 @pytest.fixture
@@ -249,7 +249,7 @@ class TestContractTests:
 
     def test_golden_path_imports(self) -> None:
         """All golden path imports should work."""
-        from bittr_tess_vetter.api import (  # noqa: F401
+        from tess_vetter.api import (  # noqa: F401
             Candidate,
             # Registry
             CheckRegistry,
@@ -275,7 +275,7 @@ class TestContractTests:
 
     def test_primitives_imports(self) -> None:
         """Primitives module imports should work."""
-        from bittr_tess_vetter.api.primitives import (  # noqa: F401
+        from tess_vetter.api.primitives import (  # noqa: F401
             fold,
             median_detrend,
         )
@@ -361,7 +361,7 @@ class TestPipelineDescribe:
 
 def _candidate_to_internal(candidate: Candidate) -> Any:
     """Convert public Candidate to internal TransitCandidate."""
-    from bittr_tess_vetter.domain.detection import TransitCandidate
+    from tess_vetter.domain.detection import TransitCandidate
 
     depth = candidate.depth if candidate.depth is not None else 0.001
     return TransitCandidate(

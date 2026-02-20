@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from bittr_tess_vetter.compute.detrend import (
+from tess_vetter.compute.detrend import (
     WOTAN_AVAILABLE,
     flatten,
     flatten_with_wotan,

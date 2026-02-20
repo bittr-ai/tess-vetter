@@ -1,13 +1,13 @@
-# Contributing to bittr-tess-vetter
+# Contributing to tess-vetter
 
-Thank you for your interest in contributing to bittr-tess-vetter!
+Thank you for your interest in contributing to tess-vetter!
 
 ## Development Setup
 
 ```bash
 # Clone the repository
-git clone https://github.com/bittr-ai/bittr-tess-vetter.git
-cd bittr-tess-vetter
+git clone https://github.com/bittr-ai/tess-vetter.git
+cd tess-vetter
 
 # Install uv if you haven't already
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -26,7 +26,7 @@ uv run pre-commit install
 uv run pytest
 
 # Run with coverage
-uv run pytest --cov=bittr_tess_vetter
+uv run pytest --cov=tess_vetter
 
 # Run specific test file
 uv run pytest tests/test_api/test_periodogram_wrappers.py
@@ -50,7 +50,7 @@ uv run ruff format .
 ## Type Checking
 
 ```bash
-uv run mypy src/bittr_tess_vetter
+uv run mypy src/tess_vetter
 ```
 
 ## Pull Request Process

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.exofop.client import ExoFopClient
+from tess_vetter.exofop.client import ExoFopClient
 
 
 def test_parse_obsnotes_csv_with_quoted_text(tmp_path):

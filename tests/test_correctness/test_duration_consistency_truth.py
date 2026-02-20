@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.domain.target import StellarParameters
-from bittr_tess_vetter.validation.lc_checks import check_duration_consistency
+from tess_vetter.domain.target import StellarParameters
+from tess_vetter.validation.lc_checks import check_duration_consistency
 
 
 def test_duration_consistency_density_correction_monotonicity() -> None:

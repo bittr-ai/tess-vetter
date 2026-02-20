@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.api.per_sector import per_sector_vet
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.api.workflow import run_candidate_workflow
+from tess_vetter.api.per_sector import per_sector_vet
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.api.workflow import run_candidate_workflow
 
 
 def _two_sector_lcs() -> dict[int, LightCurve]:

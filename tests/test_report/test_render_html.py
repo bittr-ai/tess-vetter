@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.api.types import (
+from tess_vetter.api.types import (
     Candidate,
     Ephemeris,
     LightCurve,
@@ -18,7 +18,7 @@ from bittr_tess_vetter.api.types import (
     ok_result,
     skipped_result,
 )
-from bittr_tess_vetter.report import (
+from tess_vetter.report import (
     EnrichmentBlockData,
     FullLCPlotData,
     LCSummary,
@@ -399,7 +399,7 @@ def test_render_html_version_in_footer() -> None:
     """Output includes version info in footer."""
     report = _build_mock_report()
     html = render_html(report)
-    assert "bittr-tess-vetter" in html
+    assert "tess-vetter" in html
     assert "report v" in html
 
 

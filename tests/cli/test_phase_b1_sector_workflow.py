@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
-import bittr_tess_vetter.cli.enrich_cli as enrich_cli
+import tess_vetter.cli.enrich_cli as enrich_cli
 
 
 def _base_vet_args() -> list[str]:
@@ -42,10 +42,10 @@ def _base_measure_args() -> list[str]:
 def _patch_measure_sectors_execute(monkeypatch, fake_impl) -> str:
     """Patch whichever measure-sectors execution seam exists in this revision."""
     seam_candidates = [
-        ("bittr_tess_vetter.cli.measure_sectors_cli", "_execute_measure_sectors"),
-        ("bittr_tess_vetter.cli.measure_sectors_cli", "_execute_measurements"),
-        ("bittr_tess_vetter.cli.vet_cli", "_execute_measure_sectors"),
-        ("bittr_tess_vetter.cli.vet_cli", "_execute_measurements"),
+        ("tess_vetter.cli.measure_sectors_cli", "_execute_measure_sectors"),
+        ("tess_vetter.cli.measure_sectors_cli", "_execute_measurements"),
+        ("tess_vetter.cli.vet_cli", "_execute_measure_sectors"),
+        ("tess_vetter.cli.vet_cli", "_execute_measurements"),
     ]
 
     for module_name, attr_name in seam_candidates:
@@ -142,7 +142,7 @@ def test_cli007_cli008_vet_with_sector_measurements_injects_context_and_emits_bl
             },
         }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     out_path = tmp_path / "vet.json"
     runner = CliRunner()
@@ -192,7 +192,7 @@ def test_cli007_malformed_sector_measurements_file_maps_to_exit_1(monkeypatch, t
         called["execute_vet"] = True
         return {"results": [], "warnings": [], "provenance": {}, "inputs_summary": {}}
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
 
     runner = CliRunner()
     result = runner.invoke(

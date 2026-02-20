@@ -18,26 +18,26 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
-from bittr_tess_vetter.compute.detrend import (
+from tess_vetter.compute.detrend import (
     flatten,
     median_detrend,
     normalize_flux,
     sigma_clip,
 )
-from bittr_tess_vetter.compute.periodogram import (
+from tess_vetter.compute.periodogram import (
     _estimate_snr,
     auto_periodogram,
     compute_bls_model,
     ls_periodogram,
     refine_period,
 )
-from bittr_tess_vetter.compute.transit import (
+from tess_vetter.compute.transit import (
     detect_transit,
     fold_transit,
     get_transit_mask,
     measure_depth,
 )
-from bittr_tess_vetter.domain.detection import PeriodogramResult, TransitCandidate
+from tess_vetter.domain.detection import PeriodogramResult, TransitCandidate
 
 # TLS (transitleastsquares) is not installable on Python 3.12 via PyPI today
 # (it depends on an old numba). Keep TLS code ported, but skip TLS-only tests
@@ -873,7 +873,7 @@ class TestPerSectorSearch:
 
     def test_detect_sector_gaps(self):
         """Verify that sector gaps are correctly detected."""
-        from bittr_tess_vetter.compute.periodogram import detect_sector_gaps
+        from tess_vetter.compute.periodogram import detect_sector_gaps
 
         # Create time array with 2 gaps (3 sectors)
         sector1 = np.linspace(0, 27, 1000)
@@ -892,7 +892,7 @@ class TestPerSectorSearch:
 
     def test_split_by_sectors(self):
         """Verify that light curves are correctly split by sectors."""
-        from bittr_tess_vetter.compute.periodogram import split_by_sectors
+        from tess_vetter.compute.periodogram import split_by_sectors
 
         # Create 3-sector data
         sector1_time = np.linspace(0, 27, 500)
@@ -920,7 +920,7 @@ class TestPerSectorSearch:
 
     def test_merge_candidates_deduplicates(self):
         """Verify that candidates with similar periods are deduplicated."""
-        from bittr_tess_vetter.compute.periodogram import merge_candidates
+        from tess_vetter.compute.periodogram import merge_candidates
 
         # Create candidates with similar periods
         results = [
@@ -944,7 +944,7 @@ class TestPerSectorSearch:
 
     def test_cluster_cross_sector_candidates_basic(self):
         """Verify basic clustering groups candidates by period."""
-        from bittr_tess_vetter.compute.periodogram import cluster_cross_sector_candidates
+        from tess_vetter.compute.periodogram import cluster_cross_sector_candidates
 
         candidates = [
             {"period_days": 3.0, "t0_btjd": 1500.0, "score_z": 12.5, "sector": 1},
@@ -964,7 +964,7 @@ class TestPerSectorSearch:
 
     def test_cluster_cross_sector_candidates_phase_scatter(self):
         """Verify phase scatter is computed correctly."""
-        from bittr_tess_vetter.compute.periodogram import cluster_cross_sector_candidates
+        from tess_vetter.compute.periodogram import cluster_cross_sector_candidates
 
         # Candidates with coherent ephemeris (same phase when folded)
         period = 3.0
@@ -986,14 +986,14 @@ class TestPerSectorSearch:
 
     def test_cluster_cross_sector_candidates_empty_input(self):
         """Verify empty input returns empty list."""
-        from bittr_tess_vetter.compute.periodogram import cluster_cross_sector_candidates
+        from tess_vetter.compute.periodogram import cluster_cross_sector_candidates
 
         families = cluster_cross_sector_candidates([])
         assert families == []
 
     def test_cluster_cross_sector_candidates_min_sectors_filter(self):
         """Verify min_sectors filter works correctly."""
-        from bittr_tess_vetter.compute.periodogram import cluster_cross_sector_candidates
+        from tess_vetter.compute.periodogram import cluster_cross_sector_candidates
 
         candidates = [
             {"period_days": 3.0, "t0_btjd": 1500.0, "score_z": 12.5, "sector": 1},
@@ -1012,7 +1012,7 @@ class TestPerSectorSearch:
 
     def test_cluster_cross_sector_candidates_representative(self):
         """Verify representative is the best-scoring member."""
-        from bittr_tess_vetter.compute.periodogram import cluster_cross_sector_candidates
+        from tess_vetter.compute.periodogram import cluster_cross_sector_candidates
 
         candidates = [
             {"period_days": 3.0, "t0_btjd": 1500.0, "score_z": 8.0, "sector": 1, "extra": "a"},
@@ -1034,7 +1034,7 @@ class TestPerSectorSearch:
 
     def test_cluster_cross_sector_candidates_preserves_member_key(self):
         """Verify optional member_key is propagated for stable member identification."""
-        from bittr_tess_vetter.compute.periodogram import cluster_cross_sector_candidates
+        from tess_vetter.compute.periodogram import cluster_cross_sector_candidates
 
         candidates = [
             {
@@ -1060,7 +1060,7 @@ class TestPerSectorSearch:
 
     def test_single_sector_uses_standard_tls(self):
         """Verify that single-sector data uses standard TLS search."""
-        from bittr_tess_vetter.compute.periodogram import tls_search_per_sector
+        from tess_vetter.compute.periodogram import tls_search_per_sector
 
         # Single sector data (no gaps)
         n_points = 15000
@@ -1080,7 +1080,7 @@ class TestPerSectorSearch:
 
     def test_multi_sector_per_sector_search(self):
         """Verify that per-sector search works on multi-sector data."""
-        from bittr_tess_vetter.compute.periodogram import tls_search_per_sector
+        from tess_vetter.compute.periodogram import tls_search_per_sector
 
         rng = np.random.default_rng(42)
 

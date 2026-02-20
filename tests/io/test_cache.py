@@ -8,8 +8,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.platform.io import PersistentCache
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.platform.io import PersistentCache
 
 
 class TestPersistentCache:
@@ -118,7 +118,7 @@ class TestPersistentCache:
             clock["t"] += 1.0
             return clock["t"]
 
-        monkeypatch.setattr("bittr_tess_vetter.platform.io.cache.time.time", fake_time)
+        monkeypatch.setattr("tess_vetter.platform.io.cache.time.time", fake_time)
 
         with tempfile.TemporaryDirectory() as td:
             cache = PersistentCache(td, max_entries=2)

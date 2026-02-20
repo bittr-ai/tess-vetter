@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from bittr_tess_vetter.cli.common_cli import BtvCliError
-from bittr_tess_vetter.cli.stellar_inputs import (
+from tess_vetter.cli.common_cli import BtvCliError
+from tess_vetter.cli.stellar_inputs import (
     load_auto_stellar_with_fallback,
     load_stellar_inputs_file,
     resolve_stellar_inputs,
@@ -90,9 +90,9 @@ def test_load_auto_stellar_with_fallback_uses_exofop_when_tic_fails(monkeypatch:
                 }
             ]
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.stellar_inputs.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.stellar_inputs.MASTClient", _FakeMASTClient)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.stellar_inputs.fetch_exofop_toi_table",
+        "tess_vetter.cli.stellar_inputs.fetch_exofop_toi_table",
         lambda: _FakeTable(),
     )
 

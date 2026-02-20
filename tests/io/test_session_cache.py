@@ -19,8 +19,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.lightcurve import LightCurveData
-from bittr_tess_vetter.platform.io.cache import SessionCache
+from tess_vetter.api.lightcurve import LightCurveData
+from tess_vetter.platform.io.cache import SessionCache
 
 if TYPE_CHECKING:
     pass

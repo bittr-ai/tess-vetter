@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "bittr-tess-vetter"
+name = "tess-vetter"
 version = "0.2.2"
 description = "Domain-only TESS transit detection and vetting library (array-in/array-out)"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
-authors = [{ name = "bittr-tess-vetter contributors" }]
+authors = [{ name = "tess-vetter contributors" }]
 keywords = ["tess", "astronomy", "exoplanet", "transit", "vetting"]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -40,7 +40,7 @@ dependencies = [
 ]
 
 [project.scripts]
-btv = "bittr_tess_vetter.cli.enrich_cli:main"
+btv = "tess_vetter.cli.enrich_cli:main"
 
 [project.optional-dependencies]
 # Transit detection (TLS + numba for JIT compilation)
@@ -123,8 +123,8 @@ all = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/bittr_tess_vetter"]
-include = ["src/bittr_tess_vetter/py.typed"]
+packages = ["src/tess_vetter", "src/bittr_tess_vetter"]
+include = ["src/tess_vetter/py.typed"]
 
 [tool.hatch.build.targets.sdist]
 # Keep the sdist lean and reproducible: ship source + tests + docs, but exclude
@@ -177,7 +177,7 @@ target-version = "py311"
 line-length = 100
 # Exclude vendored code and notebooks from linting
 exclude = [
-  "src/bittr_tess_vetter/ext/triceratops_plus_vendor/triceratops",
+  "src/tess_vetter/ext/triceratops_plus_vendor/triceratops",
   "docs/tutorials/*.ipynb",
 ]
 extend-exclude = ["*.ipynb"]
@@ -193,7 +193,7 @@ warn_return_any = false
 warn_unused_configs = true
 check_untyped_defs = true
 disallow_untyped_decorators = false
-exclude = ["src/bittr_tess_vetter/ext/triceratops_plus_vendor/"]
+exclude = ["src/tess_vetter/ext/triceratops_plus_vendor/"]
 
 [[tool.mypy.overrides]]
 module = [
@@ -248,31 +248,31 @@ ignore_missing_imports = true
 
 # Ignore errors in api/__init__.py lazy loading machinery
 [[tool.mypy.overrides]]
-module = "bittr_tess_vetter.api"
+module = "tess_vetter.api"
 disable_error_code = ["union-attr", "no-redef"]
 
 # CLI modules have arg-type issues from argparse - defer fixing
 [[tool.mypy.overrides]]
-module = "bittr_tess_vetter.cli.*"
+module = "tess_vetter.cli.*"
 ignore_errors = true
 
 # Triceratops FPP has type issues from external lib integration
 [[tool.mypy.overrides]]
-module = "bittr_tess_vetter.validation.triceratops_fpp"
+module = "tess_vetter.validation.triceratops_fpp"
 ignore_errors = true
 
 # These modules have minor type issues to fix later (P3 backlog)
 [[tool.mypy.overrides]]
 module = [
-  "bittr_tess_vetter.api.transit_fit",
-  "bittr_tess_vetter.transit.batman_model",
-  "bittr_tess_vetter.compute.periodogram",
-  "bittr_tess_vetter.compute.mlx_detection",
-  "bittr_tess_vetter.validation.checks_pixel",
-  "bittr_tess_vetter.validation.exovetter_checks",
-  "bittr_tess_vetter.validation.ephemeris_sensitivity_sweep",
-  "bittr_tess_vetter.pixel.wcs_localization",
-  "bittr_tess_vetter.platform.io.mast_client",
+  "tess_vetter.api.transit_fit",
+  "tess_vetter.transit.batman_model",
+  "tess_vetter.compute.periodogram",
+  "tess_vetter.compute.mlx_detection",
+  "tess_vetter.validation.checks_pixel",
+  "tess_vetter.validation.exovetter_checks",
+  "tess_vetter.validation.ephemeris_sensitivity_sweep",
+  "tess_vetter.pixel.wcs_localization",
+  "tess_vetter.platform.io.mast_client",
 ]
 ignore_errors = true
 

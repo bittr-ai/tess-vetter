@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from bittr_tess_vetter.report._ui_meta import (
+from tess_vetter.report._ui_meta import (
     UI_META_VERSION,
     build_ui_meta_artifact,
     write_ui_meta_artifact,

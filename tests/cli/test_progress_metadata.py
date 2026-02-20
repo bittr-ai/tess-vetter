@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from bittr_tess_vetter.cli.progress_metadata import (
+from tess_vetter.cli.progress_metadata import (
     ProgressIOError,
     build_single_candidate_progress,
     decide_resume_for_single_candidate,
@@ -128,7 +128,7 @@ def test_progress_write_failure_raises(tmp_path: Path, monkeypatch: pytest.Monke
     def _raise_replace(_src: object, _dst: object) -> None:
         raise OSError("disk full")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.progress_metadata.os.replace", _raise_replace)
+    monkeypatch.setattr("tess_vetter.cli.progress_metadata.os.replace", _raise_replace)
 
     with pytest.raises(ProgressIOError):
         write_progress_metadata_atomic(path, payload)

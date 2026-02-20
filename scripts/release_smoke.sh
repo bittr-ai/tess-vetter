@@ -13,7 +13,7 @@ uv run pytest -q
 
 echo "==> Build docs"
 uv run sphinx-build -b html docs docs/_build/html >/dev/null
-uv run python -m bittr_tess_vetter.report._ui_meta --out docs/_build/html/report_ui_meta.json
+uv run python -m tess_vetter.report._ui_meta --out docs/_build/html/report_ui_meta.json
 
 echo "==> Build artifacts"
 uv run hatch build -t sdist -t wheel
@@ -53,7 +53,7 @@ subprocess.check_call([sys.executable, "-m", "venv", ".release_smoke_venv"])
 pip = Path(".release_smoke_venv") / ("Scripts" if sys.platform.startswith("win") else "bin") / "pip"
 py = Path(".release_smoke_venv") / ("Scripts" if sys.platform.startswith("win") else "bin") / "python"
 subprocess.check_call([str(pip), "install", "--quiet", str(wheel)])
-subprocess.check_call([str(py), "-c", "import bittr_tess_vetter.api as btv; print(btv.__name__)"])
+subprocess.check_call([str(py), "-c", "import tess_vetter.api as btv; print(btv.__name__)"])
 print("wheel ok:", wheel)
 PY
 

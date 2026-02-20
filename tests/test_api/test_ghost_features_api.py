@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.api.ghost_features import compute_ghost_features
+from tess_vetter.api.ghost_features import compute_ghost_features
 
 
 def _make_time_and_masks(n_cadences: int) -> tuple[np.ndarray, float, float, float]:

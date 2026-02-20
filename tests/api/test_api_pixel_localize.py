@@ -4,8 +4,8 @@ import numpy as np
 
 
 def test_localize_transit_host_single_sector_one_hypothesis_margin_none() -> None:
-    from bittr_tess_vetter.api.pixel_localize import localize_transit_host_single_sector
-    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+    from tess_vetter.api.pixel_localize import localize_transit_host_single_sector
+    from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 
     n = 200
     time = np.linspace(0.0, 10.0, n, dtype=np.float64)
@@ -41,8 +41,8 @@ def test_localize_transit_host_single_sector_one_hypothesis_margin_none() -> Non
 
 
 def test_localize_single_sector_downgrades_non_physical_prf_best_fit(monkeypatch) -> None:
-    from bittr_tess_vetter.api import pixel_localize as px
-    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+    from tess_vetter.api import pixel_localize as px
+    from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 
     def _fake_diff_diag(**_kwargs):
         return (
@@ -116,8 +116,8 @@ def test_localize_single_sector_downgrades_non_physical_prf_best_fit(monkeypatch
 def test_localize_single_sector_flags_non_physical_best_fit_with_prf_lite(
     monkeypatch,
 ) -> None:
-    from bittr_tess_vetter.api import pixel_localize as px
-    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+    from tess_vetter.api import pixel_localize as px
+    from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 
     def _fake_diff_diag(**_kwargs):
         return (
@@ -185,8 +185,8 @@ def test_localize_single_sector_flags_non_physical_best_fit_with_prf_lite(
 def test_baseline_sensitive_downgrade_sets_interpretation_and_reliability(
     monkeypatch,
 ) -> None:
-    from bittr_tess_vetter.api import pixel_localize as px
-    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+    from tess_vetter.api import pixel_localize as px
+    from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 
     calls = {"n": 0}
 
@@ -279,8 +279,8 @@ def test_baseline_sensitive_downgrade_sets_interpretation_and_reliability(
 
 
 def test_brightness_prior_reorders_faint_neighbor_artifact(monkeypatch) -> None:
-    from bittr_tess_vetter.api import pixel_localize as px
-    from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+    from tess_vetter.api import pixel_localize as px
+    from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 
     def _fake_diff_diag(**_kwargs):
         return (

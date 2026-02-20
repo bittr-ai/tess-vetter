@@ -5,8 +5,8 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from bittr_tess_vetter.cli.toi_query_cli import toi_query_command
-from bittr_tess_vetter.platform.catalogs.exofop_toi_table import ExoFOPToiTable
+from tess_vetter.cli.toi_query_cli import toi_query_command
+from tess_vetter.platform.catalogs.exofop_toi_table import ExoFOPToiTable
 
 
 def _fake_table() -> ExoFOPToiTable:
@@ -53,7 +53,7 @@ def test_btv_toi_query_json_contract_includes_query_and_source_stats(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.toi_query_cli.fetch_exofop_toi_table",
+        "tess_vetter.cli.toi_query_cli.fetch_exofop_toi_table",
         lambda **_: _fake_table(),
     )
 
@@ -98,7 +98,7 @@ def test_btv_toi_query_json_contract_includes_query_and_source_stats(
 
 def test_btv_toi_query_csv_output_to_stdout(monkeypatch) -> None:
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.toi_query_cli.fetch_exofop_toi_table",
+        "tess_vetter.cli.toi_query_cli.fetch_exofop_toi_table",
         lambda **_: _fake_table(),
     )
     runner = CliRunner()

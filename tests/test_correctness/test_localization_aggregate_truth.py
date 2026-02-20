@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.features.aggregates.localization import build_localization_summary
+from tess_vetter.features.aggregates.localization import build_localization_summary
 
 
 def test_localization_summary_empty_when_missing() -> None:

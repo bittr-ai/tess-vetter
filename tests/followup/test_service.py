@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from bittr_tess_vetter.followup.service import run_followup
+from tess_vetter.followup.service import run_followup
 
 
 def test_run_followup_no_network_does_not_fetch_obsnotes(monkeypatch, tmp_path: Path) -> None:
@@ -18,9 +18,9 @@ def test_run_followup_no_network_does_not_fetch_obsnotes(monkeypatch, tmp_path: 
         def obs_notes(self, *, tic_id: int, force_refresh: bool = False):  # noqa: ARG002
             raise AssertionError("obs_notes should not be called in --no-network mode")
 
-    monkeypatch.setattr("bittr_tess_vetter.followup.service.ExoFopClient", _FakeClient)
+    monkeypatch.setattr("tess_vetter.followup.service.ExoFopClient", _FakeClient)
     monkeypatch.setattr(
-        "bittr_tess_vetter.followup.service.detect_render_capabilities",
+        "tess_vetter.followup.service.detect_render_capabilities",
         lambda: SimpleNamespace(can_render_pdf=False, preferred_renderer=None),
     )
 
@@ -76,13 +76,13 @@ def test_run_followup_reads_cached_manifest_and_headers_only(monkeypatch, tmp_pa
         def fetch_files(self, *, target: int, selectors, force_refresh: bool = False):  # noqa: ARG002
             raise AssertionError("fetch_files should not be called in --no-network mode")
 
-    monkeypatch.setattr("bittr_tess_vetter.followup.service.ExoFopClient", _FakeClient)
+    monkeypatch.setattr("tess_vetter.followup.service.ExoFopClient", _FakeClient)
     monkeypatch.setattr(
-        "bittr_tess_vetter.followup.service.detect_render_capabilities",
+        "tess_vetter.followup.service.detect_render_capabilities",
         lambda: SimpleNamespace(can_render_pdf=True, preferred_renderer="pdftoppm"),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.followup.service.extract_fits_header",
+        "tess_vetter.followup.service.extract_fits_header",
         lambda *_args, **_kwargs: SimpleNamespace(
             status=SimpleNamespace(status="ok", reason=None),
             header={"INSTRUME": "TESTSPEC"},

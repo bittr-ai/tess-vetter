@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from bittr_tess_vetter.platform.catalogs.gaia_client import (
+from tess_vetter.platform.catalogs.gaia_client import (
     RUWE_ELEVATED_THRESHOLD,
     GaiaAstrophysicalParams,
     GaiaNeighbor,
@@ -27,7 +27,7 @@ from bittr_tess_vetter.platform.catalogs.gaia_client import (
     _parse_astrophysical_params,
     _parse_gaia_source,
 )
-from bittr_tess_vetter.platform.catalogs.models import SourceRecord
+from tess_vetter.platform.catalogs.models import SourceRecord
 
 # Fixture directory
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "gaia"

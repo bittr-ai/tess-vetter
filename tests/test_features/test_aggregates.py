@@ -1,6 +1,6 @@
 """Unit tests for the aggregates subpackage."""
 
-from bittr_tess_vetter.features.aggregates import (
+from tess_vetter.features.aggregates import (
     FAMILY_GHOST_RELIABILITY,
     FAMILY_HOST_PLAUSIBILITY,
     FAMILY_PIXEL_TIMESERIES,

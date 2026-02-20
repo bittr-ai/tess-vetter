@@ -10,14 +10,14 @@ import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 
-from bittr_tess_vetter.api import compute_aperture_family_depth_curve, localize_transit_source
-from bittr_tess_vetter.api.catalogs import query_gaia_by_position_sync
-from bittr_tess_vetter.api.stellar_dilution import (
+from tess_vetter.api import compute_aperture_family_depth_curve, localize_transit_source
+from tess_vetter.api.catalogs import query_gaia_by_position_sync
+from tess_vetter.api.stellar_dilution import (
     build_host_hypotheses_from_profile,
     compute_dilution_scenarios,
 )
-from bittr_tess_vetter.api.wcs_localization import ReferenceSource
-from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+from tess_vetter.api.wcs_localization import ReferenceSource
+from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 
 
 @dataclass(frozen=True)

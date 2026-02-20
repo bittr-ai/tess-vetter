@@ -6,9 +6,9 @@ from typing import Any
 
 from click.testing import CliRunner
 
-import bittr_tess_vetter.cli.enrich_cli as enrich_cli
-from bittr_tess_vetter.api.sector_metrics import SectorEphemerisMetrics
-from bittr_tess_vetter.cli import measure_sectors_cli
+import tess_vetter.cli.enrich_cli as enrich_cli
+from tess_vetter.api.sector_metrics import SectorEphemerisMetrics
+from tess_vetter.cli import measure_sectors_cli
 
 
 def _payload() -> dict[str, Any]:
@@ -72,11 +72,11 @@ def test_measure_sectors_accepts_positional_toi_and_short_o(monkeypatch, tmp_pat
         return 123, 10.5, 2000.2, 2.5, None, {"source": "toi_catalog"}
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.measure_sectors_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.measure_sectors_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.measure_sectors_cli._execute_measure_sectors",
+        "tess_vetter.cli.measure_sectors_cli._execute_measure_sectors",
         lambda **_kwargs: _payload(),
     )
 
@@ -97,7 +97,7 @@ def test_measure_sectors_accepts_positional_toi_and_short_o(monkeypatch, tmp_pat
 
 def test_measure_sectors_emits_progress_to_stderr(monkeypatch) -> None:
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.measure_sectors_cli._execute_measure_sectors",
+        "tess_vetter.cli.measure_sectors_cli._execute_measure_sectors",
         lambda **_kwargs: _payload(),
     )
 
@@ -156,7 +156,7 @@ def test_measure_sectors_report_file_inputs_override_toi_and_seed_sectors(monkey
 
     captured: dict[str, Any] = {}
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.measure_sectors_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.measure_sectors_cli._resolve_candidate_inputs",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve TOI with report file")),
     )
 
@@ -165,7 +165,7 @@ def test_measure_sectors_report_file_inputs_override_toi_and_seed_sectors(monkey
         return _payload()
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.measure_sectors_cli._execute_measure_sectors",
+        "tess_vetter.cli.measure_sectors_cli._execute_measure_sectors",
         _fake_execute_measure_sectors,
     )
 
@@ -210,7 +210,7 @@ def test_measure_sectors_resume_skips_existing_completed_output(monkeypatch, tmp
     )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.measure_sectors_cli._execute_measure_sectors",
+        "tess_vetter.cli.measure_sectors_cli._execute_measure_sectors",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should skip due to resume")),
     )
 

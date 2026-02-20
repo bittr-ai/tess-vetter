@@ -7,9 +7,9 @@ from typing import Any
 import numpy as np
 from click.testing import CliRunner
 
-from bittr_tess_vetter.cli.common_cli import BtvCliError
-from bittr_tess_vetter.cli.ephemeris_reliability_cli import ephemeris_reliability_command
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.cli.common_cli import BtvCliError
+from tess_vetter.cli.ephemeris_reliability_cli import ephemeris_reliability_command
+from tess_vetter.domain.lightcurve import LightCurveData
 
 
 def _make_lc(*, tic_id: int, sector: int, start: float) -> LightCurveData:
@@ -69,19 +69,19 @@ def test_btv_ephemeris_reliability_success_contract_payload(monkeypatch, tmp_pat
         return _FakeResult()
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.ephemeris_reliability_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.ephemeris_reliability_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.ephemeris_reliability_cli.load_lightcurves_with_sector_policy",
+        "tess_vetter.cli.ephemeris_reliability_cli.load_lightcurves_with_sector_policy",
         _fake_load_lightcurves_with_sector_policy,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.ephemeris_reliability_cli.stitch_lightcurve_data",
+        "tess_vetter.cli.ephemeris_reliability_cli.stitch_lightcurve_data",
         _fake_stitch,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.api.ephemeris_reliability.compute_reliability_regime_numpy",
+        "tess_vetter.api.ephemeris_reliability.compute_reliability_regime_numpy",
         _fake_compute_reliability_regime_numpy,
     )
 
@@ -226,15 +226,15 @@ def test_btv_ephemeris_reliability_filters_invalid_cadences(monkeypatch, tmp_pat
         return _FakeResult()
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.ephemeris_reliability_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.ephemeris_reliability_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.ephemeris_reliability_cli.load_lightcurves_with_sector_policy",
+        "tess_vetter.cli.ephemeris_reliability_cli.load_lightcurves_with_sector_policy",
         _fake_load_lightcurves_with_sector_policy,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.api.ephemeris_reliability.compute_reliability_regime_numpy",
+        "tess_vetter.api.ephemeris_reliability.compute_reliability_regime_numpy",
         _fake_compute_reliability_regime_numpy,
     )
 
@@ -271,15 +271,15 @@ def test_btv_ephemeris_reliability_accepts_positional_toi_and_short_o(
         return 123, 7.5, 2500.25, 3.0, 900.0, {"source": "toi", "inputs": {"toi": kwargs.get("toi")}}
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.ephemeris_reliability_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.ephemeris_reliability_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.ephemeris_reliability_cli.load_lightcurves_with_sector_policy",
+        "tess_vetter.cli.ephemeris_reliability_cli.load_lightcurves_with_sector_policy",
         lambda **kwargs: ([_make_lc(tic_id=kwargs["tic_id"], sector=14, start=2000.0)], "mast_discovery"),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.api.ephemeris_reliability.compute_reliability_regime_numpy",
+        "tess_vetter.api.ephemeris_reliability.compute_reliability_regime_numpy",
         lambda **_kwargs: type("R", (), {"to_dict": lambda self: {"label": "ok"}})(),
     )
 
@@ -323,15 +323,15 @@ def test_btv_ephemeris_reliability_report_file_inputs_override_toi(monkeypatch, 
     )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.ephemeris_reliability_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.ephemeris_reliability_cli._resolve_candidate_inputs",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve TOI with report file")),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.ephemeris_reliability_cli.load_lightcurves_with_sector_policy",
+        "tess_vetter.cli.ephemeris_reliability_cli.load_lightcurves_with_sector_policy",
         lambda **kwargs: ([_make_lc(tic_id=kwargs["tic_id"], sector=5, start=2000.0)], "mast_filtered"),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.api.ephemeris_reliability.compute_reliability_regime_numpy",
+        "tess_vetter.api.ephemeris_reliability.compute_reliability_regime_numpy",
         lambda **_kwargs: type("R", (), {"to_dict": lambda self: {"label": "ok"}})(),
     )
 
@@ -358,7 +358,7 @@ def test_btv_ephemeris_reliability_report_file_inputs_override_toi(monkeypatch, 
 
 def test_btv_ephemeris_reliability_explicit_sectors_cache_miss_exits_4(monkeypatch) -> None:
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.ephemeris_reliability_cli.load_lightcurves_with_sector_policy",
+        "tess_vetter.cli.ephemeris_reliability_cli.load_lightcurves_with_sector_policy",
         lambda **_kwargs: (_ for _ in ()).throw(
             BtvCliError(
                 "Cache-only sector load failed for TIC 123. Missing cached light curve for sector(s): 14.",

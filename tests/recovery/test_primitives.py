@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from bittr_tess_vetter.recovery.primitives import (
+from tess_vetter.recovery.primitives import (
     count_transits,
     detrend_for_recovery,
     estimate_rotation_period,
@@ -328,7 +328,7 @@ class TestFitTrapezoid:
 
     def test_recovers_depth(self) -> None:
         """Correctly recovers injected transit depth."""
-        from bittr_tess_vetter.recovery.primitives import _trapezoid_model
+        from tess_vetter.recovery.primitives import _trapezoid_model
 
         phase = np.linspace(0.4, 0.6, 100, dtype=np.float64)
         true_depth = 0.004
@@ -377,7 +377,7 @@ class TestFitTrapezoid:
         bounds. The fit_trapezoid function now constrains duration
         to be within a factor of 2 of the initial estimate.
         """
-        from bittr_tess_vetter.recovery.primitives import _trapezoid_model
+        from tess_vetter.recovery.primitives import _trapezoid_model
 
         phase = np.linspace(0.4, 0.6, 100, dtype=np.float64)
         true_depth = 0.004  # 4000 ppm
@@ -411,7 +411,7 @@ class TestFitTrapezoid:
         residuals could cause the fitter to find a wide, shallow transit.
         The duration constraint should prevent this.
         """
-        from bittr_tess_vetter.recovery.primitives import _trapezoid_model
+        from tess_vetter.recovery.primitives import _trapezoid_model
 
         phase = np.linspace(0.4, 0.6, 100, dtype=np.float64)
         true_depth = 0.003  # 3000 ppm

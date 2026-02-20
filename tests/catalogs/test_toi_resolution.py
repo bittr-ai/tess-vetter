@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from bittr_tess_vetter.platform.catalogs.exofop_toi_table import ExoFOPToiTable
-from bittr_tess_vetter.platform.catalogs.models import SourceRecord
-from bittr_tess_vetter.platform.catalogs.toi_resolution import (
+from tess_vetter.platform.catalogs.exofop_toi_table import ExoFOPToiTable
+from tess_vetter.platform.catalogs.models import SourceRecord
+from tess_vetter.platform.catalogs.toi_resolution import (
     LookupStatus,
     lookup_tic_coordinates,
     resolve_toi_to_tic_ephemeris_depth,
@@ -33,11 +33,11 @@ def test_resolve_toi_to_tic_ephemeris_depth_success(monkeypatch: pytest.MonkeyPa
         ],
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table_for_toi",
+        "tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table_for_toi",
         lambda *_args, **_kwargs: table,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table",
+        "tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table",
         lambda **_: table,
     )
 
@@ -57,11 +57,11 @@ def test_resolve_toi_to_tic_ephemeris_depth_not_found(monkeypatch: pytest.Monkey
         rows=[{"toi": "100.01", "tic_id": "1"}],
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table_for_toi",
+        "tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table_for_toi",
         lambda *_args, **_kwargs: table,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table",
+        "tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table",
         lambda **_: table,
     )
 
@@ -75,11 +75,11 @@ def test_resolve_toi_to_tic_ephemeris_depth_timeout(monkeypatch: pytest.MonkeyPa
         raise TimeoutError("timed out")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table_for_toi",
+        "tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table_for_toi",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(TimeoutError("timed out")),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table",
+        "tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table",
         _raise_timeout,
     )
     result = resolve_toi_to_tic_ephemeris_depth("123.01")
@@ -103,11 +103,11 @@ def test_resolve_toi_to_tic_ephemeris_depth_falls_back_to_full_table(monkeypatch
     )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table_for_toi",
+        "tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table_for_toi",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(TimeoutError("scoped timeout")),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table",
+        "tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table",
         lambda **_: table,
     )
 
@@ -120,11 +120,11 @@ def test_resolve_toi_to_tic_ephemeris_depth_falls_back_to_full_table(monkeypatch
 
 def test_lookup_tic_coordinates_fallback_to_exofop(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "bittr_tess_vetter.platform.catalogs.toi_resolution._lookup_tic_coords_from_mast",
+        "tess_vetter.platform.catalogs.toi_resolution._lookup_tic_coords_from_mast",
         lambda tic_id, **_: (None, None, _source("mast_tic", f"TIC {tic_id}"), LookupStatus.DATA_UNAVAILABLE, "no"),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.platform.catalogs.toi_resolution._lookup_tic_coords_from_exofop",
+        "tess_vetter.platform.catalogs.toi_resolution._lookup_tic_coords_from_exofop",
         lambda tic_id, **_: (123.4, -45.6, _source("exofop_toi_table", f"TIC {tic_id}"), LookupStatus.OK, None),
     )
 
@@ -138,7 +138,7 @@ def test_lookup_tic_coordinates_fallback_to_exofop(monkeypatch: pytest.MonkeyPat
 
 def test_lookup_tic_coordinates_surfaces_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "bittr_tess_vetter.platform.catalogs.toi_resolution._lookup_tic_coords_from_mast",
+        "tess_vetter.platform.catalogs.toi_resolution._lookup_tic_coords_from_mast",
         lambda tic_id, **_: (
             None,
             None,
@@ -148,7 +148,7 @@ def test_lookup_tic_coordinates_surfaces_timeout(monkeypatch: pytest.MonkeyPatch
         ),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.platform.catalogs.toi_resolution._lookup_tic_coords_from_exofop",
+        "tess_vetter.platform.catalogs.toi_resolution._lookup_tic_coords_from_exofop",
         lambda tic_id, **_: (
             None,
             None,

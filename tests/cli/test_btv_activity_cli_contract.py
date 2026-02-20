@@ -6,8 +6,8 @@ from typing import Any
 
 from click.testing import CliRunner
 
-from bittr_tess_vetter.api.types import LightCurve
-from bittr_tess_vetter.cli.activity_cli import activity_command
+from tess_vetter.api.types import LightCurve
+from tess_vetter.cli.activity_cli import activity_command
 
 
 def test_btv_activity_success_payload_contract(monkeypatch, tmp_path: Path) -> None:
@@ -37,10 +37,10 @@ def test_btv_activity_success_payload_contract(monkeypatch, tmp_path: Path) -> N
         return _FakeActivityResult()
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.activity_cli._download_and_stitch_lightcurve",
+        "tess_vetter.cli.activity_cli._download_and_stitch_lightcurve",
         _fake_download_and_stitch_lightcurve,
     )
-    monkeypatch.setattr("bittr_tess_vetter.cli.activity_cli.characterize_activity", _fake_characterize_activity)
+    monkeypatch.setattr("tess_vetter.cli.activity_cli.characterize_activity", _fake_characterize_activity)
 
     out_path = tmp_path / "activity.json"
     runner = CliRunner()
@@ -113,7 +113,7 @@ def test_btv_activity_no_sectors_available_exits_4(monkeypatch) -> None:
             _ = tic_id, flux_type, sectors
             return []
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -134,11 +134,11 @@ def test_btv_activity_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: 
         return 123, {"source": "toi", "inputs": {"toi": kwargs.get("toi")}}
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.activity_cli._resolve_tic_and_inputs",
+        "tess_vetter.cli.activity_cli._resolve_tic_and_inputs",
         _fake_resolve_tic_and_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.activity_cli._download_and_stitch_lightcurve",
+        "tess_vetter.cli.activity_cli._download_and_stitch_lightcurve",
         lambda **_kwargs: (
             LightCurve(time=[1.0, 2.0], flux=[1.0, 1.0], flux_err=[0.001, 0.001]),
             [14],
@@ -146,7 +146,7 @@ def test_btv_activity_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: 
         ),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.activity_cli.characterize_activity",
+        "tess_vetter.cli.activity_cli.characterize_activity",
         lambda **_kwargs: type("A", (), {"to_dict": lambda self: {"rotation_period": 5.0}})(),
     )
 
@@ -197,15 +197,15 @@ def test_btv_activity_report_file_inputs_override_toi(monkeypatch, tmp_path: Pat
         )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.activity_cli._download_and_stitch_lightcurve",
+        "tess_vetter.cli.activity_cli._download_and_stitch_lightcurve",
         _fake_download_and_stitch_lightcurve,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.activity_cli.characterize_activity",
+        "tess_vetter.cli.activity_cli.characterize_activity",
         lambda **_kwargs: type("A", (), {"to_dict": lambda self: {"variability_class": "quiet"}})(),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.activity_cli._resolve_tic_and_inputs",
+        "tess_vetter.cli.activity_cli._resolve_tic_and_inputs",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve TOI with report file")),
     )
 
@@ -243,7 +243,7 @@ def test_btv_activity_explicit_sectors_cache_miss_exits_4(monkeypatch) -> None:
         def download_all_sectors(self, *_args: Any, **_kwargs: Any):
             raise AssertionError("download_all_sectors should not be called when --sectors is provided")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.diagnostics_report_inputs.MASTClient", _FakeMASTClient)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -271,11 +271,11 @@ def test_btv_activity_passes_cache_dir_to_loader(monkeypatch, tmp_path: Path) ->
         )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.activity_cli._download_and_stitch_lightcurve",
+        "tess_vetter.cli.activity_cli._download_and_stitch_lightcurve",
         _fake_download_and_stitch_lightcurve,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.activity_cli.characterize_activity",
+        "tess_vetter.cli.activity_cli.characterize_activity",
         lambda **_kwargs: type("A", (), {"to_dict": lambda self: {"variability_class": "quiet"}})(),
     )
 

@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 from click.testing import CliRunner
 
-import bittr_tess_vetter.cli.enrich_cli as enrich_cli
+import tess_vetter.cli.enrich_cli as enrich_cli
 
 
 class _FakeLightCurve:
@@ -111,9 +111,9 @@ def test_detrend_grid_output_schema_keys(monkeypatch) -> None:
         },
     ]
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        "tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
         lambda **_kwargs: _FakeSweepResult(rows),
     )
 
@@ -206,9 +206,9 @@ def test_detrend_grid_accepts_short_o_alias(monkeypatch, tmp_path) -> None:
         }
     ]
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        "tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
         lambda **_kwargs: _FakeSweepResult(rows),
     )
 
@@ -241,9 +241,9 @@ def test_detrend_grid_emits_progress_to_stderr(monkeypatch) -> None:
             "gp_fit_diagnostics": None,
         }
     ]
-    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        "tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
         lambda **_kwargs: _FakeSweepResult(rows),
     )
 
@@ -281,7 +281,7 @@ def test_detrend_grid_emits_recommended_next_step_for_transit_masked_best(monkey
             "gp_fit_diagnostics": None,
         }
     ]
-    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
     class _BestTransitSweep:
         def to_dict(self) -> dict[str, Any]:
             return {
@@ -300,7 +300,7 @@ def test_detrend_grid_emits_recommended_next_step_for_transit_masked_best(monkey
             }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        "tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
         lambda **_kwargs: _BestTransitSweep(),
     )
 
@@ -324,7 +324,7 @@ def test_detrend_grid_emits_recommended_next_step_for_transit_masked_best(monkey
 
 
 def test_detrend_grid_seed_is_deterministic_and_defaults_to_zero(monkeypatch) -> None:
-    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
 
     def _fake_sweep(**kwargs: Any) -> _FakeSweepResult:
         seed = int(kwargs["random_seed"])
@@ -388,7 +388,7 @@ def test_detrend_grid_seed_is_deterministic_and_defaults_to_zero(monkeypatch) ->
         return result
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        "tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
         _fake_sweep,
     )
 
@@ -445,9 +445,9 @@ def test_detrend_grid_passes_cache_dir_to_mast_client(monkeypatch, tmp_path) -> 
             "gp_fit_diagnostics": None,
         }
     ]
-    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _CacheAwareFakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.detrend_grid_cli.MASTClient", _CacheAwareFakeMASTClient)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        "tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
         lambda **_kwargs: _FakeSweepResult(rows),
     )
 
@@ -488,9 +488,9 @@ def test_detrend_grid_adds_check_resolution_note_for_v16_model_competition(monke
     vet_path = tmp_path / "vet.json"
     vet_path.write_text(json.dumps(vet_payload), encoding="utf-8")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        "tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
         lambda **_kwargs: _FakeSweepResult(rows),
     )
 
@@ -527,9 +527,9 @@ def test_detrend_grid_omits_check_resolution_note_without_vet_summary(monkeypatc
             "gp_fit_diagnostics": None,
         }
     ]
-    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        "tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
         lambda **_kwargs: _FakeSweepResult(rows),
     )
 
@@ -569,9 +569,9 @@ def test_detrend_grid_accepts_summary_at_payload_root(monkeypatch, tmp_path) -> 
     vet_path = tmp_path / "vet_summary_root.json"
     vet_path.write_text(json.dumps(vet_summary_root), encoding="utf-8")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        "tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
         lambda **_kwargs: _FakeSweepResult(rows),
     )
 
@@ -625,9 +625,9 @@ def test_detrend_grid_supports_report_file_inputs(monkeypatch, tmp_path) -> None
         seen["download"] = {"tic_id": tic_id, "flux_type": flux_type, "sectors": sectors}
         return [_FakeLightCurve()]
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient.download_all_sectors", _fake_download_all_sectors)
+    monkeypatch.setattr("tess_vetter.cli.detrend_grid_cli.MASTClient.download_all_sectors", _fake_download_all_sectors)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        "tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
         lambda **_kwargs: _FakeSweepResult(rows),
     )
 
@@ -685,9 +685,9 @@ def test_detrend_grid_best_variant_fallback_when_all_variants_fail(monkeypatch) 
                 "sweep_table": rows,
             }
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.detrend_grid_cli.MASTClient", _FakeMASTClient)
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
+        "tess_vetter.cli.detrend_grid_cli.compute_sensitivity_sweep_numpy",
         lambda **_kwargs: _AllFailSweep(),
     )
 

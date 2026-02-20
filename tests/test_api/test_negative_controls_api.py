@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.api.negative_controls import (
+from tess_vetter.api.negative_controls import (
     generate_control,
     generate_flux_invert,
     generate_phase_scramble,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.validation.ghost_features import compute_ghost_features
+from tess_vetter.validation.ghost_features import compute_ghost_features
 
 
 def test_ghost_aperture_sign_consistent_false_for_opposite_sign_in_out_depths() -> None:

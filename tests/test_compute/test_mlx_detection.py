@@ -35,7 +35,7 @@ pytestmark = pytest.mark.skipif(
 
 # Conditionally import module functions only if MLX is available
 if MLX_AVAILABLE:
-    from bittr_tess_vetter.compute.mlx_detection import (
+    from tess_vetter.compute.mlx_detection import (
         MlxT0RefinementResult,
         MlxTopKScoreResult,
         integrated_gradients,

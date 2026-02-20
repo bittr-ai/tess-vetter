@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.features.aggregates.host import build_host_plausibility_summary
+from tess_vetter.features.aggregates.host import build_host_plausibility_summary
 
 
 def test_host_feasible_best_selects_lowest_depth_correction_among_feasible() -> None:

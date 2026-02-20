@@ -7,8 +7,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.report import build_report
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.report import build_report
 
 _TOI_DATA_DIR = Path("docs/tutorials/data/tic188646744")
 _TOI_SECTORS = (55, 75, 82, 83)

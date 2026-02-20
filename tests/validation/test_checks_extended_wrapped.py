@@ -4,15 +4,15 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from bittr_tess_vetter.domain.detection import TransitCandidate
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.validation.checks_extended_wrapped import (
+from tess_vetter.domain.detection import TransitCandidate
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.validation.checks_extended_wrapped import (
     AliasDiagnosticsCheck,
     EphemerisReliabilityRegimeCheck,
     SectorConsistencyCheck,
 )
-from bittr_tess_vetter.validation.registry import CheckConfig, CheckInputs
-from bittr_tess_vetter.validation.systematic_periods import compute_systematic_period_proximity
+from tess_vetter.validation.registry import CheckConfig, CheckInputs
+from tess_vetter.validation.systematic_periods import compute_systematic_period_proximity
 
 
 def _make_inputs(*, period_days: float = 3.0) -> CheckInputs:
@@ -74,15 +74,15 @@ def test_v17_uniqueness_regime_labels(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.validation.ephemeris_reliability.compute_reliability_regime_numpy",
+        "tess_vetter.validation.ephemeris_reliability.compute_reliability_regime_numpy",
         _fake_compute,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.validation.ephemeris_specificity.phase_shift_t0s",
+        "tess_vetter.validation.ephemeris_specificity.phase_shift_t0s",
         lambda **_kwargs: np.array([1.1, 1.2], dtype=np.float64),
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.validation.ephemeris_specificity.scores_for_t0s_numpy",
+        "tess_vetter.validation.ephemeris_specificity.scores_for_t0s_numpy",
         lambda **_kwargs: np.array([1.6, 1.4], dtype=np.float64),
     )
 
@@ -100,18 +100,18 @@ def test_v19_includes_systematic_period_proximity(monkeypatch) -> None:
     config = CheckConfig(extra_params={})
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.validation.alias_diagnostics.compute_harmonic_scores",
+        "tess_vetter.validation.alias_diagnostics.compute_harmonic_scores",
         lambda **_kwargs: [
             SimpleNamespace(harmonic="P", period=13.0, score=2.0, depth_ppm=200.0),
             SimpleNamespace(harmonic="P/2", period=6.5, score=1.2, depth_ppm=100.0),
         ],
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.validation.alias_diagnostics.compute_secondary_significance",
+        "tess_vetter.validation.alias_diagnostics.compute_secondary_significance",
         lambda **_kwargs: 0.3,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.validation.alias_diagnostics.detect_phase_shift_events",
+        "tess_vetter.validation.alias_diagnostics.detect_phase_shift_events",
         lambda **_kwargs: [SimpleNamespace(significance=1.4)],
     )
 

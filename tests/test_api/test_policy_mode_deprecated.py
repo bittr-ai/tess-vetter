@@ -3,9 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.lc_only import odd_even_depth
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.api.vet import vet_candidate
+from tess_vetter.api.lc_only import odd_even_depth
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.api.vet import vet_candidate
 
 
 def test_lc_only_policy_mode_is_deprecated_and_ignored() -> None:

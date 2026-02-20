@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from bittr_tess_vetter.platform.catalogs.gaia_client import GaiaQueryResult, query_gaia_by_position_sync
+from tess_vetter.platform.catalogs.gaia_client import GaiaQueryResult, query_gaia_by_position_sync
 
 
 class _FakeResp:
@@ -39,7 +39,7 @@ def test_gaia_position_query_uses_cache(tmp_path: Path, monkeypatch: pytest.Monk
         }
         return _FakeResp(payload)
 
-    import bittr_tess_vetter.platform.catalogs.gaia_client as mod
+    import tess_vetter.platform.catalogs.gaia_client as mod
 
     monkeypatch.setattr(mod, "GAIA_TAP_ENDPOINT", "https://fake")
 

@@ -4,8 +4,8 @@ from typing import Any
 
 import numpy as np
 
-from bittr_tess_vetter.api.stitch import stitch_lightcurve_data, stitch_lightcurves
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.api.stitch import stitch_lightcurve_data, stitch_lightcurves
+from tess_vetter.domain.lightcurve import LightCurveData
 
 
 def test_stitch_two_sectors_normalizes_each_sector() -> None:

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.api.pixel_prf import get_prf_model
-from bittr_tess_vetter.compute.pixel_timeseries import (
+from tess_vetter.api.pixel_prf import get_prf_model
+from tess_vetter.compute.pixel_timeseries import (
     TransitWindow,
     TimeseriesEvidence,
     aggregate_timeseries_evidence,

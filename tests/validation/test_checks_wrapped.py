@@ -14,19 +14,19 @@ import json
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.domain.detection import TransitCandidate
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.validation.checks_catalog_wrapped import (
+from tess_vetter.domain.detection import TransitCandidate
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.validation.checks_catalog_wrapped import (
     ExoFOPTOILookupCheck,
     NearbyEBSearchCheck,
     register_catalog_checks,
 )
-from bittr_tess_vetter.validation.checks_exovetter_wrapped import (
+from tess_vetter.validation.checks_exovetter_wrapped import (
     ModShiftCheck,
     SweetCheck,
     register_exovetter_checks,
 )
-from bittr_tess_vetter.validation.checks_lc_wrapped import (
+from tess_vetter.validation.checks_lc_wrapped import (
     DepthStabilityCheck,
     DurationConsistencyCheck,
     OddEvenDepthCheck,
@@ -34,14 +34,14 @@ from bittr_tess_vetter.validation.checks_lc_wrapped import (
     VShapeCheck,
     register_lc_checks,
 )
-from bittr_tess_vetter.validation.checks_pixel_wrapped import (
+from tess_vetter.validation.checks_pixel_wrapped import (
     ApertureDependenceCheck,
     CentroidShiftCheck,
     DifferenceImageCheck,
     register_pixel_checks,
 )
-from bittr_tess_vetter.validation.register_defaults import register_all_defaults
-from bittr_tess_vetter.validation.registry import (
+from tess_vetter.validation.register_defaults import register_all_defaults
+from tess_vetter.validation.registry import (
     CheckConfig,
     CheckInputs,
     CheckRegistry,
@@ -49,7 +49,7 @@ from bittr_tess_vetter.validation.registry import (
     CheckTier,
     VettingCheck,
 )
-from bittr_tess_vetter.validation.result_schema import CheckResult
+from tess_vetter.validation.result_schema import CheckResult
 
 
 def _make_test_lightcurve(
@@ -308,7 +308,7 @@ class TestNearbyEBSearchCheck:
             return _Legacy()
 
         monkeypatch.setattr(
-            "bittr_tess_vetter.validation.checks_catalog.run_nearby_eb_search",
+            "tess_vetter.validation.checks_catalog.run_nearby_eb_search",
             _fake_run_nearby_eb_search,
         )
         result = check.run(inputs, config)
@@ -333,7 +333,7 @@ class TestNearbyEBSearchCheck:
             return _Legacy()
 
         monkeypatch.setattr(
-            "bittr_tess_vetter.validation.checks_catalog.run_nearby_eb_search",
+            "tess_vetter.validation.checks_catalog.run_nearby_eb_search",
             _fake_run_nearby_eb_search,
         )
         result = check.run(inputs, config)
@@ -361,7 +361,7 @@ class TestNearbyEBSearchCheck:
             return _Legacy()
 
         monkeypatch.setattr(
-            "bittr_tess_vetter.validation.checks_catalog.run_nearby_eb_search",
+            "tess_vetter.validation.checks_catalog.run_nearby_eb_search",
             _fake_run_nearby_eb_search,
         )
         result = check.run(inputs, config)

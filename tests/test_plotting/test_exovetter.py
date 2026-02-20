@@ -13,8 +13,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from bittr_tess_vetter.plotting.exovetter import plot_modshift, plot_sweet
-from bittr_tess_vetter.validation.result_schema import CheckResult, ok_result
+from tess_vetter.plotting.exovetter import plot_modshift, plot_sweet
+from tess_vetter.validation.result_schema import CheckResult, ok_result
 
 
 @pytest.fixture

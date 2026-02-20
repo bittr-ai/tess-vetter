@@ -4,7 +4,7 @@ This document defines the stable JSON seam consumed by downstream adapter/charti
 
 ## Scope
 
-- Producer: `ReportData.to_json()` in `bittr_tess_vetter.report`.
+- Producer: `ReportData.to_json()` in `tess_vetter.report`.
 - Consumer: external adapters that transform report payloads into chart-specific models.
 - Non-goal: HTML renderer behavior in this repo.
 

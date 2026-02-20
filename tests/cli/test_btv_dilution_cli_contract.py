@@ -6,7 +6,7 @@ from typing import Any
 
 from click.testing import CliRunner
 
-from bittr_tess_vetter.cli.dilution_cli import dilution_command
+from tess_vetter.cli.dilution_cli import dilution_command
 
 
 def test_btv_dilution_success_payload_contract(monkeypatch, tmp_path: Path) -> None:
@@ -18,7 +18,7 @@ def test_btv_dilution_success_payload_contract(monkeypatch, tmp_path: Path) -> N
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
 
@@ -102,7 +102,7 @@ def test_btv_dilution_reference_sources_only_success_contract(monkeypatch, tmp_p
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
 
@@ -170,7 +170,7 @@ def test_btv_dilution_partial_host_profile_supplemented_by_reference_sources(
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
 
@@ -367,7 +367,7 @@ def test_btv_dilution_report_file_inputs_override_candidate_flags(monkeypatch, t
     )
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve TOI with report file")),
     )
 
@@ -411,7 +411,7 @@ def test_btv_dilution_uses_vet_result_depth_without_candidate_resolution(monkeyp
         encoding="utf-8",
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not resolve candidate inputs")),
     )
 
@@ -471,7 +471,7 @@ def test_btv_dilution_accepts_resolve_neighbors_style_source_ids(monkeypatch, tm
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
 
@@ -526,7 +526,7 @@ def test_btv_dilution_accepts_positional_toi_and_short_o(monkeypatch, tmp_path: 
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
 
@@ -586,11 +586,11 @@ def test_btv_dilution_autoresolves_primary_radius_when_missing_and_network_ok(mo
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.dilution_cli.load_auto_stellar_with_fallback",
+        "tess_vetter.cli.dilution_cli.load_auto_stellar_with_fallback",
         lambda **_kwargs: (
             {"radius": 0.93, "mass": 0.85, "tmag": 10.8},
             {"selected_source": "exofop_toi_table"},
@@ -634,7 +634,7 @@ def test_btv_dilution_auto_radius_resolution_fail_open(monkeypatch, tmp_path: Pa
         }
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
+        "tess_vetter.cli.dilution_cli._resolve_candidate_inputs",
         _fake_resolve_candidate_inputs,
     )
 
@@ -642,7 +642,7 @@ def test_btv_dilution_auto_radius_resolution_fail_open(monkeypatch, tmp_path: Pa
         raise RuntimeError("upstream stellar lookup timeout")
 
     monkeypatch.setattr(
-        "bittr_tess_vetter.cli.dilution_cli.load_auto_stellar_with_fallback",
+        "tess_vetter.cli.dilution_cli.load_auto_stellar_with_fallback",
         _raise_auto_stellar,
     )
 

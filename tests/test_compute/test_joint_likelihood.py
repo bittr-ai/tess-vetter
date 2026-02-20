@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from bittr_tess_vetter.compute.joint_inference_schemas import SectorEvidence
-from bittr_tess_vetter.compute.joint_likelihood import (
+from tess_vetter.compute.joint_inference_schemas import SectorEvidence
+from tess_vetter.compute.joint_likelihood import (
     assess_sector_quality,
     compute_all_hypotheses_joint,
     compute_joint_log_likelihood,

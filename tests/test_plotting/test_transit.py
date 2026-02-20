@@ -13,9 +13,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.plotting.lightcurve import plot_full_lightcurve
-from bittr_tess_vetter.plotting.transit import plot_phase_folded, plot_transit_fit
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.plotting.lightcurve import plot_full_lightcurve
+from tess_vetter.plotting.transit import plot_phase_folded, plot_transit_fit
 
 # =============================================================================
 # Fixtures
@@ -554,7 +554,7 @@ class TestBinPhaseData:
 
     def test_empty_input(self):
         """Test that empty input returns empty arrays."""
-        from bittr_tess_vetter.plotting.transit import _bin_phase_data
+        from tess_vetter.plotting.transit import _bin_phase_data
 
         phase, flux, err = _bin_phase_data(
             np.array([]), np.array([]), period_days=5.0, bin_minutes=30.0
@@ -566,7 +566,7 @@ class TestBinPhaseData:
 
     def test_binning_reduces_points(self):
         """Test that binning reduces number of points."""
-        from bittr_tess_vetter.plotting.transit import _bin_phase_data
+        from tess_vetter.plotting.transit import _bin_phase_data
 
         # Create 1000 points
         phase = np.linspace(-0.1, 0.1, 1000)
@@ -582,7 +582,7 @@ class TestBinPhaseData:
 
     def test_mean_in_bins(self):
         """Test that binned values are means of input."""
-        from bittr_tess_vetter.plotting.transit import _bin_phase_data
+        from tess_vetter.plotting.transit import _bin_phase_data
 
         # Create simple test data
         phase = np.array([0.0, 0.001, 0.002, 0.1, 0.101, 0.102])
@@ -598,7 +598,7 @@ class TestBinPhaseData:
 
     def test_error_calculation(self):
         """Test that errors are standard error of mean."""
-        from bittr_tess_vetter.plotting.transit import _bin_phase_data
+        from tess_vetter.plotting.transit import _bin_phase_data
 
         # Create data with known scatter
         np.random.seed(42)

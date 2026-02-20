@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from bittr_tess_vetter.platform.catalogs.exoplanet_archive import (
+from tess_vetter.platform.catalogs.exoplanet_archive import (
     ExoplanetArchiveClient,
     KnownPlanet,
     KnownPlanetsResult,

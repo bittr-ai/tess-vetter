@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.report import build_report
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.report import build_report
 
 _DEPTH_PPM_ABS_TOL = 0.1
 _SIGNIFICANCE_ABS_TOL = 0.1

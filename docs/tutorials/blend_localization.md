@@ -2,10 +2,10 @@
 
 This tutorial demonstrates a common TESS failure mode: a transit signal can look planet-like in the stitched light curve, but still be caused by a contaminating eclipsing binary inside the TESS aperture. Here we combine:
 
-- WCS-aware difference-image localization (`bittr_tess_vetter.api.localize_transit_source`)
-- Gaia neighbor hypotheses (`bittr_tess_vetter.api.catalogs.query_gaia_by_position_sync`)
-- Dilution plausibility (“how deep would the eclipse have to be on that neighbor?”) (`bittr_tess_vetter.api.stellar_dilution.compute_dilution_scenarios`)
-- An aperture-family sanity check (`bittr_tess_vetter.api.compute_aperture_family_depth_curve`)
+- WCS-aware difference-image localization (`tess_vetter.api.localize_transit_source`)
+- Gaia neighbor hypotheses (`tess_vetter.api.catalogs.query_gaia_by_position_sync`)
+- Dilution plausibility (“how deep would the eclipse have to be on that neighbor?”) (`tess_vetter.api.stellar_dilution.compute_dilution_scenarios`)
+- An aperture-family sanity check (`tess_vetter.api.compute_aperture_family_depth_curve`)
 
 **Example target**: `TIC 188646744` (TOI-5807.01). This is an extremely bright star where localization can be baseline-sensitive, so the “localization + physics” combination is the point of the example.
 
@@ -14,7 +14,7 @@ This tutorial demonstrates a common TESS failure mode: a transit signal can look
 You need a way to acquire TPF FITS files. This tutorial uses `lightkurve` to download TESS Target Pixel Files from MAST:
 
 ```bash
-pip install bittr-tess-vetter
+pip install tess-vetter
 pip install lightkurve astroquery
 ```
 

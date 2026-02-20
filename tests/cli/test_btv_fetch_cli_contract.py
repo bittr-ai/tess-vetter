@@ -8,8 +8,8 @@ from typing import Any
 import numpy as np
 from click.testing import CliRunner
 
-from bittr_tess_vetter.cli.fetch_cli import cache_sectors_command, fetch_command
-from bittr_tess_vetter.domain.lightcurve import LightCurveData, make_data_ref
+from tess_vetter.cli.fetch_cli import cache_sectors_command, fetch_command
+from tess_vetter.domain.lightcurve import LightCurveData, make_data_ref
 
 
 def _fake_lc(*, tic_id: int, sector: int) -> LightCurveData:
@@ -48,8 +48,8 @@ def test_btv_fetch_contract_tic_id_cache_only_explicit_sectors(monkeypatch, tmp_
         def put(self, key: str, value: Any) -> None:
             seen["puts"].append((key, int(getattr(value, "sector", -1))))
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fetch_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fetch_cli.PersistentCache", _FakePersistentCache)
+    monkeypatch.setattr("tess_vetter.cli.fetch_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.fetch_cli.PersistentCache", _FakePersistentCache)
 
     out_path = tmp_path / "fetch.json"
     cache_dir = tmp_path / "cache"
@@ -128,8 +128,8 @@ def test_btv_fetch_report_file_inputs_override_toi(monkeypatch, tmp_path: Path) 
         def put(self, key: str, value: Any) -> None:
             seen["puts"].append((key, int(getattr(value, "sector", -1))))
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fetch_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fetch_cli.PersistentCache", _FakePersistentCache)
+    monkeypatch.setattr("tess_vetter.cli.fetch_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.fetch_cli.PersistentCache", _FakePersistentCache)
 
     out_path = tmp_path / "fetch.report.out.json"
     runner = CliRunner()
@@ -194,8 +194,8 @@ def test_btv_cache_sectors_probe_no_network(monkeypatch, tmp_path: Path) -> None
         def put(self, key: str, value: Any) -> None:
             raise AssertionError("probe should not write cache")
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fetch_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fetch_cli.PersistentCache", _FakePersistentCache)
+    monkeypatch.setattr("tess_vetter.cli.fetch_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.fetch_cli.PersistentCache", _FakePersistentCache)
 
     out_path = tmp_path / "cache_probe.json"
     result = CliRunner().invoke(
@@ -246,8 +246,8 @@ def test_btv_cache_sectors_fill_missing_backfills(monkeypatch, tmp_path: Path) -
         def put(self, key: str, value: Any) -> None:
             seen["puts"].append((key, int(getattr(value, "sector", -1))))
 
-    monkeypatch.setattr("bittr_tess_vetter.cli.fetch_cli.MASTClient", _FakeMASTClient)
-    monkeypatch.setattr("bittr_tess_vetter.cli.fetch_cli.PersistentCache", _FakePersistentCache)
+    monkeypatch.setattr("tess_vetter.cli.fetch_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.fetch_cli.PersistentCache", _FakePersistentCache)
 
     out_path = tmp_path / "cache_fill.json"
     result = CliRunner().invoke(

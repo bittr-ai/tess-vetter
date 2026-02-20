@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bittr_tess_vetter.api.sector_consistency import SectorMeasurement, compute_sector_consistency
+from tess_vetter.api.sector_consistency import SectorMeasurement, compute_sector_consistency
 
 
 def test_sector_consistency_expected_scatter() -> None:

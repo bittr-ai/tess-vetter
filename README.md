@@ -19,7 +19,7 @@
                                               bittr.ai                                              
 ```
 
-# bittr-tess-vetter
+# tess-vetter
 
 Domain-first Python library for TESS transit detection + vetting (array-in/array-out).
 
@@ -34,12 +34,12 @@ The `platform/` module is entirely optional and only used when explicitly import
 
 ## What's in here
 
-- **Vetting pipeline**: default preset runs 15 checks (V01-V12, V13, V15, V11b); opt-in extended preset adds metrics-only diagnostics (V16-V21) via `vet_candidate(..., preset="extended")` (`bittr_tess_vetter.api.vet`)
-- **Transit detection**: TLS/LS periodograms, multi-planet search, candidate merging (`bittr_tess_vetter.api.periodogram`)
-- **Pixel diagnostics**: centroid shift, difference images, WCS-aware localization, aperture dependence (`bittr_tess_vetter.api.pixel`)
-- **Transit recovery**: detrend + stack + trapezoid fitting for active stars (`bittr_tess_vetter.api.recovery`)
-- **FPP (optional)**: TRICERATOPS+ support with a vendored copy under `src/bittr_tess_vetter/ext/` (`bittr_tess_vetter.api.fpp`)
-- **Citations**: many public API entry points carry machine-readable literature references (see `REFERENCES.md` and `bittr_tess_vetter.api.references`)
+- **Vetting pipeline**: default preset runs 15 checks (V01-V12, V13, V15, V11b); opt-in extended preset adds metrics-only diagnostics (V16-V21) via `vet_candidate(..., preset="extended")` (`tess_vetter.api.vet`)
+- **Transit detection**: TLS/LS periodograms, multi-planet search, candidate merging (`tess_vetter.api.periodogram`)
+- **Pixel diagnostics**: centroid shift, difference images, WCS-aware localization, aperture dependence (`tess_vetter.api.pixel`)
+- **Transit recovery**: detrend + stack + trapezoid fitting for active stars (`tess_vetter.api.recovery`)
+- **FPP (optional)**: TRICERATOPS+ support with a vendored copy under `src/tess_vetter/ext/` (`tess_vetter.api.fpp`)
+- **Citations**: many public API entry points carry machine-readable literature references (see `REFERENCES.md` and `tess_vetter.api.references`)
 
 ## Installation
 
@@ -47,52 +47,52 @@ Requires Python 3.11–3.12.
 
 ### Minimal install (basic vetting)
 ```bash
-pip install bittr-tess-vetter
+pip install tess-vetter
 ```
 
 ### With transit detection (TLS)
 ```bash
-pip install 'bittr-tess-vetter[tls]'
+pip install 'tess-vetter[tls]'
 ```
 
 ### With MCMC fitting
 ```bash
-pip install 'bittr-tess-vetter[fit]'
+pip install 'tess-vetter[fit]'
 ```
 
 ### With physical transit model fitting (batman)
 ```bash
-pip install 'bittr-tess-vetter[batman]'
+pip install 'tess-vetter[batman]'
 ```
 
 ### With advanced detrending (wotan)
 ```bash
-pip install 'bittr-tess-vetter[wotan]'
+pip install 'tess-vetter[wotan]'
 ```
 
 ### With limb darkening coefficients (ldtk)
 ```bash
-pip install 'bittr-tess-vetter[ldtk]'
+pip install 'tess-vetter[ldtk]'
 ```
 
 ### With external vetter integration (exovetter)
 ```bash
-pip install 'bittr-tess-vetter[exovetter]'
+pip install 'tess-vetter[exovetter]'
 ```
 
 ### With false positive probability (TRICERATOPS)
 ```bash
-pip install 'bittr-tess-vetter[triceratops]'
+pip install 'tess-vetter[triceratops]'
 ```
 
 ### With Apple Silicon acceleration (MLX, macOS only)
 ```bash
-pip install 'bittr-tess-vetter[mlx]'
+pip install 'tess-vetter[mlx]'
 ```
 
 ### Full install
 ```bash
-pip install 'bittr-tess-vetter[all]'
+pip install 'tess-vetter[all]'
 ```
 
 ### Development
@@ -117,7 +117,7 @@ python -m pip install -e ".[all]"
 The recommended import alias follows patterns from astropy (`import astropy.units as u`):
 
 ```python
-import bittr_tess_vetter.api as btv
+import tess_vetter.api as btv
 ```
 
 Agent-first walkthroughs and CLI-first examples are in `docs/quickstart.rst`.
@@ -126,7 +126,7 @@ Agent-first walkthroughs and CLI-first examples are in `docs/quickstart.rst`.
 
 ```python
 import numpy as np
-from bittr_tess_vetter.api import Candidate, Ephemeris, LightCurve, vet_candidate
+from tess_vetter.api import Candidate, Ephemeris, LightCurve, vet_candidate
 
 lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
 candidate = Candidate(
@@ -147,7 +147,7 @@ for r in bundle.results:
 ### Batch vetting (multiple candidates, one light curve)
 
 ```python
-from bittr_tess_vetter.api import vet_many
+from tess_vetter.api import vet_many
 
 candidates = [
     Candidate(ephemeris=Ephemeris(period_days=3.5, t0_btjd=1850.0, duration_hours=2.5)),
@@ -164,7 +164,7 @@ for row in summary:
 ### Pipeline introspection
 
 ```python
-from bittr_tess_vetter.api import list_checks, describe_checks
+from tess_vetter.api import list_checks, describe_checks
 
 # List all registered checks with their requirements
 checks = list_checks()
@@ -179,7 +179,7 @@ print(describe_checks())
 ### Running a subset of checks
 
 ```python
-from bittr_tess_vetter.api import vet_candidate
+from tess_vetter.api import vet_candidate
 
 # Run only LC-only checks (V01-V05)
 bundle = vet_candidate(lc, candidate, checks=["V01", "V02", "V03", "V04", "V05"])
@@ -191,17 +191,17 @@ Catalog-backed checks are always opt-in. You must pass `network=True` (and provi
 
 ## Citations
 
-Many public API entry points and vetting checks include a list of literature references in their results. The full reference list lives in `REFERENCES.md` (and is also available programmatically via `bittr_tess_vetter.api.references`).
+Many public API entry points and vetting checks include a list of literature references in their results. The full reference list lives in `REFERENCES.md` (and is also available programmatically via `tess_vetter.api.references`).
 
 ## Code map
 
-- `src/bittr_tess_vetter/api/`: stable host-facing facade (recommended import surface)
-- `src/bittr_tess_vetter/compute/`: core array algorithms (detrending, periodograms, scoring)
-- `src/bittr_tess_vetter/validation/`: check implementations and aggregation primitives
-- `src/bittr_tess_vetter/pixel/`: pixel-level and WCS-aware diagnostics
-- `src/bittr_tess_vetter/recovery/`, `src/bittr_tess_vetter/transit/`, `src/bittr_tess_vetter/activity/`: domain modules
-- `src/bittr_tess_vetter/platform/io/`, `src/bittr_tess_vetter/platform/catalogs/`: optional I/O and catalog helpers
-- `src/bittr_tess_vetter/ext/triceratops_plus_vendor/`: vendored TRICERATOPS+ (see `THIRD_PARTY_NOTICES.md`)
+- `src/tess_vetter/api/`: stable host-facing facade (recommended import surface)
+- `src/tess_vetter/compute/`: core array algorithms (detrending, periodograms, scoring)
+- `src/tess_vetter/validation/`: check implementations and aggregation primitives
+- `src/tess_vetter/pixel/`: pixel-level and WCS-aware diagnostics
+- `src/tess_vetter/recovery/`, `src/tess_vetter/transit/`, `src/tess_vetter/activity/`: domain modules
+- `src/tess_vetter/platform/io/`, `src/tess_vetter/platform/catalogs/`: optional I/O and catalog helpers
+- `src/tess_vetter/ext/triceratops_plus_vendor/`: vendored TRICERATOPS+ (see `THIRD_PARTY_NOTICES.md`)
 
 ## Platform Support
 
@@ -219,7 +219,7 @@ Cache files (light curves, TRICERATOPS results) use pickle serialization for per
 ```bash
 uv run pytest
 uv run ruff check .
-uv run mypy src/bittr_tess_vetter
+uv run mypy src/tess_vetter
 ```
 
 ## Docs

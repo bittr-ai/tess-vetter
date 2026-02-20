@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.pixel.aperture import ApertureDependenceResult
-from bittr_tess_vetter.pixel.centroid import CentroidResult
-from bittr_tess_vetter.pixel.difference import DifferenceImageResult
-from bittr_tess_vetter.pixel.report import PixelVetReport, generate_pixel_vet_report
+from tess_vetter.pixel.aperture import ApertureDependenceResult
+from tess_vetter.pixel.centroid import CentroidResult
+from tess_vetter.pixel.difference import DifferenceImageResult
+from tess_vetter.pixel.report import PixelVetReport, generate_pixel_vet_report
 
 
 def test_generate_pixel_vet_report_bundles_metrics() -> None:

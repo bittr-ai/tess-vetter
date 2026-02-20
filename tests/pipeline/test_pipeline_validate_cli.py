@@ -5,8 +5,8 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from bittr_tess_vetter.cli.common_cli import EXIT_INPUT_ERROR
-from bittr_tess_vetter.cli.enrich_cli import cli
+from tess_vetter.cli.common_cli import EXIT_INPUT_ERROR
+from tess_vetter.cli.enrich_cli import cli
 
 
 def test_pipeline_validate_cli_valid_profile_human_summary() -> None:

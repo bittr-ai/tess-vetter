@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bittr_tess_vetter.api.ephemeris_match import (
+from tess_vetter.api.ephemeris_match import (
     EphemerisEntry,
     EphemerisIndex,
     load_index,

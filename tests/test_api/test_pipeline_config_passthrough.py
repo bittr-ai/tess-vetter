@@ -4,12 +4,12 @@ import importlib
 
 import numpy as np
 
-from bittr_tess_vetter.api.pipeline import PipelineConfig
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.validation.result_schema import VettingBundleResult
+from tess_vetter.api.pipeline import PipelineConfig
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.validation.result_schema import VettingBundleResult
 
-generate_report_api = importlib.import_module("bittr_tess_vetter.api.generate_report")
-vet_api = importlib.import_module("bittr_tess_vetter.api.vet")
+generate_report_api = importlib.import_module("tess_vetter.api.generate_report")
+vet_api = importlib.import_module("tess_vetter.api.vet")
 
 
 class _FakePipeline:
@@ -51,7 +51,7 @@ def _light_curve() -> LightCurve:
 
 
 def test_vet_candidate_accepts_pipeline_config_and_stamps_provenance(monkeypatch) -> None:
-    monkeypatch.setattr("bittr_tess_vetter.api.pipeline.VettingPipeline", _FakePipeline)
+    monkeypatch.setattr("tess_vetter.api.pipeline.VettingPipeline", _FakePipeline)
 
     cfg = PipelineConfig(timeout_seconds=7.5, random_seed=11, extra_params={"k": "v"})
     bundle = vet_api.vet_candidate(
@@ -67,7 +67,7 @@ def test_vet_candidate_accepts_pipeline_config_and_stamps_provenance(monkeypatch
 
 
 def test_vet_many_accepts_pipeline_config_and_stamps_provenance(monkeypatch) -> None:
-    monkeypatch.setattr("bittr_tess_vetter.api.pipeline.VettingPipeline", _FakePipeline)
+    monkeypatch.setattr("tess_vetter.api.pipeline.VettingPipeline", _FakePipeline)
 
     cfg = PipelineConfig(timeout_seconds=3.0, fail_fast=True, extra_params={"x": 1})
     bundles, _ = vet_api.vet_many(

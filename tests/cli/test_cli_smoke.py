@@ -24,11 +24,11 @@ TLS_AVAILABLE = importlib.util.find_spec("transitleastsquares") is not None
 
 # List of CLI modules to test
 CLI_MODULES = [
-    "bittr_tess_vetter.cli.mlx_bls_search_cli",
-    "bittr_tess_vetter.cli.mlx_bls_search_range_cli",
-    "bittr_tess_vetter.cli.mlx_quick_vet_cli",
-    "bittr_tess_vetter.cli.mlx_refine_candidates_cli",
-    "bittr_tess_vetter.cli.mlx_tls_calibration_cli",
+    "tess_vetter.cli.mlx_bls_search_cli",
+    "tess_vetter.cli.mlx_bls_search_range_cli",
+    "tess_vetter.cli.mlx_quick_vet_cli",
+    "tess_vetter.cli.mlx_refine_candidates_cli",
+    "tess_vetter.cli.mlx_tls_calibration_cli",
 ]
 
 
@@ -60,10 +60,10 @@ class TestCLIHelp:
     @pytest.mark.parametrize(
         "module_name",
         [
-            "bittr_tess_vetter.cli.mlx_bls_search_cli",
-            "bittr_tess_vetter.cli.mlx_bls_search_range_cli",
-            "bittr_tess_vetter.cli.mlx_quick_vet_cli",
-            "bittr_tess_vetter.cli.mlx_refine_candidates_cli",
+            "tess_vetter.cli.mlx_bls_search_cli",
+            "tess_vetter.cli.mlx_bls_search_range_cli",
+            "tess_vetter.cli.mlx_quick_vet_cli",
+            "tess_vetter.cli.mlx_refine_candidates_cli",
         ],
     )
     def test_cli_help_invocation(self, module_name: str) -> None:
@@ -83,7 +83,7 @@ class TestCLIHelp:
     def test_tls_calibration_cli_help(self) -> None:
         """Verify mlx_tls_calibration_cli --help works when TLS is available."""
         result = subprocess.run(
-            [sys.executable, "-m", "bittr_tess_vetter.cli.mlx_tls_calibration_cli", "--help"],
+            [sys.executable, "-m", "tess_vetter.cli.mlx_tls_calibration_cli", "--help"],
             capture_output=True,
             text=True,
             timeout=30,
@@ -103,10 +103,10 @@ class TestCLIEntryPoints:
     @pytest.mark.parametrize(
         "module_name",
         [
-            "bittr_tess_vetter.cli.mlx_bls_search_cli",
-            "bittr_tess_vetter.cli.mlx_bls_search_range_cli",
-            "bittr_tess_vetter.cli.mlx_quick_vet_cli",
-            "bittr_tess_vetter.cli.mlx_refine_candidates_cli",
+            "tess_vetter.cli.mlx_bls_search_cli",
+            "tess_vetter.cli.mlx_bls_search_range_cli",
+            "tess_vetter.cli.mlx_quick_vet_cli",
+            "tess_vetter.cli.mlx_refine_candidates_cli",
         ],
     )
     def test_cli_module_runnable(self, module_name: str) -> None:
@@ -128,7 +128,7 @@ class TestCLIEntryPoints:
     def test_tls_calibration_cli_runnable(self) -> None:
         """Verify TLS calibration CLI can be invoked."""
         result = subprocess.run(
-            [sys.executable, "-m", "bittr_tess_vetter.cli.mlx_tls_calibration_cli"],
+            [sys.executable, "-m", "tess_vetter.cli.mlx_tls_calibration_cli"],
             capture_output=True,
             text=True,
             timeout=30,
@@ -148,20 +148,20 @@ class TestCLIModuleContent:
 
     def test_mlx_bls_search_cli_has_result_dataclass(self) -> None:
         """mlx_bls_search_cli should define MlxBlsLikeResult."""
-        from bittr_tess_vetter.cli import mlx_bls_search_cli
+        from tess_vetter.cli import mlx_bls_search_cli
 
         assert hasattr(mlx_bls_search_cli, "MlxBlsLikeResult")
         assert hasattr(mlx_bls_search_cli, "MlxBlsLikeCandidate")
 
     def test_mlx_bls_search_range_cli_has_request_dataclass(self) -> None:
         """mlx_bls_search_range_cli should define RangeSearchRequest."""
-        from bittr_tess_vetter.cli import mlx_bls_search_range_cli
+        from tess_vetter.cli import mlx_bls_search_range_cli
 
         assert hasattr(mlx_bls_search_range_cli, "RangeSearchRequest")
 
     def test_mlx_refine_candidates_cli_has_candidate_dataclass(self) -> None:
         """mlx_refine_candidates_cli should define Candidate."""
-        from bittr_tess_vetter.cli import mlx_refine_candidates_cli
+        from tess_vetter.cli import mlx_refine_candidates_cli
 
         assert hasattr(mlx_refine_candidates_cli, "Candidate")
 
@@ -177,7 +177,7 @@ class TestMLXAvailability:
 
     def test_mlx_import_helper_succeeds(self) -> None:
         """_try_import_mlx should succeed when MLX is available."""
-        from bittr_tess_vetter.cli.mlx_bls_search_cli import _try_import_mlx
+        from tess_vetter.cli.mlx_bls_search_cli import _try_import_mlx
 
         mx = _try_import_mlx()
         assert mx is not None
@@ -189,7 +189,7 @@ class TestMLXUnavailable:
 
     def test_mlx_import_helper_raises(self) -> None:
         """_try_import_mlx should raise ImportError when MLX unavailable."""
-        from bittr_tess_vetter.cli.mlx_bls_search_cli import _try_import_mlx
+        from tess_vetter.cli.mlx_bls_search_cli import _try_import_mlx
 
         with pytest.raises(ImportError, match="MLX is not installed"):
             _try_import_mlx()

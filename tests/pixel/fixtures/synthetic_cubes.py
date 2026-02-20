@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 from astropy.wcs import WCS
 
-from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 
 
 @dataclass(frozen=True)

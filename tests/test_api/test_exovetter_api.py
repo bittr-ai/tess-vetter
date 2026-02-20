@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.api.exovetter import modshift, sweet, vet_exovetter
-from bittr_tess_vetter.api.types import Candidate, CheckResult, Ephemeris, LightCurve
+from tess_vetter.api.exovetter import modshift, sweet, vet_exovetter
+from tess_vetter.api.types import Candidate, CheckResult, Ephemeris, LightCurve
 
 
 def _minimal_lc() -> LightCurve:

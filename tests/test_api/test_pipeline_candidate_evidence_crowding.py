@@ -5,17 +5,17 @@ from datetime import UTC, datetime
 import numpy as np
 import pytest
 
-import bittr_tess_vetter.api.io as btv_io
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.features import FeatureConfig
-from bittr_tess_vetter.pipeline import enrich_candidate
-from bittr_tess_vetter.platform.catalogs.gaia_client import (
+import tess_vetter.api.io as btv_io
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.features import FeatureConfig
+from tess_vetter.pipeline import enrich_candidate
+from tess_vetter.platform.catalogs.gaia_client import (
     GaiaAstrophysicalParams,
     GaiaNeighbor,
     GaiaQueryResult,
     GaiaSourceRecord,
 )
-from bittr_tess_vetter.platform.catalogs.models import SourceRecord
+from tess_vetter.platform.catalogs.models import SourceRecord
 
 
 class _DummyTarget:
@@ -103,7 +103,7 @@ def test_candidate_evidence_gaia_crowding(monkeypatch: pytest.MonkeyPatch) -> No
             ),
         )
 
-    import bittr_tess_vetter.platform.catalogs.gaia_client as gaia_mod
+    import tess_vetter.platform.catalogs.gaia_client as gaia_mod
 
     monkeypatch.setattr(gaia_mod, "query_gaia_by_position_sync", _fake_gaia)  # type: ignore[assignment]
 

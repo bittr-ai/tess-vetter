@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, LightCurve
-from bittr_tess_vetter.api.vet import vet_candidate
-from bittr_tess_vetter.report import build_report
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+from tess_vetter.api.vet import vet_candidate
+from tess_vetter.report import build_report
 
 
 def _make_synthetic_lc(

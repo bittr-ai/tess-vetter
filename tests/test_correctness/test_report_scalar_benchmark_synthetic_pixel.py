@@ -3,14 +3,14 @@ from __future__ import annotations
 import numpy as np
 from astropy.wcs import WCS
 
-from bittr_tess_vetter.api.pixel import vet_pixel
-from bittr_tess_vetter.api.types import Candidate, Ephemeris, TPFStamp
-from bittr_tess_vetter.api.wcs_localization import (
+from tess_vetter.api.pixel import vet_pixel
+from tess_vetter.api.types import Candidate, Ephemeris, TPFStamp
+from tess_vetter.api.wcs_localization import (
     LocalizationVerdict,
     compute_difference_image_centroid_diagnostics,
     localize_transit_source,
 )
-from bittr_tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
 
 
 def _to_tpf_stamp(tpf_fits: TPFFitsData) -> TPFStamp:

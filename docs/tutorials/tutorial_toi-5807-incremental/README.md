@@ -9,4 +9,4 @@ Design:
 
 Run notebooks from the repo root so relative paths resolve (e.g. `docs/tutorials/data/...`).
 
-Plotting requires `matplotlib` (or install the package extra: `pip install 'bittr-tess-vetter[plotting]'`).
+Plotting requires `matplotlib` (or install the package extra: `pip install 'tess-vetter[plotting]'`).

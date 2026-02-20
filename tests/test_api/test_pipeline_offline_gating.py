@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-import bittr_tess_vetter.api.io as btv_io
-import bittr_tess_vetter.pipeline as pipeline
-from bittr_tess_vetter.features import FeatureConfig
+import tess_vetter.api.io as btv_io
+import tess_vetter.pipeline as pipeline
+from tess_vetter.features import FeatureConfig
 
 
 def test_enrich_candidate_offline_requires_local_data_path(monkeypatch: pytest.MonkeyPatch) -> None:

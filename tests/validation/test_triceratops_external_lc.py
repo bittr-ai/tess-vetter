@@ -8,8 +8,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bittr_tess_vetter.api.fpp import ExternalLightCurve
-from bittr_tess_vetter.validation.triceratops_fpp import _write_external_lc_files
+from tess_vetter.api.fpp import ExternalLightCurve
+from tess_vetter.validation.triceratops_fpp import _write_external_lc_files
 
 
 class TestWriteExternalLcFiles:

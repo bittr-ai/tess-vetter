@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from bittr_tess_vetter.errors import MissingOptionalDependencyError
+from tess_vetter.errors import MissingOptionalDependencyError
 
 
 class TestMissingOptionalDependencyError:
@@ -17,7 +17,7 @@ class TestMissingOptionalDependencyError:
         assert "pip install" in str(exc)
 
     def test_custom_hint(self) -> None:
-        exc = MissingOptionalDependencyError("tls", install_hint="uv add bittr-tess-vetter[tls]")
+        exc = MissingOptionalDependencyError("tls", install_hint="uv add tess-vetter[tls]")
         assert "uv add" in str(exc)
 
     def test_is_import_error(self) -> None:

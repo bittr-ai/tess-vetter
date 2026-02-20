@@ -9,5 +9,5 @@ This project includes code from the following third-party sources:
 - **TRICERATOPS+ fork:** Barrientos et al. 2025 (arxiv:2508.02782)
 - **License:** MIT License
 
-TRICERATOPS+ is vendored in `src/bittr_tess_vetter/ext/triceratops_plus_vendor/`.
+TRICERATOPS+ is vendored in `src/tess_vetter/ext/triceratops_plus_vendor/`.
 See `VENDORED_FROM.md` in that directory for the specific version information.

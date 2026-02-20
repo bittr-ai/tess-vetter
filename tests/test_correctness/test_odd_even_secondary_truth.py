@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from bittr_tess_vetter.domain.lightcurve import LightCurveData
-from bittr_tess_vetter.validation.lc_checks import (
+from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.validation.lc_checks import (
     OddEvenConfig,
     SecondaryEclipseConfig,
     check_odd_even_depth,

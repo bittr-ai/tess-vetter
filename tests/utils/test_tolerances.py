@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from bittr_tess_vetter.utils.tolerances import check_tolerance
+from tess_vetter.utils.tolerances import check_tolerance
 
 
 def test_period_tolerance_accepts_harmonic_when_enabled() -> None:

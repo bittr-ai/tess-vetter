@@ -1,5 +1,5 @@
-import bittr_tess_vetter.api as btv
-from bittr_tess_vetter.api.types import error_result, ok_result, skipped_result
+import tess_vetter.api as btv
+from tess_vetter.api.types import error_result, ok_result, skipped_result
 
 
 def test_format_vetting_table_smoke() -> None:
