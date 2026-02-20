@@ -60,9 +60,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
-        run: uv sync --group dev
-      - name: Run tests
+        run: uv sync --group dev --extra plotting
+      - name: Run core tests (no slow)
+        if: matrix.python-version != '3.12'
         run: uv run pytest -q -m "not slow"
+      - name: Run core tests with coverage gate (tess_vetter >= 69%)
+        if: matrix.python-version == '3.12'
+        run: uv run pytest -q -m "not slow" --cov=tess_vetter --cov-report=term --cov-fail-under=69
 
   test-extras:
     runs-on: ubuntu-latest
@@ -76,7 +80,6 @@ jobs:
         run: uv sync --group dev --extra tls --extra fit --extra wotan --extra triceratops --extra exovetter --extra batman
       - name: Run tests
         run: uv run pytest -q -m "not slow"
-
 
   coverage:
     runs-on: ubuntu-latest
@@ -101,6 +104,7 @@ jobs:
           use_oidc: true
           fail_ci_if_error: false
           verbose: true
+
   docs:
     runs-on: ubuntu-latest
     steps:
