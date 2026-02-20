@@ -130,6 +130,11 @@ For false positive probability estimation using TRICERATOPS+:
 
    pip install "tess-vetter[triceratops]"
 
+.. note::
+
+   The ``triceratops`` extra includes ``pytransit`` (GPL-2.0). Installing this
+   extra changes the effective license of your environment from BSD-3-Clause.
+
 Exovetter (ModShift/SWEET)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 

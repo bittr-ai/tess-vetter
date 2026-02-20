@@ -215,9 +215,19 @@ Supported commands:
 - ``btv ephemeris-reliability``
 - ``btv fpp``
 - ``btv fetch``
+- ``btv cache-sectors``
 - ``btv resolve-neighbors``
+- ``btv resolve-stellar``
+- ``btv describe-checks``
+- ``btv localize``
 - ``btv localize-host``
 - ``btv dilution``
+- ``btv fit``
+- ``btv contrast-curves``
+- ``btv contrast-curves summarize``
+- ``btv pipeline run``
+- ``btv pipeline profiles``
+- ``btv pipeline validate``
 - ``btv followup``
 
 Vetting Check Categories
@@ -283,6 +293,7 @@ These checks integrate with `exovetter <https://github.com/spacetelescope/exovet
 (requires the ``exovetter`` extra):
 
 - **V11 modshift**: Modshift transit/secondary significance checks
+- **V11b modshift_uniqueness**: ModShift uniqueness checks against nearby period aliases
 - **V12 sweet**: SWEET test for periodic out-of-transit variability
 
 .. note::

@@ -48,7 +48,7 @@ Backward compatibility note:
 
 ### Core diagnostics and reports
 - `btv vet`: `cli.vet.v2`
-- `btv vet --plot-data-out`: `cli.vet.plot_data.v1` (plot-data sidecar file)
+- `btv vet --split-plot-data`: `cli.vet.plot_data.v1` (writes `<out>.plot_data.json` sidecar; default on)
 - `btv fpp`: `cli.fpp.v3`
 - `btv fpp prepare`: `cli.fpp.prepare.v1`
 - `btv report`: `cli.report.v3`
@@ -73,7 +73,7 @@ Backward compatibility note:
 
 ### Data acquisition and discovery
 - `btv periodogram`: `cli.periodogram.v1`
-- `btv transit-fit`: `cli.fit.v1`
+- `btv fit`: `cli.fit.v1`
 - `btv fetch`: `cli.fetch.v1`
 - `btv fetch cache-sectors`: `cli.cache_sectors.v1`
 - `btv toi-query`: `cli.toi_query.v1`
@@ -116,7 +116,7 @@ For `btv pipeline run`, contract consumers should treat these behaviors as stabl
   - In mixed-outcome runs resumed with `--resume`, previously `ok` TOIs can be fully checkpoint-reused (`skipped_resume: true` on all successful steps) while previously `partial` TOIs rerun only steps without reusable success markers.
   - A resumed mixed-outcome run can converge to all-`ok` when prior failed steps succeed; this is reflected in manifest counts and per-TOI `status` updates.
 
-#### Evidence table schema highlights (`pipeline.evidence_table.v5`)
+### Evidence table schema highlights (`pipeline.evidence_table.v5`)
 - Per-row key `stellar_contamination_risk_scalar` is included in JSON rows and CSV columns.
 - Source mapping:
   - preferred: `summary.stellar_contamination_risk_scalar`

@@ -12,8 +12,8 @@ cd bittr-tess-vetter
 # Install uv if you haven't already
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install dependencies (including dev tools)
-uv sync --group dev
+# Install dependencies (including dev tools and optional extras used in CI/release checks)
+uv sync --all-extras --group dev
 
 # Install pre-commit hooks
 uv run pre-commit install
