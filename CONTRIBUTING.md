@@ -25,8 +25,12 @@ uv run pre-commit install
 # Run all tests
 uv run pytest
 
-# Run with coverage
+# Run broad regression coverage gate (matches CI modest gate)
 uv run pytest --cov=tess_vetter
+
+# Run core-library coverage gate (>90, excludes adapter/vendor surfaces)
+uv run coverage run --rcfile=coverage.core.ini -m pytest -q -m "not slow"
+uv run coverage report --rcfile=coverage.core.ini
 
 # Run specific test file
 uv run pytest tests/test_api/test_periodogram_wrappers.py

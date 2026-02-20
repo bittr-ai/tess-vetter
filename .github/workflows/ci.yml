@@ -64,7 +64,7 @@ jobs:
       - name: Run core tests (no slow)
         if: matrix.python-version != '3.12'
         run: uv run pytest -q -m "not slow"
-      - name: Run core tests with coverage gate (tess_vetter >= 69%)
+      - name: Run broad regression coverage gate (tess_vetter >= 69%)
         if: matrix.python-version == '3.12'
         run: uv run pytest -q -m "not slow" --cov=tess_vetter --cov-report=term --cov-fail-under=69
 
@@ -81,7 +81,8 @@ jobs:
       - name: Run tests
         run: uv run pytest -q -m "not slow"
 
-  coverage:
+  core-library-coverage:
+    needs: [test-core]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -94,9 +95,14 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: uv sync --group dev
-      - name: Run tests with coverage
-        run: uv run pytest -q -m "not slow" --cov=tess_vetter --cov-report=xml:coverage.xml
-      - name: Upload coverage report to Codecov
+      - name: Run core-library coverage gate (>90%, first-party core only)
+        run: |
+          uv run coverage run \
+            --rcfile=coverage.core.ini \
+            -m pytest -q -m "not slow"
+          uv run coverage report --rcfile=coverage.core.ini
+          uv run coverage xml -o coverage.xml
+      - name: Upload core-library coverage to Codecov
         continue-on-error: true
         uses: codecov/codecov-action@v5
         with:

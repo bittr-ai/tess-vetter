@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from tess_vetter.report._ui_meta import (
     UI_META_VERSION,
+    _model_property_types,
+    main,
     build_ui_meta_artifact,
     write_ui_meta_artifact,
 )
@@ -42,3 +46,30 @@ def test_ui_meta_writer_writes_expected_json(tmp_path) -> None:  # type: ignore[
     assert wrote == out
     parsed = json.loads(out.read_text(encoding="utf-8"))
     assert parsed == build_ui_meta_artifact()
+
+
+def test_model_property_types_handles_all_schema_shapes() -> None:
+    schema = {
+        "properties": {
+            "as_list": {"type": ["string", "null"]},
+            "as_str": {"type": "number"},
+            "as_ref": {"$ref": "#/defs/X"},
+            "as_anyof": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "as_unknown": {"title": "No type keys"},
+        }
+    }
+    out = _model_property_types(schema)
+    assert out["as_list"] == "null|string"
+    assert out["as_str"] == "number"
+    assert out["as_ref"] == "object"
+    assert out["as_anyof"] == "union"
+    assert out["as_unknown"] == "unknown"
+
+
+def test_main_writes_artifact_and_prints_path(tmp_path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    out = tmp_path / "ui_meta_from_main.json"
+    monkeypatch.setattr("sys.argv", ["ui_meta", "--out", str(out)])
+    main()
+    assert out.exists()
+    printed = capsys.readouterr().out
+    assert "Wrote" in printed

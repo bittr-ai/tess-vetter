@@ -5,12 +5,14 @@ from __future__ import annotations
 import pytest
 
 from tess_vetter.validation.registry import (
+    DEFAULT_REGISTRY,
     CheckConfig,
     CheckInputs,
     CheckRegistry,
     CheckRequirements,
     CheckTier,
     VettingCheck,
+    get_default_registry,
 )
 from tess_vetter.validation.result_schema import CheckResult, ok_result
 
@@ -155,3 +157,24 @@ class TestVettingCheckProtocol:
     def test_mock_implements_protocol(self) -> None:
         check = MockCheck("V01", "Test")
         assert isinstance(check, VettingCheck)
+
+
+def test_get_default_registry_lazy_loads_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    DEFAULT_REGISTRY._checks.clear()
+    calls: list[int] = []
+
+    def _fake_register_all_defaults(registry: CheckRegistry) -> None:
+        calls.append(1)
+        registry.register(MockCheck("V01", "Default"))
+
+    monkeypatch.setattr(
+        "tess_vetter.validation.register_defaults.register_all_defaults",
+        _fake_register_all_defaults,
+    )
+
+    reg1 = get_default_registry()
+    reg2 = get_default_registry()
+
+    assert reg1 is reg2
+    assert "V01" in reg1
+    assert calls == [1]

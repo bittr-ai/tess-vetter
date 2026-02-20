@@ -18,6 +18,7 @@ from tess_vetter.features.aggregates import (
     compute_missing_families,
     normalize_verdict,
 )
+from tess_vetter.features.aggregates.verdicts import get_verdict_aliases, is_valid_verdict
 
 # =============================================================================
 # test_normalize_verdict
@@ -69,6 +70,19 @@ class TestNormalizeVerdict:
         result = normalize_verdict("some_random_value", track_unknown=unknowns)
         assert result == "NO_EVIDENCE"
         assert "some_random_value" in unknowns
+
+    def test_is_valid_verdict(self) -> None:
+        """Canonical verdict validator accepts canonical values only."""
+        assert is_valid_verdict("on_target") is True
+        assert is_valid_verdict("NO_EVIDENCE") is True
+        assert is_valid_verdict("not_a_verdict") is False
+        assert is_valid_verdict(None) is False
+
+    def test_get_verdict_aliases_returns_copy(self) -> None:
+        """Alias accessor returns a defensive copy."""
+        aliases = get_verdict_aliases()
+        aliases["UNAMBIGUOUS"] = "OFF_TARGET"  # mutate copy
+        assert normalize_verdict("UNAMBIGUOUS") == "ON_TARGET"
 
 
 # =============================================================================

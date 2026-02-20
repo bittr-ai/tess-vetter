@@ -8,6 +8,13 @@ def test_estimate_v_eq_kms_returns_none_for_missing_inputs() -> None:
     assert estimate_v_eq_kms(stellar_radius_rsun=1.2, rotation_period_days=None) is None
 
 
+def test_estimate_v_eq_kms_returns_none_for_nonpositive_inputs() -> None:
+    assert estimate_v_eq_kms(stellar_radius_rsun=0.0, rotation_period_days=3.0) is None
+    assert estimate_v_eq_kms(stellar_radius_rsun=-1.2, rotation_period_days=3.0) is None
+    assert estimate_v_eq_kms(stellar_radius_rsun=1.2, rotation_period_days=0.0) is None
+    assert estimate_v_eq_kms(stellar_radius_rsun=1.2, rotation_period_days=-3.0) is None
+
+
 def test_build_rotation_context_ready_when_inputs_present() -> None:
     payload = build_rotation_context(
         rotation_period_days=3.0,
@@ -29,3 +36,11 @@ def test_build_rotation_context_incomplete_when_inputs_missing() -> None:
     assert payload["status"] == "INCOMPLETE_INPUTS"
     assert payload["v_eq_est_kms"] is None
     assert "MISSING_STELLAR_RADIUS" in payload["quality_flags"]
+
+
+def test_build_rotation_context_incomplete_when_inputs_invalid() -> None:
+    payload = build_rotation_context(rotation_period_days=-5.0, stellar_radius_rsun=0.0)
+    assert payload["status"] == "INCOMPLETE_INPUTS"
+    assert payload["v_eq_est_kms"] is None
+    assert "INVALID_ROTATION_PERIOD" in payload["quality_flags"]
+    assert "INVALID_STELLAR_RADIUS" in payload["quality_flags"]
