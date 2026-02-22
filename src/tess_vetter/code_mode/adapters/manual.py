@@ -23,6 +23,14 @@ from tess_vetter.api.contracts import (
     model_output_schema,
     opaque_object_schema,
 )
+from tess_vetter.api.periodogram import (
+    RUN_PERIODOGRAM_INPUT_SCHEMA,
+    RUN_PERIODOGRAM_OUTPUT_SCHEMA,
+)
+from tess_vetter.api.vet import (
+    VET_CANDIDATE_CALL_SCHEMA,
+    VET_CANDIDATE_OUTPUT_SCHEMA,
+)
 from tess_vetter.code_mode.adapters.base import OperationAdapter
 from tess_vetter.code_mode.adapters.check_wrappers import check_wrapper_functions
 from tess_vetter.code_mode.operation_spec import (
@@ -200,8 +208,8 @@ def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
                 tier_tags=("golden-path", "vetting"),
                 safety_class=SafetyClass.GUARDED,
                 safety_requirements=SafetyRequirements(needs_network=True),
-                input_json_schema=opaque_object_schema(),
-                output_json_schema=opaque_object_schema(),
+                input_json_schema=VET_CANDIDATE_CALL_SCHEMA,
+                output_json_schema=VET_CANDIDATE_OUTPUT_SCHEMA,
                 examples=(
                     OperationExample(
                         summary="Default vetting run",
@@ -222,8 +230,8 @@ def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
                 description="Run golden-path periodogram search.",
                 tier_tags=("golden-path", "detection"),
                 safety_class=SafetyClass.SAFE,
-                input_json_schema=opaque_object_schema(),
-                output_json_schema=opaque_object_schema(),
+                input_json_schema=RUN_PERIODOGRAM_INPUT_SCHEMA,
+                output_json_schema=RUN_PERIODOGRAM_OUTPUT_SCHEMA,
                 examples=(
                     OperationExample(
                         summary="Fast TLS/auto search",

@@ -152,3 +152,14 @@ def test_run_check_accepts_readonly_context_mapping() -> None:
 
     assert result.id == "V01"
     assert result.status == "ok"
+
+
+def test_run_checks_accepts_readonly_context_mapping() -> None:
+    lc, eph = _make_lc_with_box_transit()
+    cand = btv.Candidate(ephemeris=eph, depth_ppm=1000.0)
+    readonly_context = MappingProxyType({"sector": 1, "source": "unit-test"})
+
+    results = btv.run_checks(lc=lc, candidate=cand, check_ids=["V01", "V08"], context=readonly_context)
+
+    assert [r.id for r in results] == ["V01", "V08"]
+    assert [r.status for r in results] == ["ok", "skipped"]

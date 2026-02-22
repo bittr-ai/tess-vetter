@@ -162,5 +162,23 @@ def test_stitch_cadence_prefers_dominant_within_sector_delta() -> None:
 def test_stitch_contract_constants_are_stable() -> None:
     assert STITCH_SCHEMA_VERSION == 1
     assert STITCH_LIGHTCURVE_REQUIRED_FIELDS == ("time", "flux", "flux_err", "sector", "quality")
-    assert STITCH_LIGHTCURVES_CALL_SCHEMA["type"] == "object"
-    assert STITCH_LIGHTCURVE_DATA_CALL_SCHEMA["type"] == "object"
+    assert STITCH_LIGHTCURVES_CALL_SCHEMA == {
+        "type": "object",
+        "properties": {
+            "lc_list": {},
+            "normalization_policy_version": {},
+        },
+        "required": ["lc_list"],
+        "additionalProperties": False,
+    }
+    assert STITCH_LIGHTCURVE_DATA_CALL_SCHEMA == {
+        "type": "object",
+        "properties": {
+            "lightcurves": {},
+            "tic_id": {},
+            "normalization_policy_version": {},
+            "sector": {},
+        },
+        "required": ["lightcurves", "tic_id"],
+        "additionalProperties": False,
+    }

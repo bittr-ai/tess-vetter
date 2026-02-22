@@ -291,3 +291,50 @@ async def execute_plan(ops, context):
     assert result["trace"]["call_events"][0]["operation_id"] == "nested_urllib_opener"
     assert result["trace"]["call_events"][0]["status"] == "failed"
     assert result["trace"]["call_events"][0]["error_code"] == "POLICY_DENIED"
+
+
+def test_preflight_blocks_missing_nested_required_path_before_execution() -> None:
+    state = {"called": False}
+
+    class _Ops:
+        async def nested_required(self, **kwargs) -> dict:
+            state["called"] = True
+            return {"ok": True, "kwargs": kwargs}
+
+    async def _run() -> dict:
+        return await execute(
+            """
+async def execute_plan(ops, context):
+    return await ops.nested_required(payload={"outer": {}})
+""",
+            ops=_Ops(),
+            context={
+                "mode": "preflight",
+                "preflight_operation_catalog": {
+                    "nested_required": {
+                        "availability": "available",
+                        "required_fields": ["payload.outer.inner"],
+                        "field_types": {},
+                        "safety_requirements": {},
+                    }
+                },
+            },
+            catalog_version_hash="hash-v1",
+        )
+
+    result = asyncio.run(_run())
+
+    assert result["status"] == "failed"
+    assert result["error"]["code"] == "SCHEMA_VIOLATION_INPUT"
+    assert result["result"]["mode"] == "preflight"
+    assert result["result"]["ready"] is False
+    assert result["result"]["blockers"]["missing_fields"] == [
+        {
+            "operation_id": "nested_required",
+            "field": "payload.outer.inner",
+            "call_site": {"line": 3, "column": 17},
+        }
+    ]
+    assert result["trace"]["call_budget"]["used_calls"] == 0
+    assert result["trace"]["call_events"] == []
+    assert state["called"] is False

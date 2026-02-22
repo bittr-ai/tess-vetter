@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -36,10 +37,13 @@ def vet_candidate(
     stellar: StellarParams | None = ...,
     tpf: TPFStamp | None = ...,
     network: bool = ...,
+    ra_deg: float | None = ...,
+    dec_deg: float | None = ...,
+    tic_id: int | None = ...,
     preset: str = ...,
     checks: list[str] | None = ...,
+    context: dict[str, Any] | None = ...,
     pipeline_config: PipelineConfig | None = ...,
-    **kwargs: Any,
 ) -> VettingBundleResult: ...
 
 def vet_many(
@@ -49,10 +53,13 @@ def vet_many(
     stellar: StellarParams | None = ...,
     tpf: TPFStamp | None = ...,
     network: bool = ...,
+    ra_deg: float | None = ...,
+    dec_deg: float | None = ...,
+    tic_id: int | None = ...,
     preset: str = ...,
     checks: list[str] | None = ...,
+    context: dict[str, Any] | None = ...,
     pipeline_config: PipelineConfig | None = ...,
-    **kwargs: Any,
 ) -> tuple[list[VettingBundleResult], list[dict[str, Any]]]: ...
 
 def run_periodogram(
@@ -65,7 +72,13 @@ def run_periodogram(
     preset: str = ...,
     method: str = ...,
     max_planets: int = ...,
-    **kwargs: Any,
+    data_ref: str = ...,
+    tic_id: int | None = ...,
+    stellar_radius_rsun: float | None = ...,
+    stellar_mass_msun: float | None = ...,
+    use_threads: int | None = ...,
+    per_sector: bool = ...,
+    downsample_factor: int = ...,
 ) -> Any: ...
 
 def list_checks(registry: CheckRegistry | None = ...) -> list[dict[str, Any]]: ...
@@ -84,9 +97,28 @@ def generate_report(
     *,
     depth_ppm: float | None = ...,
     stellar: StellarParams | None = ...,
+    toi: str | None = ...,
+    sectors: list[int] | None = ...,
+    flux_type: str = ...,
+    mast_client: Any | None = ...,
     include_html: bool = ...,
+    include_v03: bool = ...,
+    bin_minutes: float = ...,
+    max_lc_points: int = ...,
+    max_phase_points: int = ...,
+    include_additional_plots: bool = ...,
+    max_transit_windows: int = ...,
+    max_points_per_window: int = ...,
+    max_timing_points: int = ...,
+    include_lc_robustness: bool = ...,
+    max_lc_robustness_epochs: int = ...,
+    check_config: dict[str, dict[str, Any]] | None = ...,
     pipeline_config: PipelineConfig | None = ...,
-    **kwargs: Any,
+    include_enrichment: bool = ...,
+    enrichment_config: Any | None = ...,
+    custom_views: dict[str, Any] | None = ...,
+    progress_callback: Any | None = ...,
+    vet_result: VettingBundleResult | dict[str, Any] | None = ...,
 ) -> GenerateReportResult: ...
 
 # Workflow/per-sector helpers commonly used by agents
@@ -100,7 +132,10 @@ def per_sector_vet(
     preset: str = ...,
     checks: list[str] | None = ...,
     network: bool = ...,
-    **kwargs: Any,
+    ra_deg: float | None = ...,
+    dec_deg: float | None = ...,
+    tic_id: int | None = ...,
+    extra_context: dict[str, Any] | None = ...,
 ) -> PerSectorVettingResult: ...
 
 def run_candidate_workflow(
@@ -114,8 +149,11 @@ def run_candidate_workflow(
     preset: str = ...,
     checks: list[str] | None = ...,
     network: bool = ...,
+    ra_deg: float | None = ...,
+    dec_deg: float | None = ...,
+    tic_id: int | None = ...,
     run_per_sector: bool = ...,
-    **kwargs: Any,
+    extra_context: dict[str, Any] | None = ...,
 ) -> WorkflowResult: ...
 
 def run_check(
@@ -126,10 +164,13 @@ def run_check(
     stellar: StellarParams | None = ...,
     tpf: TPFStamp | None = ...,
     network: bool = ...,
+    ra_deg: float | None = ...,
+    dec_deg: float | None = ...,
+    tic_id: int | None = ...,
+    context: Mapping[str, object] | None = ...,
     preset: str = ...,
     registry: CheckRegistry | None = ...,
     pipeline_config: PipelineConfig | None = ...,
-    **kwargs: Any,
 ) -> CheckResult: ...
 
 def run_checks(
@@ -140,10 +181,13 @@ def run_checks(
     stellar: StellarParams | None = ...,
     tpf: TPFStamp | None = ...,
     network: bool = ...,
+    ra_deg: float | None = ...,
+    dec_deg: float | None = ...,
+    tic_id: int | None = ...,
+    context: Mapping[str, object] | None = ...,
     preset: str = ...,
     registry: CheckRegistry | None = ...,
     pipeline_config: PipelineConfig | None = ...,
-    **kwargs: Any,
 ) -> list[CheckResult]: ...
 
 def export_bundle(
@@ -169,10 +213,37 @@ def load_contrast_curve_exofop_tbl(path: str | Path, *, filter: str | None = ...
 
 # Reporting helpers
 
-def format_check_result(result: Any, **kwargs: Any) -> str: ...
-def format_vetting_table(bundle: Any, **kwargs: Any) -> str: ...
-def summarize_bundle(bundle: Any, **kwargs: Any) -> Any: ...
-def render_validation_report_markdown(*, title: str, bundle: Any, **kwargs: Any) -> str: ...
+def format_check_result(
+    result: Any,
+    *,
+    include_header: bool = ...,
+    include_metrics: bool = ...,
+    metric_keys: Sequence[str] = ...,
+    max_metrics: int = ...,
+    include_flags: bool = ...,
+    include_notes: bool = ...,
+    include_provenance: bool = ...,
+) -> str: ...
+def format_vetting_table(bundle: Any, *, options: Any | None = ...) -> str: ...
+def summarize_bundle(
+    bundle: Any,
+    *,
+    check_ids: Sequence[str] | None = ...,
+    include_metrics: bool = ...,
+    metric_keys: Sequence[str] | None = ...,
+    include_flags: bool = ...,
+    include_notes: bool = ...,
+    include_provenance: bool = ...,
+    include_inputs_summary: bool = ...,
+) -> Any: ...
+def render_validation_report_markdown(
+    *,
+    title: str,
+    bundle: Any,
+    include_table: bool = ...,
+    table_options: Any | None = ...,
+    extra_sections: Iterable[tuple[str, str]] | None = ...,
+) -> str: ...
 
 # Convenience aliases
 vet: Any

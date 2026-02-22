@@ -89,7 +89,54 @@ def test_vetting_report_contract_constants_are_stable() -> None:
         "notes",
     )
     assert VETTING_REPORT_BUNDLE_KEYS == ("counts", "results_by_id", "inputs_summary", "provenance")
-    assert FORMAT_VETTING_TABLE_CALL_SCHEMA["type"] == "object"
-    assert FORMAT_CHECK_RESULT_CALL_SCHEMA["type"] == "object"
-    assert SUMMARIZE_BUNDLE_CALL_SCHEMA["type"] == "object"
-    assert RENDER_VALIDATION_REPORT_MARKDOWN_CALL_SCHEMA["type"] == "object"
+    assert FORMAT_VETTING_TABLE_CALL_SCHEMA == {
+        "type": "object",
+        "properties": {
+            "bundle": {},
+            "options": {},
+        },
+        "required": ["bundle"],
+        "additionalProperties": False,
+    }
+    assert FORMAT_CHECK_RESULT_CALL_SCHEMA == {
+        "type": "object",
+        "properties": {
+            "result": {},
+            "include_header": {},
+            "include_metrics": {},
+            "metric_keys": {},
+            "max_metrics": {},
+            "include_flags": {},
+            "include_notes": {},
+            "include_provenance": {},
+        },
+        "required": ["result"],
+        "additionalProperties": False,
+    }
+    assert SUMMARIZE_BUNDLE_CALL_SCHEMA == {
+        "type": "object",
+        "properties": {
+            "bundle": {},
+            "check_ids": {},
+            "include_metrics": {},
+            "metric_keys": {},
+            "include_flags": {},
+            "include_notes": {},
+            "include_provenance": {},
+            "include_inputs_summary": {},
+        },
+        "required": ["bundle"],
+        "additionalProperties": False,
+    }
+    assert RENDER_VALIDATION_REPORT_MARKDOWN_CALL_SCHEMA == {
+        "type": "object",
+        "properties": {
+            "title": {},
+            "bundle": {},
+            "include_table": {},
+            "table_options": {},
+            "extra_sections": {},
+        },
+        "required": ["bundle", "title"],
+        "additionalProperties": False,
+    }

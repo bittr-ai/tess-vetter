@@ -228,3 +228,29 @@ def test_constructor_composer_required_paths_and_callability_examples() -> None:
 
     assert callability["required_paths"] == list(required_paths)
     assert "operation_kwargs" in callability["minimal_payload_example"]["context"]
+
+
+def test_legacy_manual_seed_required_paths_are_non_empty_and_informative() -> None:
+    expected_required_paths = {
+        "code_mode.golden.vet_candidate": {"candidate", "lc"},
+        "code_mode.golden.run_periodogram": {"flux", "time"},
+    }
+
+    library = make_default_ops_library()
+    for operation_id, expected_paths in expected_required_paths.items():
+        adapter = library.get(operation_id)
+        required_paths = set(required_input_paths_for_adapter(adapter))
+        assert required_paths
+        assert expected_paths <= required_paths
+
+    response = make_default_mcp_adapter().search(SearchRequest(query="", limit=1_000, tags=[]))
+    assert response.error is None
+    by_id = {result.id: result for result in response.results}
+    for operation_id, expected_paths in expected_required_paths.items():
+        row = by_id.get(operation_id)
+        assert row is not None, f"Missing search row for {operation_id}"
+        callability = row.metadata.get("operation_callability")
+        assert isinstance(callability, dict), f"Missing operation_callability for {operation_id}"
+        required_paths = callability.get("required_paths")
+        assert isinstance(required_paths, list) and required_paths, f"Missing required_paths for {operation_id}"
+        assert expected_paths <= set(required_paths)

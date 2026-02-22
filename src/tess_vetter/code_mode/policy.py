@@ -9,6 +9,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
+import tess_vetter.api as _api
+
 POLICY_PROFILE_READONLY_LOCAL = "readonly_local"
 POLICY_PROFILE_NETWORK_ALLOWED = "network_allowed"
 DEFAULT_PROFILE_NAME = POLICY_PROFILE_READONLY_LOCAL
@@ -198,6 +200,9 @@ def classify_api_export_policy(
     value: object | None,
 ) -> str:
     """Classify API export handling policy for discovery/inventory surfaces."""
+    if export_name in _api._get_export_map() and not _api.is_agent_actionable_export(export_name):
+        return EXPORT_POLICY_LEGACY_DYNAMIC
+
     if export_name in _LEGACY_DYNAMIC_EXPORT_NAMES:
         return EXPORT_POLICY_LEGACY_DYNAMIC
     if module_name.startswith(_LEGACY_DYNAMIC_MODULE_PREFIXES):

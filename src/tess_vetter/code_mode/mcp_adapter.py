@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal, TypedDict, cast, get_args
@@ -587,9 +588,7 @@ def _normalize_retryable_semantics(
         return True
     if not _is_preflight_payload(details):
         return False
-    if code in {"POLICY_DENIED", "DEPENDENCY_MISSING"}:
-        return True
-    return False
+    return code in {"POLICY_DENIED", "DEPENDENCY_MISSING"}
 
 
 def _build_minimal_execute_plan_code(operation_id: str) -> str:
@@ -754,14 +753,13 @@ def _execute_via_runtime(
         for operation_id, payload in preflight_operation_catalog.items()
     }
 
-    runtime_response = asyncio.run(
-        runtime_execute(
-            request.plan_code,
-            runtime_ops,
-            context,
-            catalog_version_hash=catalog.catalog_version_hash,
-        )
+    runtime_coro = runtime_execute(
+        request.plan_code,
+        runtime_ops,
+        context,
+        catalog_version_hash=catalog.catalog_version_hash,
     )
+    runtime_response = _run_runtime_coro(runtime_coro)
 
     status = runtime_response.get("status")
     trace_payload = runtime_response.get("trace")
@@ -822,6 +820,31 @@ def _execute_via_runtime(
     )
 
 
+def _run_runtime_coro(runtime_coro: Any) -> dict[str, Any]:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return cast(dict[str, Any], asyncio.run(runtime_coro))
+
+    payload: dict[str, Any] = {}
+    failure: list[BaseException] = []
+
+    def _runner() -> None:
+        try:
+            payload["response"] = asyncio.run(runtime_coro)
+        except BaseException as exc:  # pragma: no cover - defensive worker wrapper
+            failure.append(exc)
+
+    worker = threading.Thread(target=_runner, name="mcp-adapter-runtime-exec")
+    worker.start()
+    worker.join()
+
+    if failure:
+        raise failure[0]
+
+    return cast(dict[str, Any], payload["response"])
+
+
 def make_default_mcp_adapter() -> MCPAdapter:
     """Create a canonical MCP adapter wired to catalog search and runtime execute."""
     ops_library: OpsLibrary = make_default_ops_library()
@@ -876,7 +899,7 @@ def _build_preflight_operation_catalog(adapters: list[OperationAdapter]) -> dict
     for adapter in adapters:
         schema = adapter.spec.input_json_schema if isinstance(adapter.spec.input_json_schema, dict) else {}
         properties = schema.get("properties", {}) if isinstance(schema.get("properties"), dict) else {}
-        required = schema.get("required", []) if isinstance(schema.get("required"), list) else []
+        required_paths = required_input_paths_for_adapter(adapter)
         field_types: dict[str, list[str]] = {}
         for field_name, field_schema in properties.items():
             if not isinstance(field_name, str) or not isinstance(field_schema, dict):
@@ -886,7 +909,7 @@ def _build_preflight_operation_catalog(adapters: list[OperationAdapter]) -> dict
                 field_types[field_name] = list(json_types)
         operation_catalog[adapter.id] = {
             "availability": adapter.spec.availability.value,
-            "required_fields": sorted(str(name) for name in required if isinstance(name, str)),
+            "required_fields": list(required_paths),
             "field_types": field_types,
             "safety_requirements": adapter.spec.safety_requirements.model_dump(),
         }

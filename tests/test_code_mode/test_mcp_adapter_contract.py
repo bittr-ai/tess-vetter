@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 from dataclasses import fields
 from types import SimpleNamespace
@@ -21,6 +22,7 @@ from tess_vetter.code_mode.mcp_adapter import (
     SearchRequest,
     SearchResponse,
     SearchResult,
+    _build_preflight_operation_catalog,
     _callability_score_and_flags,
     make_default_mcp_adapter,
 )
@@ -371,24 +373,30 @@ def test_default_search_metadata_exposes_truthful_execute_callability_contract()
     assert callability["reason_flags"] == metadata["callability_reason_flags"]
 
 
-def test_search_classifies_unavailable_dynamic_exports_without_hiding_them() -> None:
+def test_search_excludes_unloadable_exports_from_actionable_results() -> None:
     adapter = make_default_mcp_adapter()
 
     response = adapter.search(SearchRequest(query="", limit=1_000, tags=[]))
 
     assert response.error is None
-    unavailable_dynamic_rows = [
-        row
-        for row in response.results
-        if row.metadata.get("availability") == "unavailable"
-        and {"api-export", "auto-discovered"}.issubset(set(row.metadata.get("operation_tags", [])))
-    ]
-    assert unavailable_dynamic_rows, "Expected at least one unavailable dynamic export to be classified"
+    by_id = {row.id: row for row in response.results}
 
-    for row in unavailable_dynamic_rows:
-        flags = row.metadata.get("callability_reason_flags", [])
-        assert "availability_unavailable" in flags
-        assert "direct_execute_ready" not in flags
+    unloadable_operation_ids: set[str] = set()
+    for export_name, (module_name, _attr_name) in sorted(public_api._get_export_map().items()):
+        if not public_api.is_unloadable_export(export_name):
+            continue
+        symbol = ApiSymbol(module=module_name, name=export_name)
+        unloadable_operation_ids.add(
+            build_operation_id(
+                tier=tier_for_api_symbol(symbol),
+                name=normalize_operation_name(symbol.name),
+            )
+        )
+
+    assert unloadable_operation_ids, "Expected unloadable exports to be present in API export map"
+    assert unloadable_operation_ids.isdisjoint(by_id), (
+        "Unloadable exports must be classified non-actionable and excluded from search results"
+    )
 
 
 def test_search_keeps_actionable_exports_available_with_dynamic_classification() -> None:
@@ -487,6 +495,43 @@ def test_callability_score_penalizes_constructor_and_policy_blockers() -> None:
     assert "policy_requires_network" in flags
     assert "policy_requires_human_review" in flags
     assert "policy_requires_secrets" in flags
+
+
+def test_preflight_operation_catalog_required_fields_include_nested_paths() -> None:
+    adapter = OperationAdapter(
+        spec=OperationSpec(
+            id="code_mode.internal.unit_nested_required",
+            name="Unit Nested Required",
+            description="Synthetic operation for nested preflight required paths.",
+            safety_class=SafetyClass.SAFE,
+            input_json_schema={
+                "type": "object",
+                "required": ["payload"],
+                "properties": {
+                    "payload": {
+                        "type": "object",
+                        "required": ["outer"],
+                        "properties": {
+                            "outer": {
+                                "type": "object",
+                                "required": ["inner"],
+                                "properties": {"inner": {"type": "string"}},
+                            }
+                        },
+                    }
+                },
+            },
+            output_json_schema={"type": "object"},
+        ),
+        fn=lambda **kwargs: kwargs,
+    )
+
+    catalog = _build_preflight_operation_catalog([adapter])
+    assert catalog[adapter.id]["required_fields"] == [
+        "payload",
+        "payload.outer",
+        "payload.outer.inner",
+    ]
 
 
 def test_search_request_shape_validation_returns_schema_violation_input() -> None:
@@ -644,6 +689,47 @@ def test_error_serialization_uses_retryable_key_not_retriable() -> None:
     assert serialized["error"] is not None
     assert "retryable" in serialized["error"]
     assert "retriable" not in serialized["error"]
+
+
+def test_default_execute_remains_sync_safe_for_sync_callers() -> None:
+    adapter = make_default_mcp_adapter()
+
+    response = adapter.execute(
+        ExecuteRequest(
+            plan_code="""
+async def execute_plan(ops, context):
+    return {"ok": True}
+""",
+            context={},
+            catalog_version_hash=None,
+        )
+    )
+
+    assert response.status == "ok"
+    assert response.error is None
+    assert response.result == {"ok": True}
+
+
+def test_default_execute_is_safe_inside_running_event_loop() -> None:
+    adapter = make_default_mcp_adapter()
+
+    async def _invoke_from_async_host() -> ExecuteResponse:
+        return adapter.execute(
+            ExecuteRequest(
+                plan_code="""
+async def execute_plan(ops, context):
+    return {"ok": True}
+""",
+                context={},
+                catalog_version_hash=None,
+            )
+        )
+
+    response = asyncio.run(_invoke_from_async_host())
+
+    assert response.status == "ok"
+    assert response.error is None
+    assert response.result == {"ok": True}
 
 
 def test_execute_preflight_reports_schema_policy_and_no_execution_calls() -> None:

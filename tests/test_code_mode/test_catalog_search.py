@@ -10,6 +10,8 @@ from pydantic import BaseModel
 import tess_vetter.api as api
 from tess_vetter.api import primitives as api_primitives
 from tess_vetter.api.contracts import opaque_object_schema
+from tess_vetter.api.periodogram import RUN_PERIODOGRAM_INPUT_SCHEMA
+from tess_vetter.api.vet import VET_CANDIDATE_CALL_SCHEMA
 from tess_vetter.code_mode.catalog import build_catalog, extract_required_input_paths
 from tess_vetter.code_mode.mcp_adapter import SearchRequest, make_default_mcp_adapter
 from tess_vetter.code_mode.search import search_catalog
@@ -515,17 +517,18 @@ def test_search_rank_is_unchanged_by_wrapper_schema_metadata() -> None:
 
 
 @pytest.mark.parametrize(
-    ("operation_id", "fn"),
+    ("operation_id", "fn", "expected_input_schema"),
     (
-        ("code_mode.golden_path.vet_candidate", api.vet_candidate),
-        ("code_mode.golden_path.run_periodogram", api.run_periodogram),
-        ("code_mode.primitive.fold", api_primitives.fold),
-        ("code_mode.primitive.median_detrend", api_primitives.median_detrend),
+        ("code_mode.golden.vet_candidate", api.vet_candidate, VET_CANDIDATE_CALL_SCHEMA),
+        ("code_mode.golden.run_periodogram", api.run_periodogram, RUN_PERIODOGRAM_INPUT_SCHEMA),
+        ("code_mode.primitive.fold", api_primitives.fold, opaque_object_schema()),
+        ("code_mode.primitive.median_detrend", api_primitives.median_detrend, opaque_object_schema()),
     ),
 )
-def test_manual_seed_schema_snippet_matches_upstream_opaque_contract(
+def test_manual_seed_schema_snippet_matches_upstream_contract_truth(
     operation_id: str,
     fn: Any,
+    expected_input_schema: dict[str, Any],
 ) -> None:
     del fn
     response = make_default_mcp_adapter().search(SearchRequest(query="", limit=1_000, tags=[]))
@@ -539,7 +542,7 @@ def test_manual_seed_schema_snippet_matches_upstream_opaque_contract(
     actual_input = schema_snippet.get("input")
     assert isinstance(actual_input, dict), f"Missing schema_snippet.input for {operation_id}"
 
-    assert actual_input == opaque_object_schema()
+    assert actual_input == expected_input_schema
 
 
 _HIGH_TRAFFIC_INTERNAL_OPERATION_IDS: tuple[str, ...] = (

@@ -655,7 +655,7 @@ def _collect_preflight_blockers(
             required = ()
 
         for field_name in required:
-            if field_name not in args:
+            if not _has_required_path(args, field_name):
                 missing_fields.append(
                     {
                         "operation_id": operation_id,
@@ -817,6 +817,58 @@ def _normalize_expected_types(raw: Any) -> tuple[str, ...]:
     if isinstance(raw, list):
         return tuple(sorted({str(item) for item in raw if isinstance(item, str)}))
     return ()
+
+
+def _has_required_path(payload: Mapping[str, Any], path: str) -> bool:
+    tokens = _parse_required_path(path)
+    if not tokens:
+        return False
+    return _path_exists(payload, tokens)
+
+
+def _parse_required_path(path: str) -> tuple[tuple[str, int], ...]:
+    parsed: list[tuple[str, int]] = []
+    for raw_segment in str(path).split("."):
+        segment = raw_segment
+        if not segment:
+            return ()
+        list_depth = 0
+        while segment.endswith("[]"):
+            list_depth += 1
+            segment = segment[:-2]
+        if not segment and list_depth == 0:
+            return ()
+        parsed.append((segment, list_depth))
+    return tuple(parsed)
+
+
+def _path_exists(candidate: Any, tokens: tuple[tuple[str, int], ...]) -> bool:
+    if not tokens:
+        return True
+
+    key, list_depth = tokens[0]
+    remaining = tokens[1:]
+
+    if key:
+        if not isinstance(candidate, Mapping) or key not in candidate:
+            return False
+        current: Any = candidate[key]
+    else:
+        current = candidate
+
+    if list_depth == 0:
+        return _path_exists(current, remaining)
+
+    current_items: list[Any] = [current]
+    for _ in range(list_depth):
+        expanded: list[Any] = []
+        for item in current_items:
+            if not isinstance(item, list) or not item:
+                return False
+            expanded.extend(item)
+        current_items = expanded
+
+    return all(_path_exists(item, remaining) for item in current_items)
 
 
 def _value_matches_expected_types(value: Any, expected_types: tuple[str, ...]) -> bool:
