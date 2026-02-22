@@ -6,7 +6,7 @@ from tess_vetter.code_mode.adapters.check_wrappers import (
     check_wrapper_definitions,
     check_wrapper_functions,
 )
-from tess_vetter.code_mode.adapters.manual import manual_seed_adapters
+from tess_vetter.code_mode.adapters.manual import legacy_manual_seed_ids, manual_seed_adapters
 from tess_vetter.code_mode.mcp_adapter import SearchRequest, make_default_mcp_adapter
 from tess_vetter.code_mode.ops_library import (
     make_default_ops_library,
@@ -140,6 +140,12 @@ def test_manual_seed_adapters_include_typed_constructor_composers() -> None:
         assert adapter.spec.input_json_schema.get("type") == "object"
         assert adapter.spec.output_json_schema.get("type") == "object"
         assert adapter.spec.examples
+
+
+def test_legacy_manual_seed_ids_track_leading_manual_seed_adapters() -> None:
+    adapters = manual_seed_adapters()
+    expected_ids = legacy_manual_seed_ids()
+    assert tuple(adapter.id for adapter in adapters[: len(expected_ids)]) == expected_ids
 
 
 def test_constructor_contract_bindings_are_owned_by_api_module() -> None:
