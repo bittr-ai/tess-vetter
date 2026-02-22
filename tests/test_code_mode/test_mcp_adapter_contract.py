@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 import tess_vetter.api.contracts as api_contracts
+import tess_vetter.code_mode.adapters.discovery as discovery_adapters
 import tess_vetter.code_mode.adapters.manual as manual_adapters
 from tess_vetter.code_mode.adapters.base import OperationAdapter
 from tess_vetter.code_mode.catalog import CatalogEntry
@@ -24,11 +25,14 @@ from tess_vetter.code_mode.mcp_adapter import (
 from tess_vetter.code_mode.operation_spec import OperationSpec, SafetyClass, SafetyRequirements
 
 
-def test_manual_seed_adapters_import_upstream_typing_utility() -> None:
+def test_manual_seed_adapters_import_upstream_contract_utilities() -> None:
     assert (
-        manual_adapters.callable_input_schema_from_signature
-        is api_contracts.callable_input_schema_from_signature
+        manual_adapters.opaque_object_schema
+        is api_contracts.opaque_object_schema
     )
+    assert manual_adapters.model_input_schema is api_contracts.model_input_schema
+    assert manual_adapters.model_output_schema is api_contracts.model_output_schema
+    assert discovery_adapters.opaque_object_schema is api_contracts.opaque_object_schema
 
 
 def test_execute_request_contract_is_strict_plan_code_context_and_catalog_hash() -> None:

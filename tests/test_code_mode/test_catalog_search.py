@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 import tess_vetter.api as api
 from tess_vetter.api import primitives as api_primitives
-from tess_vetter.api.contracts import callable_input_schema_from_signature
+from tess_vetter.api.contracts import opaque_object_schema
 from tess_vetter.code_mode.catalog import build_catalog, extract_required_input_paths
 from tess_vetter.code_mode.mcp_adapter import SearchRequest, make_default_mcp_adapter
 from tess_vetter.code_mode.search import search_catalog
@@ -523,10 +523,11 @@ def test_search_rank_is_unchanged_by_wrapper_schema_metadata() -> None:
         ("code_mode.primitive.median_detrend", api_primitives.median_detrend),
     ),
 )
-def test_manual_seed_schema_snippet_matches_upstream_typing_utility(
+def test_manual_seed_schema_snippet_matches_upstream_opaque_contract(
     operation_id: str,
     fn: Any,
 ) -> None:
+    del fn
     response = make_default_mcp_adapter().search(SearchRequest(query="", limit=1_000, tags=[]))
     assert response.error is None
     by_id = {row.id: row for row in response.results}
@@ -538,8 +539,7 @@ def test_manual_seed_schema_snippet_matches_upstream_typing_utility(
     actual_input = schema_snippet.get("input")
     assert isinstance(actual_input, dict), f"Missing schema_snippet.input for {operation_id}"
 
-    expected_input = callable_input_schema_from_signature(fn)
-    assert actual_input == expected_input
+    assert actual_input == opaque_object_schema()
 
 
 _HIGH_TRAFFIC_INTERNAL_OPERATION_IDS: tuple[str, ...] = (

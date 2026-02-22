@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 import tess_vetter.api as _api
+from tess_vetter.api.contracts import model_input_schema, model_output_schema
 
 
 class _EphemerisPayload(BaseModel):
@@ -110,14 +111,14 @@ class _ComposeTPFOutput(BaseModel):
     tpf: _TPFPayload
 
 
-COMPOSE_CANDIDATE_INPUT_SCHEMA = _ComposeCandidateInput.model_json_schema(mode="validation")
-COMPOSE_CANDIDATE_OUTPUT_SCHEMA = _ComposeCandidateOutput.model_json_schema(mode="serialization")
-COMPOSE_LIGHTCURVE_INPUT_SCHEMA = _ComposeLightCurveInput.model_json_schema(mode="validation")
-COMPOSE_LIGHTCURVE_OUTPUT_SCHEMA = _ComposeLightCurveOutput.model_json_schema(mode="serialization")
-COMPOSE_STELLAR_INPUT_SCHEMA = _StellarPayload.model_json_schema(mode="validation")
-COMPOSE_STELLAR_OUTPUT_SCHEMA = _ComposeStellarOutput.model_json_schema(mode="serialization")
-COMPOSE_TPF_INPUT_SCHEMA = _ComposeTPFInput.model_json_schema(mode="validation")
-COMPOSE_TPF_OUTPUT_SCHEMA = _ComposeTPFOutput.model_json_schema(mode="serialization")
+COMPOSE_CANDIDATE_INPUT_SCHEMA = model_input_schema(_ComposeCandidateInput)
+COMPOSE_CANDIDATE_OUTPUT_SCHEMA = model_output_schema(_ComposeCandidateOutput)
+COMPOSE_LIGHTCURVE_INPUT_SCHEMA = model_input_schema(_ComposeLightCurveInput)
+COMPOSE_LIGHTCURVE_OUTPUT_SCHEMA = model_output_schema(_ComposeLightCurveOutput)
+COMPOSE_STELLAR_INPUT_SCHEMA = model_input_schema(_StellarPayload)
+COMPOSE_STELLAR_OUTPUT_SCHEMA = model_output_schema(_ComposeStellarOutput)
+COMPOSE_TPF_INPUT_SCHEMA = model_input_schema(_ComposeTPFInput)
+COMPOSE_TPF_OUTPUT_SCHEMA = model_output_schema(_ComposeTPFOutput)
 
 
 def compose_candidate(**kwargs: Any) -> dict[str, Any]:

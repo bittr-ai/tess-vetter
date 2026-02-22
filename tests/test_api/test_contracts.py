@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from tess_vetter.api.contracts import callable_input_schema_from_signature
+from pydantic import BaseModel
+
+from tess_vetter.api.contracts import (
+    callable_input_schema_from_signature,
+    model_input_schema,
+    model_output_schema,
+    opaque_object_schema,
+)
 
 
 def test_callable_input_schema_from_signature_is_deterministic() -> None:
@@ -57,3 +64,19 @@ def test_callable_input_schema_from_signature_fallback_for_uninspectable_callabl
     schema = callable_input_schema_from_signature(type)
 
     assert schema == {"type": "object", "properties": {}, "additionalProperties": True}
+
+
+def test_opaque_object_schema_is_minimal_object_contract() -> None:
+    assert opaque_object_schema() == {"type": "object"}
+
+
+def test_model_input_output_schema_helpers_defer_to_pydantic_modes() -> None:
+    class _Payload(BaseModel):
+        required_field: int
+        optional_field: str | None = None
+
+    input_schema = model_input_schema(_Payload)
+    output_schema = model_output_schema(_Payload)
+
+    assert input_schema == _Payload.model_json_schema(mode="validation")
+    assert output_schema == _Payload.model_json_schema(mode="serialization")

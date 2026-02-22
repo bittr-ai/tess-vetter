@@ -18,7 +18,11 @@ from tess_vetter.api.constructor_contracts import (
     compose_stellar,
     compose_tpf,
 )
-from tess_vetter.api.contracts import callable_input_schema_from_signature
+from tess_vetter.api.contracts import (
+    model_input_schema,
+    model_output_schema,
+    opaque_object_schema,
+)
 from tess_vetter.code_mode.adapters.base import OperationAdapter
 from tess_vetter.code_mode.adapters.check_wrappers import check_wrapper_functions
 from tess_vetter.code_mode.operation_spec import (
@@ -41,6 +45,7 @@ _LEGACY_MANUAL_SEED_IDS: tuple[str, ...] = (
 def legacy_manual_seed_ids() -> tuple[str, ...]:
     """Return legacy/manual seed operation ids in deterministic registration order."""
     return _LEGACY_MANUAL_SEED_IDS
+
 
 def _constructor_adapters() -> tuple[OperationAdapter, ...]:
     return (
@@ -195,8 +200,8 @@ def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
                 tier_tags=("golden-path", "vetting"),
                 safety_class=SafetyClass.GUARDED,
                 safety_requirements=SafetyRequirements(needs_network=True),
-                input_json_schema=callable_input_schema_from_signature(_api.vet_candidate),
-                output_json_schema={"type": "object"},
+                input_json_schema=opaque_object_schema(),
+                output_json_schema=opaque_object_schema(),
                 examples=(
                     OperationExample(
                         summary="Default vetting run",
@@ -217,8 +222,8 @@ def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
                 description="Run golden-path periodogram search.",
                 tier_tags=("golden-path", "detection"),
                 safety_class=SafetyClass.SAFE,
-                input_json_schema=callable_input_schema_from_signature(_api.run_periodogram),
-                output_json_schema={"type": "object"},
+                input_json_schema=opaque_object_schema(),
+                output_json_schema=opaque_object_schema(),
                 examples=(
                     OperationExample(
                         summary="Fast TLS/auto search",
@@ -239,8 +244,8 @@ def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
                 description="Primitive seed for phase-folding.",
                 tier_tags=("primitive-seed", "lightcurve"),
                 safety_class=SafetyClass.SAFE,
-                input_json_schema=callable_input_schema_from_signature(_api_primitives.fold),
-                output_json_schema={"type": "object"},
+                input_json_schema=opaque_object_schema(),
+                output_json_schema=opaque_object_schema(),
                 citations=(
                     OperationCitation(label="tess_vetter.api.primitives.fold"),
                 ),
@@ -254,8 +259,8 @@ def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
                 description="Primitive seed for robust detrending.",
                 tier_tags=("primitive-seed", "lightcurve"),
                 safety_class=SafetyClass.SAFE,
-                input_json_schema=callable_input_schema_from_signature(_api_primitives.median_detrend),
-                output_json_schema={"type": "object"},
+                input_json_schema=opaque_object_schema(),
+                output_json_schema=opaque_object_schema(),
                 citations=(
                     OperationCitation(label="tess_vetter.api.primitives.median_detrend"),
                 ),
@@ -272,8 +277,8 @@ def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
                 tier_tags=("manual", "typed-check-wrapper", definition.check_id.lower()),
                 safety_class=SafetyClass.GUARDED if definition.needs_network else SafetyClass.SAFE,
                 safety_requirements=SafetyRequirements(needs_network=definition.needs_network),
-                input_json_schema=definition.input_model.model_json_schema(mode="validation"),
-                output_json_schema=definition.output_model.model_json_schema(mode="serialization"),
+                input_json_schema=model_input_schema(definition.input_model),
+                output_json_schema=model_output_schema(definition.output_model),
                 citations=(
                     OperationCitation(label=f"tess_vetter.api.run_check[{definition.check_id}]"),
                 ),

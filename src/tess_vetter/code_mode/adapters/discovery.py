@@ -7,7 +7,9 @@ from collections.abc import Callable
 from typing import Any
 
 import tess_vetter.api as _api
-from tess_vetter.api.contracts import callable_input_schema_from_signature
+from tess_vetter.api.contracts import (
+    opaque_object_schema,
+)
 from tess_vetter.code_mode.adapters.base import AdapterUnavailableError, OperationAdapter
 from tess_vetter.code_mode.operation_spec import (
     OperationAvailability,
@@ -70,7 +72,6 @@ def _build_auto_adapter(
 ) -> OperationAdapter:
     doc = inspect.getdoc(fn)
     first_line = doc.splitlines()[0].strip() if doc else ""
-    input_schema = callable_input_schema_from_signature(fn)
     wrapped_fn = wrap_with_transient_retry(fn) if needs_network and availability == OperationAvailability.AVAILABLE else fn
     return OperationAdapter(
         spec=OperationSpec(
@@ -80,7 +81,8 @@ def _build_auto_adapter(
             tier_tags=("api-export", "auto-discovered"),
             safety_class=SafetyClass.SAFE,
             safety_requirements=SafetyRequirements(needs_network=needs_network),
-            input_json_schema=input_schema,
+            input_json_schema=opaque_object_schema(),
+            output_json_schema=opaque_object_schema(),
             availability=availability,
             citations=(OperationCitation(label=f"{module_name}.{export_name}"),),
         ),

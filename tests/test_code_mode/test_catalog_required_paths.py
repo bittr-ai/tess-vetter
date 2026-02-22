@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tess_vetter.api.contracts import callable_input_schema_from_signature
+from tess_vetter.api.contracts import opaque_object_schema
 from tess_vetter.code_mode.catalog import extract_required_input_paths, extract_required_paths
 from tess_vetter.code_mode.operation_spec import OperationSpec
 from tess_vetter.code_mode.ops_library import OperationAdapter, required_input_paths_for_adapter
@@ -180,10 +180,5 @@ def test_required_input_paths_for_adapter_uses_operation_schema() -> None:
     assert required_input_paths_for_adapter(adapter) == ("context", "context.candidate_id")
 
 
-def test_required_paths_from_upstream_callable_typing_schema() -> None:
-    def _example(candidate: object, lc: object, *, preset: str = "default", **kwargs: object) -> None:
-        del kwargs
-
-    schema = callable_input_schema_from_signature(_example)
-
-    assert extract_required_paths(schema) == ("candidate", "lc")
+def test_required_paths_from_upstream_opaque_schema_contract() -> None:
+    assert extract_required_paths(opaque_object_schema()) == ()

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import tess_vetter.api.constructor_contracts as constructor_contracts
+import tess_vetter.code_mode.adapters.manual as manual_adapters_module
 from tess_vetter.code_mode.adapters.check_wrappers import (
     check_wrapper_definitions,
     check_wrapper_functions,
@@ -138,6 +140,78 @@ def test_manual_seed_adapters_include_typed_constructor_composers() -> None:
         assert adapter.spec.input_json_schema.get("type") == "object"
         assert adapter.spec.output_json_schema.get("type") == "object"
         assert adapter.spec.examples
+
+
+def test_constructor_contract_bindings_are_owned_by_api_module() -> None:
+    assert manual_adapters_module.COMPOSE_CANDIDATE_INPUT_SCHEMA is constructor_contracts.COMPOSE_CANDIDATE_INPUT_SCHEMA
+    assert manual_adapters_module.COMPOSE_CANDIDATE_OUTPUT_SCHEMA is constructor_contracts.COMPOSE_CANDIDATE_OUTPUT_SCHEMA
+    assert manual_adapters_module.COMPOSE_LIGHTCURVE_INPUT_SCHEMA is constructor_contracts.COMPOSE_LIGHTCURVE_INPUT_SCHEMA
+    assert manual_adapters_module.COMPOSE_LIGHTCURVE_OUTPUT_SCHEMA is constructor_contracts.COMPOSE_LIGHTCURVE_OUTPUT_SCHEMA
+    assert manual_adapters_module.COMPOSE_STELLAR_INPUT_SCHEMA is constructor_contracts.COMPOSE_STELLAR_INPUT_SCHEMA
+    assert manual_adapters_module.COMPOSE_STELLAR_OUTPUT_SCHEMA is constructor_contracts.COMPOSE_STELLAR_OUTPUT_SCHEMA
+    assert manual_adapters_module.COMPOSE_TPF_INPUT_SCHEMA is constructor_contracts.COMPOSE_TPF_INPUT_SCHEMA
+    assert manual_adapters_module.COMPOSE_TPF_OUTPUT_SCHEMA is constructor_contracts.COMPOSE_TPF_OUTPUT_SCHEMA
+    assert manual_adapters_module.compose_candidate is constructor_contracts.compose_candidate
+    assert manual_adapters_module.compose_lightcurve is constructor_contracts.compose_lightcurve
+    assert manual_adapters_module.compose_stellar is constructor_contracts.compose_stellar
+    assert manual_adapters_module.compose_tpf is constructor_contracts.compose_tpf
+
+
+def test_constructor_composer_schemas_match_api_constructor_contracts() -> None:
+    adapters = {adapter.id: adapter for adapter in manual_seed_adapters()}
+    expected = {
+        "code_mode.primitive.compose_candidate": (
+            constructor_contracts.compose_candidate,
+            constructor_contracts.COMPOSE_CANDIDATE_INPUT_SCHEMA,
+            constructor_contracts.COMPOSE_CANDIDATE_OUTPUT_SCHEMA,
+        ),
+        "code_mode.primitive.compose_lightcurve": (
+            constructor_contracts.compose_lightcurve,
+            constructor_contracts.COMPOSE_LIGHTCURVE_INPUT_SCHEMA,
+            constructor_contracts.COMPOSE_LIGHTCURVE_OUTPUT_SCHEMA,
+        ),
+        "code_mode.primitive.compose_stellar": (
+            constructor_contracts.compose_stellar,
+            constructor_contracts.COMPOSE_STELLAR_INPUT_SCHEMA,
+            constructor_contracts.COMPOSE_STELLAR_OUTPUT_SCHEMA,
+        ),
+        "code_mode.primitive.compose_tpf": (
+            constructor_contracts.compose_tpf,
+            constructor_contracts.COMPOSE_TPF_INPUT_SCHEMA,
+            constructor_contracts.COMPOSE_TPF_OUTPUT_SCHEMA,
+        ),
+    }
+
+    for operation_id, (expected_fn, expected_input_schema, expected_output_schema) in expected.items():
+        adapter = adapters[operation_id]
+        assert adapter.fn is expected_fn
+        assert adapter.spec.input_json_schema == expected_input_schema
+        assert adapter.spec.output_json_schema == expected_output_schema
+
+
+def test_constructor_composers_never_use_signature_schema_inference(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    def _forbidden_signature_helper(_fn: object) -> dict[str, object]:
+        raise AssertionError("constructor composer must not use signature-based schema inference")
+
+    monkeypatch.setattr(
+        manual_adapters_module,
+        "callable_input_schema_from_signature",
+        _forbidden_signature_helper,
+        raising=False,
+    )
+
+    adapters = manual_adapters_module.manual_seed_adapters()
+    composer_ids = [
+        adapter.id
+        for adapter in adapters
+        if adapter.id.startswith("code_mode.primitive.compose_")
+    ]
+    assert composer_ids == [
+        "code_mode.primitive.compose_candidate",
+        "code_mode.primitive.compose_lightcurve",
+        "code_mode.primitive.compose_stellar",
+        "code_mode.primitive.compose_tpf",
+    ]
 
 
 def test_constructor_composer_required_paths_and_callability_examples() -> None:
