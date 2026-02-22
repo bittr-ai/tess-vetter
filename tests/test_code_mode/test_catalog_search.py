@@ -7,7 +7,10 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from tess_vetter.code_mode.catalog import build_catalog
+import tess_vetter.api as api
+from tess_vetter.api import primitives as api_primitives
+from tess_vetter.api.contracts import callable_input_schema_from_signature
+from tess_vetter.code_mode.catalog import build_catalog, extract_required_input_paths
 from tess_vetter.code_mode.mcp_adapter import SearchRequest, make_default_mcp_adapter
 from tess_vetter.code_mode.search import search_catalog
 
@@ -511,13 +514,66 @@ def test_search_rank_is_unchanged_by_wrapper_schema_metadata() -> None:
     assert matches[0].score == matches[1].score
 
 
-def _tranche_active_search_rows() -> list[dict[str, Any]]:
+@pytest.mark.parametrize(
+    ("operation_id", "fn"),
+    (
+        ("code_mode.golden_path.vet_candidate", api.vet_candidate),
+        ("code_mode.golden_path.run_periodogram", api.run_periodogram),
+        ("code_mode.primitive.fold", api_primitives.fold),
+        ("code_mode.primitive.median_detrend", api_primitives.median_detrend),
+    ),
+)
+def test_manual_seed_schema_snippet_matches_upstream_typing_utility(
+    operation_id: str,
+    fn: Any,
+) -> None:
     response = make_default_mcp_adapter().search(SearchRequest(query="", limit=1_000, tags=[]))
     assert response.error is None
+    by_id = {row.id: row for row in response.results}
+    row = by_id.get(operation_id)
+    assert row is not None, f"Missing search row for {operation_id}"
+
+    schema_snippet = row.metadata.get("schema_snippet")
+    assert isinstance(schema_snippet, dict), f"Missing schema_snippet for {operation_id}"
+    actual_input = schema_snippet.get("input")
+    assert isinstance(actual_input, dict), f"Missing schema_snippet.input for {operation_id}"
+
+    expected_input = callable_input_schema_from_signature(fn)
+    assert actual_input == expected_input
+
+
+_HIGH_TRAFFIC_INTERNAL_OPERATION_IDS: tuple[str, ...] = (
+    "code_mode.internal.check_v01_odd_even_depth",
+    "code_mode.internal.check_v02_secondary_eclipse",
+    "code_mode.internal.check_v03_duration_consistency",
+    "code_mode.internal.check_v04_depth_stability",
+    "code_mode.internal.check_v05_v_shape",
+    "code_mode.internal.check_v06_nearby_eb_search",
+    "code_mode.internal.check_v07_exofop_toi_lookup",
+    "code_mode.internal.check_v08_centroid_shift",
+    "code_mode.internal.check_v09_difference_image",
+    "code_mode.internal.check_v10_aperture_dependence",
+    "code_mode.internal.check_v11_modshift",
+    "code_mode.internal.check_v12_sweet",
+    "code_mode.internal.check_v13_data_gaps",
+    "code_mode.internal.check_v15_transit_asymmetry",
+    "code_mode.internal.run_check",
+    "code_mode.internal.vet_catalog",
+    "code_mode.internal.calculate_fpp",
+)
+
+
+def _tranche_high_traffic_internal_search_rows() -> list[dict[str, Any]]:
+    response = make_default_mcp_adapter().search(SearchRequest(query="", limit=1_000, tags=[]))
+    assert response.error is None
+    by_id = {row.id: row for row in response.results}
     tranche_rows: list[dict[str, Any]] = []
-    for row in response.results:
+    for operation_id in _HIGH_TRAFFIC_INTERNAL_OPERATION_IDS:
+        row = by_id.get(operation_id)
+        if row is None:
+            continue
         metadata = row.metadata
-        if metadata.get("operation_tier") not in {"golden_path", "primitive"}:
+        if metadata.get("operation_tier") != "internal":
             continue
         if metadata.get("availability") != "available":
             continue
@@ -527,57 +583,87 @@ def _tranche_active_search_rows() -> list[dict[str, Any]]:
     return tranche_rows
 
 
-def _schema_required_paths(schema: dict[str, Any], prefix: str = "") -> list[str]:
-    if not isinstance(schema, dict):
-        return []
-    if schema.get("type") != "object":
-        return []
-
-    required = schema.get("required")
-    properties = schema.get("properties")
-    if not isinstance(required, list) or not isinstance(properties, dict):
-        return []
-
-    paths: list[str] = []
-    for key in required:
-        if not isinstance(key, str) or not key:
+def _missing_high_traffic_internal_operation_ids() -> list[str]:
+    response = make_default_mcp_adapter().search(SearchRequest(query="", limit=1_000, tags=[]))
+    assert response.error is None
+    by_id = {row.id: row for row in response.results}
+    missing_ids: list[str] = []
+    for operation_id in _HIGH_TRAFFIC_INTERNAL_OPERATION_IDS:
+        row = by_id.get(operation_id)
+        if row is None:
+            missing_ids.append(operation_id)
             continue
-        path = f"{prefix}.{key}" if prefix else key
-        paths.append(path)
-        nested = properties.get(key)
-        if isinstance(nested, dict):
-            paths.extend(_schema_required_paths(nested, prefix=path))
-    return paths
+        metadata = row.metadata
+        if metadata.get("operation_tier") != "internal":
+            missing_ids.append(operation_id)
+            continue
+        if metadata.get("availability") != "available":
+            missing_ids.append(operation_id)
+            continue
+        if metadata.get("status") != "active":
+            missing_ids.append(operation_id)
+            continue
+    return missing_ids
 
 
-def test_tranche_callability_required_paths_match_input_schema_required_paths() -> None:
-    failing_ops: list[str] = []
+@pytest.mark.parametrize(
+    "row",
+    _tranche_high_traffic_internal_search_rows(),
+    ids=lambda row: row["operation_id"],
+)
+def test_tranche_internal_required_paths_match_schema_truth(row: dict[str, Any]) -> None:
+    operation_id = row["operation_id"]
+    metadata = row["metadata"]
+    callability = metadata.get("operation_callability")
+    schema_snippet = metadata.get("schema_snippet")
 
-    for row in _tranche_active_search_rows():
+    assert isinstance(callability, dict), f"Missing operation_callability for operation id: {operation_id}"
+    assert isinstance(schema_snippet, dict), f"Missing schema_snippet for operation id: {operation_id}"
+
+    input_schema = schema_snippet.get("input")
+    assert isinstance(input_schema, dict), f"Missing schema_snippet.input for operation id: {operation_id}"
+
+    expected = sorted(set(extract_required_input_paths(input_schema)))
+    actual_raw = callability.get("required_paths")
+    assert isinstance(actual_raw, list) and all(isinstance(path, str) for path in actual_raw), (
+        "Missing/invalid required_paths for operation id: " f"{operation_id}"
+    )
+    actual = sorted(set(actual_raw))
+
+    assert actual == expected, (
+        "required_paths mismatch for operation id "
+        f"{operation_id}: expected={expected}, actual={actual}"
+    )
+
+
+def test_tranche_internal_required_paths_summary_lists_failing_operation_ids() -> None:
+    failing: list[str] = []
+
+    missing_ids = _missing_high_traffic_internal_operation_ids()
+    failing.extend(f"{operation_id}:operation_missing_or_inactive" for operation_id in missing_ids)
+
+    for row in _tranche_high_traffic_internal_search_rows():
         operation_id = row["operation_id"]
         metadata = row["metadata"]
         callability = metadata.get("operation_callability")
         schema_snippet = metadata.get("schema_snippet")
-
-        if not isinstance(callability, dict) or not isinstance(schema_snippet, dict):
-            failing_ops.append(operation_id)
+        if not isinstance(callability, dict):
+            failing.append(f"{operation_id}:operation_callability_missing")
             continue
-
+        if not isinstance(schema_snippet, dict):
+            failing.append(f"{operation_id}:schema_snippet_missing")
+            continue
         input_schema = schema_snippet.get("input")
         if not isinstance(input_schema, dict):
-            failing_ops.append(operation_id)
+            failing.append(f"{operation_id}:schema_input_missing")
             continue
-
-        expected = sorted(set(_schema_required_paths(input_schema)))
+        expected = sorted(set(extract_required_input_paths(input_schema)))
         actual_raw = callability.get("required_paths")
         if not isinstance(actual_raw, list) or any(not isinstance(path, str) for path in actual_raw):
-            failing_ops.append(operation_id)
+            failing.append(f"{operation_id}:required_paths_missing_or_invalid")
             continue
-
         actual = sorted(set(actual_raw))
         if actual != expected:
-            failing_ops.append(operation_id)
+            failing.append(f"{operation_id}:required_paths_mismatch")
 
-    assert not failing_ops, (
-        "required_paths mismatch or missing for operation ids: " f"{sorted(set(failing_ops))}"
-    )
+    assert not failing, f"High-traffic internal required_paths failures: {sorted(set(failing))}"

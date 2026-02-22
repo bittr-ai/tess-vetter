@@ -327,6 +327,7 @@ def test_adapter_normalizes_policy_denials_to_actionable_blockers() -> None:
     assert response.error.details["policy_blockers"][0]["type"] == "network_boundary_denied"
     assert response.error.details["policy_blockers"][0]["boundary"] == "urllib.request.urlopen"
     assert response.error.details["dependency_blockers"] == []
+    assert response.error.details["constructor_blockers"] == []
 
 
 def test_adapter_normalizes_dependency_denials_and_preserves_retryable_envelope() -> None:
@@ -360,3 +361,75 @@ def test_adapter_normalizes_dependency_denials_and_preserves_retryable_envelope(
     assert response.error.details["dependency_blockers"][0]["type"] == "optional_dependency_missing"
     assert response.error.details["dependency_blockers"][0]["dependency"] == "tls"
     assert response.error.details["policy_blockers"] == []
+    assert response.error.details["constructor_blockers"] == []
+
+
+def test_adapter_preflight_policy_and_dependency_blockers_are_sorted_and_retryable() -> None:
+    adapter = MCPAdapter(
+        execute_handler=lambda _request: ExecuteResponse(
+            status="failed",
+            result={"mode": "preflight", "ready": False},
+            error=ErrorPayload(
+                code="DEPENDENCY_MISSING",
+                message="Preflight detected dependency blockers.",
+                retryable=False,
+                details={
+                    "mode": "preflight",
+                    "dependency_blockers": [
+                        {
+                            "type": "operation_not_found",
+                            "operation_id": "code_mode.internal.z_op",
+                            "reason": "operation_not_found",
+                            "call_site": {"line": 9, "column": 7},
+                        },
+                        {
+                            "type": "operation_not_found",
+                            "operation_id": "code_mode.internal.a_op",
+                            "reason": "operation_not_found",
+                            "call_site": {"line": 7, "column": 4},
+                        },
+                    ],
+                    "constructor_blockers": [
+                        {
+                            "type": "constructor_missing",
+                            "operation_id": "code_mode.internal.z_op",
+                            "field": "lc",
+                            "reason": "constructor_missing",
+                            "call_site": {"line": 9, "column": 7},
+                        },
+                        {
+                            "type": "constructor_missing",
+                            "operation_id": "code_mode.internal.a_op",
+                            "field": "candidate",
+                            "reason": "constructor_missing",
+                            "call_site": {"line": 7, "column": 4},
+                        },
+                    ],
+                    "policy_blockers": [],
+                },
+            ),
+            trace=None,
+            catalog_version_hash="catalog-v1",
+        )
+    )
+
+    response = adapter.execute(
+        ExecuteRequest(
+            plan_code="async def execute_plan(ops, context):\n    return {'ok': True}\n",
+            context={"mode": "preflight"},
+            catalog_version_hash="catalog-v1",
+        )
+    )
+
+    assert response.status == "failed"
+    assert response.error is not None
+    assert response.error.code == "DEPENDENCY_MISSING"
+    assert response.error.retryable is True
+    assert [row["operation_id"] for row in response.error.details["dependency_blockers"]] == [
+        "code_mode.internal.a_op",
+        "code_mode.internal.z_op",
+    ]
+    assert [row["operation_id"] for row in response.error.details["constructor_blockers"]] == [
+        "code_mode.internal.a_op",
+        "code_mode.internal.z_op",
+    ]

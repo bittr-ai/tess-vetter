@@ -27,6 +27,14 @@ MODE_PREFLIGHT = "preflight"
 _FAIRNESS_LOCK = threading.Lock()
 _FAIRNESS_PLAN_SEQUENCE = count(1)
 _FAIRNESS_CALL_SEQUENCE = count(1)
+_PREFLIGHT_BLOCKER_KEYS: tuple[str, ...] = (
+    "missing_fields",
+    "type_mismatches",
+    "policy_blockers",
+    "dependency_blockers",
+    "constructor_blockers",
+)
+_CONSTRUCTOR_FIELDS: frozenset[str] = frozenset({"candidate", "lc", "stellar", "tpf"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -501,7 +509,7 @@ def _is_preflight_ready(payload: Mapping[str, Any]) -> bool:
     blockers = payload.get("blockers")
     if not isinstance(blockers, Mapping):
         return True
-    return not any(bool(blockers.get(key)) for key in ("missing_fields", "type_mismatches", "policy_blockers", "dependency_blockers"))
+    return not any(bool(blockers.get(key)) for key in _PREFLIGHT_BLOCKER_KEYS)
 
 
 def _select_preflight_error(blockers: Mapping[str, Any]) -> dict[str, Any]:
@@ -516,11 +524,20 @@ def _select_preflight_error(blockers: Mapping[str, Any]) -> dict[str, Any]:
             "POLICY_DENIED",
             "Preflight detected policy blockers.",
             {"mode": MODE_PREFLIGHT, "blockers": dict(blockers)},
+            retryable=True,
+        )
+    if blockers.get("constructor_blockers") or blockers.get("dependency_blockers"):
+        return _error(
+            "DEPENDENCY_MISSING",
+            "Preflight detected dependency blockers.",
+            {"mode": MODE_PREFLIGHT, "blockers": dict(blockers)},
+            retryable=True,
         )
     return _error(
         "DEPENDENCY_MISSING",
         "Preflight detected dependency blockers.",
         {"mode": MODE_PREFLIGHT, "blockers": dict(blockers)},
+        retryable=True,
     )
 
 
@@ -535,12 +552,7 @@ def _collect_preflight_blockers(
     except SyntaxError:
         return {
             "operation_ids": [],
-            "blockers": {
-                "missing_fields": [],
-                "type_mismatches": [],
-                "policy_blockers": [],
-                "dependency_blockers": [],
-            },
+            "blockers": _empty_preflight_blockers(),
         }
 
     operation_catalog = context.get("preflight_operation_catalog")
@@ -554,6 +566,7 @@ def _collect_preflight_blockers(
     type_mismatches: list[dict[str, Any]] = []
     policy_blockers: list[dict[str, Any]] = []
     dependency_blockers: list[dict[str, Any]] = []
+    constructor_blockers: list[dict[str, Any]] = []
 
     for call_site in call_sites:
         operation_id = call_site["operation_id"]
@@ -564,6 +577,7 @@ def _collect_preflight_blockers(
         if entry is None:
             dependency_blockers.append(
                 {
+                    "type": "operation_not_found",
                     "operation_id": operation_id,
                     "reason": "operation_not_found",
                     "call_site": call_ref,
@@ -575,6 +589,7 @@ def _collect_preflight_blockers(
         if availability != "available":
             dependency_blockers.append(
                 {
+                    "type": "operation_unavailable",
                     "operation_id": operation_id,
                     "reason": "operation_unavailable",
                     "availability": availability,
@@ -587,6 +602,7 @@ def _collect_preflight_blockers(
             if bool(requirements.get("needs_network")) and not profile.allow_network:
                 policy_blockers.append(
                     {
+                        "type": "needs_network",
                         "operation_id": operation_id,
                         "requirement": "needs_network",
                         "policy_profile": profile.name,
@@ -596,6 +612,7 @@ def _collect_preflight_blockers(
             if bool(requirements.get("requires_human_review")) and not bool(context.get("human_review_approved")):
                 policy_blockers.append(
                     {
+                        "type": "requires_human_review",
                         "operation_id": operation_id,
                         "requirement": "requires_human_review",
                         "policy_profile": profile.name,
@@ -605,6 +622,7 @@ def _collect_preflight_blockers(
             if bool(requirements.get("needs_secrets")) and not bool(context.get("secrets_available")):
                 policy_blockers.append(
                     {
+                        "type": "needs_secrets",
                         "operation_id": operation_id,
                         "requirement": "needs_secrets",
                         "policy_profile": profile.name,
@@ -614,6 +632,7 @@ def _collect_preflight_blockers(
             if bool(requirements.get("needs_filesystem")) and not bool(context.get("filesystem_available", True)):
                 policy_blockers.append(
                     {
+                        "type": "needs_filesystem",
                         "operation_id": operation_id,
                         "requirement": "needs_filesystem",
                         "policy_profile": profile.name,
@@ -644,6 +663,16 @@ def _collect_preflight_blockers(
                         "call_site": call_ref,
                     }
                 )
+                if field_name in _CONSTRUCTOR_FIELDS:
+                    constructor_blockers.append(
+                        {
+                            "type": "constructor_missing",
+                            "operation_id": operation_id,
+                            "field": field_name,
+                            "reason": "constructor_missing",
+                            "call_site": call_ref,
+                        }
+                    )
 
         field_types = entry.get("field_types")
         if isinstance(field_types, Mapping):
@@ -675,6 +704,7 @@ def _collect_preflight_blockers(
                     str(row.get("operation_id")),
                     str(row.get("field")),
                     int(row.get("call_site", {}).get("line", 0)),
+                    int(row.get("call_site", {}).get("column", 0)),
                 ),
             ),
             "type_mismatches": sorted(
@@ -683,26 +713,45 @@ def _collect_preflight_blockers(
                     str(row.get("operation_id")),
                     str(row.get("field")),
                     int(row.get("call_site", {}).get("line", 0)),
+                    int(row.get("call_site", {}).get("column", 0)),
                 ),
             ),
             "policy_blockers": sorted(
                 policy_blockers,
                 key=lambda row: (
                     str(row.get("operation_id")),
+                    str(row.get("type")),
                     str(row.get("requirement")),
                     int(row.get("call_site", {}).get("line", 0)),
+                    int(row.get("call_site", {}).get("column", 0)),
                 ),
             ),
             "dependency_blockers": sorted(
                 dependency_blockers,
                 key=lambda row: (
                     str(row.get("operation_id")),
+                    str(row.get("type")),
                     str(row.get("reason")),
                     int(row.get("call_site", {}).get("line", 0)),
+                    int(row.get("call_site", {}).get("column", 0)),
+                ),
+            ),
+            "constructor_blockers": sorted(
+                constructor_blockers,
+                key=lambda row: (
+                    str(row.get("operation_id")),
+                    str(row.get("field")),
+                    str(row.get("type")),
+                    int(row.get("call_site", {}).get("line", 0)),
+                    int(row.get("call_site", {}).get("column", 0)),
                 ),
             ),
         },
     }
+
+
+def _empty_preflight_blockers() -> dict[str, list[dict[str, Any]]]:
+    return {key: [] for key in _PREFLIGHT_BLOCKER_KEYS}
 
 
 def _extract_operation_call_sites(tree: ast.AST) -> list[dict[str, Any]]:
@@ -809,11 +858,17 @@ def _clamp_budget_value(requested: int | None, ceiling: int) -> int:
     return min(requested, ceiling)
 
 
-def _error(code: str, message: str, details: Mapping[str, Any]) -> dict[str, Any]:
+def _error(
+    code: str,
+    message: str,
+    details: Mapping[str, Any],
+    *,
+    retryable: bool = False,
+) -> dict[str, Any]:
     return {
         "code": code,
         "message": message,
-        "retryable": False,
+        "retryable": retryable,
         "details": dict(details),
     }
 

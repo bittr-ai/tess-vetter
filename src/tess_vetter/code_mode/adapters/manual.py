@@ -4,6 +4,21 @@ from __future__ import annotations
 
 import tess_vetter.api as _api
 from tess_vetter.api import primitives as _api_primitives
+from tess_vetter.api.constructor_contracts import (
+    COMPOSE_CANDIDATE_INPUT_SCHEMA,
+    COMPOSE_CANDIDATE_OUTPUT_SCHEMA,
+    COMPOSE_LIGHTCURVE_INPUT_SCHEMA,
+    COMPOSE_LIGHTCURVE_OUTPUT_SCHEMA,
+    COMPOSE_STELLAR_INPUT_SCHEMA,
+    COMPOSE_STELLAR_OUTPUT_SCHEMA,
+    COMPOSE_TPF_INPUT_SCHEMA,
+    COMPOSE_TPF_OUTPUT_SCHEMA,
+    compose_candidate,
+    compose_lightcurve,
+    compose_stellar,
+    compose_tpf,
+)
+from tess_vetter.api.contracts import callable_input_schema_from_signature
 from tess_vetter.code_mode.adapters.base import OperationAdapter
 from tess_vetter.code_mode.adapters.check_wrappers import check_wrapper_functions
 from tess_vetter.code_mode.operation_spec import (
@@ -27,6 +42,147 @@ def legacy_manual_seed_ids() -> tuple[str, ...]:
     """Return legacy/manual seed operation ids in deterministic registration order."""
     return _LEGACY_MANUAL_SEED_IDS
 
+def _constructor_adapters() -> tuple[OperationAdapter, ...]:
+    return (
+        OperationAdapter(
+            spec=OperationSpec(
+                id="code_mode.primitive.compose_candidate",
+                name="Compose Candidate",
+                description="Compose a validated Candidate payload from ephemeris and depth fields.",
+                tier_tags=("manual", "composer", "typed-constructor", "candidate"),
+                safety_class=SafetyClass.SAFE,
+                input_json_schema=COMPOSE_CANDIDATE_INPUT_SCHEMA,
+                output_json_schema=COMPOSE_CANDIDATE_OUTPUT_SCHEMA,
+                examples=(
+                    OperationExample(
+                        summary="Compose candidate with ephemeris and depth in ppm",
+                        input={
+                            "ephemeris": {
+                                "period_days": 3.245,
+                                "t0_btjd": 2012.345,
+                                "duration_hours": 2.1,
+                            },
+                            "depth_ppm": 540.0,
+                        },
+                        output={
+                            "candidate": {
+                                "ephemeris": {
+                                    "period_days": 3.245,
+                                    "t0_btjd": 2012.345,
+                                    "duration_hours": 2.1,
+                                },
+                                "depth_ppm": 540.0,
+                                "depth_fraction": None,
+                            }
+                        },
+                    ),
+                ),
+                citations=(OperationCitation(label="tess_vetter.api.Candidate"),),
+            ),
+            fn=compose_candidate,
+        ),
+        OperationAdapter(
+            spec=OperationSpec(
+                id="code_mode.primitive.compose_lightcurve",
+                name="Compose Lightcurve",
+                description="Compose a validated LightCurve payload for check wrappers.",
+                tier_tags=("manual", "composer", "typed-constructor", "lightcurve"),
+                safety_class=SafetyClass.SAFE,
+                input_json_schema=COMPOSE_LIGHTCURVE_INPUT_SCHEMA,
+                output_json_schema=COMPOSE_LIGHTCURVE_OUTPUT_SCHEMA,
+                examples=(
+                    OperationExample(
+                        summary="Compose minimal light curve payload",
+                        input={
+                            "time": [1000.0, 1000.02, 1000.04],
+                            "flux": [1.0, 0.9995, 1.0003],
+                            "flux_err": [0.0005, 0.0005, 0.0005],
+                        },
+                        output={
+                            "lc": {
+                                "time": [1000.0, 1000.02, 1000.04],
+                                "flux": [1.0, 0.9995, 1.0003],
+                                "flux_err": [0.0005, 0.0005, 0.0005],
+                                "quality": None,
+                                "valid_mask": None,
+                            }
+                        },
+                    ),
+                ),
+                citations=(OperationCitation(label="tess_vetter.api.LightCurve"),),
+            ),
+            fn=compose_lightcurve,
+        ),
+        OperationAdapter(
+            spec=OperationSpec(
+                id="code_mode.primitive.compose_stellar",
+                name="Compose Stellar",
+                description="Compose a validated StellarParams payload for duration checks.",
+                tier_tags=("manual", "composer", "typed-constructor", "stellar"),
+                safety_class=SafetyClass.SAFE,
+                input_json_schema=COMPOSE_STELLAR_INPUT_SCHEMA,
+                output_json_schema=COMPOSE_STELLAR_OUTPUT_SCHEMA,
+                examples=(
+                    OperationExample(
+                        summary="Compose stellar payload with mass and radius",
+                        input={"radius": 0.87, "mass": 0.91, "teff": 5200.0, "logg": 4.55},
+                        output={
+                            "stellar": {
+                                "teff": 5200.0,
+                                "logg": 4.55,
+                                "radius": 0.87,
+                                "mass": 0.91,
+                                "tmag": None,
+                                "contamination": None,
+                                "luminosity": None,
+                                "metallicity": None,
+                            }
+                        },
+                    ),
+                ),
+                citations=(OperationCitation(label="tess_vetter.api.StellarParams"),),
+            ),
+            fn=compose_stellar,
+        ),
+        OperationAdapter(
+            spec=OperationSpec(
+                id="code_mode.primitive.compose_tpf",
+                name="Compose Tpf",
+                description="Compose a validated TPF payload for pixel-level checks.",
+                tier_tags=("manual", "composer", "typed-constructor", "tpf"),
+                safety_class=SafetyClass.SAFE,
+                input_json_schema=COMPOSE_TPF_INPUT_SCHEMA,
+                output_json_schema=COMPOSE_TPF_OUTPUT_SCHEMA,
+                examples=(
+                    OperationExample(
+                        summary="Compose minimal TPF payload",
+                        input={
+                            "time": [1000.0, 1000.02],
+                            "flux": [
+                                [[120.0, 119.5], [118.9, 121.0]],
+                                [[119.8, 119.3], [118.7, 120.8]],
+                            ],
+                        },
+                        output={
+                            "tpf": {
+                                "time": [1000.0, 1000.02],
+                                "flux": [
+                                    [[120.0, 119.5], [118.9, 121.0]],
+                                    [[119.8, 119.3], [118.7, 120.8]],
+                                ],
+                                "flux_err": None,
+                                "aperture_mask": None,
+                                "quality": None,
+                            }
+                        },
+                    ),
+                ),
+                citations=(OperationCitation(label="tess_vetter.api.TPFStamp"),),
+            ),
+            fn=compose_tpf,
+        ),
+    )
+
 
 def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
     """Return stable seed adapters that are always present by design."""
@@ -39,7 +195,7 @@ def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
                 tier_tags=("golden-path", "vetting"),
                 safety_class=SafetyClass.GUARDED,
                 safety_requirements=SafetyRequirements(needs_network=True),
-                input_json_schema={"type": "object"},
+                input_json_schema=callable_input_schema_from_signature(_api.vet_candidate),
                 output_json_schema={"type": "object"},
                 examples=(
                     OperationExample(
@@ -61,7 +217,7 @@ def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
                 description="Run golden-path periodogram search.",
                 tier_tags=("golden-path", "detection"),
                 safety_class=SafetyClass.SAFE,
-                input_json_schema={"type": "object"},
+                input_json_schema=callable_input_schema_from_signature(_api.run_periodogram),
                 output_json_schema={"type": "object"},
                 examples=(
                     OperationExample(
@@ -83,7 +239,7 @@ def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
                 description="Primitive seed for phase-folding.",
                 tier_tags=("primitive-seed", "lightcurve"),
                 safety_class=SafetyClass.SAFE,
-                input_json_schema={"type": "object"},
+                input_json_schema=callable_input_schema_from_signature(_api_primitives.fold),
                 output_json_schema={"type": "object"},
                 citations=(
                     OperationCitation(label="tess_vetter.api.primitives.fold"),
@@ -98,7 +254,7 @@ def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
                 description="Primitive seed for robust detrending.",
                 tier_tags=("primitive-seed", "lightcurve"),
                 safety_class=SafetyClass.SAFE,
-                input_json_schema={"type": "object"},
+                input_json_schema=callable_input_schema_from_signature(_api_primitives.median_detrend),
                 output_json_schema={"type": "object"},
                 citations=(
                     OperationCitation(label="tess_vetter.api.primitives.median_detrend"),
@@ -126,7 +282,7 @@ def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
         )
         for definition, wrapper in check_wrapper_functions()
     )
-    return (*legacy, *wrappers)
+    return (*legacy, *_constructor_adapters(), *wrappers)
 
 
 __all__ = ["legacy_manual_seed_ids", "manual_seed_adapters"]

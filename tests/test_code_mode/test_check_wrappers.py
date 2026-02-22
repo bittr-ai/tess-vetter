@@ -5,6 +5,11 @@ from tess_vetter.code_mode.adapters.check_wrappers import (
     check_wrapper_functions,
 )
 from tess_vetter.code_mode.adapters.manual import manual_seed_adapters
+from tess_vetter.code_mode.mcp_adapter import SearchRequest, make_default_mcp_adapter
+from tess_vetter.code_mode.ops_library import (
+    make_default_ops_library,
+    required_input_paths_for_adapter,
+)
 from tess_vetter.validation.result_schema import ok_result
 
 
@@ -111,3 +116,41 @@ def test_manual_seed_adapters_include_typed_check_wrappers_with_schemas() -> Non
     assert "properties" in wrapper.spec.input_json_schema
     assert wrapper.spec.output_json_schema.get("type") == "object"
     assert "properties" in wrapper.spec.output_json_schema
+
+
+def test_manual_seed_adapters_include_typed_constructor_composers() -> None:
+    adapters = manual_seed_adapters()
+    composer_ids = [
+        adapter.id
+        for adapter in adapters
+        if adapter.id.startswith("code_mode.primitive.compose_")
+    ]
+
+    assert composer_ids == [
+        "code_mode.primitive.compose_candidate",
+        "code_mode.primitive.compose_lightcurve",
+        "code_mode.primitive.compose_stellar",
+        "code_mode.primitive.compose_tpf",
+    ]
+
+    for operation_id in composer_ids:
+        adapter = next(op for op in adapters if op.id == operation_id)
+        assert adapter.spec.input_json_schema.get("type") == "object"
+        assert adapter.spec.output_json_schema.get("type") == "object"
+        assert adapter.spec.examples
+
+
+def test_constructor_composer_required_paths_and_callability_examples() -> None:
+    library = make_default_ops_library()
+    adapter = library.get("code_mode.primitive.compose_candidate")
+    required_paths = required_input_paths_for_adapter(adapter)
+
+    assert required_paths == ("ephemeris",)
+
+    mcp_adapter = make_default_mcp_adapter()
+    response = mcp_adapter.search(SearchRequest(query="compose candidate", limit=20, tags=[]))
+    target = next(result for result in response.results if result.id == "code_mode.primitive.compose_candidate")
+    callability = target.metadata["operation_callability"]
+
+    assert callability["required_paths"] == list(required_paths)
+    assert "operation_kwargs" in callability["minimal_payload_example"]["context"]

@@ -394,6 +394,11 @@ def _normalize_execute_response(response: ExecuteResponse) -> ExecuteResponse:
         message=error.message,
         details=dict(error.details),
     )
+    retryable = _normalize_retryable_semantics(
+        code=error.code,
+        details=normalized_details,
+        retryable=error.retryable,
+    )
     result_payload: Any = None
     if isinstance(response.result, dict) and str(response.result.get("mode", "")).strip().lower() == "preflight":
         result_payload = dict(response.result)
@@ -403,7 +408,7 @@ def _normalize_execute_response(response: ExecuteResponse) -> ExecuteResponse:
         error=ErrorPayload(
             code=error.code,
             message=error.message,
-            retryable=error.retryable,
+            retryable=retryable,
             details=normalized_details,
         ),
         trace=None if response.trace is None else dict(response.trace),
@@ -507,27 +512,84 @@ def _normalize_blocker_details(
     details: dict[str, Any],
 ) -> dict[str, Any]:
     normalized = dict(details)
+    _ensure_blocker_arrays(normalized)
     if code == "POLICY_DENIED":
-        policy_blockers = normalized.get("policy_blockers")
-        if not isinstance(policy_blockers, list):
-            policy_blockers = [_policy_blocker_from_details(normalized, message)]
-        dependency_blockers = normalized.get("dependency_blockers")
-        normalized["policy_blockers"] = policy_blockers
-        normalized["dependency_blockers"] = (
-            dependency_blockers if isinstance(dependency_blockers, list) else []
-        )
+        if not normalized["policy_blockers"]:
+            normalized["policy_blockers"] = [_policy_blocker_from_details(normalized, message)]
+        _sort_blocker_arrays(normalized)
         return normalized
 
     if code == "DEPENDENCY_MISSING":
-        dependency_blockers = normalized.get("dependency_blockers")
-        if not isinstance(dependency_blockers, list):
-            dependency_blockers = [_dependency_blocker_from_details(normalized, message)]
-        policy_blockers = normalized.get("policy_blockers")
-        normalized["dependency_blockers"] = dependency_blockers
-        normalized["policy_blockers"] = policy_blockers if isinstance(policy_blockers, list) else []
+        if not normalized["dependency_blockers"] and not normalized["constructor_blockers"]:
+            normalized["dependency_blockers"] = [_dependency_blocker_from_details(normalized, message)]
+        _sort_blocker_arrays(normalized)
         return normalized
 
+    if _is_preflight_payload(normalized):
+        _sort_blocker_arrays(normalized)
+
     return normalized
+
+
+def _ensure_blocker_arrays(details: dict[str, Any]) -> None:
+    for key in ("policy_blockers", "dependency_blockers", "constructor_blockers"):
+        value = details.get(key)
+        if not isinstance(value, list):
+            details[key] = []
+            continue
+        details[key] = [dict(item) for item in value if isinstance(item, dict)]
+
+
+def _sort_blocker_arrays(details: dict[str, Any]) -> None:
+    details["policy_blockers"] = sorted(
+        details["policy_blockers"],
+        key=lambda row: (
+            str(row.get("operation_id")),
+            str(row.get("type")),
+            str(row.get("requirement")),
+            int(row.get("call_site", {}).get("line", 0)),
+            int(row.get("call_site", {}).get("column", 0)),
+        ),
+    )
+    details["dependency_blockers"] = sorted(
+        details["dependency_blockers"],
+        key=lambda row: (
+            str(row.get("operation_id")),
+            str(row.get("type")),
+            str(row.get("reason")),
+            int(row.get("call_site", {}).get("line", 0)),
+            int(row.get("call_site", {}).get("column", 0)),
+        ),
+    )
+    details["constructor_blockers"] = sorted(
+        details["constructor_blockers"],
+        key=lambda row: (
+            str(row.get("operation_id")),
+            str(row.get("field")),
+            str(row.get("type")),
+            int(row.get("call_site", {}).get("line", 0)),
+            int(row.get("call_site", {}).get("column", 0)),
+        ),
+    )
+
+
+def _is_preflight_payload(details: dict[str, Any]) -> bool:
+    return str(details.get("mode", "")).strip().lower() == "preflight"
+
+
+def _normalize_retryable_semantics(
+    *,
+    code: ErrorCode,
+    details: dict[str, Any],
+    retryable: bool,
+) -> bool:
+    if retryable:
+        return True
+    if not _is_preflight_payload(details):
+        return False
+    if code in {"POLICY_DENIED", "DEPENDENCY_MISSING"}:
+        return True
+    return False
 
 
 def _build_minimal_execute_plan_code(operation_id: str) -> str:
@@ -547,25 +609,66 @@ def _callability_score_and_flags(
     adapter: OperationAdapter | None,
 ) -> tuple[float, tuple[str, ...]]:
     score = 1.0
-    flags: list[str] = []
+    blockers: list[str] = []
+    hints: list[str] = []
+    constructor_ready = False
+    policy_ready = False
 
     if adapter is None:
-        score -= 0.40
-        flags.append("adapter_missing")
+        score -= 0.45
+        blockers.append("adapter_missing")
+        required_paths: tuple[str, ...] = ()
+        requirements: dict[str, Any] = {}
+    else:
+        required_paths = required_input_paths_for_adapter(adapter)
+        requirements = adapter.spec.safety_requirements.model_dump()
+        if required_paths:
+            blockers.append("constructor_inputs_required")
+            score -= min(0.20, 0.03 * len(required_paths))
+        else:
+            constructor_ready = True
+            hints.append("constructor_ready")
+
+        if bool(requirements.get("needs_network")):
+            blockers.append("policy_requires_network")
+            score -= 0.12
+        if bool(requirements.get("requires_human_review")):
+            blockers.append("policy_requires_human_review")
+            score -= 0.18
+        if bool(requirements.get("needs_secrets")):
+            blockers.append("policy_requires_secrets")
+            score -= 0.18
+        if bool(requirements.get("needs_filesystem")):
+            blockers.append("policy_requires_filesystem")
+            score -= 0.08
+        if not any(
+            bool(requirements.get(key))
+            for key in (
+                "needs_network",
+                "requires_human_review",
+                "needs_secrets",
+                "needs_filesystem",
+            )
+        ):
+            policy_ready = True
+            hints.append("policy_ready")
+
     if entry.availability != "available":
         score -= 0.35
-        flags.append("availability_unavailable")
+        blockers.append("availability_unavailable")
     if entry.status != "active":
         score -= 0.15
-        flags.append("status_inactive")
+        blockers.append("status_inactive")
     if entry.deprecated:
         score -= 0.10
-        flags.append("deprecated")
+        blockers.append("deprecated")
     if entry.replacement:
-        flags.append("replacement_available")
+        hints.append("replacement_available")
 
-    if not flags:
-        flags.append("direct_execute_ready")
+    if constructor_ready and policy_ready and not blockers:
+        hints.insert(0, "direct_execute_ready")
+
+    flags = [*hints, *blockers]
 
     if score < 0:
         score = 0.0
@@ -685,6 +788,12 @@ def _execute_via_runtime(
             message=message,
             details=dict(details) if isinstance(details, dict) else {},
         )
+        raw_retryable = raw_error.get("retryable")
+        retryable = _normalize_retryable_semantics(
+            code=code,
+            details=normalized_details,
+            retryable=bool(raw_retryable) if isinstance(raw_retryable, bool) else False,
+        )
         result_payload = runtime_response.get("result")
         return ExecuteResponse(
             status="failed",
@@ -692,7 +801,7 @@ def _execute_via_runtime(
             error=ErrorPayload(
                 code=code,
                 message=message,
-                retryable=bool(raw_error.get("retryable", False)),
+                retryable=retryable,
                 details=normalized_details,
             ),
             trace=trace,

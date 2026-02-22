@@ -72,6 +72,7 @@ def map_legacy_denial_details(
                 }
             ],
             "policy_blockers": [],
+            "constructor_blockers": [],
         }
 
     if normalized_reason in _POLICY_REASON_FLAGS or error_class in {
@@ -91,6 +92,7 @@ def map_legacy_denial_details(
                 }
             ],
             "dependency_blockers": [],
+            "constructor_blockers": [],
         }
 
     return {}
