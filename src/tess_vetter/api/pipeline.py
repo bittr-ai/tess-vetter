@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any
 
+from tess_vetter.code_mode.errors import map_legacy_error_to_prd_code
 from tess_vetter.validation.registry import (
     CheckConfig,
     CheckInputs,
@@ -180,6 +181,12 @@ class VettingPipeline:
                     check.name,
                     reason_flag=reason,
                     notes=[_format_skip_note(reason)],
+                    provenance={
+                        "error_code": map_legacy_error_to_prd_code(
+                            None,
+                            reason_flag=reason,
+                        )
+                    },
                 )
                 results.append(result)
                 warnings.append(f"{check.id} ({check.name}) skipped: {reason}")
@@ -198,6 +205,9 @@ class VettingPipeline:
                     check.name,
                     error=type(e).__name__,
                     notes=[str(e)],
+                    provenance={
+                        "error_code": map_legacy_error_to_prd_code(type(e).__name__),
+                    },
                 )
                 results.append(result)
                 warnings.append(f"{check.id} ({check.name}) error: {e}")

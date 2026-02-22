@@ -54,6 +54,7 @@ from tess_vetter.features import (
     RawEvidencePacket,
     build_features,
 )
+from tess_vetter.code_mode.errors import map_legacy_error_to_prd_code
 
 logger = logging.getLogger(__name__)
 
@@ -295,6 +296,7 @@ def enrich_candidate(
     def _make_error_response(
         error_class: str, error_msg: str, wall_ms: float
     ) -> tuple[RawEvidencePacket, EnrichedRow]:
+        error_code = map_legacy_error_to_prd_code(error_class)
         raw: RawEvidencePacket = {
             "target": {"tic_id": tic_id, "toi": toi},
             "ephemeris": {
@@ -312,6 +314,7 @@ def enrich_candidate(
                 "pipeline_version": pipeline_version,
                 "code_hash": code_hash,
                 "dependency_versions": _dependency_versions(),
+                "error_code": error_code,
                 "error_class": error_class,
                 "error": error_msg,
             },
