@@ -9,6 +9,12 @@ import numpy as np
 import pytest
 
 from tess_vetter.api.pipeline import (
+    DESCRIBE_CHECKS_INPUT_SCHEMA,
+    DESCRIBE_CHECKS_OUTPUT_SCHEMA,
+    LIST_CHECKS_INPUT_SCHEMA,
+    LIST_CHECKS_OUTPUT_SCHEMA,
+    PIPELINE_DESCRIBE_INPUT_SCHEMA,
+    PIPELINE_DESCRIBE_OUTPUT_SCHEMA,
     VettingPipeline,
     describe_checks,
     list_checks,
@@ -233,6 +239,26 @@ class TestDescribe:
         assert len(desc["will_skip"]) == 1
         assert desc["will_skip"][0]["reason"] == "NO_TPF"
 
+    def test_describe_payload_is_deterministic(self) -> None:
+        registry = CheckRegistry()
+        registry.register(
+            MockCheck(
+                "V08",
+                "Pixel Check",
+                CheckTier.PIXEL,
+                CheckRequirements(needs_tpf=True),
+            )
+        )
+        registry.register(MockCheck("V01", "LC Check", CheckTier.LC_ONLY))
+
+        pipeline = VettingPipeline(registry=registry)
+        first = pipeline.describe(tpf=None, network=False)
+        second = pipeline.describe(tpf=None, network=False)
+
+        assert first == second
+        assert [item["id"] for item in first["will_run"]] == ["V01"]
+        assert [item["id"] for item in first["will_skip"]] == ["V08"]
+
 
 class TestRunMany:
     def test_run_many_preserves_order_and_returns_summary(self, mock_lc: Any) -> None:
@@ -277,6 +303,24 @@ class TestListChecks:
         assert checks[0]["id"] == "V01"
         assert checks[0]["citations"] == ["Test Citation"]
 
+    def test_list_checks_is_deterministic_and_returns_copy(self) -> None:
+        registry = CheckRegistry()
+        registry.register(MockCheck("V02", "Second Check"))
+        registry.register(MockCheck("V01", "First Check"))
+
+        first = list_checks(registry)
+        second = list_checks(registry)
+
+        assert first == second
+        assert [item["id"] for item in first] == ["V01", "V02"]
+
+        first[0]["citations"].append("Mutated")
+        first[0]["requirements"]["optional_deps"].append("fake_extra")
+
+        third = list_checks(registry)
+        assert third[0]["citations"] == ["Test Citation"]
+        assert third[0]["requirements"]["optional_deps"] == []
+
     def test_describe_checks_empty(self) -> None:
         registry = CheckRegistry()
         desc = describe_checks(registry)
@@ -289,3 +333,100 @@ class TestListChecks:
         desc = describe_checks(registry)
         assert "V01" in desc
         assert "Test Check" in desc
+
+
+def test_pipeline_contract_schemas_are_stable() -> None:
+    assert LIST_CHECKS_INPUT_SCHEMA == {
+        "type": "object",
+        "properties": {"registry": {"description": "Optional check registry override."}},
+        "additionalProperties": False,
+    }
+    assert LIST_CHECKS_OUTPUT_SCHEMA == {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "citations": {"type": "array", "items": {"type": "string"}},
+                "id": {"type": "string"},
+                "name": {"type": "string"},
+                "requirements": {
+                    "type": "object",
+                    "properties": {
+                        "needs_network": {"type": "boolean"},
+                        "needs_ra_dec": {"type": "boolean"},
+                        "needs_stellar": {"type": "boolean"},
+                        "needs_tic_id": {"type": "boolean"},
+                        "needs_tpf": {"type": "boolean"},
+                        "optional_deps": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": [
+                        "needs_network",
+                        "needs_ra_dec",
+                        "needs_stellar",
+                        "needs_tic_id",
+                        "needs_tpf",
+                        "optional_deps",
+                    ],
+                    "additionalProperties": False,
+                },
+                "tier": {"type": "string"},
+            },
+            "required": ["citations", "id", "name", "requirements", "tier"],
+            "additionalProperties": False,
+        },
+    }
+    assert DESCRIBE_CHECKS_INPUT_SCHEMA == {
+        "type": "object",
+        "properties": {"registry": {"description": "Optional check registry override."}},
+        "additionalProperties": False,
+    }
+    assert DESCRIBE_CHECKS_OUTPUT_SCHEMA == {"type": "string"}
+    assert PIPELINE_DESCRIBE_INPUT_SCHEMA == {
+        "type": "object",
+        "properties": {
+            "dec_deg": {"type": ["number", "null"]},
+            "network": {"type": "boolean"},
+            "ra_deg": {"type": ["number", "null"]},
+            "tic_id": {"type": ["integer", "null"]},
+            "tpf": {
+                "description": "Opaque TPF object; null means unavailable.",
+                "type": ["object", "null"],
+            },
+        },
+        "additionalProperties": False,
+    }
+    assert PIPELINE_DESCRIBE_OUTPUT_SCHEMA == {
+        "type": "object",
+        "properties": {
+            "total_checks": {"type": "integer"},
+            "will_run": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "name": {"type": "string"},
+                        "tier": {"type": "string"},
+                    },
+                    "required": ["id", "name", "tier"],
+                    "additionalProperties": False,
+                },
+            },
+            "will_skip": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "name": {"type": "string"},
+                        "reason": {"type": ["string", "null"]},
+                        "tier": {"type": "string"},
+                    },
+                    "required": ["id", "name", "reason", "tier"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["total_checks", "will_run", "will_skip"],
+        "additionalProperties": False,
+    }

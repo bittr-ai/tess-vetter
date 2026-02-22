@@ -17,6 +17,7 @@ from typing import Any, TypedDict, cast
 import numpy as np
 from numpy.typing import NDArray
 
+from tess_vetter.api.contracts import callable_input_schema_from_signature
 from tess_vetter.api.ephemeris_specificity import (
     SmoothTemplateConfig,
     score_fixed_period_numpy,
@@ -30,6 +31,8 @@ from tess_vetter.validation.base import (
 from tess_vetter.validation.sector_consistency import SectorMeasurement
 
 SECTOR_MEASUREMENTS_SCHEMA_VERSION = 1
+SECTOR_MEASUREMENTS_PAYLOAD_KEYS: tuple[str, ...] = ("schema_version", "measurements")
+SECTOR_MEASUREMENT_REQUIRED_KEYS: tuple[str, ...] = ("sector", "depth_ppm", "depth_err_ppm")
 
 
 class V21SectorMeasurementRow(TypedDict):
@@ -254,8 +257,11 @@ def compute_sector_ephemeris_metrics_from_stitched(
 
 
 def _coerce_sector_measurement_row(row: Mapping[str, Any]) -> SectorMeasurement:
-    if "sector" not in row or "depth_ppm" not in row or "depth_err_ppm" not in row:
-        raise ValueError("each sector measurement row must include sector, depth_ppm, and depth_err_ppm")
+    missing = [key for key in SECTOR_MEASUREMENT_REQUIRED_KEYS if key not in row]
+    if missing:
+        raise ValueError(
+            "each sector measurement row must include sector, depth_ppm, and depth_err_ppm"
+        )
     return SectorMeasurement(
         sector=int(row["sector"]),
         depth_ppm=float(row["depth_ppm"]),
@@ -325,7 +331,16 @@ def deserialize_v21_sector_measurements(
             raise ValueError("V21 sector measurements payload must be a JSON object")
         data = cast(Mapping[str, Any], loaded)
     else:
+        if not isinstance(payload, Mapping):
+            raise ValueError("V21 sector measurements payload must be a mapping or JSON object")
         data = payload
+
+    missing_payload_keys = [key for key in SECTOR_MEASUREMENTS_PAYLOAD_KEYS if key not in data]
+    if missing_payload_keys:
+        raise ValueError(
+            "V21 sector measurements payload must include keys: "
+            + ", ".join(SECTOR_MEASUREMENTS_PAYLOAD_KEYS)
+        )
 
     version = int(data.get("schema_version", -1))
     if version != SECTOR_MEASUREMENTS_SCHEMA_VERSION:
@@ -346,8 +361,24 @@ def deserialize_v21_sector_measurements(
     return rows
 
 
+COMPUTE_SECTOR_EPHEMERIS_METRICS_CALL_SCHEMA = callable_input_schema_from_signature(
+    compute_sector_ephemeris_metrics
+)
+COMPUTE_SECTOR_EPHEMERIS_METRICS_FROM_STITCHED_CALL_SCHEMA = callable_input_schema_from_signature(
+    compute_sector_ephemeris_metrics_from_stitched
+)
+SERIALIZE_V21_SECTOR_MEASUREMENTS_CALL_SCHEMA = callable_input_schema_from_signature(
+    serialize_v21_sector_measurements
+)
+DESERIALIZE_V21_SECTOR_MEASUREMENTS_CALL_SCHEMA = callable_input_schema_from_signature(
+    deserialize_v21_sector_measurements
+)
+
+
 __all__ = [
     "SECTOR_MEASUREMENTS_SCHEMA_VERSION",
+    "SECTOR_MEASUREMENTS_PAYLOAD_KEYS",
+    "SECTOR_MEASUREMENT_REQUIRED_KEYS",
     "SectorEphemerisMetrics",
     "V21SectorMeasurementRow",
     "V21SectorMeasurementsPayload",
@@ -355,4 +386,8 @@ __all__ = [
     "compute_sector_ephemeris_metrics_from_stitched",
     "serialize_v21_sector_measurements",
     "deserialize_v21_sector_measurements",
+    "COMPUTE_SECTOR_EPHEMERIS_METRICS_CALL_SCHEMA",
+    "COMPUTE_SECTOR_EPHEMERIS_METRICS_FROM_STITCHED_CALL_SCHEMA",
+    "SERIALIZE_V21_SECTOR_MEASUREMENTS_CALL_SCHEMA",
+    "DESERIALIZE_V21_SECTOR_MEASUREMENTS_CALL_SCHEMA",
 ]

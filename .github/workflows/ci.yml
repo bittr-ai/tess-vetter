@@ -81,6 +81,20 @@ jobs:
       - name: Run tests
         run: uv run pytest -q -m "not slow"
 
+  test-security-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --group dev
+      - name: Run security matrix tests
+        run: uv run pytest -q tests/test_security/test_matrix.py
+
   core-library-coverage:
     needs: [test-core]
     runs-on: ubuntu-latest

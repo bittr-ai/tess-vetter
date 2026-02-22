@@ -13,13 +13,47 @@ Design:
 from __future__ import annotations
 
 import csv
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, TypedDict
 
 import numpy as np
+from numpy.typing import NDArray
 
+from tess_vetter.api.contracts import callable_input_schema_from_signature
 from tess_vetter.api.types import LightCurve, TPFStamp
+
+LOCAL_DATASET_SCHEMA_VERSION = 1
+LOCAL_DATASET_LC_CSV_PATTERN = "sector{sector}_pdcsap.csv"
+LOCAL_DATASET_TPF_NPZ_PATTERN = "sector{sector}_tpf.npz"
+LOAD_TUTORIAL_TARGET_SCHEMA_VERSION = 1
+LOAD_TUTORIAL_TARGET_REQUIRED_FIELDS: tuple[str, ...] = ("name",)
+LOAD_TUTORIAL_TARGET_DATA_ROOT_PARTS: tuple[str, str, str] = ("docs", "tutorials", "data")
+LOCAL_DATASET_PATTERN_DEFAULTS: dict[str, str] = {
+    "lc_csv": LOCAL_DATASET_LC_CSV_PATTERN,
+    "tpf_npz": LOCAL_DATASET_TPF_NPZ_PATTERN,
+}
+
+
+class LocalDatasetSummaryPayload(TypedDict):
+    """Stable JSON payload contract returned by LocalDataset.summary()."""
+
+    schema_version: int
+    root: str
+    sectors_lc: list[int]
+    sectors_tpf: list[int]
+    artifacts: list[str]
+
+
+class LocalDatasetLoadPayload(TypedDict):
+    """Stable in-memory contract represented by a LocalDataset instance."""
+
+    schema_version: int
+    root: Path
+    lc_by_sector: dict[int, LightCurve]
+    tpf_by_sector: dict[int, TPFStamp]
+    artifacts: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -32,7 +66,7 @@ class LocalDataset:
     tpf_by_sector: dict[int, TPFStamp] = field(default_factory=dict)
     artifacts: dict[str, Any] = field(default_factory=dict)
 
-    def summary(self) -> dict[str, Any]:
+    def summary(self) -> LocalDatasetSummaryPayload:
         return {
             "schema_version": int(self.schema_version),
             "root": str(self.root),
@@ -41,12 +75,37 @@ class LocalDataset:
             "artifacts": sorted(self.artifacts.keys()),
         }
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> LocalDatasetSummaryPayload:
         """JSON-serializable metadata summary (does not embed array data)."""
         return self.summary()
 
+    def load_payload(self) -> LocalDatasetLoadPayload:
+        """Stable in-memory payload contract for loaded dataset contents."""
+        return {
+            "schema_version": int(self.schema_version),
+            "root": self.root,
+            "lc_by_sector": dict(self.lc_by_sector),
+            "tpf_by_sector": dict(self.tpf_by_sector),
+            "artifacts": dict(self.artifacts),
+        }
 
-def _read_csv_no_pandas(path: Path) -> dict[str, np.ndarray]:
+
+class _CSVData(TypedDict):
+    time_btjd: NDArray[np.float64]
+    flux: NDArray[np.float64]
+    flux_err: NDArray[np.float64]
+    quality: NDArray[np.int32]
+
+
+class LoadTutorialTargetBoundaryContract(TypedDict):
+    """Stable contract constants for ``load_tutorial_target`` wrapper inputs."""
+
+    schema_version: int
+    required_fields: tuple[Literal["name"],]
+    data_root_parts: tuple[str, str, str]
+
+
+def _read_csv_no_pandas(path: Path) -> _CSVData:
     """Read a tutorial-format CSV with comment header lines."""
     time: list[float] = []
     flux: list[float] = []
@@ -54,7 +113,7 @@ def _read_csv_no_pandas(path: Path) -> dict[str, np.ndarray]:
     quality: list[int] = []
 
     with path.open(newline="") as f:
-        def _non_comment_lines() -> Any:
+        def _non_comment_lines() -> Iterator[str]:
             for line in f:
                 if not line.strip() or line.startswith("#"):
                     continue
@@ -75,7 +134,7 @@ def _read_csv_no_pandas(path: Path) -> dict[str, np.ndarray]:
     }
 
 
-def _maybe_build_wcs(wcs_header: Any) -> Any:
+def _maybe_build_wcs(wcs_header: Mapping[str, object] | object) -> object:
     """Best-effort WCS construction.
 
     Returns either an astropy WCS object (if available) or the raw header dict.
@@ -91,7 +150,7 @@ def _maybe_build_wcs(wcs_header: Any) -> Any:
 def load_local_dataset(
     path: str | Path,
     *,
-    pattern_overrides: dict[str, str] | None = None,
+    pattern_overrides: Mapping[str, str] | None = None,
 ) -> LocalDataset:
     """Load a local dataset folder into API types.
 
@@ -115,10 +174,7 @@ def load_local_dataset(
     if not root.exists() or not root.is_dir():
         raise FileNotFoundError(f"Dataset folder not found: {root}")
 
-    patterns = {
-        "lc_csv": "sector{sector}_pdcsap.csv",
-        "tpf_npz": "sector{sector}_tpf.npz",
-    }
+    patterns = dict(LOCAL_DATASET_PATTERN_DEFAULTS)
     if pattern_overrides:
         patterns.update({str(k): str(v) for k, v in pattern_overrides.items()})
 
@@ -171,7 +227,7 @@ def load_local_dataset(
     artifacts["files"] = sorted(p.name for p in root.iterdir() if p.is_file())
 
     return LocalDataset(
-        schema_version=1,
+        schema_version=LOCAL_DATASET_SCHEMA_VERSION,
         root=root,
         lc_by_sector=lc_by_sector,
         tpf_by_sector=tpf_by_sector,
@@ -184,8 +240,32 @@ def load_tutorial_target(name: str) -> LocalDataset:
 
     This is a repo convenience wrapper around :func:`load_local_dataset`.
     """
-    base = Path(__file__).resolve().parents[3] / "docs" / "tutorials" / "data"
+    base = Path(__file__).resolve().parents[3].joinpath(*LOAD_TUTORIAL_TARGET_DATA_ROOT_PARTS)
     return load_local_dataset(base / name)
 
 
-__all__ = ["LocalDataset", "load_local_dataset", "load_tutorial_target"]
+LOAD_TUTORIAL_TARGET_CALL_SCHEMA = callable_input_schema_from_signature(load_tutorial_target)
+LOAD_TUTORIAL_TARGET_BOUNDARY_CONTRACT: LoadTutorialTargetBoundaryContract = {
+    "schema_version": LOAD_TUTORIAL_TARGET_SCHEMA_VERSION,
+    "required_fields": ("name",),
+    "data_root_parts": LOAD_TUTORIAL_TARGET_DATA_ROOT_PARTS,
+}
+
+
+__all__: list[str] = [
+    "LOAD_TUTORIAL_TARGET_BOUNDARY_CONTRACT",
+    "LOAD_TUTORIAL_TARGET_CALL_SCHEMA",
+    "LOAD_TUTORIAL_TARGET_DATA_ROOT_PARTS",
+    "LOAD_TUTORIAL_TARGET_REQUIRED_FIELDS",
+    "LOAD_TUTORIAL_TARGET_SCHEMA_VERSION",
+    "LOCAL_DATASET_LC_CSV_PATTERN",
+    "LOCAL_DATASET_PATTERN_DEFAULTS",
+    "LOCAL_DATASET_SCHEMA_VERSION",
+    "LOCAL_DATASET_TPF_NPZ_PATTERN",
+    "LocalDataset",
+    "LocalDatasetLoadPayload",
+    "LocalDatasetSummaryPayload",
+    "LoadTutorialTargetBoundaryContract",
+    "load_local_dataset",
+    "load_tutorial_target",
+]

@@ -4,7 +4,14 @@ from typing import Any
 
 import numpy as np
 
-from tess_vetter.api.stitch import stitch_lightcurve_data, stitch_lightcurves
+from tess_vetter.api.stitch import (
+    STITCH_LIGHTCURVE_DATA_CALL_SCHEMA,
+    STITCH_LIGHTCURVE_REQUIRED_FIELDS,
+    STITCH_LIGHTCURVES_CALL_SCHEMA,
+    STITCH_SCHEMA_VERSION,
+    stitch_lightcurve_data,
+    stitch_lightcurves,
+)
 from tess_vetter.domain.lightcurve import LightCurveData
 
 
@@ -150,3 +157,28 @@ def test_stitch_cadence_prefers_dominant_within_sector_delta() -> None:
     )
     stitched_lc, _ = stitch_lightcurve_data([lc20, lc120], tic_id=1)
     assert np.isclose(stitched_lc.cadence_seconds, 120.0, atol=1e-3)
+
+
+def test_stitch_contract_constants_are_stable() -> None:
+    assert STITCH_SCHEMA_VERSION == 1
+    assert STITCH_LIGHTCURVE_REQUIRED_FIELDS == ("time", "flux", "flux_err", "sector", "quality")
+    assert STITCH_LIGHTCURVES_CALL_SCHEMA == {
+        "type": "object",
+        "properties": {
+            "lc_list": {},
+            "normalization_policy_version": {},
+        },
+        "required": ["lc_list"],
+        "additionalProperties": False,
+    }
+    assert STITCH_LIGHTCURVE_DATA_CALL_SCHEMA == {
+        "type": "object",
+        "properties": {
+            "lightcurves": {},
+            "tic_id": {},
+            "normalization_policy_version": {},
+            "sector": {},
+        },
+        "required": ["lightcurves", "tic_id"],
+        "additionalProperties": False,
+    }

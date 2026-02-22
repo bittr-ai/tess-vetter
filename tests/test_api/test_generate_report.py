@@ -15,7 +15,12 @@ import pytest
 
 import tess_vetter.api.generate_report as generate_report_api
 from tess_vetter.api.generate_report import (
+    GENERATE_REPORT_ENRICHMENT_SCHEMA_VERSION,
+    GENERATE_REPORT_PLOT_DATA_KEY,
+    GENERATE_REPORT_RESULT_SCHEMA_VERSION,
     EnrichmentConfig,
+    GenerateReportJSONContract,
+    GenerateReportPlotDataContract,
     GenerateReportResult,
     generate_report,
 )
@@ -135,9 +140,14 @@ def test_happy_path_multi_sector() -> None:
     assert result.stitch_diagnostics is not None
     assert len(result.stitch_diagnostics) > 0
     assert isinstance(result.report_json, dict)
-    assert "plot_data" not in result.report_json
+    assert GENERATE_REPORT_PLOT_DATA_KEY not in result.report_json
     assert isinstance(result.plot_data_json, dict)
     assert "full_lc" in result.plot_data_json
+    assert result.schema_version == GENERATE_REPORT_RESULT_SCHEMA_VERSION
+    _typed_report_json: GenerateReportJSONContract = result.report_json
+    _typed_plot_data: GenerateReportPlotDataContract = result.plot_data_json
+    assert isinstance(_typed_report_json, dict)
+    assert isinstance(_typed_plot_data, dict)
 
 
 # ---------------------------------------------------------------------------
@@ -422,6 +432,12 @@ def test_custom_views_default_unchanged_when_not_passed() -> None:
     assert result.report_json["custom_views"] == {"version": "1", "views": []}
 
 
+def test_contract_constants_are_stable() -> None:
+    assert GENERATE_REPORT_RESULT_SCHEMA_VERSION == 1
+    assert GENERATE_REPORT_PLOT_DATA_KEY == "plot_data"
+    assert GENERATE_REPORT_ENRICHMENT_SCHEMA_VERSION == "0.1.0"
+
+
 # ---------------------------------------------------------------------------
 # 8. mast_client injection
 # ---------------------------------------------------------------------------
@@ -503,7 +519,7 @@ def test_include_enrichment_true_adds_blocks() -> None:
 
     assert result.report.enrichment is not None
     e = result.report_json["summary"]["enrichment"]
-    assert e["version"] == "0.1.0"
+    assert e["version"] == GENERATE_REPORT_ENRICHMENT_SCHEMA_VERSION
     assert e["pixel_diagnostics"]["status"] == "skipped"
     assert e["catalog_context"]["status"] == "skipped"
     assert e["followup_context"]["status"] in {"ok", "skipped"}

@@ -4,7 +4,13 @@ import pytest
 from tess_vetter.api import compute_sector_ephemeris_metrics
 from tess_vetter.api.sector_consistency import SectorMeasurement
 from tess_vetter.api.sector_metrics import (
+    COMPUTE_SECTOR_EPHEMERIS_METRICS_CALL_SCHEMA,
+    COMPUTE_SECTOR_EPHEMERIS_METRICS_FROM_STITCHED_CALL_SCHEMA,
+    DESERIALIZE_V21_SECTOR_MEASUREMENTS_CALL_SCHEMA,
+    SECTOR_MEASUREMENT_REQUIRED_KEYS,
+    SECTOR_MEASUREMENTS_PAYLOAD_KEYS,
     SECTOR_MEASUREMENTS_SCHEMA_VERSION,
+    SERIALIZE_V21_SECTOR_MEASUREMENTS_CALL_SCHEMA,
     deserialize_v21_sector_measurements,
     serialize_v21_sector_measurements,
 )
@@ -127,3 +133,13 @@ def test_v21_sector_measurements_from_ephemeris_metrics_includes_n_transits() ->
     payload = serialize_v21_sector_measurements(metrics)
     assert payload["measurements"][0]["n_transits"] > 0
     assert payload["measurements"][0]["quality_weight"] == 1.0
+
+
+def test_sector_metrics_contract_constants_are_stable() -> None:
+    assert SECTOR_MEASUREMENTS_SCHEMA_VERSION == 1
+    assert SECTOR_MEASUREMENTS_PAYLOAD_KEYS == ("schema_version", "measurements")
+    assert SECTOR_MEASUREMENT_REQUIRED_KEYS == ("sector", "depth_ppm", "depth_err_ppm")
+    assert COMPUTE_SECTOR_EPHEMERIS_METRICS_CALL_SCHEMA["type"] == "object"
+    assert COMPUTE_SECTOR_EPHEMERIS_METRICS_FROM_STITCHED_CALL_SCHEMA["type"] == "object"
+    assert SERIALIZE_V21_SECTOR_MEASUREMENTS_CALL_SCHEMA["type"] == "object"
+    assert DESERIALIZE_V21_SECTOR_MEASUREMENTS_CALL_SCHEMA["type"] == "object"

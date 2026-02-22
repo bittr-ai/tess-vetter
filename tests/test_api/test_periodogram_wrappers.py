@@ -1,4 +1,6 @@
+import importlib
 import importlib.util
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -7,6 +9,7 @@ from tess_vetter.api.periodogram import refine_period, run_periodogram
 from tess_vetter.api.transit_model import compute_transit_model
 
 TLS_AVAILABLE = importlib.util.find_spec("transitleastsquares") is not None
+periodogram_module = importlib.import_module("tess_vetter.api.periodogram")
 
 
 def _inject_transit(
@@ -46,6 +49,26 @@ def test_run_periodogram_ls_returns_finite_power() -> None:
     assert result.signal_type == "sinusoidal"
     assert len(result.peaks) == 1
     assert float(result.peaks[0].power) == float(result.peaks[0].power)  # not NaN
+
+
+def test_run_periodogram_forwards_contract_n_peaks(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, int] = {}
+
+    def _stub_auto_periodogram(*args: object, **kwargs: object) -> object:
+        del args
+        captured["n_peaks"] = int(kwargs["n_peaks"])
+        return SimpleNamespace(method="ls")
+
+    monkeypatch.setattr(periodogram_module, "auto_periodogram", _stub_auto_periodogram)
+    result = periodogram_module.run_periodogram(
+        time=np.array([1500.0, 1500.5, 1501.0], dtype=np.float64),
+        flux=np.array([1.0, 1.0001, 0.9999], dtype=np.float64),
+        flux_err=np.array([1e-4, 1e-4, 1e-4], dtype=np.float64),
+        method="ls",
+    )
+
+    assert captured["n_peaks"] == periodogram_module.RUN_PERIODOGRAM_AUTO_N_PEAKS
+    assert result.method == "ls"
 
 
 def test_run_periodogram_ls_recovers_sinusoid_period() -> None:

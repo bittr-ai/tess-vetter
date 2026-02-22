@@ -17,7 +17,7 @@ from tess_vetter.utils.caps import (  # noqa: F401
     cap_variant_summaries,
 )
 
-__all__ = [
+__all__: list[str] = [
     "DEFAULT_TOP_K_CAP",
     "DEFAULT_VARIANT_SUMMARIES_CAP",
     "DEFAULT_NEIGHBORS_CAP",

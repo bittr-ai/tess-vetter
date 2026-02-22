@@ -20,7 +20,8 @@ References:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Protocol, TypeAlias
 
 from tess_vetter.api.references import (
     GUERRERO_2021,
@@ -43,11 +44,23 @@ from tess_vetter.validation.checks_catalog import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+JsonScalar: TypeAlias = float | int | str | bool | None
+
+
+class _CatalogCheckResultLike(Protocol):
+    """Typed contract for upstream catalog check results."""
+
+    id: str
+    name: str
+    confidence: float
+    details: Mapping[str, object]
+
+
 # Module-level references for programmatic access (generated from central registry)
 REFERENCES = [ref.to_dict() for ref in [PRSA_2022, GUERRERO_2021]]
 
 
-def _convert_result(result: object) -> CheckResult:
+def _convert_result(result: _CatalogCheckResultLike) -> CheckResult:
     """Convert internal VetterCheckResult to canonical CheckResult.
 
     Args:
@@ -56,11 +69,11 @@ def _convert_result(result: object) -> CheckResult:
     Returns:
         Canonical CheckResult (Pydantic model from validation.result_schema)
     """
-    details = dict(result.details)  # type: ignore[attr-defined]
+    details = dict(result.details)
 
     # Convert details dict to structured metrics (filter to JSON-serializable scalars)
-    metrics: dict[str, float | int | str | bool | None] = {}
-    raw_data: dict[str, Any] = {}
+    metrics: dict[str, JsonScalar] = {}
+    raw_data: dict[str, object] = {}
     for k, v in details.items():
         if isinstance(v, (float, int, str, bool, type(None))):
             metrics[k] = v
@@ -68,10 +81,10 @@ def _convert_result(result: object) -> CheckResult:
             raw_data[k] = v
 
     return ok_result(
-        id=result.id,  # type: ignore[attr-defined]
-        name=result.name,  # type: ignore[attr-defined]
+        id=result.id,
+        name=result.name,
         metrics=metrics,
-        confidence=result.confidence,  # type: ignore[attr-defined]
+        confidence=result.confidence,
         raw=raw_data if raw_data else None,
     )
 
@@ -96,12 +109,13 @@ def _make_skipped_result(check_id: str, name: str) -> CheckResult:
 
 def _make_missing_metadata_result(check_id: str, name: str, *, missing: list[str]) -> CheckResult:
     """Create a skipped result when required metadata is missing."""
+    missing_list = list(missing)
     return skipped_result(
         id=check_id,
         name=name,
-        reason_flag="MISSING_METADATA",
-        notes=[f"Missing required metadata: {', '.join(missing)}"],
-        raw={"missing": missing, "reason": "missing_metadata"},
+        reason_flag="MISSING_METADATA",  # kept for legacy host checks
+        notes=[f"Missing required metadata: {', '.join(missing_list)}"],
+        raw={"missing": missing_list, "reason": "missing_metadata"},
     )
 
 
@@ -133,9 +147,9 @@ def nearby_eb_search(
     ra_deg: float,
     dec_deg: float,
     network: bool = False,
-    cache: Any | None = None,
+    cache: object | None = None,
     search_radius_arcsec: float = 42.0,
-    http_get: Callable[..., Any] | None = None,
+    http_get: Callable[..., object] | None = None,
 ) -> CheckResult:
     """V06: Search for known eclipsing binaries near target.
 
@@ -189,9 +203,9 @@ def exofop_disposition(
     *,
     tic_id: int,
     network: bool = False,
-    cache: Any | None = None,
+    cache: object | None = None,
     toi: float | None = None,
-    http_get: Callable[..., Any] | None = None,
+    http_get: Callable[..., object] | None = None,
 ) -> CheckResult:
     """V07: Look up the ExoFOP-TESS TOI table row for a TIC.
 
@@ -243,11 +257,11 @@ def vet_catalog(
     ra_deg: float | None = None,
     dec_deg: float | None = None,
     network: bool = False,
-    cache: Any | None = None,
+    cache: object | None = None,
     toi: float | None = None,
     enabled: set[str] | None = None,
     search_radius_arcsec: float = 42.0,
-    http_get: Callable[..., Any] | None = None,
+    http_get: Callable[..., object] | None = None,
 ) -> list[CheckResult]:
     """Run catalog vetting checks (V06-V07).
 

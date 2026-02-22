@@ -12,8 +12,9 @@ This module provides a small session object plus convenience functions.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING
 
 from tess_vetter.api.pipeline import PipelineConfig, VettingPipeline
 from tess_vetter.api.types import (
@@ -29,6 +30,14 @@ from tess_vetter.validation.register_defaults import (
     register_extended_defaults,
 )
 from tess_vetter.validation.registry import CheckRegistry
+
+if TYPE_CHECKING:
+    from tess_vetter.domain.lightcurve import LightCurveData
+
+
+ContextValue = object
+ContextMapping = Mapping[str, ContextValue]
+ContextDict = dict[str, ContextValue]
 
 
 def _build_registry(*, preset: str) -> CheckRegistry:
@@ -59,7 +68,7 @@ class VettingSession:
     canonical `CheckResult` objects (status=ok/skipped/error).
     """
 
-    lc: Any
+    lc: LightCurveData
     candidate: TransitCandidate
     stellar: StellarParams | None
     tpf: TPFStamp | None
@@ -67,7 +76,7 @@ class VettingSession:
     ra_deg: float | None
     dec_deg: float | None
     tic_id: int | None
-    context: dict[str, Any]
+    context: ContextDict
     registry: CheckRegistry
     pipeline_config: PipelineConfig
 
@@ -83,7 +92,7 @@ class VettingSession:
         ra_deg: float | None = None,
         dec_deg: float | None = None,
         tic_id: int | None = None,
-        context: dict[str, Any] | None = None,
+        context: ContextMapping | None = None,
         preset: str = "default",
         registry: CheckRegistry | None = None,
         pipeline_config: PipelineConfig | None = None,
@@ -102,7 +111,7 @@ class VettingSession:
             ra_deg=ra_deg,
             dec_deg=dec_deg,
             tic_id=tic_id,
-            context=context or {},
+            context=_coerce_context_dict(context),
             registry=registry,
             pipeline_config=cfg,
         )
@@ -135,6 +144,104 @@ class VettingSession:
         return list(bundle.results)
 
 
+@dataclass(frozen=True)
+class RunCheckRequest:
+    """Boundary contract for one-check execution."""
+
+    lc: LightCurve
+    candidate: Candidate
+    check_id: str
+    stellar: StellarParams | None = None
+    tpf: TPFStamp | None = None
+    network: bool = False
+    ra_deg: float | None = None
+    dec_deg: float | None = None
+    tic_id: int | None = None
+    context: ContextMapping | None = None
+    preset: str = "default"
+    registry: CheckRegistry | None = None
+    pipeline_config: PipelineConfig | None = None
+
+
+@dataclass(frozen=True)
+class RunCheckResponse:
+    """Boundary contract for one-check execution result."""
+
+    result: CheckResult
+
+
+@dataclass(frozen=True)
+class RunChecksRequest:
+    """Boundary contract for multi-check execution."""
+
+    lc: LightCurve
+    candidate: Candidate
+    check_ids: list[str]
+    stellar: StellarParams | None = None
+    tpf: TPFStamp | None = None
+    network: bool = False
+    ra_deg: float | None = None
+    dec_deg: float | None = None
+    tic_id: int | None = None
+    context: ContextMapping | None = None
+    preset: str = "default"
+    registry: CheckRegistry | None = None
+    pipeline_config: PipelineConfig | None = None
+
+
+@dataclass(frozen=True)
+class RunChecksResponse:
+    """Boundary contract for multi-check execution result."""
+
+    results: list[CheckResult]
+
+
+def _coerce_context_dict(context: ContextMapping | None) -> ContextDict:
+    if context is None:
+        return {}
+    if isinstance(context, dict):
+        return context
+    return dict(context)
+
+
+def run_check_contract(request: RunCheckRequest) -> RunCheckResponse:
+    """Run one check via explicit request/response contracts."""
+    session = VettingSession.from_api(
+        lc=request.lc,
+        candidate=request.candidate,
+        stellar=request.stellar,
+        tpf=request.tpf,
+        network=request.network,
+        ra_deg=request.ra_deg,
+        dec_deg=request.dec_deg,
+        tic_id=request.tic_id,
+        context=request.context,
+        preset=request.preset,
+        registry=request.registry,
+        pipeline_config=request.pipeline_config,
+    )
+    return RunCheckResponse(result=session.run(request.check_id))
+
+
+def run_checks_contract(request: RunChecksRequest) -> RunChecksResponse:
+    """Run many checks via explicit request/response contracts."""
+    session = VettingSession.from_api(
+        lc=request.lc,
+        candidate=request.candidate,
+        stellar=request.stellar,
+        tpf=request.tpf,
+        network=request.network,
+        ra_deg=request.ra_deg,
+        dec_deg=request.dec_deg,
+        tic_id=request.tic_id,
+        context=request.context,
+        preset=request.preset,
+        registry=request.registry,
+        pipeline_config=request.pipeline_config,
+    )
+    return RunChecksResponse(results=session.run_many(list(request.check_ids)))
+
+
 def run_check(
     *,
     lc: LightCurve,
@@ -146,15 +253,16 @@ def run_check(
     ra_deg: float | None = None,
     dec_deg: float | None = None,
     tic_id: int | None = None,
-    context: dict[str, Any] | None = None,
+    context: ContextMapping | None = None,
     preset: str = "default",
     registry: CheckRegistry | None = None,
     pipeline_config: PipelineConfig | None = None,
 ) -> CheckResult:
     """Convenience wrapper to run one check and return its `CheckResult`."""
-    session = VettingSession.from_api(
+    request = RunCheckRequest(
         lc=lc,
         candidate=candidate,
+        check_id=check_id,
         stellar=stellar,
         tpf=tpf,
         network=network,
@@ -166,7 +274,7 @@ def run_check(
         registry=registry,
         pipeline_config=pipeline_config,
     )
-    return session.run(check_id)
+    return run_check_contract(request).result
 
 
 def run_checks(
@@ -180,15 +288,16 @@ def run_checks(
     ra_deg: float | None = None,
     dec_deg: float | None = None,
     tic_id: int | None = None,
-    context: dict[str, Any] | None = None,
+    context: ContextMapping | None = None,
     preset: str = "default",
     registry: CheckRegistry | None = None,
     pipeline_config: PipelineConfig | None = None,
 ) -> list[CheckResult]:
     """Convenience wrapper to run a list of checks and return results in order."""
-    session = VettingSession.from_api(
+    request = RunChecksRequest(
         lc=lc,
         candidate=candidate,
+        check_ids=list(check_ids),
         stellar=stellar,
         tpf=tpf,
         network=network,
@@ -200,7 +309,17 @@ def run_checks(
         registry=registry,
         pipeline_config=pipeline_config,
     )
-    return session.run_many(list(check_ids))
+    return run_checks_contract(request).results
 
 
-__all__ = ["VettingSession", "run_check", "run_checks"]
+__all__ = [
+    "RunCheckRequest",
+    "RunCheckResponse",
+    "RunChecksRequest",
+    "RunChecksResponse",
+    "VettingSession",
+    "run_check",
+    "run_check_contract",
+    "run_checks",
+    "run_checks_contract",
+]

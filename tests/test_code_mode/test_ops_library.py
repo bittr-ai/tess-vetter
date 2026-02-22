@@ -1,0 +1,296 @@
+from __future__ import annotations
+
+import tess_vetter.api as public_api
+import tess_vetter.code_mode.adapters.check_wrappers as check_wrappers
+import tess_vetter.code_mode.adapters.manual as manual_adapters
+from tess_vetter.code_mode.operation_spec import OperationSpec
+from tess_vetter.code_mode.ops_library import OperationAdapter, OpsLibrary, make_default_ops_library
+from tess_vetter.code_mode.policy import (
+    EXPORT_POLICY_ACTIONABLE,
+    EXPORT_POLICY_LEGACY_DYNAMIC,
+    classify_api_export_policy,
+)
+from tess_vetter.code_mode.registries.operation_ids import (
+    build_operation_id,
+    normalize_operation_name,
+)
+from tess_vetter.code_mode.registries.tiering import ApiSymbol, tier_for_api_symbol
+from tess_vetter.code_mode.retry import RetryPolicy, retry_transient
+
+_DOCUMENTED_OPTIONAL_EXPORT_SKIPS: frozenset[str] = frozenset(
+    set(public_api._MLX_GUARDED_EXPORTS) | set(public_api._MATPLOTLIB_GUARDED_EXPORTS)
+)
+
+
+def _expected_operation_ids_from_export_map() -> tuple[set[str], set[str], set[str], set[str]]:
+    available: set[str] = set()
+    unavailable: set[str] = set()
+    legacy_dynamic: set[str] = set()
+    unloadable_unexpected: set[str] = set()
+
+    for export_name, (module_name, _attr_name) in sorted(public_api._get_export_map().items()):
+        symbol = ApiSymbol(module=module_name, name=export_name)
+        operation_id = build_operation_id(
+            tier=tier_for_api_symbol(symbol),
+            name=normalize_operation_name(symbol.name),
+        )
+
+        try:
+            value = getattr(public_api, export_name)
+        except (AttributeError, ImportError, ModuleNotFoundError):
+            export_policy = classify_api_export_policy(
+                export_name=export_name,
+                module_name=module_name,
+                value=None,
+            )
+            if export_policy == EXPORT_POLICY_LEGACY_DYNAMIC:
+                legacy_dynamic.add(operation_id)
+                continue
+            if export_name in _DOCUMENTED_OPTIONAL_EXPORT_SKIPS:
+                unavailable.add(operation_id)
+            else:
+                unloadable_unexpected.add(operation_id)
+            continue
+
+        export_policy = classify_api_export_policy(
+            export_name=export_name,
+            module_name=module_name,
+            value=value,
+        )
+        if export_policy != EXPORT_POLICY_ACTIONABLE:
+            legacy_dynamic.add(operation_id)
+            continue
+
+        available.add(operation_id)
+
+    return available, unavailable, legacy_dynamic, unloadable_unexpected
+
+
+def test_operation_adapter_forwards_call_unchanged() -> None:
+    seen: dict[str, object] = {}
+
+    def _fn(*args: object, **kwargs: object) -> dict[str, object]:
+        seen["args"] = args
+        seen["kwargs"] = kwargs
+        return {"ok": True}
+
+    adapter = OperationAdapter(
+        spec=OperationSpec(id="code_mode.primitive.local_fn", name="Local Fn"),
+        fn=_fn,
+    )
+
+    result = adapter(1, 2, key="value")
+    assert result == {"ok": True}
+    assert seen["args"] == (1, 2)
+    assert seen["kwargs"] == {"key": "value"}
+
+
+def test_ops_library_list_outputs_are_deterministic() -> None:
+    library = OpsLibrary()
+    library.register(
+        OperationAdapter(
+            spec=OperationSpec(id="code_mode.zeta.second", name="Second"),
+            fn=lambda: None,
+        )
+    )
+    library.register(
+        OperationAdapter(
+            spec=OperationSpec(id="code_mode.alpha.first", name="First"),
+            fn=lambda: None,
+        )
+    )
+
+    assert library.list_ids() == ["code_mode.alpha.first", "code_mode.zeta.second"]
+    assert [op.id for op in library.list()] == ["code_mode.alpha.first", "code_mode.zeta.second"]
+
+
+def test_default_library_uses_current_api_callables(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    seen: dict[str, object] = {}
+
+    def _fake_vet_candidate(*args: object, **kwargs: object) -> str:
+        seen["args"] = args
+        seen["kwargs"] = kwargs
+        return "ok"
+
+    monkeypatch.setattr(manual_adapters._api, "vet_candidate", _fake_vet_candidate)
+
+    library = make_default_ops_library()
+    op = library.get("code_mode.golden.vet_candidate")
+
+    result = op("lc", "candidate", network=False)
+    assert result == "ok"
+    assert seen["args"] == ("lc", "candidate")
+    assert seen["kwargs"] == {"network": False}
+
+
+def test_default_library_applies_retry_wrapper_to_network_seed(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    calls = {"count": 0}
+
+    def _flaky_vet_candidate(*_args: object, **_kwargs: object) -> str:
+        calls["count"] += 1
+        if calls["count"] < 3:
+            raise TimeoutError("temporary network timeout")
+        return "ok"
+
+    def _deterministic_retry_wrapper(fn):  # type: ignore[no-untyped-def]
+        def _wrapped(*args: object, **kwargs: object) -> object:
+            return retry_transient(
+                lambda: fn(*args, **kwargs),
+                policy=RetryPolicy(attempts=3, backoff_seconds=0.0, jitter=0.0, cap_seconds=0.0),
+                sleep=lambda _seconds: None,
+                use_jitter=False,
+            )
+
+        return _wrapped
+
+    monkeypatch.setattr(manual_adapters._api, "vet_candidate", _flaky_vet_candidate)
+    monkeypatch.setattr(manual_adapters, "wrap_with_transient_retry", _deterministic_retry_wrapper)
+
+    library = make_default_ops_library()
+    op = library.get("code_mode.golden.vet_candidate")
+    assert op("lc", "candidate", network=True) == "ok"
+    assert calls["count"] == 3
+
+
+def test_manual_seed_retries_required_for_network_check_wrappers_v06_v07(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    wrapped_check_ids: set[str] = set()
+
+    def _recording_retry_wrapper(fn):  # type: ignore[no-untyped-def]
+        check_id = getattr(fn, "__code_mode_check_id__", None)
+        if isinstance(check_id, str):
+            wrapped_check_ids.add(check_id)
+
+        def _wrapped(*args: object, **kwargs: object) -> object:
+            return fn(*args, **kwargs)
+
+        return _wrapped
+
+    monkeypatch.setattr(check_wrappers, "wrap_with_transient_retry", _recording_retry_wrapper)
+
+    adapters = manual_adapters.manual_seed_adapters()
+
+    check_wrapper_ids = {
+        adapter.id
+        for adapter in adapters
+        if adapter.id.startswith("code_mode.internal.check_v")
+    }
+    required_retry_ids = {"code_mode.internal.check_v06_nearby_eb_search", "code_mode.internal.check_v07_exofop_toi_lookup"}
+
+    assert required_retry_ids <= check_wrapper_ids
+    assert wrapped_check_ids == {"V06", "V07"}
+
+
+def test_network_check_wrapper_retries_internally_without_changing_top_level_semantics(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    run_check_calls: list[dict[str, object]] = []
+    attempt = {"count": 0}
+
+    def _flaky_run_check(**kwargs: object) -> public_api.CheckResult:
+        run_check_calls.append(dict(kwargs))
+        attempt["count"] += 1
+        if attempt["count"] < 3:
+            raise TimeoutError("transient catalog timeout")
+        return public_api.CheckResult(
+            id="V06",
+            name="Nearby EB Search",
+            status="ok",
+            metrics={"n_matches": 2, "min_sep_arcsec": 4.2},
+            flags=["CATALOG_MATCH"],
+            notes=["Recovered after transient failures"],
+            provenance={"source": "fake"},
+            raw={"attempts": attempt["count"]},
+        )
+
+    def _deterministic_retry_wrapper(fn):  # type: ignore[no-untyped-def]
+        def _wrapped(*args: object, **kwargs: object) -> object:
+            return retry_transient(
+                lambda: fn(*args, **kwargs),
+                policy=RetryPolicy(attempts=3, backoff_seconds=0.0, jitter=0.0, cap_seconds=0.0),
+                sleep=lambda _seconds: None,
+                use_jitter=False,
+            )
+
+        return _wrapped
+
+    monkeypatch.setattr(check_wrappers._api, "run_check", _flaky_run_check)
+    monkeypatch.setattr(check_wrappers, "wrap_with_transient_retry", _deterministic_retry_wrapper)
+
+    library = make_default_ops_library()
+    op = library.get("code_mode.internal.check_v06_nearby_eb_search")
+    result = op(
+        lc={"time": [1.0], "flux": [1.0]},
+        candidate={"ephemeris": {"period_days": 2.0, "t0_btjd": 1.0, "duration_hours": 3.0}},
+        network=True,
+        ra_deg=10.5,
+        dec_deg=-2.25,
+    )
+
+    assert attempt["count"] == 3
+    assert len(run_check_calls) == 3
+    assert all(call["check_id"] == "V06" for call in run_check_calls)
+    assert all(call["network"] is True for call in run_check_calls)
+    assert result.check_id == "V06"
+    assert result.status == "ok"
+    assert result.metrics.n_matches == 2
+    assert result.metrics.min_sep_arcsec == 4.2
+
+
+def test_default_library_ids_are_stable_sorted_and_unique() -> None:
+    library_a = make_default_ops_library()
+    library_b = make_default_ops_library()
+
+    ids_a = library_a.list_ids()
+    ids_b = library_b.list_ids()
+
+    assert ids_a == ids_b
+    assert ids_a == sorted(ids_a)
+    assert len(ids_a) == len(set(ids_a))
+
+
+def test_default_library_includes_seed_and_broad_discovered_exports() -> None:
+    library = make_default_ops_library()
+    ids = library.list_ids()
+
+    # Original manual seed operations remain present for backward compatibility.
+    assert "code_mode.golden.vet_candidate" in ids
+    assert "code_mode.golden.run_periodogram" in ids
+    assert "code_mode.primitive.fold" in ids
+    assert "code_mode.primitive.median_detrend" in ids
+
+    # Auto-discovered callable exports provide much broader surface coverage.
+    discovered_ids = [op_id for op_id in ids if op_id.startswith(("code_mode.golden_path.", "code_mode.internal."))]
+    assert len(discovered_ids) >= 100
+    assert len(ids) >= 120
+
+    # Key golden-path and primitive exports should be auto-registered too.
+    assert "code_mode.golden_path.vet_candidate" in ids
+    assert "code_mode.golden_path.run_periodogram" in ids
+    assert "code_mode.internal.calculate_fpp" in ids
+    assert "code_mode.primitive.box_model" in ids
+
+
+def test_default_library_fully_covers_export_map_operation_ids_including_unavailable() -> None:
+    library = make_default_ops_library()
+    library_ids = set(library.list_ids())
+    available_ids, unavailable_ids, legacy_dynamic_ids, unloadable_unexpected = _expected_operation_ids_from_export_map()
+
+    assert not unloadable_unexpected, f"Unexpected unloadable exports: {sorted(unloadable_unexpected)}"
+    assert unavailable_ids
+    assert legacy_dynamic_ids
+
+    expected_ids = available_ids | unavailable_ids
+    missing = expected_ids - library_ids
+    assert not missing, f"Missing discovered operation ids: {sorted(missing)}"
+
+    coverage = len(expected_ids - missing) / max(len(expected_ids), 1)
+    assert coverage == 1.0
+
+    for operation_id in sorted(unavailable_ids):
+        op = library.get(operation_id)
+        try:
+            op()
+        except ImportError:
+            pass
+        else:
+            raise AssertionError(f"Unavailable operation did not raise ImportError: {operation_id}")
+
+    assert not (library_ids & legacy_dynamic_ids)

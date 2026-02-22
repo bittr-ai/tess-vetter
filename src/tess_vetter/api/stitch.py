@@ -14,12 +14,26 @@ Notes:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
 
+from tess_vetter.api.contracts import callable_input_schema_from_signature
 from tess_vetter.domain.lightcurve import LightCurveData
+
+STITCH_SCHEMA_VERSION = 1
+STITCH_LIGHTCURVE_REQUIRED_FIELDS: tuple[str, ...] = ("time", "flux", "flux_err", "sector", "quality")
+
+
+class StitchLightCurveInput(TypedDict):
+    """Boundary contract for one light curve input row used by stitching."""
+
+    time: NDArray[np.floating[Any]]
+    flux: NDArray[np.floating[Any]]
+    flux_err: NDArray[np.floating[Any]]
+    sector: int
+    quality: NDArray[np.integer[Any]]
 
 
 def _infer_cadence_seconds(
@@ -92,9 +106,8 @@ def _summarize_quality_flags(quality: NDArray[np.integer[Any]]) -> dict[str, int
     return {"good": good, "flagged": flagged, "total": total}
 
 
-def _validate_lightcurve_dict(lc: dict[str, Any], index: int) -> None:
-    required_fields = ["time", "flux", "flux_err", "sector", "quality"]
-    for field_name in required_fields:
+def _validate_lightcurve_dict(lc: StitchLightCurveInput | dict[str, Any], index: int) -> None:
+    for field_name in STITCH_LIGHTCURVE_REQUIRED_FIELDS:
         if field_name not in lc:
             raise ValueError(f"Light curve at index {index} missing required field: {field_name}")
 
@@ -132,7 +145,7 @@ def _compute_normalization_factor_v1(
 
 
 def stitch_lightcurves(
-    lc_list: list[dict[str, Any]],
+    lc_list: list[StitchLightCurveInput | dict[str, Any]],
     normalization_policy_version: str = "v1",
 ) -> StitchedLC:
     """Stitch multiple (typically per-sector) light curves into a single series.
@@ -289,4 +302,18 @@ def stitch_lightcurve_data(
     return stitched_lc_data, stitched
 
 
-__all__ = ["SectorDiagnostics", "StitchedLC", "stitch_lightcurves", "stitch_lightcurve_data"]
+STITCH_LIGHTCURVES_CALL_SCHEMA = callable_input_schema_from_signature(stitch_lightcurves)
+STITCH_LIGHTCURVE_DATA_CALL_SCHEMA = callable_input_schema_from_signature(stitch_lightcurve_data)
+
+
+__all__ = [
+    "STITCH_SCHEMA_VERSION",
+    "STITCH_LIGHTCURVE_REQUIRED_FIELDS",
+    "StitchLightCurveInput",
+    "SectorDiagnostics",
+    "StitchedLC",
+    "STITCH_LIGHTCURVES_CALL_SCHEMA",
+    "STITCH_LIGHTCURVE_DATA_CALL_SCHEMA",
+    "stitch_lightcurves",
+    "stitch_lightcurve_data",
+]

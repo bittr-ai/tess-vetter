@@ -2,8 +2,19 @@ from __future__ import annotations
 
 import numpy as np
 
+from tess_vetter.api.contracts import (
+    callable_input_schema_from_signature,
+    model_input_schema,
+    model_output_schema,
+)
 from tess_vetter.api.negative_controls import (
+    GENERATE_CONTROL_TYPED_CALL_SCHEMA,
+    GENERATE_CONTROL_TYPED_INPUT_SCHEMA,
+    GENERATE_CONTROL_TYPED_OUTPUT_SCHEMA,
+    GenerateControlTypedRequest,
+    GenerateControlTypedResponse,
     generate_control,
+    generate_control_typed,
     generate_flux_invert,
     generate_phase_scramble,
     generate_time_scramble,
@@ -76,3 +87,120 @@ def test_generate_control_dispatches() -> None:
     assert len(t) == len(time)
     assert len(f) == len(time)
     assert len(e) == len(time)
+
+
+def test_generate_control_typed_schema_constants_track_models() -> None:
+    assert model_input_schema(GenerateControlTypedRequest) == GENERATE_CONTROL_TYPED_INPUT_SCHEMA
+    assert model_output_schema(GenerateControlTypedResponse) == GENERATE_CONTROL_TYPED_OUTPUT_SCHEMA
+
+    assert sorted(GENERATE_CONTROL_TYPED_INPUT_SCHEMA["properties"]) == [
+        "block_size",
+        "control_type",
+        "flux",
+        "flux_err",
+        "n_bins",
+        "period",
+        "seed",
+        "time",
+    ]
+    assert sorted(GENERATE_CONTROL_TYPED_OUTPUT_SCHEMA["properties"]) == ["flux", "flux_err", "time"]
+
+
+def test_generate_control_typed_call_schema_is_stable() -> None:
+    expected = {
+        "type": "object",
+        "properties": {
+            "block_size": {},
+            "control_type": {},
+            "flux": {},
+            "flux_err": {},
+            "n_bins": {},
+            "period": {},
+            "seed": {},
+            "time": {},
+        },
+        "additionalProperties": False,
+        "required": ["control_type", "flux", "flux_err", "time"],
+    }
+    assert expected == GENERATE_CONTROL_TYPED_CALL_SCHEMA
+    assert (
+        callable_input_schema_from_signature(generate_control_typed)
+        == GENERATE_CONTROL_TYPED_CALL_SCHEMA
+    )
+
+
+def test_generate_control_typed_parity_for_time_scramble() -> None:
+    rng = np.random.default_rng(5)
+    time = np.linspace(50.0, 55.0, 80, dtype=np.float64)
+    flux = rng.normal(1.0, 0.01, size=len(time)).astype(np.float64)
+    flux_err = np.full_like(time, 0.001)
+
+    raw_t, raw_f, raw_e = generate_control(
+        "time_scramble",
+        time,
+        flux,
+        flux_err,
+        seed=13,
+        block_size=11,
+    )
+    typed = generate_control_typed(
+        control_type="time_scramble",
+        time=time.tolist(),
+        flux=flux.tolist(),
+        flux_err=flux_err.tolist(),
+        seed=13,
+        block_size=11,
+    )
+
+    assert np.allclose(typed.time, raw_t)
+    assert np.allclose(typed.flux, raw_f)
+    assert np.allclose(typed.flux_err, raw_e)
+
+
+def test_generate_control_typed_parity_for_phase_scramble() -> None:
+    rng = np.random.default_rng(6)
+    time = np.linspace(0.0, 20.0, 120, dtype=np.float64)
+    flux = rng.normal(1.0, 0.02, size=len(time)).astype(np.float64)
+    flux_err = np.full_like(time, 0.002)
+
+    raw_t, raw_f, raw_e = generate_control(
+        "phase_scramble",
+        time,
+        flux,
+        flux_err,
+        seed=21,
+        period=3.1,
+        n_bins=9,
+    )
+    typed = generate_control_typed(
+        control_type="phase_scramble",
+        time=time.tolist(),
+        flux=flux.tolist(),
+        flux_err=flux_err.tolist(),
+        seed=21,
+        period=3.1,
+        n_bins=9,
+    )
+
+    assert np.allclose(typed.time, raw_t)
+    assert np.allclose(typed.flux, raw_f)
+    assert np.allclose(typed.flux_err, raw_e)
+
+
+def test_generate_control_typed_parity_for_flux_invert() -> None:
+    time = np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float64)
+    flux = np.array([1.0, 0.99, 1.01, 1.02], dtype=np.float64)
+    flux_err = np.array([0.01, 0.01, 0.01, 0.01], dtype=np.float64)
+
+    raw_t, raw_f, raw_e = generate_control("flux_invert", time, flux, flux_err, seed=8)
+    typed = generate_control_typed(
+        control_type="flux_invert",
+        time=time.tolist(),
+        flux=flux.tolist(),
+        flux_err=flux_err.tolist(),
+        seed=8,
+    )
+
+    assert np.allclose(typed.time, raw_t)
+    assert np.allclose(typed.flux, raw_f)
+    assert np.allclose(typed.flux_err, raw_e)

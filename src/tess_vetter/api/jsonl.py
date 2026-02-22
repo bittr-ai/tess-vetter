@@ -9,10 +9,13 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeAlias
 
+JSONScalar: TypeAlias = None | bool | int | float | str
+JSONValue: TypeAlias = JSONScalar | list["JSONValue"] | dict[str, "JSONValue"]
+JSONObject: TypeAlias = dict[str, JSONValue]
 
-def iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
+def iter_jsonl(path: Path) -> Iterator[JSONObject]:
     """Yield JSON objects from a JSONL file (streaming)."""
     with path.open("r", encoding="utf-8") as handle:
         for line_num, line in enumerate(handle, 1):
@@ -51,4 +54,3 @@ def append_jsonl(path: Path, row: Mapping[str, Any]) -> None:
 
 
 __all__ = ["iter_jsonl", "stream_existing_candidate_keys", "append_jsonl"]
-

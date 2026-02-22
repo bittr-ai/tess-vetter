@@ -13,10 +13,11 @@ References:
 
 from __future__ import annotations
 
-from typing import Any, Literal, TypedDict, cast
+from typing import Any, Literal, TypeAlias, TypedDict, cast
 
 import numpy as np
 
+from tess_vetter.api.contracts import callable_input_schema_from_signature
 from tess_vetter.api.references import (
     ASTROPY_COLLAB_2013,
     BRYSON_2013,
@@ -67,6 +68,49 @@ class DifferenceImageCentroidDiagnostics(TypedDict):
     n_out_of_transit: int
     baseline_mode: str
     warnings: list[str]
+
+
+WCS_LOCALIZATION_BOUNDARY_SCHEMA_VERSION = 1
+
+WCS_LOCALIZATION_METHOD_CENTROID = "centroid"
+WCS_LOCALIZATION_METHOD_GAUSSIAN_FIT = "gaussian_fit"
+WCS_LOCALIZATION_METHODS: tuple[str, str] = (
+    WCS_LOCALIZATION_METHOD_CENTROID,
+    WCS_LOCALIZATION_METHOD_GAUSSIAN_FIT,
+)
+
+WCS_LOCALIZATION_BASELINE_MODE_LOCAL = "local"
+WCS_LOCALIZATION_BASELINE_MODE_GLOBAL = "global"
+WCS_LOCALIZATION_BASELINE_MODES: tuple[str, str] = (
+    WCS_LOCALIZATION_BASELINE_MODE_LOCAL,
+    WCS_LOCALIZATION_BASELINE_MODE_GLOBAL,
+)
+
+WCSLocalizationMethod: TypeAlias = Literal["centroid", "gaussian_fit"]
+WCSLocalizationBaselineMode: TypeAlias = Literal["local", "global"]
+WCSLocalizationVerdict: TypeAlias = Literal["ON_TARGET", "OFF_TARGET", "AMBIGUOUS", "INVALID"]
+
+WCS_LOCALIZATION_VERDICTS: tuple[WCSLocalizationVerdict, ...] = (
+    "ON_TARGET",
+    "OFF_TARGET",
+    "AMBIGUOUS",
+    "INVALID",
+)
+
+
+class WCSLocalizationBoundaryContract(TypedDict):
+    schema_version: int
+    methods: tuple[WCSLocalizationMethod, ...]
+    baseline_modes: tuple[WCSLocalizationBaselineMode, ...]
+    verdicts: tuple[WCSLocalizationVerdict, ...]
+
+
+WCS_LOCALIZATION_BOUNDARY_CONTRACT = WCSLocalizationBoundaryContract(
+    schema_version=WCS_LOCALIZATION_BOUNDARY_SCHEMA_VERSION,
+    methods=cast(tuple[WCSLocalizationMethod, ...], WCS_LOCALIZATION_METHODS),
+    baseline_modes=cast(tuple[WCSLocalizationBaselineMode, ...], WCS_LOCALIZATION_BASELINE_MODES),
+    verdicts=WCS_LOCALIZATION_VERDICTS,
+)
 
 
 REFERENCES = [
@@ -182,7 +226,28 @@ def compute_difference_image_centroid_diagnostics(
     return centroid_rc, diff_image, diagnostics
 
 
+LOCALIZE_TRANSIT_SOURCE_CALL_SCHEMA = callable_input_schema_from_signature(localize_transit_source)
+COMPUTE_DIFFERENCE_IMAGE_CENTROID_DIAGNOSTICS_CALL_SCHEMA = callable_input_schema_from_signature(
+    compute_difference_image_centroid_diagnostics
+)
+
+
 __all__ = [
+    "WCS_LOCALIZATION_BOUNDARY_SCHEMA_VERSION",
+    "WCS_LOCALIZATION_METHOD_CENTROID",
+    "WCS_LOCALIZATION_METHOD_GAUSSIAN_FIT",
+    "WCS_LOCALIZATION_METHODS",
+    "WCS_LOCALIZATION_BASELINE_MODE_LOCAL",
+    "WCS_LOCALIZATION_BASELINE_MODE_GLOBAL",
+    "WCS_LOCALIZATION_BASELINE_MODES",
+    "WCS_LOCALIZATION_VERDICTS",
+    "WCSLocalizationMethod",
+    "WCSLocalizationBaselineMode",
+    "WCSLocalizationVerdict",
+    "WCSLocalizationBoundaryContract",
+    "WCS_LOCALIZATION_BOUNDARY_CONTRACT",
+    "LOCALIZE_TRANSIT_SOURCE_CALL_SCHEMA",
+    "COMPUTE_DIFFERENCE_IMAGE_CENTROID_DIAGNOSTICS_CALL_SCHEMA",
     "ReferenceSource",
     "DifferenceImageCentroidDiagnostics",
     "LocalizationResult",

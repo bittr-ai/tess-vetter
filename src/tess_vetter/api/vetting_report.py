@@ -13,7 +13,54 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypedDict
+
+from tess_vetter.api.contracts import callable_input_schema_from_signature
+from tess_vetter.validation.result_schema import CheckStatus
+
+MetricScalar = float | int | str | bool | None
+
+VETTING_REPORT_SCHEMA_VERSION = 1
+VETTING_REPORT_COUNTS_KEYS: tuple[str, ...] = ("checks", "ok", "error", "skipped")
+VETTING_REPORT_RESULT_KEYS: tuple[str, ...] = (
+    "id",
+    "name",
+    "status",
+    "confidence",
+    "metrics",
+    "flags",
+    "notes",
+)
+VETTING_REPORT_BUNDLE_KEYS: tuple[str, ...] = (
+    "counts",
+    "results_by_id",
+    "inputs_summary",
+    "provenance",
+)
+
+
+class BundleCounts(TypedDict):
+    checks: int
+    ok: int
+    error: int
+    skipped: int
+
+
+class CheckSummary(TypedDict, total=False):
+    id: str
+    name: str | None
+    status: CheckStatus | None
+    confidence: float | None
+    metrics: dict[str, MetricScalar]
+    flags: list[str]
+    notes: list[str]
+
+
+class BundleSummary(TypedDict, total=False):
+    counts: BundleCounts
+    results_by_id: dict[str, CheckSummary]
+    inputs_summary: dict[str, Any]
+    provenance: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -45,7 +92,7 @@ def _format_confidence(v: float | None) -> str:
 
 
 def _select_metrics_for_row(
-    metrics: dict[str, float | int | str | bool | None] | None,
+    metrics: dict[str, MetricScalar] | None,
     *,
     metric_keys: Sequence[str],
     max_metrics_per_row: int,
@@ -243,17 +290,17 @@ def summarize_bundle(
     include_notes: bool = False,
     include_provenance: bool = True,
     include_inputs_summary: bool = True,
-) -> dict[str, Any]:
+) -> BundleSummary:
     """Return a compact JSON-serializable summary of a vetting bundle."""
     results = list(getattr(bundle, "results", []) or [])
     if check_ids is not None:
         wanted = {str(x) for x in check_ids}
         results = [r for r in results if str(getattr(r, "id", "")) in wanted]
 
-    by_id: dict[str, Any] = {}
+    by_id: dict[str, CheckSummary] = {}
     for r in results:
         rid = str(getattr(r, "id", ""))
-        entry: dict[str, Any] = {
+        entry: CheckSummary = {
             "id": rid,
             "name": getattr(r, "name", None),
             "status": getattr(r, "status", None),
@@ -275,7 +322,7 @@ def summarize_bundle(
 
         by_id[rid] = entry
 
-    out: dict[str, Any] = {
+    out: BundleSummary = {
         "counts": {
             "checks": int(len(getattr(bundle, "results", []) or [])),
             "ok": int(getattr(bundle, "n_passed", 0)),
@@ -320,8 +367,27 @@ def render_validation_report_markdown(
     return "\n".join(md).rstrip() + "\n"
 
 
+FORMAT_VETTING_TABLE_CALL_SCHEMA = callable_input_schema_from_signature(format_vetting_table)
+FORMAT_CHECK_RESULT_CALL_SCHEMA = callable_input_schema_from_signature(format_check_result)
+SUMMARIZE_BUNDLE_CALL_SCHEMA = callable_input_schema_from_signature(summarize_bundle)
+RENDER_VALIDATION_REPORT_MARKDOWN_CALL_SCHEMA = callable_input_schema_from_signature(
+    render_validation_report_markdown
+)
+
+
 __all__ = [
+    "VETTING_REPORT_SCHEMA_VERSION",
+    "VETTING_REPORT_COUNTS_KEYS",
+    "VETTING_REPORT_RESULT_KEYS",
+    "VETTING_REPORT_BUNDLE_KEYS",
     "VettingTableOptions",
+    "BundleCounts",
+    "CheckSummary",
+    "BundleSummary",
+    "FORMAT_VETTING_TABLE_CALL_SCHEMA",
+    "FORMAT_CHECK_RESULT_CALL_SCHEMA",
+    "SUMMARIZE_BUNDLE_CALL_SCHEMA",
+    "RENDER_VALIDATION_REPORT_MARKDOWN_CALL_SCHEMA",
     "format_check_result",
     "format_vetting_table",
     "summarize_bundle",
