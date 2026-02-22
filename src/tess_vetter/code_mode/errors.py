@@ -54,11 +54,22 @@ def map_legacy_error_to_prd_code(
         PRD taxonomy code.
     """
     if isinstance(reason_flag, str):
-        if reason_flag.startswith("EXTRA_MISSING:"):
+        normalized_reason = reason_flag.strip().upper()
+        if normalized_reason.startswith("EXTRA_MISSING:"):
             return "DEPENDENCY_MISSING"
-        if reason_flag == "NETWORK_DISABLED":
+        if normalized_reason in {"NETWORK_DISABLED", "NETWORK_ERROR"}:
             return "POLICY_DENIED"
-        if reason_flag in {"NO_TPF", "NO_COORDINATES", "NO_TIC_ID"}:
+        if normalized_reason == "NETWORK_TIMEOUT":
+            return "TIMEOUT_EXCEEDED"
+        if normalized_reason in {
+            "NO_TPF",
+            "NO_COORDINATES",
+            "NO_TIC_ID",
+            "INSUFFICIENT_DATA",
+            "NO_APERTURE_MASK",
+            "NO_SECTOR_MEASUREMENTS",
+            "INSUFFICIENT_SECTORS",
+        }:
             return "SCHEMA_VIOLATION_INPUT"
 
     if isinstance(error_class, str):

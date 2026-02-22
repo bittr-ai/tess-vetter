@@ -10,6 +10,7 @@ from tess_vetter.code_mode.mcp_adapter import (
     MCPAdapter,
     SearchRequest,
     SearchResponse,
+    SearchResult,
 )
 
 
@@ -22,7 +23,19 @@ class SecurityScenario:
 
 def build_matrix_adapter() -> MCPAdapter:
     def _search_handler(_req: SearchRequest) -> SearchResponse:
-        return SearchResponse(ok=True, results=[])
+        return SearchResponse(
+            ok=True,
+            catalog_version_hash="catalog-v1",
+            results=[
+                SearchResult(
+                    id="ops.run",
+                    title="Run",
+                    snippet="Run operation",
+                    score=1.0,
+                    metadata={"version": "1.2.3", "tier": "golden_path"},
+                )
+            ],
+        )
 
     def _execute_handler(_req: ExecuteRequest) -> ExecuteResponse:
         return ExecuteResponse(ok=True, output={"status": "ok"})

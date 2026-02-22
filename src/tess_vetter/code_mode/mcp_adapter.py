@@ -13,11 +13,23 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, TypedDict
 
 ErrorCode = Literal[
+    # Legacy adapter-local labels (kept for additive backward compatibility).
     "network_denied",
     "sandbox_required",
     "hash_mismatch",
     "unsupported",
     "internal_error",
+    # PRD taxonomy labels.
+    "PLAN_PARSE_ERROR",
+    "SCHEMA_VIOLATION_INPUT",
+    "SCHEMA_VIOLATION_OUTPUT",
+    "POLICY_DENIED",
+    "OPERATION_NOT_FOUND",
+    "DEPENDENCY_MISSING",
+    "TRANSIENT_EXHAUSTION",
+    "TIMEOUT_EXCEEDED",
+    "CALL_LIMIT_EXCEEDED",
+    "OUTPUT_LIMIT_EXCEEDED",
 ]
 
 
@@ -45,6 +57,7 @@ class SearchResponseDict(TypedDict, total=False):
 
     ok: bool
     results: list[SearchResultDict]
+    catalog_version_hash: str
     error: ErrorPayloadDict
 
 
@@ -113,10 +126,13 @@ class SearchResponse:
 
     ok: bool
     results: list[SearchResult] = field(default_factory=list)
+    catalog_version_hash: str | None = None
     error: ErrorPayload | None = None
 
     def to_dict(self) -> SearchResponseDict:
         payload: SearchResponseDict = {"ok": self.ok, "results": [row.to_dict() for row in self.results]}
+        if self.catalog_version_hash is not None:
+            payload["catalog_version_hash"] = self.catalog_version_hash
         if self.error is not None:
             payload["error"] = self.error.to_dict()
         return payload
@@ -151,10 +167,19 @@ SearchHandler = Callable[[SearchRequest], SearchResponse]
 ExecuteHandler = Callable[[ExecuteRequest], ExecuteResponse]
 
 
-def _error_response(message: str, code: ErrorCode, details: dict[str, Any] | None = None) -> ExecuteResponse:
+def _error_response(
+    message: str,
+    code: ErrorCode,
+    details: dict[str, Any] | None = None,
+    *,
+    legacy_code: str | None = None,
+) -> ExecuteResponse:
+    merged_details = dict(details or {})
+    if legacy_code is not None and "legacy_code" not in merged_details:
+        merged_details["legacy_code"] = legacy_code
     return ExecuteResponse(
         ok=False,
-        error=ErrorPayload(code=code, message=message, details=details or {}),
+        error=ErrorPayload(code=code, message=message, details=merged_details),
     )
 
 
@@ -186,7 +211,13 @@ class MCPAdapter:
                 error=ErrorPayload(code="unsupported", message="No search handler configured."),
             )
         try:
-            return self._search_handler(request)
+            response = self._search_handler(request)
+            return SearchResponse(
+                ok=response.ok,
+                results=[_normalize_search_result(row) for row in response.results],
+                catalog_version_hash=response.catalog_version_hash,
+                error=response.error,
+            )
         except Exception as exc:  # pragma: no cover - defensive wrapper
             return SearchResponse(
                 ok=False,
@@ -196,27 +227,65 @@ class MCPAdapter:
     def execute(self, request: ExecuteRequest) -> ExecuteResponse:
         """Run an execute request through sandbox and integrity guardrails."""
         if not request.sandboxed:
-            return _error_response("Execution denied: sandbox is required.", "sandbox_required")
+            return _error_response(
+                "Execution denied: sandbox is required.",
+                "POLICY_DENIED",
+                legacy_code="sandbox_required",
+            )
 
         if request.expected_payload_sha256 is not None:
             actual_sha256 = hashlib.sha256(_canonical_json_bytes(request.payload)).hexdigest()
             if actual_sha256 != request.expected_payload_sha256:
                 return _error_response(
                     "Execution denied: request payload hash mismatch.",
-                    "hash_mismatch",
+                    "SCHEMA_VIOLATION_INPUT",
                     details={
                         "expected_payload_sha256": request.expected_payload_sha256,
                         "actual_payload_sha256": actual_sha256,
                     },
+                    legacy_code="hash_mismatch",
                 )
 
         if self._execute_handler is None:
-            return _error_response("No execute handler configured.", "unsupported")
+            return _error_response(
+                "No execute handler configured.",
+                "OPERATION_NOT_FOUND",
+                legacy_code="unsupported",
+            )
 
         try:
             return self._execute_handler(request)
         except Exception as exc:  # pragma: no cover - defensive wrapper
-            return _error_response(str(exc), "internal_error")
+            return _error_response(str(exc), "SCHEMA_VIOLATION_OUTPUT", legacy_code="internal_error")
+
+
+_REQUIRED_OPERATION_METADATA_FIELDS: tuple[str, ...] = (
+    "operation_id",
+    "operation_version",
+    "operation_tier",
+    "operation_tags",
+    "operation_requirements",
+    "operation_safety_class",
+)
+
+
+def _normalize_search_result(row: SearchResult) -> SearchResult:
+    metadata = dict(row.metadata)
+    metadata.setdefault("operation_id", row.id)
+    metadata.setdefault("operation_version", metadata.get("version"))
+    metadata.setdefault("operation_tier", metadata.get("tier"))
+    metadata.setdefault("operation_tags", metadata.get("tags", []))
+    metadata.setdefault("operation_requirements", metadata.get("requirements", {}))
+    metadata.setdefault("operation_safety_class", metadata.get("safety_class"))
+    for key in _REQUIRED_OPERATION_METADATA_FIELDS:
+        metadata.setdefault(key, None)
+    return SearchResult(
+        id=row.id,
+        title=row.title,
+        snippet=row.snippet,
+        score=row.score,
+        metadata=metadata,
+    )
 
 
 def _canonical_json_bytes(payload: dict[str, Any]) -> bytes:

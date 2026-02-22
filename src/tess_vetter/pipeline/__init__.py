@@ -2050,6 +2050,7 @@ def enrich_worklist(
                 errors += 1
                 cls = type(e).__name__
                 error_class_counts[cls] = error_class_counts.get(cls, 0) + 1
+                error_code = map_legacy_error_to_prd_code(cls)
                 append_jsonl(
                     out_path,
                     {
@@ -2069,6 +2070,9 @@ def enrich_worklist(
                         "inputs_summary": {},
                         "missing_feature_families": ["all"],
                         "item_wall_ms": 0.0,
+                        "provenance": {
+                            "error_code": error_code,
+                        },
                     },
                 )
 

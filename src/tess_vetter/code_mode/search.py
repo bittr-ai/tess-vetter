@@ -19,7 +19,7 @@ _TOKEN_RE = re.compile(r"[a-z0-9_]+")
 
 @dataclass(frozen=True, slots=True)
 class SearchMatch:
-    """Single ranked search result with deterministic score and reasons."""
+    """Single ranked search result with deterministic rank score and reasons."""
 
     entry: CatalogEntry
     score: int
@@ -76,7 +76,9 @@ def search_catalog(
     query_tokens = _tokenize(query)
     requested_tags = {tag.strip().lower() for tag in (tags or ()) if tag and tag.strip()}
 
-    matches: list[SearchMatch] = []
+    entry_rows: list[tuple[CatalogEntry, int, int, int, tuple[str, ...]]] = []
+    max_tag_matches = 0
+    max_text_score = 0
     for entry in entries:
         tier_bias = _TIER_BIAS.get(entry.tier, 0)
         tag_matches = len(requested_tags.intersection(entry.tags))
@@ -87,17 +89,20 @@ def search_catalog(
             why.append(f"tags:{tag_matches}")
         why.extend(text_reasons)
 
-        score = tier_bias * 1000 + tag_matches * 100 + text_score
-        matches.append(SearchMatch(entry=entry, score=score, why_matched=tuple(why)))
+        max_tag_matches = max(max_tag_matches, tag_matches)
+        max_text_score = max(max_text_score, text_score)
+        entry_rows.append((entry, tier_bias, tag_matches, text_score, tuple(why)))
 
-    matches.sort(
-        key=lambda m: (
-            -_TIER_BIAS.get(m.entry.tier, 0),
-            -len(requested_tags.intersection(m.entry.tags)),
-            -_text_relevance(query_tokens, m.entry)[0],
-            m.entry.id,
-        )
-    )
+    tag_base = max_tag_matches + 1
+    text_base = max_text_score + 1
+
+    matches: list[SearchMatch] = []
+    for entry, tier_bias, tag_matches, text_score, why in entry_rows:
+        # Pack ranking dimensions so exposed score is monotonic with sort precedence.
+        score = ((tier_bias * tag_base) + tag_matches) * text_base + text_score
+        matches.append(SearchMatch(entry=entry, score=score, why_matched=why))
+
+    matches.sort(key=lambda m: (-m.score, m.entry.id))
     return tuple(matches[:limit])
 
 

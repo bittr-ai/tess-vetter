@@ -21,6 +21,12 @@ def _write_step(path: Path, payload: dict) -> str:
     return str(path)
 
 
+def _without_clocklike_fields(metadata: dict) -> dict:
+    normalized = dict(metadata)
+    normalized.pop("timestamp", None)
+    return normalized
+
+
 def test_trace_row_matches_executor_extraction_for_representative_payload(tmp_path: Path) -> None:
     toi = "TOI-CODE-MODE.01"
     toi_dir = tmp_path / toi / "steps"
@@ -112,6 +118,60 @@ def test_trace_row_matches_executor_extraction_for_representative_payload(tmp_pa
     assert actual["multiplicity_risk_reasons"] == ["TARGET_RUWE_ELEVATED", "5"]
 
 
+def test_trace_row_inline_payload_parity_without_step_output_path(tmp_path: Path) -> None:
+    toi = "TOI-INLINE.01"
+    model_payload = {"verdict": "MODEL_OK", "warnings": ["inline_warn"]}
+    report_payload = {"summary": {"concerns": ["c2", "c1"]}, "warnings": ["c3"]}
+    localize_payload = {
+        "result": {
+            "consensus": {"action_hint": "collect_more_imaging", "reliability_flags": ["c4"]},
+            "reliability_summary": {"status": "REVIEW_REQUIRED", "action_hint": "DEFER_HOST_ASSIGNMENT"},
+        }
+    }
+
+    inline_toi_result = {
+        "toi": toi,
+        "concern_flags": ["root_flag"],
+        "steps": [
+            {"step_id": "model_compete", "op": "model_compete", "status": "ok", "payload": model_payload},
+            {"step_id": "report", "op": "report", "status": "ok", "payload": report_payload},
+            {"step_id": "localize_host", "op": "localize_host", "status": "ok", "payload": localize_payload},
+        ],
+    }
+
+    toi_dir = tmp_path / toi / "steps"
+    filebacked_toi_result = {
+        "toi": toi,
+        "concern_flags": ["root_flag"],
+        "steps": [
+            {
+                "step_id": "model_compete",
+                "op": "model_compete",
+                "status": "ok",
+                "step_output_path": _write_step(toi_dir / "01_model.json", model_payload),
+            },
+            {
+                "step_id": "report",
+                "op": "report",
+                "status": "ok",
+                "step_output_path": _write_step(toi_dir / "02_report.json", report_payload),
+            },
+            {
+                "step_id": "localize_host",
+                "op": "localize_host",
+                "status": "ok",
+                "step_output_path": _write_step(toi_dir / "03_localize.json", localize_payload),
+            },
+        ],
+    }
+
+    expected = _extract_evidence_row(filebacked_toi_result, out_dir=tmp_path)
+    actual = build_evidence_compatible_row(inline_toi_result)
+
+    assert actual == expected
+    assert actual["concern_flags"] == ["c1", "c2", "c3", "c4", "inline_warn", "root_flag"]
+
+
 def test_trace_required_keys_and_fieldnames_stay_in_lockstep_with_executor_csv(tmp_path: Path) -> None:
     toi_result = {"toi": "TOI-EMPTY.01", "concern_flags": [], "steps": []}
     row = build_evidence_compatible_row(toi_result)
@@ -155,3 +215,40 @@ def test_build_runtime_trace_metadata_exposes_expected_structure() -> None:
     assert metadata["detrend_invariance"]["policy_version"] == "v1"
     assert metadata["detrend_invariance"]["fpp_delta_abs_threshold"] == 0.01
     assert metadata["evidence"]["fieldnames"] == list(EVIDENCE_FIELDNAMES)
+
+
+def test_trace_repeat_run_outputs_are_deterministic_except_clocklike_fields(tmp_path: Path) -> None:
+    toi = "TOI-DETERMINISM.01"
+    toi_dir = tmp_path / toi / "steps"
+    model_path = _write_step(toi_dir / "01_model.json", {"verdict": "MODEL_OK", "warnings": ["w2", "w1"]})
+    report_path = _write_step(toi_dir / "02_report.json", {"summary": {"concerns": ["c2", "c1"]}})
+
+    toi_result = {
+        "toi": toi,
+        "concern_flags": ["r2", "r1"],
+        "steps": [
+            {"op": "model_compete", "status": "ok", "step_output_path": model_path},
+            {"op": "report", "status": "ok", "step_output_path": report_path},
+        ],
+    }
+
+    row_first = build_evidence_compatible_row(toi_result)
+    row_second = build_evidence_compatible_row(toi_result)
+    assert row_first == row_second
+    assert to_csv_row(row_first) == to_csv_row(row_second)
+
+    metadata_first = build_runtime_trace_metadata(
+        trace_id="trace-deterministic",
+        policy_profile="readonly_local",
+        network_ok=True,
+        catalog_version_hash="hash123",
+        timestamp=1700000000.0,
+    )
+    metadata_second = build_runtime_trace_metadata(
+        trace_id="trace-deterministic",
+        policy_profile="readonly_local",
+        network_ok=True,
+        catalog_version_hash="hash123",
+        timestamp=1700000100.0,
+    )
+    assert _without_clocklike_fields(metadata_first) == _without_clocklike_fields(metadata_second)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 from tess_vetter.code_mode.policy import (
     DEFAULT_PROFILE_NAME,
@@ -109,3 +110,32 @@ async def execute_plan(ops, context):
     assert result["error"]["code"] == "CATALOG_DRIFT"
     assert result["trace"]["call_budget"]["used_calls"] == 0
     assert state["called"] is False
+
+
+def test_sync_operation_respects_per_call_timeout() -> None:
+    class _Ops:
+        def block(self) -> dict:
+            time.sleep(0.2)
+            return {"ok": True}
+
+    async def _run() -> dict:
+        return await execute(
+            """
+async def execute_plan(ops, context):
+    return await ops.block()
+""",
+            ops=_Ops(),
+            context={"budget": {"per_call_timeout_ms": 50}},
+            catalog_version_hash="hash-v1",
+        )
+
+    result = asyncio.run(_run())
+
+    assert result["status"] == "failed"
+    assert result["error"]["code"] == "TIMEOUT_EXCEEDED"
+    assert result["error"]["details"]["operation_id"] == "block"
+    assert result["error"]["details"]["per_call_timeout_ms"] == 50
+    assert result["trace"]["call_budget"]["used_calls"] == 1
+    assert result["trace"]["call_events"][0]["operation_id"] == "block"
+    assert result["trace"]["call_events"][0]["status"] == "timeout"
+    assert result["trace"]["call_events"][0]["error_code"] == "TIMEOUT_EXCEEDED"

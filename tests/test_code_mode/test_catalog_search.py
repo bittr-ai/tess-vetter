@@ -115,3 +115,102 @@ def test_search_rank_and_why_matched() -> None:
     assert any(reason.startswith("tier:golden_path") for reason in matches[0].why_matched)
     assert "tags:2" in matches[0].why_matched
     assert any(reason.startswith("text:") for reason in matches[0].why_matched)
+
+
+def test_search_tiebreak_by_id_for_equal_rank() -> None:
+    entries = build_catalog(
+        [
+            {
+                "id": "z_same_rank",
+                "tier": "primitive",
+                "title": "Transit helper",
+                "description": "No query terms",
+                "tags": ["infra"],
+                "schema": {"type": "object", "properties": {}},
+            },
+            {
+                "id": "a_same_rank",
+                "tier": "primitive",
+                "title": "Transit helper",
+                "description": "No query terms",
+                "tags": ["infra"],
+                "schema": {"type": "object", "properties": {}},
+            },
+        ]
+    )
+
+    matches = search_catalog(entries.entries, query="report", tags=["pipeline"], limit=2)
+
+    assert [match.entry.id for match in matches] == ["a_same_rank", "z_same_rank"]
+    assert matches[0].score == matches[1].score
+
+
+def test_search_limit_is_deterministic_across_input_order() -> None:
+    base = [
+        {
+            "id": "c_rank",
+            "tier": "primitive",
+            "title": "Transit helper",
+            "description": "No query terms",
+            "tags": ["infra"],
+            "schema": {"type": "object", "properties": {}},
+        },
+        {
+            "id": "a_rank",
+            "tier": "primitive",
+            "title": "Transit helper",
+            "description": "No query terms",
+            "tags": ["infra"],
+            "schema": {"type": "object", "properties": {}},
+        },
+        {
+            "id": "b_rank",
+            "tier": "primitive",
+            "title": "Transit helper",
+            "description": "No query terms",
+            "tags": ["infra"],
+            "schema": {"type": "object", "properties": {}},
+        },
+    ]
+    expected = ["a_rank", "b_rank"]
+
+    for seed in (1, 7, 21):
+        shuffled = deepcopy(base)
+        Random(seed).shuffle(shuffled)
+        catalog = build_catalog(shuffled)
+
+        matches = search_catalog(catalog.entries, query="report", tags=["pipeline"], limit=2)
+        assert [match.entry.id for match in matches] == expected
+
+
+def test_search_score_respects_tag_over_text_precedence() -> None:
+    catalog = build_catalog(
+        [
+            {
+                "id": "high_text_one_tag",
+                "tier": "primitive",
+                "title": "alpha beta gamma delta epsilon zeta eta theta iota kappa",
+                "description": "alpha beta gamma delta epsilon zeta eta theta iota kappa",
+                "tags": ["only"],
+                "schema": {"type": "object", "properties": {}},
+            },
+            {
+                "id": "low_text_two_tags",
+                "tier": "primitive",
+                "title": "alpha",
+                "description": "alpha",
+                "tags": ["only", "extra"],
+                "schema": {"type": "object", "properties": {}},
+            },
+        ]
+    )
+
+    matches = search_catalog(
+        catalog.entries,
+        query="alpha beta gamma delta epsilon zeta eta theta iota kappa",
+        tags=["only", "extra"],
+        limit=2,
+    )
+
+    assert [match.entry.id for match in matches] == ["low_text_two_tags", "high_text_one_tag"]
+    assert matches[0].score > matches[1].score

@@ -138,6 +138,20 @@ async def execute(
 
     execute_plan = plan_fn_or_error
 
+    async def _invoke_with_per_call_timeout(op: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        timeout_seconds = budget.per_call_timeout_ms / 1000.0
+        if _is_async_callable(op):
+            result = await asyncio.wait_for(op(*args, **kwargs), timeout=timeout_seconds)
+        else:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(op, *args, **kwargs),
+                timeout=timeout_seconds,
+            )
+
+        if inspect.isawaitable(result):
+            return await asyncio.wait_for(result, timeout=timeout_seconds)
+        return result
+
     async def invoke_op(op_name: str, op: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         nonlocal used_calls
         if used_calls >= budget.max_calls:
@@ -153,9 +167,7 @@ async def execute(
         started = time.perf_counter()
         event: dict[str, Any] = {"operation_id": op_name, "status": "ok"}
         try:
-            result = op(*args, **kwargs)
-            if inspect.isawaitable(result):
-                result = await asyncio.wait_for(result, timeout=budget.per_call_timeout_ms / 1000.0)
+            result = await _invoke_with_per_call_timeout(op, *args, **kwargs)
             event["duration_ms"] = int((time.perf_counter() - started) * 1000)
             return result
         except TimeoutError as exc:
@@ -341,6 +353,14 @@ def _load_execute_plan(plan_code: str) -> Callable[..., Any] | dict[str, Any]:
         )
 
     return plan_fn
+
+
+def _is_async_callable(op: Callable[..., Any]) -> bool:
+    if inspect.iscoroutinefunction(op):
+        return True
+    if not callable(op):
+        return False
+    return inspect.iscoroutinefunction(type(op).__call__)
 
 
 def _pick_profile_name(context: Mapping[str, Any]) -> str:
