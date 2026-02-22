@@ -4,6 +4,7 @@ import inspect
 import json
 
 import tess_vetter.api as public_api
+import tess_vetter.code_mode.generators.surface_inventory as surface_inventory_module
 from tess_vetter.api.primitives_catalog import list_primitives
 from tess_vetter.code_mode.generators.surface_inventory import (
     build_surface_inventory,
@@ -20,8 +21,8 @@ _DOCUMENTED_OPTIONAL_EXPORT_SKIPS: frozenset[str] = frozenset(
 )
 
 
-def _expected_discovery_aligned_rows() -> tuple[set[tuple[str, str, str, str]], set[str], set[str]]:
-    expected: set[tuple[str, str, str, str]] = set()
+def _expected_discovery_aligned_rows() -> tuple[set[tuple[str, str, str, str, str]], set[str], set[str]]:
+    expected: set[tuple[str, str, str, str, str]] = set()
     unloadable_documented: set[str] = set()
     unloadable_unexpected: set[str] = set()
 
@@ -34,6 +35,16 @@ def _expected_discovery_aligned_rows() -> tuple[set[tuple[str, str, str, str]], 
                 unloadable_documented.add(export_name)
             else:
                 unloadable_unexpected.add(export_name)
+            tier = tier_for_api_symbol(symbol)
+            expected.add(
+                (
+                    symbol.name,
+                    symbol.module,
+                    build_operation_id(tier=tier, name=normalize_operation_name(symbol.name)),
+                    tier,
+                    "unavailable",
+                )
+            )
             continue
 
         if inspect.isclass(value):
@@ -48,6 +59,7 @@ def _expected_discovery_aligned_rows() -> tuple[set[tuple[str, str, str, str]], 
                 symbol.module,
                 build_operation_id(tier=tier, name=normalize_operation_name(symbol.name)),
                 tier,
+                "available",
             )
         )
 
@@ -108,13 +120,52 @@ def test_surface_inventory_fully_covers_loadable_export_map_routines() -> None:
     assert not unloadable_unexpected, f"Unexpected unloadable exports: {sorted(unloadable_unexpected)}"
     assert unloadable_documented <= _DOCUMENTED_OPTIONAL_EXPORT_SKIPS
 
+    expected_symbols = {row[0] for row in expected_rows}
     actual_rows = {
-        (item["symbol"], item["module"], item["operation_id"], item["tier"])
+        (item["symbol"], item["module"], item["operation_id"], item["tier"], item["status"])
         for item in payload
-        if item["status"] == "available"
+        if item["symbol"] in expected_symbols
     }
     missing = expected_rows - actual_rows
     assert not missing, f"Missing inventory rows: {sorted(missing)}"
 
     coverage = len(expected_rows - missing) / max(len(expected_rows), 1)
     assert coverage == 1.0
+
+
+def test_surface_inventory_emits_unavailable_rows_for_unloadable_exports(monkeypatch) -> None:
+    export_map = {
+        "missing_optional": ("tess_vetter.api.optional", "missing_optional"),
+        "loadable_fn": ("tess_vetter.api.loadable", "loadable_fn"),
+    }
+
+    symbol = ApiSymbol(module="tess_vetter.api.loadable", name="loadable_fn")
+
+    class FakeApi:
+        def _get_export_map(self) -> dict[str, tuple[str, str]]:
+            return export_map
+
+        @staticmethod
+        def loadable_fn() -> str:
+            return "ok"
+
+        def __getattr__(self, name: str) -> object:
+            if name == "missing_optional":
+                raise ImportError("optional dependency missing")
+            raise AttributeError(name)
+
+    monkeypatch.setattr(surface_inventory_module, "_api", FakeApi())
+    monkeypatch.setattr(
+        surface_inventory_module,
+        "_iter_api_export_callables",
+        lambda: [(symbol, FakeApi.loadable_fn)],
+    )
+    monkeypatch.setattr(
+        surface_inventory_module,
+        "list_primitives",
+        lambda include_unimplemented=True: {},
+    )
+
+    payload = surface_inventory_jsonable(build_surface_inventory())
+    assert [item["symbol"] for item in payload] == ["loadable_fn", "missing_optional"]
+    assert [item["status"] for item in payload] == ["available", "unavailable"]

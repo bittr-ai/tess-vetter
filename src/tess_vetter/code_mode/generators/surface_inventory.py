@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 from typing import Any
 
+import tess_vetter.api as _api
 from tess_vetter.api.primitives_catalog import list_primitives
 from tess_vetter.code_mode.adapters.discovery import _iter_api_export_callables
 from tess_vetter.code_mode.registries.operation_ids import (
     build_operation_id,
     normalize_operation_name,
 )
-from tess_vetter.code_mode.registries.tiering import tier_for_api_symbol
+from tess_vetter.code_mode.registries.tiering import ApiSymbol, tier_for_api_symbol
 
 _TIER_ORDER: tuple[str, ...] = ("golden_path", "primitive", "internal")
 _TIER_RANK: dict[str, int] = {tier: idx for idx, tier in enumerate(_TIER_ORDER)}
@@ -40,13 +42,38 @@ def _sort_key(row: SurfaceInventoryRow) -> tuple[int, str, str, str, str, str]:
 
 
 def _iter_api_callable_rows() -> list[SurfaceInventoryRow]:
+    callable_symbols = {symbol for symbol, _ in _iter_api_export_callables()}
+    export_map = _api._get_export_map()
     rows: list[SurfaceInventoryRow] = []
-    for symbol, _ in _iter_api_export_callables():
+
+    for export_name in sorted(export_map):
+        module_name, _attr_name = export_map[export_name]
+        symbol = ApiSymbol(module=module_name, name=export_name)
         tier = tier_for_api_symbol(symbol)
         operation_id = build_operation_id(
             tier=tier,
             name=normalize_operation_name(symbol.name),
         )
+        try:
+            value = getattr(_api, export_name)
+        except (AttributeError, ImportError, ModuleNotFoundError):
+            rows.append(
+                SurfaceInventoryRow(
+                    operation_id=operation_id,
+                    tier=tier,
+                    symbol=symbol.name,
+                    module=symbol.module,
+                    status="unavailable",
+                    replaced_by=None,
+                )
+            )
+            continue
+
+        if symbol not in callable_symbols and (
+            inspect.isclass(value) or not (inspect.isroutine(value) or callable(value))
+        ):
+            continue
+
         rows.append(
             SurfaceInventoryRow(
                 operation_id=operation_id,

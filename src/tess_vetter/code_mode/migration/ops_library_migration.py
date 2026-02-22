@@ -141,11 +141,17 @@ def summarize_legacy_seed_coverage_delta(
     discovered_modular_ids: Iterable[str],
     *,
     renamed_id_hints: Mapping[str, str] | None = None,
+    unavailable_operation_ids: Iterable[str] = (),
 ) -> dict[str, object]:
     """Build a deterministic coverage summary for migration reporting."""
 
     normalized_legacy = _normalize_ids(legacy_seed_ids)
     normalized_discovered = _normalize_ids(discovered_modular_ids)
+    normalized_unavailable = _normalize_ids(unavailable_operation_ids)
+    discovered_set = set(normalized_discovered)
+    unavailable_in_discovered = tuple(
+        operation_id for operation_id in normalized_unavailable if operation_id in discovered_set
+    )
     diff = compare_legacy_seed_ids(
         legacy_seed_ids=normalized_legacy,
         discovered_modular_ids=normalized_discovered,
@@ -158,10 +164,13 @@ def summarize_legacy_seed_coverage_delta(
             "missing_total": len(diff.missing_ids),
             "added_total": len(diff.added_ids),
             "renamed_total": len(diff.renamed_ids),
+            "unavailable_total": len(unavailable_in_discovered),
+            "unavailable_added_total": len(set(diff.added_ids) & set(unavailable_in_discovered)),
             "net_new_total": len(normalized_discovered) - len(normalized_legacy),
         },
         "missing_by_tier_prefix": diff.missing_by_tier_prefix(),
         "added_by_tier_prefix": diff.added_by_tier_prefix(),
+        "unavailable_ids": unavailable_in_discovered,
     }
 
 

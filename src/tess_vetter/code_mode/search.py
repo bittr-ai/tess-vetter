@@ -86,6 +86,8 @@ def search_catalog(
         text_score, text_reasons = _text_relevance(query_tokens, entry)
 
         why: list[str] = [f"tier:{normalized_tier}:{tier_bias}"]
+        why.append(f"availability:{entry.availability}")
+        why.append(f"status:{entry.status}")
         if tag_matches > 0:
             why.append(f"tags:{tag_matches}")
         why.extend(text_reasons)

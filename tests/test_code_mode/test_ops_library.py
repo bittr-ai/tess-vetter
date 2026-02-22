@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import inspect
-
 import tess_vetter.api as public_api
 import tess_vetter.code_mode.adapters.manual as manual_adapters
 from tess_vetter.code_mode.operation_spec import OperationSpec
@@ -17,35 +15,35 @@ _DOCUMENTED_OPTIONAL_EXPORT_SKIPS: frozenset[str] = frozenset(
 )
 
 
-def _expected_loadable_operation_ids_from_export_map() -> tuple[set[str], set[str], set[str]]:
-    expected: set[str] = set()
-    unloadable_documented: set[str] = set()
+def _expected_operation_ids_from_export_map() -> tuple[set[str], set[str], set[str]]:
+    available: set[str] = set()
+    unavailable: set[str] = set()
     unloadable_unexpected: set[str] = set()
 
     for export_name, (module_name, _attr_name) in sorted(public_api._get_export_map().items()):
         symbol = ApiSymbol(module=module_name, name=export_name)
+        operation_id = build_operation_id(
+            tier=tier_for_api_symbol(symbol),
+            name=normalize_operation_name(symbol.name),
+        )
+
         try:
             value = getattr(public_api, export_name)
         except (AttributeError, ImportError, ModuleNotFoundError):
             if export_name in _DOCUMENTED_OPTIONAL_EXPORT_SKIPS:
-                unloadable_documented.add(export_name)
+                unavailable.add(operation_id)
             else:
-                unloadable_unexpected.add(export_name)
+                unloadable_unexpected.add(operation_id)
             continue
 
-        if inspect.isclass(value):
+        if isinstance(value, type):
             continue
-        if not (inspect.isroutine(value) or callable(value)):
+        if not callable(value):
             continue
 
-        expected.add(
-            build_operation_id(
-                tier=tier_for_api_symbol(symbol),
-                name=normalize_operation_name(symbol.name),
-            )
-        )
+        available.add(operation_id)
 
-    return expected, unloadable_documented, unloadable_unexpected
+    return available, unavailable, unloadable_unexpected
 
 
 def test_operation_adapter_forwards_call_unchanged() -> None:
@@ -139,17 +137,26 @@ def test_default_library_includes_seed_and_broad_discovered_exports() -> None:
     assert "code_mode.primitive.box_model" in ids
 
 
-def test_default_library_fully_covers_loadable_operation_like_exports() -> None:
-    library_ids = set(make_default_ops_library().list_ids())
-    expected_ids, unloadable_documented, unloadable_unexpected = (
-        _expected_loadable_operation_ids_from_export_map()
-    )
+def test_default_library_fully_covers_export_map_operation_ids_including_unavailable() -> None:
+    library = make_default_ops_library()
+    library_ids = set(library.list_ids())
+    available_ids, unavailable_ids, unloadable_unexpected = _expected_operation_ids_from_export_map()
 
     assert not unloadable_unexpected, f"Unexpected unloadable exports: {sorted(unloadable_unexpected)}"
-    assert unloadable_documented <= _DOCUMENTED_OPTIONAL_EXPORT_SKIPS
+    assert unavailable_ids
 
+    expected_ids = available_ids | unavailable_ids
     missing = expected_ids - library_ids
     assert not missing, f"Missing discovered operation ids: {sorted(missing)}"
 
     coverage = len(expected_ids - missing) / max(len(expected_ids), 1)
     assert coverage == 1.0
+
+    for operation_id in sorted(unavailable_ids):
+        op = library.get(operation_id)
+        try:
+            op()
+        except ImportError:
+            pass
+        else:
+            raise AssertionError(f"Unavailable operation did not raise ImportError: {operation_id}")

@@ -17,6 +17,7 @@ def _sample_entries() -> list[dict[str, object]]:
             "title": "Internal cache",
             "description": "Internal memoized cache lifecycle",
             "tags": ["cache", "infra"],
+            "availability": "available",
             "schema": {"type": "object", "properties": {"ttl": {"type": "number"}}},
         },
         {
@@ -25,6 +26,7 @@ def _sample_entries() -> list[dict[str, object]]:
             "title": "Fold curve",
             "description": "Primitive fold utility for transit diagnostics",
             "tags": ["lightcurve", "fold"],
+            "availability": "available",
             "status": "active",
             "schema": {"type": "object", "properties": {"period": {"type": "number"}}},
         },
@@ -34,6 +36,7 @@ def _sample_entries() -> list[dict[str, object]]:
             "title": "Golden report",
             "description": "Main report generation flow",
             "tags": ["report", "pipeline"],
+            "availability": "unavailable",
             "status": "deprecated",
             "deprecated": True,
             "replacement": "a_primitive_fold",
@@ -153,10 +156,12 @@ def test_catalog_entry_metadata_is_preserved() -> None:
     catalog = build_catalog(_sample_entries())
     by_id = {entry.id: entry for entry in catalog.entries}
 
+    assert by_id["b_golden_report"].availability == "unavailable"
     assert by_id["b_golden_report"].status == "deprecated"
     assert by_id["b_golden_report"].deprecated is True
     assert by_id["b_golden_report"].replacement == "a_primitive_fold"
 
+    assert by_id["z_internal_cache"].availability == "available"
     assert by_id["z_internal_cache"].status == "active"
     assert by_id["z_internal_cache"].deprecated is False
     assert by_id["z_internal_cache"].replacement is None
@@ -178,6 +183,18 @@ def test_deprecation_and_replacement_change_catalog_hash() -> None:
     assert build_original.catalog_version_hash != build_changed_replacement.catalog_version_hash
 
 
+def test_availability_change_changes_catalog_hash() -> None:
+    original = _sample_entries()
+    changed = deepcopy(original)
+
+    changed[1]["availability"] = "unavailable"
+
+    build_original = build_catalog(original)
+    build_changed = build_catalog(changed)
+
+    assert build_original.catalog_version_hash != build_changed.catalog_version_hash
+
+
 def test_search_rank_and_why_matched() -> None:
     catalog = build_catalog(_sample_entries())
 
@@ -194,6 +211,8 @@ def test_search_rank_and_why_matched() -> None:
         "z_internal_cache",
     ]
     assert any(reason.startswith("tier:golden_path") for reason in matches[0].why_matched)
+    assert "availability:unavailable" in matches[0].why_matched
+    assert "status:deprecated" in matches[0].why_matched
     assert "tags:2" in matches[0].why_matched
     assert any(reason.startswith("text:") for reason in matches[0].why_matched)
 

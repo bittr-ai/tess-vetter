@@ -146,6 +146,11 @@ def test_summarize_legacy_seed_coverage_delta_reports_counts_and_breakdown() -> 
             "code_mode.adapters.new_two",
             "code_mode.adapters.new_two",
         ],
+        unavailable_operation_ids=[
+            "code_mode.adapters.new_two",
+            "code_mode.adapters.not_present",
+            "code_mode.adapters.new_two",
+        ],
     )
 
     assert summary["coverage_delta_counts"] == {
@@ -154,6 +159,8 @@ def test_summarize_legacy_seed_coverage_delta_reports_counts_and_breakdown() -> 
         "missing_total": 2,
         "added_total": 2,
         "renamed_total": 0,
+        "unavailable_total": 1,
+        "unavailable_added_total": 1,
         "net_new_total": 0,
     }
     assert summary["missing_by_tier_prefix"] == (
@@ -166,3 +173,4 @@ def test_summarize_legacy_seed_coverage_delta_reports_counts_and_breakdown() -> 
             ("code_mode.adapters.new_one", "code_mode.adapters.new_two"),
         ),
     )
+    assert summary["unavailable_ids"] == ("code_mode.adapters.new_two",)

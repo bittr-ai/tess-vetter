@@ -35,6 +35,7 @@ class CatalogEntry:
     tags: tuple[str, ...]
     schema: Any
     schema_fingerprint: str
+    availability: str = "available"
     status: str = "active"
     deprecated: bool = False
     replacement: str | None = None
@@ -114,6 +115,7 @@ def _canonical_line(entry: CatalogEntry) -> str:
         entry.title,
         entry.description,
         tags,
+        entry.availability,
         entry.status,
         "1" if entry.deprecated else "0",
         replacement,
@@ -139,6 +141,7 @@ def build_catalog(entries: list[dict[str, Any]]) -> CatalogBuildResult:
         title = str(raw.get("title") or raw.get("name") or entry_id)
         description = str(raw.get("description") or "")
         tags = _normalize_tags(raw.get("tags"))
+        availability = str(raw.get("availability") or "available").strip().lower() or "available"
         status = str(raw.get("status") or "active").strip().lower() or "active"
         deprecated = bool(raw.get("deprecated", False))
         replacement_raw = raw.get("replacement")
@@ -159,6 +162,7 @@ def build_catalog(entries: list[dict[str, Any]]) -> CatalogBuildResult:
                 title=title,
                 description=description,
                 tags=tags,
+                availability=availability,
                 status=status,
                 deprecated=deprecated,
                 replacement=replacement,

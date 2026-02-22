@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Callable
+from typing import Any
 
 import tess_vetter.api as _api
-from tess_vetter.code_mode.adapters.base import OperationAdapter
-from tess_vetter.code_mode.operation_spec import OperationCitation, OperationSpec, SafetyClass
+from tess_vetter.code_mode.adapters.base import AdapterUnavailableError, OperationAdapter
+from tess_vetter.code_mode.operation_spec import (
+    OperationAvailability,
+    OperationCitation,
+    OperationSpec,
+    SafetyClass,
+)
 from tess_vetter.code_mode.registries.operation_ids import (
     build_operation_id,
     normalize_operation_name,
@@ -39,7 +46,14 @@ def _iter_api_export_callables() -> list[tuple[ApiSymbol, object]]:
     return exports
 
 
-def _build_auto_adapter(operation_id: str, export_name: str, fn: object, *, module_name: str) -> OperationAdapter:
+def _build_auto_adapter(
+    operation_id: str,
+    export_name: str,
+    fn: object,
+    *,
+    module_name: str,
+    availability: OperationAvailability = OperationAvailability.AVAILABLE,
+) -> OperationAdapter:
     doc = inspect.getdoc(fn)
     first_line = doc.splitlines()[0].strip() if doc else ""
     return OperationAdapter(
@@ -49,10 +63,29 @@ def _build_auto_adapter(operation_id: str, export_name: str, fn: object, *, modu
             description=first_line,
             tier_tags=("api-export", "auto-discovered"),
             safety_class=SafetyClass.SAFE,
+            availability=availability,
             citations=(OperationCitation(label=f"{module_name}.{export_name}"),),
         ),
         fn=fn,
     )
+
+
+def _build_unavailable_adapter_fn(
+    *,
+    operation_id: str,
+    export_name: str,
+    module_name: str,
+    cause: Exception,
+) -> Callable[..., Any]:
+    message = (
+        f"Operation '{operation_id}' is unavailable because "
+        f"'{module_name}.{export_name}' could not be imported: {cause}"
+    )
+
+    def _unavailable(*_args: Any, **_kwargs: Any) -> Any:
+        raise AdapterUnavailableError(message) from cause
+
+    return _unavailable
 
 
 def discover_api_export_adapters(existing_ids: set[str] | None = None) -> tuple[OperationAdapter, ...]:
@@ -60,17 +93,42 @@ def discover_api_export_adapters(existing_ids: set[str] | None = None) -> tuple[
     used_ids = set(existing_ids or ())
     discovered: list[OperationAdapter] = []
 
-    for symbol, fn in _iter_api_export_callables():
+    for export_name, (module_name, _attr_name) in sorted(_api._get_export_map().items()):
+        symbol = ApiSymbol(module=module_name, name=export_name)
         operation_id = build_operation_id(
             tier=tier_for_api_symbol(symbol),
             name=normalize_operation_name(symbol.name),
         )
         if operation_id in used_ids:
             continue
+
+        try:
+            value = getattr(_api, export_name)
+        except (AttributeError, ImportError, ModuleNotFoundError) as exc:
+            used_ids.add(operation_id)
+            discovered.append(
+                _build_auto_adapter(
+                    operation_id,
+                    symbol.name,
+                    _build_unavailable_adapter_fn(
+                        operation_id=operation_id,
+                        export_name=symbol.name,
+                        module_name=symbol.module,
+                        cause=exc,
+                    ),
+                    module_name=symbol.module,
+                    availability=OperationAvailability.UNAVAILABLE,
+                )
+            )
+            continue
+
+        if inspect.isclass(value):
+            continue
+        if not (inspect.isroutine(value) or callable(value)):
+            continue
+
         used_ids.add(operation_id)
-        discovered.append(
-            _build_auto_adapter(operation_id, symbol.name, fn, module_name=symbol.module)
-        )
+        discovered.append(_build_auto_adapter(operation_id, symbol.name, value, module_name=symbol.module))
 
     return tuple(sorted(discovered, key=lambda adapter: adapter.id))
 

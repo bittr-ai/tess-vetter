@@ -20,6 +20,13 @@ class SafetyClass(str, Enum):
     RESTRICTED = "restricted"
 
 
+class OperationAvailability(str, Enum):
+    """Availability of an operation adapter at runtime."""
+
+    AVAILABLE = "available"
+    UNAVAILABLE = "unavailable"
+
+
 class SafetyRequirements(BaseModel):
     """Execution constraints required to safely run an operation."""
 
@@ -59,6 +66,7 @@ class OperationSpec(BaseModel):
     name: str
     version: str = "1.0"
     description: str = ""
+    availability: OperationAvailability = OperationAvailability.AVAILABLE
 
     deprecated: bool = False
     replaced_by: str | None = None
@@ -121,6 +129,7 @@ class OperationSpec(BaseModel):
 
 
 __all__ = [
+    "OperationAvailability",
     "OperationCitation",
     "OperationExample",
     "OperationSpec",

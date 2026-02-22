@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import builtins
+from collections.abc import Callable
 
+import tess_vetter.api as public_api
 from tess_vetter.code_mode.adapters import (
     OperationAdapter,
     default_adapter_registration_plan,
 )
+from tess_vetter.code_mode.operation_spec import OperationCitation, OperationSpec, SafetyClass
+from tess_vetter.code_mode.registries.operation_ids import (
+    build_operation_id,
+    normalize_operation_name,
+)
+from tess_vetter.code_mode.registries.tiering import ApiSymbol, tier_for_api_symbol
 
 
 class OpsLibrary:
@@ -39,11 +47,58 @@ class OpsLibrary:
         return len(self._ops)
 
 
+def _build_unavailable_guarded_stub(*, export_name: str) -> Callable[..., object]:
+    def _raise_unavailable(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        raise ImportError(f"Operation '{export_name}' is unavailable in this environment")
+
+    return _raise_unavailable
+
+
+def _iter_unavailable_guarded_export_adapters() -> builtins.list[OperationAdapter]:
+    guarded_exports = set(public_api._MLX_GUARDED_EXPORTS) | set(public_api._MATPLOTLIB_GUARDED_EXPORTS)
+    export_map = public_api._get_export_map()
+    unavailable: builtins.list[OperationAdapter] = []
+
+    for export_name in sorted(export_map):
+        if export_name not in guarded_exports:
+            continue
+
+        module_name, _attr_name = export_map[export_name]
+        symbol = ApiSymbol(module=module_name, name=export_name)
+        operation_id = build_operation_id(
+            tier=tier_for_api_symbol(symbol),
+            name=normalize_operation_name(symbol.name),
+        )
+
+        try:
+            getattr(public_api, export_name)
+        except (AttributeError, ImportError, ModuleNotFoundError):
+            unavailable.append(
+                OperationAdapter(
+                    spec=OperationSpec(
+                        id=operation_id,
+                        name=export_name.replace("_", " ").title(),
+                        description=f"Unavailable guarded export: {module_name}.{export_name}",
+                        tier_tags=("api-export", "auto-discovered", "unavailable"),
+                        safety_class=SafetyClass.GUARDED,
+                        citations=(OperationCitation(label=f"{module_name}.{export_name}"),),
+                    ),
+                    fn=_build_unavailable_guarded_stub(export_name=export_name),
+                )
+            )
+
+    return unavailable
+
+
 def make_default_ops_library() -> OpsLibrary:
     """Construct the default operation library from the adapter registration plan."""
     library = OpsLibrary()
     for adapter in default_adapter_registration_plan():
         library.register(adapter)
+    for unavailable_adapter in _iter_unavailable_guarded_export_adapters():
+        if unavailable_adapter.id not in library:
+            library.register(unavailable_adapter)
     return library
 
 
