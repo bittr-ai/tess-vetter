@@ -162,6 +162,60 @@ def test_manual_seed_retries_required_for_network_check_wrappers_v06_v07(monkeyp
     assert wrapped_check_ids == {"V06", "V07"}
 
 
+def test_network_check_wrapper_retries_internally_without_changing_top_level_semantics(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    run_check_calls: list[dict[str, object]] = []
+    attempt = {"count": 0}
+
+    def _flaky_run_check(**kwargs: object) -> public_api.CheckResult:
+        run_check_calls.append(dict(kwargs))
+        attempt["count"] += 1
+        if attempt["count"] < 3:
+            raise TimeoutError("transient catalog timeout")
+        return public_api.CheckResult(
+            id="V06",
+            name="Nearby EB Search",
+            status="ok",
+            metrics={"n_matches": 2, "min_sep_arcsec": 4.2},
+            flags=["CATALOG_MATCH"],
+            notes=["Recovered after transient failures"],
+            provenance={"source": "fake"},
+            raw={"attempts": attempt["count"]},
+        )
+
+    def _deterministic_retry_wrapper(fn):  # type: ignore[no-untyped-def]
+        def _wrapped(*args: object, **kwargs: object) -> object:
+            return retry_transient(
+                lambda: fn(*args, **kwargs),
+                policy=RetryPolicy(attempts=3, backoff_seconds=0.0, jitter=0.0, cap_seconds=0.0),
+                sleep=lambda _seconds: None,
+                use_jitter=False,
+            )
+
+        return _wrapped
+
+    monkeypatch.setattr(check_wrappers._api, "run_check", _flaky_run_check)
+    monkeypatch.setattr(check_wrappers, "wrap_with_transient_retry", _deterministic_retry_wrapper)
+
+    library = make_default_ops_library()
+    op = library.get("code_mode.internal.check_v06_nearby_eb_search")
+    result = op(
+        lc={"time": [1.0], "flux": [1.0]},
+        candidate={"ephemeris": {"period_days": 2.0, "t0_btjd": 1.0, "duration_hours": 3.0}},
+        network=True,
+        ra_deg=10.5,
+        dec_deg=-2.25,
+    )
+
+    assert attempt["count"] == 3
+    assert len(run_check_calls) == 3
+    assert all(call["check_id"] == "V06" for call in run_check_calls)
+    assert all(call["network"] is True for call in run_check_calls)
+    assert result.check_id == "V06"
+    assert result.status == "ok"
+    assert result.metrics.n_matches == 2
+    assert result.metrics.min_sep_arcsec == 4.2
+
+
 def test_default_library_ids_are_stable_sorted_and_unique() -> None:
     library_a = make_default_ops_library()
     library_b = make_default_ops_library()

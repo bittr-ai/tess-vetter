@@ -186,22 +186,66 @@ def test_trace_metadata_determinism_basic_check() -> None:
     ).hexdigest()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "TODO(runtime-capability): no deterministic per-step memory/CPU telemetry is emitted, "
-        "so resource-bomb enforcement cannot be verified e2e yet."
-    ),
-)
-def test_todo_resource_bomb_enforcement_e2e() -> None:
-    raise AssertionError("Waiting on deterministic runtime resource telemetry.")
+def test_output_payload_limit_enforced_e2e() -> None:
+    async def _run() -> dict:
+        return await execute(
+            """
+async def execute_plan(ops, context):
+    return {"payload": "x" * 1024}
+""",
+            ops={},
+            context={"budget": {"max_output_bytes": 64}},
+            catalog_version_hash="hash-v1",
+        )
+
+    result = asyncio.run(_run())
+
+    assert result["status"] == "failed"
+    assert result["error"]["code"] == "OUTPUT_LIMIT_EXCEEDED"
+    assert result["error"]["details"]["max_output_bytes"] == 64
+    assert result["error"]["details"]["actual_output_bytes"] > 64
+    assert result["trace"]["call_budget"]["max_output_bytes"] == 64
+
+
+def test_catalog_hash_drift_denied_before_plan_execution() -> None:
+    called = False
+
+    class _Ops:
+        def ping(self) -> dict:
+            nonlocal called
+            called = True
+            return {"ok": True}
+
+    async def _run() -> dict:
+        return await execute(
+            """
+async def execute_plan(ops, context):
+    return await ops.ping()
+""",
+            ops=_Ops(),
+            context={"catalog_version_hash": "catalog-request-v1"},
+            catalog_version_hash="catalog-runtime-v1",
+        )
+
+    result = asyncio.run(_run())
+
+    assert result["status"] == "failed"
+    assert result["error"]["code"] == "CATALOG_DRIFT"
+    assert result["error"]["details"] == {
+        "expected_catalog_version_hash": "catalog-runtime-v1",
+        "received_catalog_version_hash": "catalog-request-v1",
+    }
+    assert result["trace"]["call_budget"]["used_calls"] == 0
+    assert result["trace"]["call_events"] == []
+    assert called is False
 
 
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "TODO(runtime-capability): runtime lacks deterministic scheduler hooks and fairness counters "
-        "across concurrent plans for budget-fairness e2e validation."
+        "TODO(runtime-capability): runtime.execute has no global plan scheduler hooks and no "
+        "cross-plan fairness counters/telemetry (only per-execution used_calls), so deterministic "
+        "budget-fairness validation across concurrent plans is not currently observable."
     ),
 )
 def test_todo_budget_fairness_across_concurrent_plans_e2e() -> None:

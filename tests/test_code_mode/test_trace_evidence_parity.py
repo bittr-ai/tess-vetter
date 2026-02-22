@@ -4,6 +4,8 @@ import csv
 import json
 from pathlib import Path
 
+import pytest
+
 from tess_vetter.code_mode.trace import (
     EVIDENCE_FIELDNAMES,
     REQUIRED_EVIDENCE_KEYS,
@@ -252,3 +254,179 @@ def test_trace_repeat_run_outputs_are_deterministic_except_clocklike_fields(tmp_
         timestamp=1700000100.0,
     )
     assert _without_clocklike_fields(metadata_first) == _without_clocklike_fields(metadata_second)
+
+
+@pytest.mark.parametrize(
+    ("name", "model_raw", "model_detrended", "fpp_raw", "fpp_detrended", "expected_variant", "expected_policy", "expected_reason"),
+    [
+        (
+            "invariant_pass",
+            {"verdict": "LIKELY_TRANSIT"},
+            {"verdict": "LIKELY_TRANSIT"},
+            {"fpp": 0.02},
+            {"fpp": 0.015},
+            "detrended",
+            "INVARIANT",
+            "PASS",
+        ),
+        (
+            "model_verdict_changed",
+            {"verdict": "LIKELY_TRANSIT"},
+            {"verdict": "NON_TRANSIT"},
+            {"fpp": 0.02},
+            {"fpp": 0.015},
+            "raw",
+            "NON_INVARIANT",
+            "MODEL_VERDICT_CHANGED",
+        ),
+        (
+            "fpp_delta_above_threshold",
+            {"verdict": "LIKELY_TRANSIT"},
+            {"verdict": "LIKELY_TRANSIT"},
+            {"fpp": 0.01},
+            {"fpp": 0.03},
+            "raw",
+            "NON_INVARIANT",
+            "FPP_DELTA_ABOVE_THRESHOLD",
+        ),
+        (
+            "insufficient_data_nonfinite",
+            {"verdict": "LIKELY_TRANSIT"},
+            {"verdict": "LIKELY_TRANSIT"},
+            {"fpp": "inf"},
+            {"fpp": 0.01},
+            "raw",
+            "INSUFFICIENT_DATA",
+            "MISSING_MODEL_VERDICTS_OR_FPP_VALUES",
+        ),
+    ],
+)
+def test_trace_robustness_branches_match_executor_and_are_deterministic(
+    tmp_path: Path,
+    name: str,
+    model_raw: dict,
+    model_detrended: dict,
+    fpp_raw: dict,
+    fpp_detrended: dict,
+    expected_variant: str,
+    expected_policy: str,
+    expected_reason: str,
+) -> None:
+    toi = f"TOI-ROBUST-{name}"
+    toi_dir = tmp_path / toi / "steps"
+
+    toi_result = {
+        "toi": toi,
+        "steps": [
+            {
+                "step_id": "model_compete_raw",
+                "op": "model_compete",
+                "status": "ok",
+                "step_output_path": _write_step(toi_dir / "01_model_raw.json", model_raw),
+            },
+            {
+                "step_id": "model_compete_detrended",
+                "op": "model_compete",
+                "status": "ok",
+                "step_output_path": _write_step(toi_dir / "02_model_detrended.json", model_detrended),
+            },
+            {
+                "step_id": "fpp_raw",
+                "op": "fpp_run",
+                "status": "ok",
+                "step_output_path": _write_step(toi_dir / "03_fpp_raw.json", fpp_raw),
+            },
+            {
+                "step_id": "fpp_detrended",
+                "op": "fpp_run",
+                "status": "ok",
+                "step_output_path": _write_step(toi_dir / "04_fpp_detrended.json", fpp_detrended),
+            },
+            {
+                "step_id": "contrast_curves",
+                "op": "contrast_curves",
+                "status": "ok",
+                "step_output_path": _write_step(
+                    toi_dir / "05_contrast_curves.json",
+                    {
+                        "availability": "available",
+                        "selected_curve": {"id": "fallback", "source": "curves"},
+                    },
+                ),
+            },
+            {
+                "step_id": "contrast_curve_summary",
+                "op": "contrast_curve_summary",
+                "status": "ok",
+                "step_output_path": _write_step(
+                    toi_dir / "06_contrast_curve_summary.json",
+                    {
+                        "result": {
+                            "availability": "summary_available",
+                            "selected_curve": {"id": "preferred", "source": "summary"},
+                        }
+                    },
+                ),
+            },
+            {"step_id": "ignored", "op": "fpp_run", "status": "failed", "step_output_path": "missing.json"},
+        ],
+    }
+
+    expected = _extract_evidence_row(toi_result, out_dir=tmp_path)
+    actual_first = build_evidence_compatible_row(toi_result)
+    actual_second = build_evidence_compatible_row(toi_result)
+
+    assert actual_first == expected
+    assert actual_second == expected
+    assert actual_first["robustness_recommended_variant"] == expected_variant
+    assert actual_first["detrend_invariance_policy_verdict"] == expected_policy
+    assert actual_first["detrend_invariance_policy_reason_code"] == expected_reason
+    assert actual_first["contrast_curve_availability"] == "summary_available"
+    assert actual_first["contrast_curve_selected_id"] == "preferred"
+    assert actual_first["contrast_curve_selected_source"] == "summary"
+
+
+def test_trace_step_payload_map_supports_missing_files_and_repeatable_outputs(tmp_path: Path) -> None:
+    toi_result = {
+        "toi": "TOI-PAYLOAD-MAP.01",
+        "concern_flags": ["root_b", "root_a", "root_b"],
+        "steps": [
+            {"step_id": "model_compete", "op": "model_compete", "status": "ok", "step_output_path": "missing.json"},
+            {"step_id": "report", "op": "report", "status": "ok", "step_output_path": "missing.json"},
+            {"step_id": "localize_host", "op": "localize_host", "status": "ok", "step_output_path": "missing.json"},
+            {"step_id": "fpp", "op": "fpp", "status": "ok", "step_output_path": "missing.json"},
+            {"step_id": "neighbors", "op": "resolve_neighbors", "status": "ok", "step_output_path": "missing.json"},
+            {"step_id": "skip_failed", "op": "report", "status": "failed", "step_output_path": "missing.json"},
+        ],
+    }
+    step_payloads = {
+        "model_compete": {"verdict": "MODEL_OK", "warnings": ["w2", "w1", "w2"]},
+        "report": {"summary": {"concerns": ["rc2", "rc1"]}, "warnings": ["rw"]},
+        "localize_host": {
+            "result": {
+                "consensus": {"action_hint": "review", "reliability_flags": ["lf"]},
+                "reliability_summary": {"status": "REVIEW_REQUIRED", "action_hint": "hold"},
+            }
+        },
+        "fpp": {"result": {"fpp": 0.04}},
+        "neighbors": {"multiplicity_risk": {"status": "ELEVATED", "reasons": ["R-A", None, 3]}},
+    }
+
+    row_first = build_evidence_compatible_row(toi_result, step_payloads=step_payloads)
+    row_second = build_evidence_compatible_row(toi_result, step_payloads=step_payloads)
+
+    assert row_first == row_second
+    assert row_first["model_compete_verdict"] == "MODEL_OK"
+    assert row_first["localize_host_action_hint"] == "review"
+    assert row_first["localize_host_reliability_status"] == "REVIEW_REQUIRED"
+    assert row_first["fpp"] == 0.04
+    assert row_first["multiplicity_risk_status"] == "ELEVATED"
+    assert row_first["multiplicity_risk_reasons"] == ["R-A", "3"]
+    assert row_first["concern_flags"] == ["lf", "rc1", "rc2", "root_a", "root_b", "rw", "w1", "w2"]
+    assert row_first["detrend_invariance_policy_verdict"] == "INSUFFICIENT_DATA"
+    assert row_first["detrend_invariance_policy_reason_code"] == "MISSING_MODEL_VERDICTS_OR_FPP_VALUES"
+
+    csv_first = to_csv_row(row_first)
+    csv_second = to_csv_row(row_second)
+    assert csv_first == csv_second
+    assert csv_first["concern_flags"] == "lf;rc1;rc2;root_a;root_b;rw;w1;w2"

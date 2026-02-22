@@ -55,6 +55,40 @@ def test_retry_transient_raises_deterministic_transient_exhaustion_payload() -> 
     assert sleeps == [0.1, 0.2]
 
 
+def test_retry_transient_repeated_transient_failures_eventually_succeeds() -> None:
+    calls = {"count": 0}
+    sleeps: list[float] = []
+
+    def _op() -> str:
+        calls["count"] += 1
+        if calls["count"] < 6:
+            raise ConnectionError("upstream busy")
+        return "recovered"
+
+    policy = RetryPolicy(attempts=6, backoff_seconds=0.1, jitter=0.4, cap_seconds=0.4)
+    result = retry_transient(_op, policy=policy, sleep=sleeps.append, use_jitter=False)
+
+    assert result == "recovered"
+    assert calls["count"] == 6
+    assert sleeps == [0.1, 0.2, 0.4, 0.4, 0.4]
+
+
+def test_retry_transient_non_transient_exceptions_are_passed_through_without_retry() -> None:
+    calls = {"count": 0}
+    sleeps: list[float] = []
+
+    def _op() -> str:
+        calls["count"] += 1
+        raise ValueError("bad payload")
+
+    policy = RetryPolicy(attempts=5, backoff_seconds=0.1, jitter=0.4, cap_seconds=0.2)
+    with pytest.raises(ValueError, match="bad payload"):
+        retry_transient(_op, policy=policy, sleep=sleeps.append, use_jitter=False)
+
+    assert calls["count"] == 1
+    assert sleeps == []
+
+
 def test_wrap_with_transient_retry_surfaces_deterministic_transient_exhaustion() -> None:
     calls = {"count": 0}
     sleeps: list[float] = []

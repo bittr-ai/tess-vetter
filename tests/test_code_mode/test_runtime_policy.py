@@ -176,3 +176,118 @@ async def execute_plan(ops, context):
     assert result["trace"]["call_events"][0]["operation_id"] == "nested_network"
     assert result["trace"]["call_events"][0]["status"] == "failed"
     assert result["trace"]["call_events"][0]["error_code"] == "POLICY_DENIED"
+
+
+def test_readonly_local_transitively_denies_socket_connect_variant() -> None:
+    class _Ops:
+        def nested_socket_connect(self) -> dict:
+            import socket
+
+            def _helper(sock: socket.socket) -> None:
+                sock.connect(("example.com", 443))
+
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            _helper(sock)
+            return {"ok": True}
+
+    async def _run() -> dict:
+        return await execute(
+            """
+async def execute_plan(ops, context):
+    return await ops.nested_socket_connect()
+""",
+            ops=_Ops(),
+            context={"policy_profile": POLICY_PROFILE_READONLY_LOCAL},
+            catalog_version_hash="hash-v1",
+        )
+
+    result = asyncio.run(_run())
+
+    assert result["status"] == "failed"
+    assert result["error"]["code"] == "POLICY_DENIED"
+    assert result["error"]["details"] == {
+        "policy_profile": POLICY_PROFILE_READONLY_LOCAL,
+        "boundary": "socket.connect",
+        "target": "('example.com', 443)",
+    }
+    assert result["trace"]["call_budget"]["used_calls"] == 1
+    assert result["trace"]["call_events"][0]["operation_id"] == "nested_socket_connect"
+    assert result["trace"]["call_events"][0]["status"] == "failed"
+    assert result["trace"]["call_events"][0]["error_code"] == "POLICY_DENIED"
+
+
+def test_readonly_local_transitively_denies_socket_connect_ex_alias_path() -> None:
+    class _Ops:
+        def nested_socket_connect_ex_alias(self) -> dict:
+            import socket
+
+            def _helper(connect_fn) -> None:
+                connect_fn(("example.com", 443))
+
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            connector = sock.connect_ex
+            _helper(connector)
+            return {"ok": True}
+
+    async def _run() -> dict:
+        return await execute(
+            """
+async def execute_plan(ops, context):
+    return await ops.nested_socket_connect_ex_alias()
+""",
+            ops=_Ops(),
+            context={"policy_profile": POLICY_PROFILE_READONLY_LOCAL},
+            catalog_version_hash="hash-v1",
+        )
+
+    result = asyncio.run(_run())
+
+    assert result["status"] == "failed"
+    assert result["error"]["code"] == "POLICY_DENIED"
+    assert result["error"]["details"] == {
+        "policy_profile": POLICY_PROFILE_READONLY_LOCAL,
+        "boundary": "socket.connect_ex",
+        "target": "('example.com', 443)",
+    }
+    assert result["trace"]["call_budget"]["used_calls"] == 1
+    assert result["trace"]["call_events"][0]["operation_id"] == "nested_socket_connect_ex_alias"
+    assert result["trace"]["call_events"][0]["status"] == "failed"
+    assert result["trace"]["call_events"][0]["error_code"] == "POLICY_DENIED"
+
+
+def test_readonly_local_transitively_denies_urllib_opener_flow() -> None:
+    class _Ops:
+        def nested_urllib_opener(self) -> dict:
+            import urllib.request
+
+            def _helper(url: str) -> None:
+                opener = urllib.request.build_opener()
+                opener.open(url, timeout=0.1)
+
+            _helper("https://example.com")
+            return {"ok": True}
+
+    async def _run() -> dict:
+        return await execute(
+            """
+async def execute_plan(ops, context):
+    return await ops.nested_urllib_opener()
+""",
+            ops=_Ops(),
+            context={"policy_profile": POLICY_PROFILE_READONLY_LOCAL},
+            catalog_version_hash="hash-v1",
+        )
+
+    result = asyncio.run(_run())
+
+    assert result["status"] == "failed"
+    assert result["error"]["code"] == "POLICY_DENIED"
+    assert result["error"]["details"] == {
+        "policy_profile": POLICY_PROFILE_READONLY_LOCAL,
+        "boundary": "urllib.request.OpenerDirector.open",
+        "target": "https://example.com",
+    }
+    assert result["trace"]["call_budget"]["used_calls"] == 1
+    assert result["trace"]["call_events"][0]["operation_id"] == "nested_urllib_opener"
+    assert result["trace"]["call_events"][0]["status"] == "failed"
+    assert result["trace"]["call_events"][0]["error_code"] == "POLICY_DENIED"

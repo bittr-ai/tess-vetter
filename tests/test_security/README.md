@@ -7,11 +7,12 @@ Executable deterministic checks:
 - sandbox-required denial for `execute()` when sandboxing is disabled
 - payload hash mismatch rejection for `execute()` integrity checks
 - sandbox-escape denial via AST policy (`import` is blocked with `POLICY_DENIED`)
+- output payload size enforcement (`OUTPUT_LIMIT_EXCEEDED`) under constrained call budget
+- catalog hash drift rejection (`CATALOG_DRIFT`) before plan execution begins
 - trace determinism basic check for `build_runtime_trace_metadata(...)`
 
 Known gaps tracked as strict TODO `xfail` tests:
-- resource bomb enforcement e2e is blocked until runtime emits deterministic per-step memory/CPU telemetry
-- budget fairness across concurrent plans e2e is blocked until runtime exposes deterministic scheduler hooks and fairness counters
+- budget fairness across concurrent plans e2e is blocked until runtime exposes deterministic global scheduler hooks and cross-plan fairness counters/telemetry
 
 Constraints:
 - tests stay unit-level and avoid real network/filesystem dependencies
