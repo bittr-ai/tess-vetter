@@ -25,6 +25,7 @@ def _sample_entries() -> list[dict[str, object]]:
             "title": "Fold curve",
             "description": "Primitive fold utility for transit diagnostics",
             "tags": ["lightcurve", "fold"],
+            "status": "active",
             "schema": {"type": "object", "properties": {"period": {"type": "number"}}},
         },
         {
@@ -33,6 +34,9 @@ def _sample_entries() -> list[dict[str, object]]:
             "title": "Golden report",
             "description": "Main report generation flow",
             "tags": ["report", "pipeline"],
+            "status": "deprecated",
+            "deprecated": True,
+            "replacement": "a_primitive_fold",
             "schema": {
                 "type": "object",
                 "properties": {
@@ -95,6 +99,35 @@ def test_non_finite_schema_number_rejected() -> None:
 
     with pytest.raises(ValueError, match="Non-finite"):
         build_catalog(broken)
+
+
+def test_catalog_entry_metadata_is_preserved() -> None:
+    catalog = build_catalog(_sample_entries())
+    by_id = {entry.id: entry for entry in catalog.entries}
+
+    assert by_id["b_golden_report"].status == "deprecated"
+    assert by_id["b_golden_report"].deprecated is True
+    assert by_id["b_golden_report"].replacement == "a_primitive_fold"
+
+    assert by_id["z_internal_cache"].status == "active"
+    assert by_id["z_internal_cache"].deprecated is False
+    assert by_id["z_internal_cache"].replacement is None
+
+
+def test_deprecation_and_replacement_change_catalog_hash() -> None:
+    original = _sample_entries()
+    changed_deprecated = deepcopy(original)
+    changed_replacement = deepcopy(original)
+
+    changed_deprecated[2]["deprecated"] = False
+    changed_replacement[2]["replacement"] = "z_internal_cache"
+
+    build_original = build_catalog(original)
+    build_changed_deprecated = build_catalog(changed_deprecated)
+    build_changed_replacement = build_catalog(changed_replacement)
+
+    assert build_original.catalog_version_hash != build_changed_deprecated.catalog_version_hash
+    assert build_original.catalog_version_hash != build_changed_replacement.catalog_version_hash
 
 
 def test_search_rank_and_why_matched() -> None:

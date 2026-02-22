@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import tess_vetter.code_mode.ops_library as ops_library
+import tess_vetter.code_mode.adapters.manual as manual_adapters
 from tess_vetter.code_mode.operation_spec import OperationSpec
 from tess_vetter.code_mode.ops_library import OperationAdapter, OpsLibrary, make_default_ops_library
 
@@ -51,7 +51,7 @@ def test_default_library_uses_current_api_callables(monkeypatch) -> None:  # typ
         seen["kwargs"] = kwargs
         return "ok"
 
-    monkeypatch.setattr(ops_library._api, "vet_candidate", _fake_vet_candidate)
+    monkeypatch.setattr(manual_adapters._api, "vet_candidate", _fake_vet_candidate)
 
     library = make_default_ops_library()
     op = library.get("code_mode.golden.vet_candidate")
@@ -62,14 +62,34 @@ def test_default_library_uses_current_api_callables(monkeypatch) -> None:  # typ
     assert seen["kwargs"] == {"network": False}
 
 
-def test_default_library_ids_are_stable_and_sorted() -> None:
-    library = make_default_ops_library()
+def test_default_library_ids_are_stable_sorted_and_unique() -> None:
+    library_a = make_default_ops_library()
+    library_b = make_default_ops_library()
 
-    assert library.list_ids() == sorted(
-        [
-            "code_mode.golden.run_periodogram",
-            "code_mode.golden.vet_candidate",
-            "code_mode.primitive.fold",
-            "code_mode.primitive.median_detrend",
-        ]
-    )
+    ids_a = library_a.list_ids()
+    ids_b = library_b.list_ids()
+
+    assert ids_a == ids_b
+    assert ids_a == sorted(ids_a)
+    assert len(ids_a) == len(set(ids_a))
+
+
+def test_default_library_includes_seed_and_broad_discovered_exports() -> None:
+    library = make_default_ops_library()
+    ids = library.list_ids()
+
+    # Original manual seed operations remain present for backward compatibility.
+    assert "code_mode.golden.vet_candidate" in ids
+    assert "code_mode.golden.run_periodogram" in ids
+    assert "code_mode.primitive.fold" in ids
+    assert "code_mode.primitive.median_detrend" in ids
+
+    # Auto-discovered callable exports provide much broader surface coverage.
+    discovered_ids = [op_id for op_id in ids if op_id.startswith("code_mode.api.")]
+    assert len(discovered_ids) >= 20
+    assert len(ids) >= 24
+
+    # Key golden-path and primitive exports should be auto-registered too.
+    assert "code_mode.api.vet_candidate" in ids
+    assert "code_mode.api.run_periodogram" in ids
+    assert "code_mode.primitive.check_odd_even_depth" in ids

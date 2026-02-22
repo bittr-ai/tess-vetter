@@ -25,6 +25,9 @@ class CatalogEntry:
     tags: tuple[str, ...]
     schema: Any
     schema_fingerprint: str
+    status: str = "active"
+    deprecated: bool = False
+    replacement: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,12 +91,16 @@ def _tier_sort_key(tier: str) -> tuple[int, str]:
 
 def _canonical_line(entry: CatalogEntry) -> str:
     tags = ",".join(entry.tags)
+    replacement = entry.replacement or ""
     parts = [
         entry.tier,
         entry.id,
         entry.title,
         entry.description,
         tags,
+        entry.status,
+        "1" if entry.deprecated else "0",
+        replacement,
         entry.schema_fingerprint,
     ]
     return "|".join(parts)
@@ -116,6 +123,14 @@ def build_catalog(entries: list[dict[str, Any]]) -> CatalogBuildResult:
         title = str(raw.get("title") or raw.get("name") or entry_id)
         description = str(raw.get("description") or "")
         tags = _normalize_tags(raw.get("tags"))
+        status = str(raw.get("status") or "active").strip().lower() or "active"
+        deprecated = bool(raw.get("deprecated", False))
+        replacement_raw = raw.get("replacement")
+        replacement = None
+        if replacement_raw is not None:
+            replacement_value = str(replacement_raw).strip()
+            if replacement_value:
+                replacement = replacement_value
 
         raw_schema = raw.get("schema", {})
         canonical_schema = canonicalize_value(raw_schema)
@@ -128,6 +143,9 @@ def build_catalog(entries: list[dict[str, Any]]) -> CatalogBuildResult:
                 title=title,
                 description=description,
                 tags=tags,
+                status=status,
+                deprecated=deprecated,
+                replacement=replacement,
                 schema=canonical_schema,
                 schema_fingerprint=schema_fp,
             )
