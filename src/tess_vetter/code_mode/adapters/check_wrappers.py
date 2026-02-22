@@ -16,6 +16,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 import tess_vetter.api as _api
+from tess_vetter.code_mode.retry.wrappers import wrap_with_transient_retry
 
 MetricScalar = float | int | str | bool | None
 CheckStatus = Literal["ok", "skipped", "error"]
@@ -374,6 +375,7 @@ def make_check_wrapper(definition: CheckWrapperDefinition) -> Callable[..., Type
 
     _wrapper.__name__ = f"check_wrapper_{definition.check_id.lower()}"
     _wrapper.__doc__ = f"Typed wrapper for {definition.check_id} ({definition.name})."
+    _wrapper.__code_mode_check_id__ = definition.check_id  # type: ignore[attr-defined]
     return _wrapper
 
 
@@ -530,7 +532,13 @@ def check_wrapper_definitions() -> tuple[CheckWrapperDefinition, ...]:
 
 def check_wrapper_functions() -> tuple[tuple[CheckWrapperDefinition, Callable[..., TypedCheckResultBase]], ...]:
     """Return `(definition, callable)` pairs for adapter registration."""
-    return tuple((definition, make_check_wrapper(definition)) for definition in _CHECK_WRAPPER_DEFINITIONS)
+    def _wrap(definition: CheckWrapperDefinition) -> Callable[..., TypedCheckResultBase]:
+        wrapper = make_check_wrapper(definition)
+        if definition.needs_network:
+            return wrap_with_transient_retry(wrapper)
+        return wrapper
+
+    return tuple((definition, _wrap(definition)) for definition in _CHECK_WRAPPER_DEFINITIONS)
 
 
 __all__ = [

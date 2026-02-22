@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tess_vetter.api as public_api
+import tess_vetter.code_mode.adapters.check_wrappers as check_wrappers
 import tess_vetter.code_mode.adapters.manual as manual_adapters
 from tess_vetter.code_mode.operation_spec import OperationSpec
 from tess_vetter.code_mode.ops_library import OperationAdapter, OpsLibrary, make_default_ops_library
@@ -131,6 +132,34 @@ def test_default_library_applies_retry_wrapper_to_network_seed(monkeypatch) -> N
     op = library.get("code_mode.golden.vet_candidate")
     assert op("lc", "candidate", network=True) == "ok"
     assert calls["count"] == 3
+
+
+def test_manual_seed_retries_required_for_network_check_wrappers_v06_v07(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    wrapped_check_ids: set[str] = set()
+
+    def _recording_retry_wrapper(fn):  # type: ignore[no-untyped-def]
+        check_id = getattr(fn, "__code_mode_check_id__", None)
+        if isinstance(check_id, str):
+            wrapped_check_ids.add(check_id)
+
+        def _wrapped(*args: object, **kwargs: object) -> object:
+            return fn(*args, **kwargs)
+
+        return _wrapped
+
+    monkeypatch.setattr(check_wrappers, "wrap_with_transient_retry", _recording_retry_wrapper)
+
+    adapters = manual_adapters.manual_seed_adapters()
+
+    check_wrapper_ids = {
+        adapter.id
+        for adapter in adapters
+        if adapter.id.startswith("code_mode.internal.check_v")
+    }
+    required_retry_ids = {"code_mode.internal.check_v06_nearby_eb_search", "code_mode.internal.check_v07_exofop_toi_lookup"}
+
+    assert required_retry_ids <= check_wrapper_ids
+    assert wrapped_check_ids == {"V06", "V07"}
 
 
 def test_default_library_ids_are_stable_sorted_and_unique() -> None:

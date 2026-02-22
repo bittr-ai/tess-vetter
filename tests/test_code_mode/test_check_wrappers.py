@@ -51,6 +51,19 @@ def test_check_wrapper_inventory_is_deterministic_v01_v15_set() -> None:
     assert len(operation_ids) == len(set(operation_ids))
 
 
+def test_only_v06_v07_check_definitions_require_network() -> None:
+    network_flags = {
+        definition.check_id: definition.needs_network
+        for definition in check_wrapper_definitions()
+    }
+
+    assert network_flags["V06"] is True
+    assert network_flags["V07"] is True
+    assert {
+        check_id for check_id, needs_network in network_flags.items() if needs_network
+    } == {"V06", "V07"}
+
+
 def test_check_wrapper_callable_returns_typed_model(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     definition, wrapper = check_wrapper_functions()[0]
 
