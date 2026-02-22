@@ -1,5 +1,15 @@
 import tess_vetter.api as btv
 from tess_vetter.api.types import error_result, ok_result, skipped_result
+from tess_vetter.api.vetting_report import (
+    FORMAT_CHECK_RESULT_CALL_SCHEMA,
+    FORMAT_VETTING_TABLE_CALL_SCHEMA,
+    RENDER_VALIDATION_REPORT_MARKDOWN_CALL_SCHEMA,
+    SUMMARIZE_BUNDLE_CALL_SCHEMA,
+    VETTING_REPORT_BUNDLE_KEYS,
+    VETTING_REPORT_COUNTS_KEYS,
+    VETTING_REPORT_RESULT_KEYS,
+    VETTING_REPORT_SCHEMA_VERSION,
+)
 
 
 def test_format_vetting_table_smoke() -> None:
@@ -64,3 +74,22 @@ def test_summarize_bundle_preserves_status_literals() -> None:
     assert s["results_by_id"]["V01"]["status"] == "ok"
     assert s["results_by_id"]["V06"]["status"] == "skipped"
     assert s["results_by_id"]["V99"]["status"] == "error"
+
+
+def test_vetting_report_contract_constants_are_stable() -> None:
+    assert VETTING_REPORT_SCHEMA_VERSION == 1
+    assert VETTING_REPORT_COUNTS_KEYS == ("checks", "ok", "error", "skipped")
+    assert VETTING_REPORT_RESULT_KEYS == (
+        "id",
+        "name",
+        "status",
+        "confidence",
+        "metrics",
+        "flags",
+        "notes",
+    )
+    assert VETTING_REPORT_BUNDLE_KEYS == ("counts", "results_by_id", "inputs_summary", "provenance")
+    assert FORMAT_VETTING_TABLE_CALL_SCHEMA["type"] == "object"
+    assert FORMAT_CHECK_RESULT_CALL_SCHEMA["type"] == "object"
+    assert SUMMARIZE_BUNDLE_CALL_SCHEMA["type"] == "object"
+    assert RENDER_VALIDATION_REPORT_MARKDOWN_CALL_SCHEMA["type"] == "object"

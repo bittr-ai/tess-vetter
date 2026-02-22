@@ -9,6 +9,8 @@ It is designed for "production hardening" use cases:
 
 from __future__ import annotations
 
+from typing import Any, TypedDict
+
 import numpy as np
 
 from tess_vetter.api.references import (
@@ -37,14 +39,79 @@ from tess_vetter.transit.ttv_track_search import (
 )
 
 __all__ = [
+    "TTV_SEARCH_COST_SCHEMA_VERSION",
+    "TTV_TRACK_SEARCH_RESULT_SCHEMA_VERSION",
+    "TTVSearchCostEstimatePayload",
+    "TTVTrackHypothesisPayload",
+    "TTVTrackCandidatePayload",
+    "TTVTrackSearchResultPayload",
     "TTVSearchBudget",
     "TTVTrackSearchResult",
     "estimate_search_cost",
     "identify_observing_windows",
     "run_ttv_track_search",
     "run_ttv_track_search_for_candidate",
+    "to_ttv_track_search_result_payload",
     "should_run_ttv_search",
 ]
+
+TTV_SEARCH_COST_SCHEMA_VERSION = 1
+TTV_TRACK_SEARCH_RESULT_SCHEMA_VERSION = 1
+
+
+class TTVSearchCostEstimatePayload(TypedDict):
+    schema_version: int
+    n_windows: int
+    period_steps: int
+    tracks_per_period: int
+    theoretical_total_tracks: int
+    budget_limited_tracks: int
+    estimated_seconds: float
+    will_hit_budget: bool
+
+
+class TTVTrackHypothesisPayload(TypedDict):
+    track_id: str
+    base_period_days: float
+    base_t0_btjd: float
+    window_offsets_days: list[float]
+    score: float
+    score_improvement: float
+    n_transits_matched: int
+
+
+class TTVTrackCandidatePayload(TypedDict):
+    best_track: TTVTrackHypothesisPayload
+    alternative_tracks: list[TTVTrackHypothesisPayload]
+    periodic_score: float
+    per_transit_residuals: list[float]
+    runtime_seconds: float
+    provenance: dict[str, Any]
+
+
+class TTVTrackSearchResultPayload(TypedDict):
+    schema_version: int
+    candidates: list[TTVTrackCandidatePayload]
+    n_periods_searched: int
+    n_tracks_evaluated: int
+    runtime_seconds: float
+    budget_exhausted: bool
+    provenance: dict[str, Any]
+
+
+def to_ttv_track_search_result_payload(
+    result: TTVTrackSearchResult,
+) -> TTVTrackSearchResultPayload:
+    data = result.to_dict()
+    return {
+        "schema_version": TTV_TRACK_SEARCH_RESULT_SCHEMA_VERSION,
+        "candidates": data["candidates"],
+        "n_periods_searched": data["n_periods_searched"],
+        "n_tracks_evaluated": data["n_tracks_evaluated"],
+        "runtime_seconds": data["runtime_seconds"],
+        "budget_exhausted": data["budget_exhausted"],
+        "provenance": data["provenance"],
+    }
 
 
 def identify_observing_windows(
@@ -78,8 +145,8 @@ def estimate_search_cost(
     max_tracks_per_period: int,
     budget: TTVSearchBudget,
     gap_threshold_days: float = 5.0,
-) -> dict[str, int | float]:
-    return _estimate_search_cost(
+) -> TTVSearchCostEstimatePayload:
+    data = _estimate_search_cost(
         time_btjd,
         period_steps=period_steps,
         n_offset_steps=n_offset_steps,
@@ -87,6 +154,16 @@ def estimate_search_cost(
         budget=budget,
         gap_threshold_days=gap_threshold_days,
     )
+    return {
+        "schema_version": TTV_SEARCH_COST_SCHEMA_VERSION,
+        "n_windows": int(data["n_windows"]),
+        "period_steps": int(data["period_steps"]),
+        "tracks_per_period": int(data["tracks_per_period"]),
+        "theoretical_total_tracks": int(data["theoretical_total_tracks"]),
+        "budget_limited_tracks": int(data["budget_limited_tracks"]),
+        "estimated_seconds": float(data["estimated_seconds"]),
+        "will_hit_budget": bool(data["will_hit_budget"]),
+    }
 
 
 @cites(
@@ -102,8 +179,16 @@ def run_ttv_track_search(
     period_days: float,
     t0_btjd: float,
     duration_hours: float,
+    period_span_fraction: float = 0.005,
+    period_steps: int = 50,
+    max_offset_days: float = 0.1,
+    n_offset_steps: int = 5,
+    max_tracks_per_period: int = 200,
+    min_score_improvement: float = 2.0,
+    gap_threshold_days: float = 5.0,
+    budget: TTVSearchBudget | None = None,
+    random_seed: int = 42,
     normalize_flux: bool = True,
-    **kwargs: object,
 ) -> TTVTrackSearchResult:
     """Run a TTV track search around a known ephemeris.
 
@@ -120,13 +205,17 @@ def run_ttv_track_search(
         period_days: Base orbital period in days to search around.
         t0_btjd: Base transit epoch in BTJD.
         duration_hours: Transit duration in hours.
+        period_span_fraction: Search +/- this fraction around period_days.
+        period_steps: Number of period grid points.
+        max_offset_days: Max per-window timing offset (days).
+        n_offset_steps: Grid resolution for per-window offsets.
+        max_tracks_per_period: Max offset tracks evaluated per period.
+        min_score_improvement: Minimum improvement over periodic to report.
+        gap_threshold_days: Gap size threshold for window splitting.
+        budget: Optional compute budget.
+        random_seed: Seed for deterministic grid sampling.
         normalize_flux: If True, divides flux and flux_err by nanmedian(flux).
             Default is True.
-        **kwargs: Additional parameters passed to the internal implementation,
-            including:
-            - budget (TTVSearchBudget): Runtime/evaluation budget controls.
-            - n_offset_steps (int): Number of timing offset steps per window.
-            - max_tracks_per_period (int): Maximum tracks to evaluate per period.
 
     Returns:
         TTVTrackSearchResult containing:
@@ -164,7 +253,15 @@ def run_ttv_track_search(
         period_days=period_days,
         t0_btjd=t0_btjd,
         duration_hours=duration_hours,
-        **kwargs,  # type: ignore[arg-type]
+        period_span_fraction=period_span_fraction,
+        period_steps=period_steps,
+        max_offset_days=max_offset_days,
+        n_offset_steps=n_offset_steps,
+        max_tracks_per_period=max_tracks_per_period,
+        min_score_improvement=min_score_improvement,
+        gap_threshold_days=gap_threshold_days,
+        budget=budget,
+        random_seed=random_seed,
     )
 
 
@@ -177,8 +274,16 @@ def run_ttv_track_search_for_candidate(
     lc: LightCurve,
     candidate: Candidate,
     *,
+    period_span_fraction: float = 0.005,
+    period_steps: int = 50,
+    max_offset_days: float = 0.1,
+    n_offset_steps: int = 5,
+    max_tracks_per_period: int = 200,
+    min_score_improvement: float = 2.0,
+    gap_threshold_days: float = 5.0,
+    budget: TTVSearchBudget | None = None,
+    random_seed: int = 42,
     normalize_flux: bool = True,
-    **kwargs: object,
 ) -> TTVTrackSearchResult:
     """Run TTV track search using a Candidate's ephemeris.
 
@@ -191,10 +296,17 @@ def run_ttv_track_search_for_candidate(
             Invalid data points (NaN/Inf) are automatically masked.
         candidate: Candidate object containing the ephemeris to search around.
             The ephemeris provides period_days, t0_btjd, and duration_hours.
+        period_span_fraction: Search +/- this fraction around period_days.
+        period_steps: Number of period grid points.
+        max_offset_days: Max per-window timing offset (days).
+        n_offset_steps: Grid resolution for per-window offsets.
+        max_tracks_per_period: Max offset tracks evaluated per period.
+        min_score_improvement: Minimum improvement over periodic to report.
+        gap_threshold_days: Gap size threshold for window splitting.
+        budget: Optional compute budget.
+        random_seed: Seed for deterministic grid sampling.
         normalize_flux: If True, divides flux and flux_err by nanmedian(flux).
             Default is True.
-        **kwargs: Additional parameters passed to run_ttv_track_search,
-            including budget controls and search parameters.
 
     Returns:
         TTVTrackSearchResult containing candidate tracks and search metadata.
@@ -227,6 +339,14 @@ def run_ttv_track_search_for_candidate(
         period_days=eph.period_days,
         t0_btjd=eph.t0_btjd,
         duration_hours=eph.duration_hours,
+        period_span_fraction=period_span_fraction,
+        period_steps=period_steps,
+        max_offset_days=max_offset_days,
+        n_offset_steps=n_offset_steps,
+        max_tracks_per_period=max_tracks_per_period,
+        min_score_improvement=min_score_improvement,
+        gap_threshold_days=gap_threshold_days,
+        budget=budget,
+        random_seed=random_seed,
         normalize_flux=normalize_flux,
-        **kwargs,
     )

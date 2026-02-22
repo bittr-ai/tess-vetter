@@ -10,7 +10,7 @@ All functions are compute-only (no I/O, no network).
 from __future__ import annotations
 
 import time as _time
-from typing import Any, Literal, TypedDict, cast
+from typing import Any, Literal, TypeAlias, TypedDict, cast
 
 import numpy as np
 
@@ -39,6 +39,92 @@ from tess_vetter.api.wcs_utils import compute_pixel_scale, pixel_to_world, world
 from tess_vetter.pixel.tpf_fits import TPFFitsData
 
 ACTION_HINT_REVIEW_MARGIN_THRESHOLD = 10.0
+PIXEL_LOCALIZE_BOUNDARY_SCHEMA_VERSION = 1
+PIXEL_LOCALIZE_MARGIN_RESOLVE_THRESHOLD = float(MARGIN_RESOLVE_THRESHOLD)
+PIXEL_LOCALIZE_ACTION_HINT_REVIEW_MARGIN_THRESHOLD = float(ACTION_HINT_REVIEW_MARGIN_THRESHOLD)
+PIXEL_LOCALIZE_BASELINE_CENTROID_SHIFT_THRESHOLD_PIXELS_DEFAULT = 0.5
+
+PixelLocalizeStatus: TypeAlias = Literal["ok", "invalid"]
+PixelLocalizeVerdict: TypeAlias = Literal["ON_TARGET", "OFF_TARGET", "AMBIGUOUS", "INVALID"]
+PixelLocalizeInterpretationCode: TypeAlias = Literal["INSUFFICIENT_DISCRIMINATION"]
+PixelLocalizeActionHint: TypeAlias = Literal[
+    "DEFER_HOST_ASSIGNMENT",
+    "REVIEW_WITH_DILUTION",
+    "HOST_ON_TARGET_SUPPORTED",
+    "HOST_OFF_TARGET_CANDIDATE_REVIEW",
+]
+PixelLocalizeReliabilityFlag: TypeAlias = Literal[
+    "NON_PHYSICAL_PRF_BEST_FIT",
+    "BASELINE_SENSITIVE_LOCALIZATION",
+    "HIGH_CADENCE_DROPOUT",
+]
+
+PIXEL_LOCALIZE_INTERPRETATION_INSUFFICIENT_DISCRIMINATION: PixelLocalizeInterpretationCode = (
+    "INSUFFICIENT_DISCRIMINATION"
+)
+PIXEL_LOCALIZE_ACTION_HINT_DEFER_HOST_ASSIGNMENT: PixelLocalizeActionHint = "DEFER_HOST_ASSIGNMENT"
+PIXEL_LOCALIZE_ACTION_HINT_REVIEW_WITH_DILUTION: PixelLocalizeActionHint = "REVIEW_WITH_DILUTION"
+PIXEL_LOCALIZE_ACTION_HINT_HOST_ON_TARGET_SUPPORTED: PixelLocalizeActionHint = (
+    "HOST_ON_TARGET_SUPPORTED"
+)
+PIXEL_LOCALIZE_ACTION_HINT_HOST_OFF_TARGET_CANDIDATE_REVIEW: PixelLocalizeActionHint = (
+    "HOST_OFF_TARGET_CANDIDATE_REVIEW"
+)
+PIXEL_LOCALIZE_RELIABILITY_FLAG_NON_PHYSICAL_PRF_BEST_FIT: PixelLocalizeReliabilityFlag = (
+    "NON_PHYSICAL_PRF_BEST_FIT"
+)
+PIXEL_LOCALIZE_RELIABILITY_FLAG_BASELINE_SENSITIVE_LOCALIZATION: PixelLocalizeReliabilityFlag = (
+    "BASELINE_SENSITIVE_LOCALIZATION"
+)
+PIXEL_LOCALIZE_RELIABILITY_FLAG_HIGH_CADENCE_DROPOUT: PixelLocalizeReliabilityFlag = (
+    "HIGH_CADENCE_DROPOUT"
+)
+
+PIXEL_LOCALIZE_VERDICTS: tuple[PixelLocalizeVerdict, ...] = (
+    "ON_TARGET",
+    "OFF_TARGET",
+    "AMBIGUOUS",
+    "INVALID",
+)
+PIXEL_LOCALIZE_INTERPRETATION_CODES: tuple[PixelLocalizeInterpretationCode, ...] = (
+    PIXEL_LOCALIZE_INTERPRETATION_INSUFFICIENT_DISCRIMINATION,
+)
+PIXEL_LOCALIZE_ACTION_HINTS: tuple[PixelLocalizeActionHint, ...] = (
+    PIXEL_LOCALIZE_ACTION_HINT_DEFER_HOST_ASSIGNMENT,
+    PIXEL_LOCALIZE_ACTION_HINT_REVIEW_WITH_DILUTION,
+    PIXEL_LOCALIZE_ACTION_HINT_HOST_ON_TARGET_SUPPORTED,
+    PIXEL_LOCALIZE_ACTION_HINT_HOST_OFF_TARGET_CANDIDATE_REVIEW,
+)
+PIXEL_LOCALIZE_RELIABILITY_FLAGS: tuple[PixelLocalizeReliabilityFlag, ...] = (
+    PIXEL_LOCALIZE_RELIABILITY_FLAG_NON_PHYSICAL_PRF_BEST_FIT,
+    PIXEL_LOCALIZE_RELIABILITY_FLAG_BASELINE_SENSITIVE_LOCALIZATION,
+    PIXEL_LOCALIZE_RELIABILITY_FLAG_HIGH_CADENCE_DROPOUT,
+)
+
+
+class PixelLocalizeBoundaryContract(TypedDict):
+    schema_version: int
+    margin_resolve_threshold: float
+    action_hint_review_margin_threshold: float
+    baseline_centroid_shift_threshold_pixels_default: float
+    verdicts: tuple[PixelLocalizeVerdict, ...]
+    interpretation_codes: tuple[PixelLocalizeInterpretationCode, ...]
+    action_hints: tuple[PixelLocalizeActionHint, ...]
+    reliability_flags: tuple[PixelLocalizeReliabilityFlag, ...]
+
+
+PIXEL_LOCALIZE_BOUNDARY_CONTRACT = PixelLocalizeBoundaryContract(
+    schema_version=PIXEL_LOCALIZE_BOUNDARY_SCHEMA_VERSION,
+    margin_resolve_threshold=PIXEL_LOCALIZE_MARGIN_RESOLVE_THRESHOLD,
+    action_hint_review_margin_threshold=PIXEL_LOCALIZE_ACTION_HINT_REVIEW_MARGIN_THRESHOLD,
+    baseline_centroid_shift_threshold_pixels_default=(
+        PIXEL_LOCALIZE_BASELINE_CENTROID_SHIFT_THRESHOLD_PIXELS_DEFAULT
+    ),
+    verdicts=PIXEL_LOCALIZE_VERDICTS,
+    interpretation_codes=PIXEL_LOCALIZE_INTERPRETATION_CODES,
+    action_hints=PIXEL_LOCALIZE_ACTION_HINTS,
+    reliability_flags=PIXEL_LOCALIZE_RELIABILITY_FLAGS,
+)
 
 
 class ReferenceSource(TypedDict, total=False):
@@ -58,15 +144,15 @@ class BaselineConsistencyResult(TypedDict):
     checked: bool
     centroid_shift_pixels: float | None
     centroid_shift_threshold_pixels: float
-    verdict_local: str | None
-    verdict_global: str | None
+    verdict_local: PixelLocalizeVerdict | None
+    verdict_global: PixelLocalizeVerdict | None
     inconsistent: bool | None
 
 
 class PixelLocalizeSectorResult(TypedDict, total=False):
-    status: str
-    verdict: str
-    raw_verdict: str
+    status: PixelLocalizeStatus
+    verdict: PixelLocalizeVerdict
+    raw_verdict: PixelLocalizeVerdict
 
     best_source_id: str | None
     best_source_name: str | None
@@ -87,11 +173,11 @@ class PixelLocalizeSectorResult(TypedDict, total=False):
     n_out_of_transit: int
     runtime_seconds: float
 
-    prf_backend: str
+    prf_backend: PRFBackend
     prf_fit_diagnostics: dict[str, Any] | None
     reliability_flagged: bool
-    reliability_flags: list[str]
-    interpretation_code: str | None
+    reliability_flags: list[PixelLocalizeReliabilityFlag]
+    interpretation_code: PixelLocalizeInterpretationCode | None
     ranking_changed_by_prior: bool
     brightness_prior_enabled: bool
 
@@ -367,18 +453,18 @@ def _derive_action_hint(
     consensus_best_source_id: str | None,
     consensus_margin: float | None,
     reliability_flagged: bool,
-    interpretation_code: str | None,
+    interpretation_code: PixelLocalizeInterpretationCode | None,
     target_source_id: str,
-) -> str:
-    if reliability_flagged or interpretation_code == "INSUFFICIENT_DISCRIMINATION":
-        return "DEFER_HOST_ASSIGNMENT"
+) -> PixelLocalizeActionHint:
+    if reliability_flagged or interpretation_code == PIXEL_LOCALIZE_INTERPRETATION_INSUFFICIENT_DISCRIMINATION:
+        return PIXEL_LOCALIZE_ACTION_HINT_DEFER_HOST_ASSIGNMENT
     if consensus_margin is None or float(consensus_margin) < float(
         ACTION_HINT_REVIEW_MARGIN_THRESHOLD
     ):
-        return "REVIEW_WITH_DILUTION"
+        return PIXEL_LOCALIZE_ACTION_HINT_REVIEW_WITH_DILUTION
     if consensus_best_source_id in {target_source_id, "target"}:
-        return "HOST_ON_TARGET_SUPPORTED"
-    return "HOST_OFF_TARGET_CANDIDATE_REVIEW"
+        return PIXEL_LOCALIZE_ACTION_HINT_HOST_ON_TARGET_SUPPORTED
+    return PIXEL_LOCALIZE_ACTION_HINT_HOST_OFF_TARGET_CANDIDATE_REVIEW
 
 
 def _annotate_fit_physical(hypotheses: list[dict[str, Any]]) -> None:
@@ -557,11 +643,11 @@ def localize_transit_host_single_sector(
         _annotate_fit_physical(ranked)
 
     warnings: list[str] = []
-    reliability_flags: list[str] = []
+    reliability_flags: list[PixelLocalizeReliabilityFlag] = []
     best_source_id: str | None = None
     best_source_name: str | None = None
     margin: float | None = None
-    verdict = "AMBIGUOUS"
+    verdict: PixelLocalizeVerdict = "AMBIGUOUS"
     raw_verdict = verdict
 
     if ranked:
@@ -614,7 +700,7 @@ def localize_transit_host_single_sector(
             prf_fit_diagnostics["non_physical_indicators"] = list(non_physical_reasons)
 
     if non_physical_reasons:
-        reliability_flags.append("NON_PHYSICAL_PRF_BEST_FIT")
+        reliability_flags.append(PIXEL_LOCALIZE_RELIABILITY_FLAG_NON_PHYSICAL_PRF_BEST_FIT)
         if verdict != "AMBIGUOUS":
             # Preserve pre-gate decision for auditability.
             raw_verdict = verdict
@@ -626,10 +712,10 @@ def localize_transit_host_single_sector(
             warnings.append("Non-physical PRF best-fit indicators detected.")
 
     reliability_flagged = bool(reliability_flags)
-    interpretation_code: str | None = None
+    interpretation_code: PixelLocalizeInterpretationCode | None = None
     low_margin = margin is None or float(margin) < float(MARGIN_RESOLVE_THRESHOLD)
     if low_margin or reliability_flagged:
-        interpretation_code = "INSUFFICIENT_DISCRIMINATION"
+        interpretation_code = PIXEL_LOCALIZE_INTERPRETATION_INSUFFICIENT_DISCRIMINATION
 
     end = _time.perf_counter()
     return PixelLocalizeSectorResult(
@@ -679,7 +765,7 @@ def localize_transit_host_single_sector_with_baseline_check(
     prf_backend: Literal["prf_lite", "parametric", "instrument"] = "prf_lite",
     prf_params: dict[str, Any] | None = None,
     random_seed: int = 42,
-    centroid_shift_threshold_pixels: float = 0.5,
+    centroid_shift_threshold_pixels: float = PIXEL_LOCALIZE_BASELINE_CENTROID_SHIFT_THRESHOLD_PIXELS_DEFAULT,
     brightness_prior_enabled: bool = True,
     brightness_prior_weight: float = 40.0,
     brightness_prior_softening_mag: float = 2.5,
@@ -796,11 +882,11 @@ def localize_transit_host_single_sector_with_baseline_check(
         local["raw_verdict"] = verdict_local
         local["verdict"] = "AMBIGUOUS"
         flags = list(local.get("reliability_flags") or [])
-        if "BASELINE_SENSITIVE_LOCALIZATION" not in flags:
-            flags.append("BASELINE_SENSITIVE_LOCALIZATION")
+        if PIXEL_LOCALIZE_RELIABILITY_FLAG_BASELINE_SENSITIVE_LOCALIZATION not in flags:
+            flags.append(PIXEL_LOCALIZE_RELIABILITY_FLAG_BASELINE_SENSITIVE_LOCALIZATION)
         local["reliability_flags"] = flags
         local["reliability_flagged"] = True
-        local["interpretation_code"] = "INSUFFICIENT_DISCRIMINATION"
+        local["interpretation_code"] = PIXEL_LOCALIZE_INTERPRETATION_INSUFFICIENT_DISCRIMINATION
         local.setdefault("warnings", []).append(
             "Downgraded OFF_TARGET to AMBIGUOUS due to baseline-sensitive localization."
         )
@@ -827,7 +913,7 @@ def localize_transit_host_multi_sector(
     prf_backend: Literal["prf_lite", "parametric", "instrument"] = "prf_lite",
     prf_params: dict[str, Any] | None = None,
     random_seed: int = 42,
-    centroid_shift_threshold_pixels: float = 0.5,
+    centroid_shift_threshold_pixels: float = PIXEL_LOCALIZE_BASELINE_CENTROID_SHIFT_THRESHOLD_PIXELS_DEFAULT,
     brightness_prior_enabled: bool = True,
     brightness_prior_weight: float = 40.0,
     brightness_prior_softening_mag: float = 2.5,
@@ -875,11 +961,11 @@ def localize_transit_host_multi_sector(
             )
             r["warnings"] = warnings
             flags = list(r.get("reliability_flags") or [])
-            if "HIGH_CADENCE_DROPOUT" not in flags:
-                flags.append("HIGH_CADENCE_DROPOUT")
+            if PIXEL_LOCALIZE_RELIABILITY_FLAG_HIGH_CADENCE_DROPOUT not in flags:
+                flags.append(PIXEL_LOCALIZE_RELIABILITY_FLAG_HIGH_CADENCE_DROPOUT)
             r["reliability_flags"] = flags
             r["reliability_flagged"] = True
-            r["interpretation_code"] = "INSUFFICIENT_DISCRIMINATION"
+            r["interpretation_code"] = PIXEL_LOCALIZE_INTERPRETATION_INSUFFICIENT_DISCRIMINATION
         per_sector_results.append(r)
 
     consensus = cast(
@@ -906,7 +992,7 @@ def localize_transit_host_multi_sector(
         consensus_margin is None or consensus_margin < float(MARGIN_RESOLVE_THRESHOLD)
     )
     if low_discrimination or consensus_reliability_flagged:
-        consensus["interpretation_code"] = "INSUFFICIENT_DISCRIMINATION"
+        consensus["interpretation_code"] = PIXEL_LOCALIZE_INTERPRETATION_INSUFFICIENT_DISCRIMINATION
     else:
         consensus["interpretation_code"] = None
     consensus["reliability_flagged"] = consensus_reliability_flagged
@@ -941,6 +1027,29 @@ def localize_transit_host_multi_sector(
 __all__ = [
     "ReferenceSource",
     "BaselineConsistencyResult",
+    "PIXEL_LOCALIZE_BOUNDARY_SCHEMA_VERSION",
+    "PIXEL_LOCALIZE_MARGIN_RESOLVE_THRESHOLD",
+    "PIXEL_LOCALIZE_ACTION_HINT_REVIEW_MARGIN_THRESHOLD",
+    "PIXEL_LOCALIZE_BASELINE_CENTROID_SHIFT_THRESHOLD_PIXELS_DEFAULT",
+    "PIXEL_LOCALIZE_INTERPRETATION_INSUFFICIENT_DISCRIMINATION",
+    "PIXEL_LOCALIZE_ACTION_HINT_DEFER_HOST_ASSIGNMENT",
+    "PIXEL_LOCALIZE_ACTION_HINT_REVIEW_WITH_DILUTION",
+    "PIXEL_LOCALIZE_ACTION_HINT_HOST_ON_TARGET_SUPPORTED",
+    "PIXEL_LOCALIZE_ACTION_HINT_HOST_OFF_TARGET_CANDIDATE_REVIEW",
+    "PIXEL_LOCALIZE_RELIABILITY_FLAG_NON_PHYSICAL_PRF_BEST_FIT",
+    "PIXEL_LOCALIZE_RELIABILITY_FLAG_BASELINE_SENSITIVE_LOCALIZATION",
+    "PIXEL_LOCALIZE_RELIABILITY_FLAG_HIGH_CADENCE_DROPOUT",
+    "PIXEL_LOCALIZE_VERDICTS",
+    "PIXEL_LOCALIZE_INTERPRETATION_CODES",
+    "PIXEL_LOCALIZE_ACTION_HINTS",
+    "PIXEL_LOCALIZE_RELIABILITY_FLAGS",
+    "PixelLocalizeStatus",
+    "PixelLocalizeVerdict",
+    "PixelLocalizeInterpretationCode",
+    "PixelLocalizeActionHint",
+    "PixelLocalizeReliabilityFlag",
+    "PixelLocalizeBoundaryContract",
+    "PIXEL_LOCALIZE_BOUNDARY_CONTRACT",
     "PixelLocalizeSectorResult",
     "PixelLocalizeMultiSectorResult",
     "localize_transit_host_single_sector",

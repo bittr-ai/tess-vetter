@@ -13,13 +13,14 @@ References:
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from collections.abc import Callable
-from typing import Any, Literal
+from typing import Any, Literal, NotRequired, Protocol, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
 
+from tess_vetter.api.contracts import callable_input_schema_from_signature, opaque_object_schema
 from tess_vetter.api.references import (
     GIACALONE_2021,
     TRICERATOPS_PLUS,
@@ -29,8 +30,37 @@ from tess_vetter.api.references import (
 )
 from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
 
-# PersistentCache type comes from the host application.
-PersistentCache = Any
+
+class PersistentCache(Protocol):
+    """Minimal cache protocol required by the FPP API boundary."""
+
+    cache_dir: str | None
+
+    def keys(self) -> list[str]: ...
+
+    def get(self, key: str) -> object: ...
+
+
+class FppPresetOverrides(TypedDict, total=False):
+    """Supported per-call preset override keys."""
+
+    mc_draws: int | None
+    window_duration_mult: float | None
+    max_points: int | None
+    min_flux_err: float
+    use_empirical_noise_floor: bool
+    drop_scenario: str | list[str]
+
+
+class FppProgressPayload(TypedDict, total=False):
+    """Progress payload shape for replicate execution callbacks."""
+
+    stage: str
+    replicate: int
+    status: str
+    message: str
+    elapsed_seconds: float
+    details: NotRequired[dict[str, object]]
 
 # Valid photometric filter designations for external light curves
 ExternalLCFilter = Literal["g", "r", "i", "z", "J", "H", "K"]
@@ -113,7 +143,7 @@ STANDARD_PRESET = TriceratopsFppPreset(
     use_empirical_noise_floor=False,
 )
 
-TUTORIAL_PRESET_OVERRIDES: dict[str, Any] = {
+TUTORIAL_PRESET_OVERRIDES: FppPresetOverrides = {
     "mc_draws": 200_000,
     "max_points": 3000,
     "window_duration_mult": 2.0,
@@ -141,14 +171,14 @@ def calculate_fpp(
     tmag: float | None = None,
     timeout_seconds: float | None = None,
     preset: Literal["fast", "standard", "tutorial"] = "fast",
-    overrides: dict[str, Any] | None = None,
+    overrides: FppPresetOverrides | None = None,
     external_lightcurves: list[ExternalLightCurve] | None = None,
     contrast_curve: ContrastCurve | None = None,
     replicates: int | None = None,
     seed: int | None = None,
     allow_network: bool = True,
-    progress_hook: Callable[[dict[str, Any]], None] | None = None,
-) -> dict[str, Any]:
+    progress_hook: Callable[[Mapping[str, object]], None] | None = None,
+) -> dict[str, object]:
     """Calculate FPP using TRICERATOPS+ with an explicit preset.
 
     `standard` is intended for offline/non-interactive analysis and may take minutes.
@@ -218,3 +248,7 @@ def calculate_fpp(
         allow_network=allow_network,
         progress_hook=progress_hook,
     )
+
+
+CALCULATE_FPP_CALL_SCHEMA = callable_input_schema_from_signature(calculate_fpp)
+CALCULATE_FPP_OUTPUT_SCHEMA = opaque_object_schema()

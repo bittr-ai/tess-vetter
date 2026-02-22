@@ -32,6 +32,23 @@ from tess_vetter.code_mode.registries.operation_ids import (
 )
 from tess_vetter.code_mode.registries.tiering import ApiSymbol, tier_for_api_symbol
 
+_LR04_CHANGED_API_SYMBOLS: tuple[tuple[str, str], ...] = (
+    ("tess_vetter.api.fpp", "calculate_fpp"),
+    ("tess_vetter.api.pixel_localize", "localize_transit_host_multi_sector"),
+    ("tess_vetter.api.pixel_localize", "localize_transit_host_single_sector"),
+    ("tess_vetter.api.pixel_localize", "localize_transit_host_single_sector_with_baseline_check"),
+    ("tess_vetter.api.ttv_track_search", "estimate_search_cost"),
+    ("tess_vetter.api.ttv_track_search", "identify_observing_windows"),
+    ("tess_vetter.api.ttv_track_search", "run_ttv_track_search"),
+    ("tess_vetter.api.ttv_track_search", "run_ttv_track_search_for_candidate"),
+    ("tess_vetter.api.ttv_track_search", "should_run_ttv_search"),
+    ("tess_vetter.api.stitch", "stitch_lightcurves"),
+    ("tess_vetter.api.vetting_report", "format_check_result"),
+    ("tess_vetter.api.vetting_report", "format_vetting_table"),
+    ("tess_vetter.api.vetting_report", "render_validation_report_markdown"),
+    ("tess_vetter.api.vetting_report", "summarize_bundle"),
+)
+
 
 def test_manual_seed_adapters_import_upstream_contract_utilities() -> None:
     assert (
@@ -98,6 +115,63 @@ def test_lr02_changed_api_discovery_rows_track_expected_modules_and_symbols() ->
             name=normalize_operation_name(symbol.name),
         )
         assert operation_id in operation_ids
+
+
+def test_lr04_changed_api_adapters_keep_opaque_upstream_schemas() -> None:
+    library = make_default_ops_library()
+    operation_ids = set(library.list_ids())
+    expected_operation_ids: list[str] = []
+
+    for module_name, export_name in _LR04_CHANGED_API_SYMBOLS:
+        export_map = public_api._get_export_map()
+        assert export_name in export_map
+        assert export_map[export_name][0] == module_name
+        export_value = getattr(public_api, export_name)
+        if inspect.isclass(export_value):
+            continue
+        if not (inspect.isroutine(export_value) or callable(export_value)):
+            continue
+        symbol = ApiSymbol(module=module_name, name=export_name)
+        expected_operation_ids.append(
+            build_operation_id(
+                tier=tier_for_api_symbol(symbol),
+                name=normalize_operation_name(symbol.name),
+            )
+        )
+
+    for operation_id in expected_operation_ids:
+        assert operation_id in operation_ids
+        op = library.get(operation_id)
+        assert op.spec.input_json_schema == api_contracts.opaque_object_schema()
+        assert op.spec.output_json_schema == api_contracts.opaque_object_schema()
+        assert set(op.spec.input_json_schema) == {"type"}
+        assert set(op.spec.output_json_schema) == {"type"}
+
+
+def test_lr04_changed_api_adapters_remain_thin_against_upstream_callables() -> None:
+    library = make_default_ops_library()
+    export_map = public_api._get_export_map()
+
+    for module_name, export_name in _LR04_CHANGED_API_SYMBOLS:
+        assert export_name in export_map
+        assert export_map[export_name][0] == module_name
+        export_value = getattr(public_api, export_name)
+        if inspect.isclass(export_value):
+            continue
+        if not (inspect.isroutine(export_value) or callable(export_value)):
+            continue
+
+        symbol = ApiSymbol(module=module_name, name=export_name)
+        operation_id = build_operation_id(
+            tier=tier_for_api_symbol(symbol),
+            name=normalize_operation_name(symbol.name),
+        )
+        op = library.get(operation_id)
+
+        # Thin adapter contract: either call the upstream export directly, or a wrapper
+        # that preserves upstream identity through functools.wraps.
+        wrapped = getattr(op.fn, "__wrapped__", None)
+        assert op.fn is export_value or wrapped is export_value
 
 
 def test_execute_request_contract_is_strict_plan_code_context_and_catalog_hash() -> None:

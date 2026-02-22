@@ -4,7 +4,10 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
+from tess_vetter.api.contracts import callable_input_schema_from_signature, opaque_object_schema
 from tess_vetter.api.fpp import (
+    CALCULATE_FPP_CALL_SCHEMA,
+    CALCULATE_FPP_OUTPUT_SCHEMA,
     FAST_PRESET,
     STANDARD_PRESET,
     ContrastCurve,
@@ -150,3 +153,37 @@ def test_calculate_fpp_passes_contrast_curve_to_handler() -> None:
         kwargs = handler.call_args.kwargs
         assert kwargs["contrast_curve"] is not None
         assert kwargs["contrast_curve"].filter == "Ks"
+
+
+def test_calculate_fpp_schema_constants_track_contract_helpers() -> None:
+    assert callable_input_schema_from_signature(calculate_fpp) == CALCULATE_FPP_CALL_SCHEMA
+    assert opaque_object_schema() == CALCULATE_FPP_OUTPUT_SCHEMA
+
+
+def test_calculate_fpp_call_schema_is_stable() -> None:
+    assert CALCULATE_FPP_CALL_SCHEMA == {
+        "type": "object",
+        "properties": {
+            "allow_network": {},
+            "cache": {},
+            "contrast_curve": {},
+            "depth_ppm": {},
+            "duration_hours": {},
+            "external_lightcurves": {},
+            "overrides": {},
+            "period": {},
+            "preset": {},
+            "progress_hook": {},
+            "replicates": {},
+            "seed": {},
+            "sectors": {},
+            "stellar_mass": {},
+            "stellar_radius": {},
+            "t0": {},
+            "tic_id": {},
+            "timeout_seconds": {},
+            "tmag": {},
+        },
+        "additionalProperties": False,
+        "required": ["cache", "depth_ppm", "period", "t0", "tic_id"],
+    }

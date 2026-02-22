@@ -114,3 +114,134 @@ def test_run_ttv_track_search_deterministic() -> None:
         r1.candidates[0].best_track.window_offsets_days
         == r2.candidates[0].best_track.window_offsets_days
     )
+
+
+def test_estimate_search_cost_schema_contract() -> None:
+    from tess_vetter.api.ttv_track_search import (
+        TTV_SEARCH_COST_SCHEMA_VERSION,
+        TTVSearchBudget,
+        estimate_search_cost,
+    )
+
+    time, _, _ = _make_synthetic_ttv_lc()
+    payload = estimate_search_cost(
+        time,
+        period_steps=4,
+        n_offset_steps=5,
+        max_tracks_per_period=200,
+        budget=TTVSearchBudget(
+            max_runtime_seconds=5.0,
+            max_period_evaluations=10,
+            max_track_hypotheses=5000,
+        ),
+    )
+    assert payload["schema_version"] == TTV_SEARCH_COST_SCHEMA_VERSION
+    assert set(payload) == {
+        "schema_version",
+        "n_windows",
+        "period_steps",
+        "tracks_per_period",
+        "theoretical_total_tracks",
+        "budget_limited_tracks",
+        "estimated_seconds",
+        "will_hit_budget",
+    }
+    assert payload["n_windows"] >= 1
+    assert payload["period_steps"] >= 1
+    assert isinstance(payload["will_hit_budget"], bool)
+
+
+def test_ttv_track_search_result_payload_parity() -> None:
+    from tess_vetter.api.ttv_track_search import (
+        TTV_TRACK_SEARCH_RESULT_SCHEMA_VERSION,
+        TTVSearchBudget,
+        run_ttv_track_search,
+        to_ttv_track_search_result_payload,
+    )
+
+    time, flux, flux_err = _make_synthetic_ttv_lc()
+    result = run_ttv_track_search(
+        time,
+        flux,
+        flux_err,
+        period_days=10.0,
+        t0_btjd=1000.0,
+        duration_hours=4.0,
+        period_span_fraction=0.0,
+        period_steps=1,
+        max_offset_days=0.1,
+        n_offset_steps=5,
+        max_tracks_per_period=200,
+        min_score_improvement=0.5,
+        budget=TTVSearchBudget(
+            max_runtime_seconds=5.0,
+            max_period_evaluations=10,
+            max_track_hypotheses=5000,
+        ),
+        random_seed=123,
+    )
+    payload = to_ttv_track_search_result_payload(result)
+    assert payload["schema_version"] == TTV_TRACK_SEARCH_RESULT_SCHEMA_VERSION
+    assert payload["candidates"] == result.to_dict()["candidates"]
+    assert payload["n_periods_searched"] == result.n_periods_searched
+    assert payload["n_tracks_evaluated"] == result.n_tracks_evaluated
+    assert payload["budget_exhausted"] == result.budget_exhausted
+
+
+def test_run_ttv_track_search_for_candidate_parity_with_direct_call() -> None:
+    from tess_vetter.api.ttv_track_search import (
+        TTVSearchBudget,
+        run_ttv_track_search,
+        run_ttv_track_search_for_candidate,
+    )
+    from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
+
+    time, flux, flux_err = _make_synthetic_ttv_lc()
+    # Ensure wrapper masking path is exercised (NaN should be filtered).
+    flux = flux.copy()
+    flux[0] = np.nan
+
+    lc = LightCurve(time=time, flux=flux, flux_err=flux_err)
+    candidate = Candidate(ephemeris=Ephemeris(period_days=10.0, t0_btjd=1000.0, duration_hours=4.0))
+    budget = TTVSearchBudget(max_runtime_seconds=5.0, max_period_evaluations=10, max_track_hypotheses=5000)
+
+    kwargs = {
+        "period_span_fraction": 0.0,
+        "period_steps": 1,
+        "max_offset_days": 0.1,
+        "n_offset_steps": 5,
+        "max_tracks_per_period": 200,
+        "min_score_improvement": 0.5,
+        "gap_threshold_days": 5.0,
+        "budget": budget,
+        "random_seed": 123,
+        "normalize_flux": True,
+    }
+
+    via_candidate = run_ttv_track_search_for_candidate(lc, candidate, **kwargs)
+    internal = lc.to_internal()
+    mask = internal.valid_mask
+    via_direct = run_ttv_track_search(
+        internal.time[mask],
+        internal.flux[mask],
+        internal.flux_err[mask],
+        period_days=candidate.ephemeris.period_days,
+        t0_btjd=candidate.ephemeris.t0_btjd,
+        duration_hours=candidate.ephemeris.duration_hours,
+        **kwargs,
+    )
+    c_dict = via_candidate.to_dict()
+    d_dict = via_direct.to_dict()
+    assert c_dict["n_periods_searched"] == d_dict["n_periods_searched"]
+    assert c_dict["n_tracks_evaluated"] == d_dict["n_tracks_evaluated"]
+    assert c_dict["budget_exhausted"] == d_dict["budget_exhausted"]
+    assert c_dict["provenance"] == d_dict["provenance"]
+    assert len(c_dict["candidates"]) == len(d_dict["candidates"])
+    if c_dict["candidates"]:
+        c0 = c_dict["candidates"][0]
+        d0 = d_dict["candidates"][0]
+        assert c0["best_track"] == d0["best_track"]
+        assert c0["alternative_tracks"] == d0["alternative_tracks"]
+        assert c0["periodic_score"] == d0["periodic_score"]
+        assert c0["per_transit_residuals"] == d0["per_transit_residuals"]
+        assert c0["provenance"] == d0["provenance"]

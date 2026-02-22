@@ -15,9 +15,28 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any, TypedDict
 
+from tess_vetter.api.contracts import callable_input_schema_from_signature
 from tess_vetter.validation.result_schema import CheckStatus
 
 MetricScalar = float | int | str | bool | None
+
+VETTING_REPORT_SCHEMA_VERSION = 1
+VETTING_REPORT_COUNTS_KEYS: tuple[str, ...] = ("checks", "ok", "error", "skipped")
+VETTING_REPORT_RESULT_KEYS: tuple[str, ...] = (
+    "id",
+    "name",
+    "status",
+    "confidence",
+    "metrics",
+    "flags",
+    "notes",
+)
+VETTING_REPORT_BUNDLE_KEYS: tuple[str, ...] = (
+    "counts",
+    "results_by_id",
+    "inputs_summary",
+    "provenance",
+)
 
 
 class BundleCounts(TypedDict):
@@ -348,8 +367,27 @@ def render_validation_report_markdown(
     return "\n".join(md).rstrip() + "\n"
 
 
+FORMAT_VETTING_TABLE_CALL_SCHEMA = callable_input_schema_from_signature(format_vetting_table)
+FORMAT_CHECK_RESULT_CALL_SCHEMA = callable_input_schema_from_signature(format_check_result)
+SUMMARIZE_BUNDLE_CALL_SCHEMA = callable_input_schema_from_signature(summarize_bundle)
+RENDER_VALIDATION_REPORT_MARKDOWN_CALL_SCHEMA = callable_input_schema_from_signature(
+    render_validation_report_markdown
+)
+
+
 __all__ = [
+    "VETTING_REPORT_SCHEMA_VERSION",
+    "VETTING_REPORT_COUNTS_KEYS",
+    "VETTING_REPORT_RESULT_KEYS",
+    "VETTING_REPORT_BUNDLE_KEYS",
     "VettingTableOptions",
+    "BundleCounts",
+    "CheckSummary",
+    "BundleSummary",
+    "FORMAT_VETTING_TABLE_CALL_SCHEMA",
+    "FORMAT_CHECK_RESULT_CALL_SCHEMA",
+    "SUMMARIZE_BUNDLE_CALL_SCHEMA",
+    "RENDER_VALIDATION_REPORT_MARKDOWN_CALL_SCHEMA",
     "format_check_result",
     "format_vetting_table",
     "summarize_bundle",
