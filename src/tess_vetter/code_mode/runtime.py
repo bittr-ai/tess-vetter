@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from itertools import count
 from types import MappingProxyType
 from typing import Any
 
@@ -20,6 +22,9 @@ from tess_vetter.code_mode.policy import (
 )
 
 ERROR_CATALOG_DRIFT = "CATALOG_DRIFT"
+_FAIRNESS_LOCK = threading.Lock()
+_FAIRNESS_PLAN_SEQUENCE = count(1)
+_FAIRNESS_CALL_SEQUENCE = count(1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +84,7 @@ async def execute(
     catalog_version_hash: str | None = None,
 ) -> dict[str, Any]:
     request_context = dict(context or {})
+    plan_instance_id = _next_fairness_plan_id()
 
     try:
         profile = resolve_profile(_pick_profile_name(request_context))
@@ -96,6 +102,7 @@ async def execute(
             call_events=[],
             catalog_hash=catalog_version_hash,
             used_calls=0,
+            plan_instance_id=plan_instance_id,
         )
 
     budget = BudgetConfig.from_context(request_context, profile)
@@ -112,6 +119,7 @@ async def execute(
             call_events=call_events,
             catalog_hash=catalog_version_hash,
             used_calls=used_calls,
+            plan_instance_id=plan_instance_id,
         )
 
     ast_error = validate_plan_ast(plan_code)
@@ -124,6 +132,7 @@ async def execute(
             call_events=call_events,
             catalog_hash=catalog_version_hash,
             used_calls=used_calls,
+            plan_instance_id=plan_instance_id,
         )
 
     plan_fn_or_error = _load_execute_plan(plan_code)
@@ -136,6 +145,7 @@ async def execute(
             call_events=call_events,
             catalog_hash=catalog_version_hash,
             used_calls=used_calls,
+            plan_instance_id=plan_instance_id,
         )
 
     execute_plan = plan_fn_or_error
@@ -165,9 +175,16 @@ async def execute(
                 )
             )
 
+        plan_call_index = used_calls + 1
         used_calls += 1
+        fairness_ticket = _next_fairness_call_ticket()
         started = time.perf_counter()
-        event: dict[str, Any] = {"operation_id": op_name, "status": "ok"}
+        event: dict[str, Any] = {
+            "operation_id": op_name,
+            "status": "ok",
+            "plan_call_index": plan_call_index,
+            "fairness_ticket": fairness_ticket,
+        }
         try:
             result = await _invoke_with_per_call_timeout(op, *args, **kwargs)
             event["duration_ms"] = int((time.perf_counter() - started) * 1000)
@@ -246,6 +263,7 @@ async def execute(
             call_events=call_events,
             catalog_hash=catalog_version_hash,
             used_calls=used_calls,
+            plan_instance_id=plan_instance_id,
         )
     except _RuntimeExecutionError as exc:
         return _failure_response(
@@ -256,6 +274,7 @@ async def execute(
             call_events=call_events,
             catalog_hash=catalog_version_hash,
             used_calls=used_calls,
+            plan_instance_id=plan_instance_id,
         )
     except NetworkBoundaryViolationError as exc:
         return _failure_response(
@@ -274,6 +293,7 @@ async def execute(
             call_events=call_events,
             catalog_hash=catalog_version_hash,
             used_calls=used_calls,
+            plan_instance_id=plan_instance_id,
         )
 
     serialized = json.dumps(result, sort_keys=True, default=str).encode("utf-8")
@@ -293,6 +313,7 @@ async def execute(
             call_events=call_events,
             catalog_hash=catalog_version_hash,
             used_calls=used_calls,
+            plan_instance_id=plan_instance_id,
         )
 
     return {
@@ -311,7 +332,10 @@ async def execute(
                 "per_call_timeout_ms": budget.per_call_timeout_ms,
             },
             "call_events": call_events,
-            "metadata": {"plan_duration_ms": plan_duration_ms},
+            "metadata": {
+                "plan_duration_ms": plan_duration_ms,
+                "fairness": {"plan_instance_id": plan_instance_id},
+            },
         },
     }
 
@@ -455,6 +479,7 @@ def _failure_response(
     call_events: list[dict[str, Any]],
     catalog_hash: str | None,
     used_calls: int,
+    plan_instance_id: int,
 ) -> dict[str, Any]:
     limits = _policy_limits(profile) if profile is not None else None
     if budget is None:
@@ -478,9 +503,22 @@ def _failure_response(
             "policy_limits": limits,
             "call_budget": call_budget,
             "call_events": call_events,
-            "metadata": {"short_circuit": True},
+            "metadata": {
+                "short_circuit": True,
+                "fairness": {"plan_instance_id": plan_instance_id},
+            },
         },
     }
+
+
+def _next_fairness_plan_id() -> int:
+    with _FAIRNESS_LOCK:
+        return next(_FAIRNESS_PLAN_SEQUENCE)
+
+
+def _next_fairness_call_ticket() -> int:
+    with _FAIRNESS_LOCK:
+        return next(_FAIRNESS_CALL_SEQUENCE)
 
 
 __all__ = [

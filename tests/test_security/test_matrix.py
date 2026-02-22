@@ -240,13 +240,92 @@ async def execute_plan(ops, context):
     assert called is False
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "TODO(runtime-capability): runtime.execute has no global plan scheduler hooks and no "
-        "cross-plan fairness counters/telemetry (only per-execution used_calls), so deterministic "
-        "budget-fairness validation across concurrent plans is not currently observable."
-    ),
-)
-def test_todo_budget_fairness_across_concurrent_plans_e2e() -> None:
-    raise AssertionError("Waiting on deterministic fairness instrumentation.")
+def test_budget_fairness_across_concurrent_plans_e2e() -> None:
+    class _CoordinatedOps:
+        def __init__(self, allow_a_second_call: asyncio.Event) -> None:
+            self.allow_a_second_call = allow_a_second_call
+            self.a_started = asyncio.Event()
+            self.allow_b_first = asyncio.Event()
+            self.a_second_done = asyncio.Event()
+            self.allow_b_second = asyncio.Event()
+
+        async def a_first(self) -> dict:
+            self.a_started.set()
+            self.allow_b_first.set()
+            return {"step": "a_first"}
+
+        async def a_second(self) -> dict:
+            self.a_second_done.set()
+            self.allow_b_second.set()
+            return {"step": "a_second"}
+
+        async def b_first(self) -> dict:
+            await self.allow_b_first.wait()
+            self.allow_a_second_call.set()
+            await self.a_second_done.wait()
+            return {"step": "b_first"}
+
+        async def b_second(self) -> dict:
+            await self.allow_b_second.wait()
+            return {"step": "b_second"}
+
+    async def _run() -> tuple[dict, dict]:
+        allow_a_second_call = asyncio.Event()
+        ops = _CoordinatedOps(allow_a_second_call)
+
+        task_a = asyncio.create_task(
+            execute(
+                """
+async def execute_plan(ops, context):
+    await ops.a_first()
+    await context["allow_a_second_call"].wait()
+    await ops.a_second()
+    return {"plan": "a"}
+""",
+                ops=ops,
+                context={"allow_a_second_call": allow_a_second_call},
+                catalog_version_hash="hash-v1",
+            )
+        )
+        await ops.a_started.wait()
+        task_b = asyncio.create_task(
+            execute(
+                """
+async def execute_plan(ops, context):
+    await ops.b_first()
+    await ops.b_second()
+    return {"plan": "b"}
+""",
+                ops=ops,
+                context={"allow_a_second_call": allow_a_second_call},
+                catalog_version_hash="hash-v1",
+            )
+        )
+
+        return await asyncio.gather(task_a, task_b)
+
+    result_a, result_b = asyncio.run(_run())
+
+    assert result_a["status"] == "ok"
+    assert result_b["status"] == "ok"
+
+    events_a = result_a["trace"]["call_events"]
+    events_b = result_b["trace"]["call_events"]
+    tickets = {
+        events_a[0]["operation_id"]: events_a[0]["fairness_ticket"],
+        events_b[0]["operation_id"]: events_b[0]["fairness_ticket"],
+        events_a[1]["operation_id"]: events_a[1]["fairness_ticket"],
+        events_b[1]["operation_id"]: events_b[1]["fairness_ticket"],
+    }
+    expected = [
+        tickets["a_first"],
+        tickets["b_first"],
+        tickets["a_second"],
+        tickets["b_second"],
+    ]
+    assert len(set(expected)) == 4
+    assert expected == sorted(expected)
+
+    plan_id_a = result_a["trace"]["metadata"]["fairness"]["plan_instance_id"]
+    plan_id_b = result_b["trace"]["metadata"]["fairness"]["plan_instance_id"]
+    assert plan_id_a < plan_id_b
