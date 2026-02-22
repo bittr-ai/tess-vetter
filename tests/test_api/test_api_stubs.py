@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import importlib
 import inspect
 from pathlib import Path
 
@@ -25,6 +26,19 @@ def _stub_function_signature(name: str) -> tuple[list[str], bool]:
             has_var_kw = node.args.kwarg is not None
             return names, has_var_kw
     raise AssertionError(f"Function {name!r} not found in {str(_stub_path())!r}")
+
+
+def _runtime_export_function(name: str):
+    export_map = api._get_export_map()
+    target = export_map.get(name)
+    if target is None:
+        raise AssertionError(f"Runtime export {name!r} missing from export map")
+    module_name, attr_name = target
+    if module_name == "tess_vetter.api" and attr_name == name:
+        mod = importlib.import_module(f"{module_name}.{name}")
+        return mod
+    mod = importlib.import_module(module_name)
+    return getattr(mod, attr_name)
 
 
 def test_api_stub_file_exists() -> None:
@@ -90,7 +104,7 @@ def test_stubbed_function_prefix_signatures_match_runtime() -> None:
 
     for name in function_names:
         stub_params, has_var_kw = _stub_function_signature(name)
-        runtime_sig = inspect.signature(getattr(api, name))
+        runtime_sig = inspect.signature(_runtime_export_function(name))
         runtime_params = [
             p.name
             for p in runtime_sig.parameters.values()

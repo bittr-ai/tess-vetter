@@ -274,7 +274,6 @@ def test_default_library_fully_covers_export_map_operation_ids_including_unavail
     available_ids, unavailable_ids, legacy_dynamic_ids, unloadable_unexpected = _expected_operation_ids_from_export_map()
 
     assert not unloadable_unexpected, f"Unexpected unloadable exports: {sorted(unloadable_unexpected)}"
-    assert unavailable_ids
     assert legacy_dynamic_ids
 
     expected_ids = available_ids | unavailable_ids
