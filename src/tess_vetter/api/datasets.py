@@ -13,11 +13,13 @@ Design:
 from __future__ import annotations
 
 import csv
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import numpy as np
+from numpy.typing import NDArray
 
 from tess_vetter.api.types import LightCurve, TPFStamp
 
@@ -46,7 +48,14 @@ class LocalDataset:
         return self.summary()
 
 
-def _read_csv_no_pandas(path: Path) -> dict[str, np.ndarray]:
+class _CSVData(TypedDict):
+    time_btjd: NDArray[np.float64]
+    flux: NDArray[np.float64]
+    flux_err: NDArray[np.float64]
+    quality: NDArray[np.int32]
+
+
+def _read_csv_no_pandas(path: Path) -> _CSVData:
     """Read a tutorial-format CSV with comment header lines."""
     time: list[float] = []
     flux: list[float] = []
@@ -54,7 +63,7 @@ def _read_csv_no_pandas(path: Path) -> dict[str, np.ndarray]:
     quality: list[int] = []
 
     with path.open(newline="") as f:
-        def _non_comment_lines() -> Any:
+        def _non_comment_lines() -> Iterator[str]:
             for line in f:
                 if not line.strip() or line.startswith("#"):
                     continue
@@ -75,7 +84,7 @@ def _read_csv_no_pandas(path: Path) -> dict[str, np.ndarray]:
     }
 
 
-def _maybe_build_wcs(wcs_header: Any) -> Any:
+def _maybe_build_wcs(wcs_header: Mapping[str, object] | object) -> object:
     """Best-effort WCS construction.
 
     Returns either an astropy WCS object (if available) or the raw header dict.
@@ -91,7 +100,7 @@ def _maybe_build_wcs(wcs_header: Any) -> Any:
 def load_local_dataset(
     path: str | Path,
     *,
-    pattern_overrides: dict[str, str] | None = None,
+    pattern_overrides: Mapping[str, str] | None = None,
 ) -> LocalDataset:
     """Load a local dataset folder into API types.
 
@@ -188,4 +197,4 @@ def load_tutorial_target(name: str) -> LocalDataset:
     return load_local_dataset(base / name)
 
 
-__all__ = ["LocalDataset", "load_local_dataset", "load_tutorial_target"]
+__all__: list[str] = ["LocalDataset", "load_local_dataset", "load_tutorial_target"]

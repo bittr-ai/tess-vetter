@@ -6,7 +6,7 @@ from io import StringIO
 
 import numpy as np
 
-from tess_vetter.api.export import export_bundle
+from tess_vetter.api.export import ExportFormatEnum, export_bundle
 from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 from tess_vetter.api.vet import vet_candidate
 
@@ -54,3 +54,22 @@ def test_export_bundle_md_smoke() -> None:
     assert out is not None
     assert "My Report" in out
 
+
+def test_export_bundle_accepts_enum_format_values() -> None:
+    lc, cand = _bundle_one_check()
+    bundle = vet_candidate(lc, cand, checks=["V01"])
+
+    out = export_bundle(bundle, format=ExportFormatEnum.JSON)
+    assert out is not None
+    payload = json.loads(out)
+    assert payload["schema_version"] == 1
+
+
+def test_export_bundle_uppercase_format_still_accepted() -> None:
+    lc, cand = _bundle_one_check()
+    bundle = vet_candidate(lc, cand, checks=["V01"])
+
+    out = export_bundle(bundle, format="JSON")  # type: ignore[arg-type]
+    assert out is not None
+    payload = json.loads(out)
+    assert payload["schema_version"] == 1

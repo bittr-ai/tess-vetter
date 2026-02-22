@@ -4,17 +4,28 @@ from __future__ import annotations
 
 import csv
 import json
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from tess_vetter.api.vetting_report import render_validation_report_markdown
 from tess_vetter.validation.result_schema import VettingBundleResult
 
-ExportFormat = Literal["json", "csv", "md"]
+ExportFormatLiteral = Literal["json", "csv", "md"]
+
+
+class ExportFormatEnum(StrEnum):
+    JSON = "json"
+    CSV = "csv"
+    MARKDOWN = "md"
+
+
+ExportFormat = ExportFormatLiteral | ExportFormatEnum
+_CSVRow = dict[str, Any]
 
 
 def _bundle_to_jsonable(bundle: VettingBundleResult, *, include_raw: bool) -> dict[str, Any]:
-    data = bundle.model_dump()
+    data: dict[str, Any] = bundle.model_dump()
     if include_raw:
         return data
     # Strip raw payloads (can be large/unstructured); keep all metrics/flags/notes.
@@ -43,7 +54,7 @@ def export_bundle(
         include_raw: If True, include check-level `raw` payloads in JSON (and CSV `raw_json`).
         title: Markdown title when format="md".
     """
-    fmt = str(format).lower()
+    fmt = cast(ExportFormatLiteral, str(format).lower())
     out_path = Path(path).expanduser().resolve() if path is not None else None
 
     if fmt == "json":
@@ -62,9 +73,9 @@ def export_bundle(
         return md
 
     if fmt == "csv":
-        rows: list[dict[str, Any]] = []
+        rows: list[_CSVRow] = []
         for r in bundle.results:
-            row: dict[str, Any] = {
+            row: _CSVRow = {
                 "id": r.id,
                 "name": r.name,
                 "status": r.status,
@@ -110,5 +121,4 @@ def export_bundle(
     raise ValueError(f"Unsupported export format: {format!r}")
 
 
-__all__ = ["ExportFormat", "export_bundle"]
-
+__all__: list[str] = ["ExportFormat", "ExportFormatEnum", "ExportFormatLiteral", "export_bundle"]

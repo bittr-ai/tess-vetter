@@ -46,3 +46,21 @@ def test_render_validation_report_markdown_smoke() -> None:
     md = btv.render_validation_report_markdown(title="Test", bundle=bundle)
     assert md.startswith("# Test")
     assert "```" in md
+
+
+def test_summarize_bundle_preserves_status_literals() -> None:
+    bundle = btv.VettingBundleResult(
+        results=[
+            ok_result(id="V01", name="odd_even", metrics={}),
+            skipped_result(id="V06", name="nearby_eb", reason_flag="NETWORK_DISABLED"),
+            error_result(id="V99", name="boom", error="RuntimeError"),
+        ],
+        warnings=[],
+        provenance={},
+        inputs_summary={},
+    )
+
+    s = btv.summarize_bundle(bundle)
+    assert s["results_by_id"]["V01"]["status"] == "ok"
+    assert s["results_by_id"]["V06"]["status"] == "skipped"
+    assert s["results_by_id"]["V99"]["status"] == "error"

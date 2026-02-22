@@ -14,11 +14,13 @@ import hashlib
 import json
 import math
 from datetime import date, datetime
-from typing import Any
+from typing import Any, TypeAlias
 
 import numpy as np
 
 FLOAT_DECIMAL_PLACES = 10
+JSONScalar: TypeAlias = None | bool | int | float | str
+JSONValue: TypeAlias = JSONScalar | list["JSONValue"] | dict[str, "JSONValue"]
 
 
 def _quantize_float(value: float) -> int | float:
@@ -35,7 +37,7 @@ def _quantize_float(value: float) -> int | float:
     return float(rounded)
 
 
-def _normalize(obj: Any) -> Any:
+def _normalize(obj: object) -> JSONValue:
     if obj is None or obj is True or obj is False:
         return obj
 
@@ -81,7 +83,7 @@ def _normalize(obj: Any) -> Any:
             return sorted(normalized_items, key=lambda x: str(x))
 
     if isinstance(obj, dict):
-        out: dict[str, Any] = {}
+        out: dict[str, JSONValue] = {}
         for k, v in obj.items():
             out[str(k)] = _normalize(v)
         # json.dumps(sort_keys=True) will handle ordering.
