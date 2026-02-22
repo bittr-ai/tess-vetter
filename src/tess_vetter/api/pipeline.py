@@ -9,7 +9,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from tess_vetter.code_mode.errors import map_legacy_error_to_prd_code
 from tess_vetter.validation.registry import (
@@ -29,6 +29,158 @@ from tess_vetter.validation.result_schema import (
 if TYPE_CHECKING:
     from tess_vetter.domain.detection import TransitCandidate
     from tess_vetter.domain.lightcurve import LightCurveData
+
+
+class CheckRequirementsPayload(TypedDict):
+    """Stable API payload for check requirement metadata."""
+
+    needs_tpf: bool
+    needs_network: bool
+    needs_ra_dec: bool
+    needs_tic_id: bool
+    needs_stellar: bool
+    optional_deps: list[str]
+
+
+class CheckMetadataPayload(TypedDict):
+    """Stable API payload for check metadata."""
+
+    id: str
+    name: str
+    tier: str
+    requirements: CheckRequirementsPayload
+    citations: list[str]
+
+
+class PipelineDescribeCheckPayload(TypedDict):
+    """Stable API payload for checks that can run."""
+
+    id: str
+    name: str
+    tier: str
+
+
+class PipelineDescribeSkippedCheckPayload(PipelineDescribeCheckPayload):
+    """Stable API payload for checks that will be skipped."""
+
+    reason: str | None
+
+
+class PipelineDescribePayload(TypedDict):
+    """Stable API payload for pipeline describe output."""
+
+    will_run: list[PipelineDescribeCheckPayload]
+    will_skip: list[PipelineDescribeSkippedCheckPayload]
+    total_checks: int
+
+
+LIST_CHECKS_INPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "registry": {
+            "description": "Optional check registry override.",
+        }
+    },
+    "additionalProperties": False,
+}
+
+LIST_CHECKS_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "citations": {"type": "array", "items": {"type": "string"}},
+            "id": {"type": "string"},
+            "name": {"type": "string"},
+            "requirements": {
+                "type": "object",
+                "properties": {
+                    "needs_network": {"type": "boolean"},
+                    "needs_ra_dec": {"type": "boolean"},
+                    "needs_stellar": {"type": "boolean"},
+                    "needs_tic_id": {"type": "boolean"},
+                    "needs_tpf": {"type": "boolean"},
+                    "optional_deps": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": [
+                    "needs_network",
+                    "needs_ra_dec",
+                    "needs_stellar",
+                    "needs_tic_id",
+                    "needs_tpf",
+                    "optional_deps",
+                ],
+                "additionalProperties": False,
+            },
+            "tier": {"type": "string"},
+        },
+        "required": ["citations", "id", "name", "requirements", "tier"],
+        "additionalProperties": False,
+    },
+}
+
+DESCRIBE_CHECKS_INPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "registry": {
+            "description": "Optional check registry override.",
+        }
+    },
+    "additionalProperties": False,
+}
+
+DESCRIBE_CHECKS_OUTPUT_SCHEMA: dict[str, Any] = {"type": "string"}
+
+PIPELINE_DESCRIBE_INPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "dec_deg": {"type": ["number", "null"]},
+        "network": {"type": "boolean"},
+        "ra_deg": {"type": ["number", "null"]},
+        "tic_id": {"type": ["integer", "null"]},
+        "tpf": {
+            "description": "Opaque TPF object; null means unavailable.",
+            "type": ["object", "null"],
+        },
+    },
+    "additionalProperties": False,
+}
+
+PIPELINE_DESCRIBE_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "total_checks": {"type": "integer"},
+        "will_run": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "name": {"type": "string"},
+                    "tier": {"type": "string"},
+                },
+                "required": ["id", "name", "tier"],
+                "additionalProperties": False,
+            },
+        },
+        "will_skip": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "name": {"type": "string"},
+                    "reason": {"type": ["string", "null"]},
+                    "tier": {"type": "string"},
+                },
+                "required": ["id", "name", "reason", "tier"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["total_checks", "will_run", "will_skip"],
+    "additionalProperties": False,
+}
 
 
 @dataclass
@@ -290,7 +442,7 @@ class VettingPipeline:
         ra_deg: float | None = None,
         dec_deg: float | None = None,
         tic_id: int | None = None,
-    ) -> dict[str, Any]:
+    ) -> PipelineDescribePayload:
         """Describe what the pipeline will do given inputs.
 
         Returns a dict describing which checks will run vs skip.
@@ -307,12 +459,12 @@ class VettingPipeline:
         )
 
         checks = self._get_checks_to_run()
-        will_run = []
-        will_skip = []
+        will_run: list[PipelineDescribeCheckPayload] = []
+        will_skip: list[PipelineDescribeSkippedCheckPayload] = []
 
         for check in checks:
             met, reason = self._check_requirements_met(check.requirements, inputs)
-            info = {
+            info: PipelineDescribeCheckPayload = {
                 "id": check.id,
                 "name": check.name,
                 "tier": check.tier.value,
@@ -322,11 +474,12 @@ class VettingPipeline:
             else:
                 will_skip.append({**info, "reason": reason})
 
-        return {
+        payload: PipelineDescribePayload = {
             "will_run": will_run,
             "will_skip": will_skip,
             "total_checks": len(checks),
         }
+        return payload
 
 
 def _bundle_summary_row(
@@ -383,7 +536,7 @@ def _format_skip_note(reason: str) -> str:
     return f"Check skipped: {reason}"
 
 
-def list_checks(registry: CheckRegistry | None = None) -> list[dict[str, Any]]:
+def list_checks(registry: CheckRegistry | None = None) -> list[CheckMetadataPayload]:
     """List all available checks.
 
     Args:
@@ -393,23 +546,25 @@ def list_checks(registry: CheckRegistry | None = None) -> list[dict[str, Any]]:
         List of check info dicts.
     """
     reg = get_default_registry() if registry is None else registry
-    return [
-        {
-            "id": c.id,
-            "name": c.name,
-            "tier": c.tier.value,
-            "requirements": {
-                "needs_tpf": c.requirements.needs_tpf,
-                "needs_network": c.requirements.needs_network,
-                "needs_ra_dec": c.requirements.needs_ra_dec,
-                "needs_tic_id": c.requirements.needs_tic_id,
-                "needs_stellar": c.requirements.needs_stellar,
-                "optional_deps": list(c.requirements.optional_deps),
-            },
-            "citations": c.citations,
-        }
-        for c in reg.list()
-    ]
+    checks: list[CheckMetadataPayload] = []
+    for c in reg.list():
+        checks.append(
+            {
+                "id": c.id,
+                "name": c.name,
+                "tier": c.tier.value,
+                "requirements": {
+                    "needs_tpf": c.requirements.needs_tpf,
+                    "needs_network": c.requirements.needs_network,
+                    "needs_ra_dec": c.requirements.needs_ra_dec,
+                    "needs_tic_id": c.requirements.needs_tic_id,
+                    "needs_stellar": c.requirements.needs_stellar,
+                    "optional_deps": list(c.requirements.optional_deps),
+                },
+                "citations": list(c.citations),
+            }
+        )
+    return checks
 
 
 def describe_checks(registry: CheckRegistry | None = None) -> str:

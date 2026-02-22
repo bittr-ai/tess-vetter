@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import inspect
 from dataclasses import fields
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
+import tess_vetter.api as public_api
 import tess_vetter.api.contracts as api_contracts
 import tess_vetter.code_mode.adapters.discovery as discovery_adapters
 import tess_vetter.code_mode.adapters.manual as manual_adapters
@@ -23,6 +25,12 @@ from tess_vetter.code_mode.mcp_adapter import (
     make_default_mcp_adapter,
 )
 from tess_vetter.code_mode.operation_spec import OperationSpec, SafetyClass, SafetyRequirements
+from tess_vetter.code_mode.ops_library import make_default_ops_library
+from tess_vetter.code_mode.registries.operation_ids import (
+    build_operation_id,
+    normalize_operation_name,
+)
+from tess_vetter.code_mode.registries.tiering import ApiSymbol, tier_for_api_symbol
 
 
 def test_manual_seed_adapters_import_upstream_contract_utilities() -> None:
@@ -33,6 +41,63 @@ def test_manual_seed_adapters_import_upstream_contract_utilities() -> None:
     assert manual_adapters.model_input_schema is api_contracts.model_input_schema
     assert manual_adapters.model_output_schema is api_contracts.model_output_schema
     assert discovery_adapters.opaque_object_schema is api_contracts.opaque_object_schema
+
+
+def test_lr02_changed_api_adapters_keep_opaque_upstream_schemas() -> None:
+    library = make_default_ops_library()
+    operation_ids = set(library.list_ids())
+
+    changed_api_symbols = (
+        ("tess_vetter.api.periodogram", "run_periodogram"),
+        ("tess_vetter.api.check_runner", "run_check"),
+        ("tess_vetter.api.check_runner", "run_checks"),
+        ("tess_vetter.api.workflow", "run_candidate_workflow"),
+        ("tess_vetter.api.generate_report", "generate_report"),
+    )
+    expected_operation_ids: list[str] = []
+    for _module_name, export_name in changed_api_symbols:
+        export_value = getattr(public_api, export_name)
+        if inspect.isclass(export_value):
+            continue
+        if not (inspect.isroutine(export_value) or callable(export_value)):
+            continue
+        tier = "golden_path" if export_name in {"run_periodogram", "vet_candidate"} else "internal"
+        expected_operation_ids.append(f"code_mode.{tier}.{export_name}")
+
+    for operation_id in expected_operation_ids:
+        assert operation_id in operation_ids
+        op = library.get(operation_id)
+        assert op.spec.input_json_schema == api_contracts.opaque_object_schema()
+        assert op.spec.output_json_schema == api_contracts.opaque_object_schema()
+        assert set(op.spec.input_json_schema) == {"type"}
+        assert set(op.spec.output_json_schema) == {"type"}
+
+
+def test_lr02_changed_api_discovery_rows_track_expected_modules_and_symbols() -> None:
+    operation_ids = set(make_default_ops_library().list_ids())
+
+    export_map = public_api._get_export_map()
+    changed_api_symbols = (
+        ("tess_vetter.api.periodogram", "run_periodogram"),
+        ("tess_vetter.api.check_runner", "run_check"),
+        ("tess_vetter.api.check_runner", "run_checks"),
+        ("tess_vetter.api.workflow", "run_candidate_workflow"),
+        ("tess_vetter.api.generate_report", "generate_report"),
+    )
+    for module_name, export_name in changed_api_symbols:
+        assert export_name in export_map
+        assert export_map[export_name][0] == module_name
+        export_value = getattr(public_api, export_name)
+        if inspect.isclass(export_value):
+            continue
+        if not (inspect.isroutine(export_value) or callable(export_value)):
+            continue
+        symbol = ApiSymbol(module=module_name, name=export_name)
+        operation_id = build_operation_id(
+            tier=tier_for_api_symbol(symbol),
+            name=normalize_operation_name(symbol.name),
+        )
+        assert operation_id in operation_ids
 
 
 def test_execute_request_contract_is_strict_plan_code_context_and_catalog_hash() -> None:

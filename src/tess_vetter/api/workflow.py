@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import importlib.metadata
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypedDict
 
 import numpy as np
 
@@ -23,6 +23,54 @@ from tess_vetter.api.types import (
     VettingBundleResult,
 )
 from tess_vetter.api.vet import vet_candidate
+
+WORKFLOW_SCHEMA_VERSION = 1
+WORKFLOW_PROVENANCE_SCHEMA_VERSION = 1
+
+
+class WorkflowStitchedDiagnostics(TypedDict):
+    """Stable row contract for stitched per-sector diagnostics."""
+
+    sector: int
+    n_cadences: int
+    median_flux: float
+    mad_flux: float
+    normalization_factor: float
+    normalization_warning: str | None
+    quality_flags_summary: dict[str, int]
+
+
+class WorkflowStitchedSummary(TypedDict):
+    """Stable stitched summary contract emitted by WorkflowResult."""
+
+    normalization_policy_version: str
+    sectors: list[int]
+    per_sector_diagnostics: list[WorkflowStitchedDiagnostics]
+
+
+class WorkflowProvenance(TypedDict):
+    """Stable provenance contract emitted by WorkflowResult."""
+
+    schema_version: int
+    package_version: str
+    preset: str
+    checks: list[str] | None
+    network: bool
+    run_per_sector: bool
+    tic_id: int | None
+    has_dataset: bool
+    has_lc_by_sector: bool
+    has_tpf_by_sector: bool
+
+
+class WorkflowResultPayload(TypedDict):
+    """Stable JSON payload contract returned by WorkflowResult.to_dict()."""
+
+    schema_version: int
+    bundle: dict[str, Any]
+    per_sector: dict[str, Any] | None
+    stitched: WorkflowStitchedSummary | None
+    provenance: WorkflowProvenance
 
 
 def _package_version() -> str:
@@ -59,10 +107,10 @@ class WorkflowResult:
     schema_version: int
     bundle: VettingBundleResult
     per_sector: PerSectorVettingResult | None
-    stitched: dict[str, Any] | None
-    provenance: dict[str, Any]
+    stitched: WorkflowStitchedSummary | None
+    provenance: WorkflowProvenance
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> WorkflowResultPayload:
         return {
             "schema_version": int(self.schema_version),
             "bundle": self.bundle.model_dump(),
@@ -102,7 +150,7 @@ def run_candidate_workflow(
     if lc is None and not lc_by_sector:
         raise ValueError("Provide lc=..., lc_by_sector=..., or dataset=...")
 
-    stitched_summary: dict[str, Any] | None = None
+    stitched_summary: WorkflowStitchedSummary | None = None
     lc_for_bundle: LightCurve
     tpf_for_bundle: TPFStamp | None = None
 
@@ -169,8 +217,8 @@ def run_candidate_workflow(
             extra_context=extra_context,
         )
 
-    provenance = {
-        "schema_version": 1,
+    provenance: WorkflowProvenance = {
+        "schema_version": WORKFLOW_PROVENANCE_SCHEMA_VERSION,
         "package_version": _package_version(),
         "preset": str(preset),
         "checks": list(checks) if checks is not None else None,
@@ -183,7 +231,7 @@ def run_candidate_workflow(
     }
 
     return WorkflowResult(
-        schema_version=1,
+        schema_version=WORKFLOW_SCHEMA_VERSION,
         bundle=bundle,
         per_sector=per_sector,
         stitched=stitched_summary,
@@ -191,5 +239,13 @@ def run_candidate_workflow(
     )
 
 
-__all__ = ["WorkflowResult", "run_candidate_workflow"]
-
+__all__ = [
+    "WORKFLOW_PROVENANCE_SCHEMA_VERSION",
+    "WORKFLOW_SCHEMA_VERSION",
+    "WorkflowProvenance",
+    "WorkflowResult",
+    "WorkflowResultPayload",
+    "WorkflowStitchedDiagnostics",
+    "WorkflowStitchedSummary",
+    "run_candidate_workflow",
+]

@@ -9,7 +9,13 @@ from __future__ import annotations
 from typing import Literal
 
 import numpy as np
+from pydantic import BaseModel, ConfigDict
 
+from tess_vetter.api.contracts import (
+    callable_input_schema_from_signature,
+    model_input_schema,
+    model_output_schema,
+)
 from tess_vetter.api.references import (
     HIPPKE_HELLER_2019_TLS,
     LOMB_1976,
@@ -33,6 +39,63 @@ from tess_vetter.compute.periodogram import (  # noqa: F401
 )
 from tess_vetter.compute.periodogram import refine_period as _refine_period_compute
 from tess_vetter.domain.detection import PeriodogramPeak, PeriodogramResult  # noqa: F401
+
+
+class RunPeriodogramRequest(BaseModel):
+    """Typed request payload for periodogram API boundary contracts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    time: list[float]
+    flux: list[float]
+    flux_err: list[float] | None = None
+    min_period: float = 0.5
+    max_period: float | None = None
+    preset: Literal["fast", "thorough", "deep"] | str = "fast"
+    method: Literal["tls", "ls", "auto"] = "auto"
+    max_planets: int = 1
+    data_ref: str = ""
+    tic_id: int | None = None
+    stellar_radius_rsun: float | None = None
+    stellar_mass_msun: float | None = None
+    use_threads: int | None = None
+    per_sector: bool = True
+    downsample_factor: int = 1
+
+
+class RunPeriodogramResponse(BaseModel):
+    """Typed response payload for periodogram API boundary contracts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    result: PeriodogramResult
+
+
+class RefinePeriodRequest(BaseModel):
+    """Typed request payload for period-refinement boundary contracts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    time: list[float]
+    flux: list[float]
+    flux_err: list[float] | None
+    initial_period: float
+    initial_duration: float
+    refine_factor: float = 0.1
+    n_refine: int = 100
+    tic_id: int | None = None
+    stellar_radius_rsun: float | None = None
+    stellar_mass_msun: float | None = None
+
+
+class RefinePeriodResponse(BaseModel):
+    """Typed response payload for period-refinement boundary contracts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    period: float
+    t0: float
+    power: float
 
 
 @cites(
@@ -123,10 +186,28 @@ def refine_period(
     )
 
 
+RUN_PERIODOGRAM_INPUT_SCHEMA = model_input_schema(RunPeriodogramRequest)
+RUN_PERIODOGRAM_OUTPUT_SCHEMA = model_output_schema(RunPeriodogramResponse)
+RUN_PERIODOGRAM_CALL_SCHEMA = callable_input_schema_from_signature(run_periodogram)
+REFINE_PERIOD_INPUT_SCHEMA = model_input_schema(RefinePeriodRequest)
+REFINE_PERIOD_OUTPUT_SCHEMA = model_output_schema(RefinePeriodResponse)
+REFINE_PERIOD_CALL_SCHEMA = callable_input_schema_from_signature(refine_period)
+
+
 __all__ = [
     "PerformancePreset",
     "PeriodogramPeak",
     "PeriodogramResult",
+    "REFINE_PERIOD_CALL_SCHEMA",
+    "REFINE_PERIOD_INPUT_SCHEMA",
+    "REFINE_PERIOD_OUTPUT_SCHEMA",
+    "RefinePeriodRequest",
+    "RefinePeriodResponse",
+    "RUN_PERIODOGRAM_CALL_SCHEMA",
+    "RUN_PERIODOGRAM_INPUT_SCHEMA",
+    "RUN_PERIODOGRAM_OUTPUT_SCHEMA",
+    "RunPeriodogramRequest",
+    "RunPeriodogramResponse",
     "run_periodogram",
     "compute_transit_model",
     "auto_periodogram",

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import fields
+from types import MappingProxyType
+
 import numpy as np
 
 import tess_vetter.api as btv
+from tess_vetter.api import check_runner as check_runner_contracts
 
 
 def _make_lc_with_box_transit(
@@ -73,3 +77,78 @@ def test_format_check_result_includes_metrics_block() -> None:
     assert "Metrics" in out
     assert "delta_sigma" in out
 
+
+def test_run_check_contract_schema_fields() -> None:
+    assert [f.name for f in fields(check_runner_contracts.RunCheckRequest)] == [
+        "lc",
+        "candidate",
+        "check_id",
+        "stellar",
+        "tpf",
+        "network",
+        "ra_deg",
+        "dec_deg",
+        "tic_id",
+        "context",
+        "preset",
+        "registry",
+        "pipeline_config",
+    ]
+    assert [f.name for f in fields(check_runner_contracts.RunCheckResponse)] == ["result"]
+
+
+def test_run_checks_contract_schema_fields() -> None:
+    assert [f.name for f in fields(check_runner_contracts.RunChecksRequest)] == [
+        "lc",
+        "candidate",
+        "check_ids",
+        "stellar",
+        "tpf",
+        "network",
+        "ra_deg",
+        "dec_deg",
+        "tic_id",
+        "context",
+        "preset",
+        "registry",
+        "pipeline_config",
+    ]
+    assert [f.name for f in fields(check_runner_contracts.RunChecksResponse)] == ["results"]
+
+
+def test_run_check_contract_runtime_parity() -> None:
+    lc, eph = _make_lc_with_box_transit()
+    cand = btv.Candidate(ephemeris=eph, depth_ppm=1000.0)
+    request = check_runner_contracts.RunCheckRequest(lc=lc, candidate=cand, check_id="V01")
+
+    wrapped = btv.run_check(lc=lc, candidate=cand, check_id="V01")
+    contracted = check_runner_contracts.run_check_contract(request).result
+
+    assert wrapped.id == contracted.id
+    assert wrapped.status == contracted.status
+    assert wrapped.flags == contracted.flags
+    assert wrapped.metrics == contracted.metrics
+
+
+def test_run_checks_contract_runtime_parity() -> None:
+    lc, eph = _make_lc_with_box_transit()
+    cand = btv.Candidate(ephemeris=eph, depth_ppm=1000.0)
+    request = check_runner_contracts.RunChecksRequest(lc=lc, candidate=cand, check_ids=["V01", "V08"])
+
+    wrapped = btv.run_checks(lc=lc, candidate=cand, check_ids=["V01", "V08"])
+    contracted = check_runner_contracts.run_checks_contract(request).results
+
+    assert [r.id for r in wrapped] == [r.id for r in contracted] == ["V01", "V08"]
+    assert [r.status for r in wrapped] == [r.status for r in contracted]
+    assert [r.flags for r in wrapped] == [r.flags for r in contracted]
+
+
+def test_run_check_accepts_readonly_context_mapping() -> None:
+    lc, eph = _make_lc_with_box_transit()
+    cand = btv.Candidate(ephemeris=eph, depth_ppm=1000.0)
+    readonly_context = MappingProxyType({"sector": 1, "source": "unit-test"})
+
+    result = btv.run_check(lc=lc, candidate=cand, check_id="V01", context=readonly_context)
+
+    assert result.id == "V01"
+    assert result.status == "ok"

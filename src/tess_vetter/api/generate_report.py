@@ -17,7 +17,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass
-from typing import Any, Literal, overload
+from typing import Any, Literal, TypedDict, overload
 
 import numpy as np
 
@@ -36,12 +36,12 @@ from tess_vetter.api.types import (
     TPFStamp,
 )
 from tess_vetter.domain.detection import TransitCandidate
+from tess_vetter.platform.catalogs.exofop_toi_table import fetch_exofop_toi_table
 from tess_vetter.platform.io.mast_client import (
     DownloadProgress,
     LightCurveNotFoundError,
     MASTClient,
 )
-from tess_vetter.platform.catalogs.exofop_toi_table import fetch_exofop_toi_table
 from tess_vetter.report import (
     EnrichmentBlockData,
     ReportData,
@@ -55,6 +55,26 @@ from tess_vetter.validation.registry import CheckRegistry, CheckTier
 from tess_vetter.validation.result_schema import VettingBundleResult
 
 logger = logging.getLogger(__name__)
+
+GENERATE_REPORT_RESULT_SCHEMA_VERSION = 1
+GENERATE_REPORT_ENRICHMENT_SCHEMA_VERSION = "0.1.0"
+GENERATE_REPORT_PLOT_DATA_KEY = "plot_data"
+
+
+class GenerateReportJSONContract(TypedDict, total=False):
+    """Stable report JSON boundary payload (plot_data removed)."""
+
+    schema_version: str
+    verdict: str
+    verdict_source: str
+    summary: dict[str, Any]
+    custom_views: dict[str, Any]
+
+
+class GenerateReportPlotDataContract(TypedDict, total=False):
+    """Stable plot-data payload emitted separately from report_json."""
+
+    full_lc: dict[str, Any]
 
 
 def _to_optional_finite_float(value: Any) -> float | None:
@@ -114,6 +134,11 @@ class GenerateReportResult:
     sectors_used: list[int]
     stitch_diagnostics: list[SectorDiagnostics] | None
     vet_artifact_reuse: VetArtifactReuseSummary | None = None
+
+    @property
+    def schema_version(self) -> int:
+        """Contract schema version for the GenerateReportResult wrapper."""
+        return GENERATE_REPORT_RESULT_SCHEMA_VERSION
 
 
 @dataclass(frozen=True)
@@ -323,9 +348,11 @@ def generate_report(
         )
 
     full_report_json = report.to_json()
-    plot_data_json = dict(full_report_json.get("plot_data", {}))
-    report_json = dict(full_report_json)
-    report_json.pop("plot_data", None)
+    plot_data_json: GenerateReportPlotDataContract = dict(
+        full_report_json.get(GENERATE_REPORT_PLOT_DATA_KEY, {})
+    )
+    report_json: GenerateReportJSONContract = dict(full_report_json)
+    report_json.pop(GENERATE_REPORT_PLOT_DATA_KEY, None)
 
     # 7. Optional HTML
     html = render_html(report) if include_html else None
@@ -488,7 +515,7 @@ def _build_enrichment_data(
             )
 
     return ReportEnrichmentData(
-        version="0.1.0",
+        version=GENERATE_REPORT_ENRICHMENT_SCHEMA_VERSION,
         pixel_diagnostics=blocks["pixel_diagnostics"],
         catalog_context=blocks["catalog_context"],
         followup_context=blocks["followup_context"],
@@ -1017,4 +1044,13 @@ def _build_followup_context(
     )
 
 
-__all__ = ["EnrichmentConfig", "GenerateReportResult", "generate_report"]
+__all__ = [
+    "GENERATE_REPORT_ENRICHMENT_SCHEMA_VERSION",
+    "GENERATE_REPORT_PLOT_DATA_KEY",
+    "GENERATE_REPORT_RESULT_SCHEMA_VERSION",
+    "EnrichmentConfig",
+    "GenerateReportJSONContract",
+    "GenerateReportPlotDataContract",
+    "GenerateReportResult",
+    "generate_report",
+]
