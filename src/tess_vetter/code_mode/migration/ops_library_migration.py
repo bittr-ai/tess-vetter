@@ -23,6 +23,14 @@ class OpsLibraryIdDiff:
             "renamed_ids": self.renamed_ids,
         }
 
+    def missing_by_tier_prefix(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        """Group missing ids by tier prefix for machine-readable reporting."""
+        return _group_ids_by_tier_prefix(self.missing_ids)
+
+    def added_by_tier_prefix(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        """Group added ids by tier prefix for machine-readable reporting."""
+        return _group_ids_by_tier_prefix(self.added_ids)
+
 
 def _normalize_ids(ids: Iterable[str]) -> tuple[str, ...]:
     """Normalize ids into sorted unique tuples for deterministic processing."""
@@ -32,6 +40,25 @@ def _normalize_ids(ids: Iterable[str]) -> tuple[str, ...]:
 def _leaf_token(operation_id: str) -> str:
     """Return the suffix token used for conservative rename inference."""
     return operation_id.rsplit(".", 1)[-1]
+
+
+def _tier_prefix(operation_id: str) -> str:
+    """Return the first two path segments used as a tier prefix."""
+    segments = operation_id.split(".")
+    if len(segments) >= 2:
+        return ".".join(segments[:2])
+    return segments[0]
+
+
+def _group_ids_by_tier_prefix(ids: Iterable[str]) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """Group ids by tier prefix with deterministic ordering."""
+    grouped: dict[str, list[str]] = defaultdict(list)
+    for operation_id in _normalize_ids(ids):
+        grouped[_tier_prefix(operation_id)].append(operation_id)
+    return tuple(
+        (tier_prefix, tuple(sorted(values)))
+        for tier_prefix, values in sorted(grouped.items())
+    )
 
 
 def _infer_renames(
@@ -109,7 +136,37 @@ def compare_legacy_seed_ids(
     )
 
 
+def summarize_legacy_seed_coverage_delta(
+    legacy_seed_ids: Iterable[str],
+    discovered_modular_ids: Iterable[str],
+    *,
+    renamed_id_hints: Mapping[str, str] | None = None,
+) -> dict[str, object]:
+    """Build a deterministic coverage summary for migration reporting."""
+
+    normalized_legacy = _normalize_ids(legacy_seed_ids)
+    normalized_discovered = _normalize_ids(discovered_modular_ids)
+    diff = compare_legacy_seed_ids(
+        legacy_seed_ids=normalized_legacy,
+        discovered_modular_ids=normalized_discovered,
+        renamed_id_hints=renamed_id_hints,
+    )
+    return {
+        "coverage_delta_counts": {
+            "legacy_seed_total": len(normalized_legacy),
+            "expanded_discovery_total": len(normalized_discovered),
+            "missing_total": len(diff.missing_ids),
+            "added_total": len(diff.added_ids),
+            "renamed_total": len(diff.renamed_ids),
+            "net_new_total": len(normalized_discovered) - len(normalized_legacy),
+        },
+        "missing_by_tier_prefix": diff.missing_by_tier_prefix(),
+        "added_by_tier_prefix": diff.added_by_tier_prefix(),
+    }
+
+
 __all__ = [
     "OpsLibraryIdDiff",
     "compare_legacy_seed_ids",
+    "summarize_legacy_seed_coverage_delta",
 ]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Final
 
@@ -19,6 +20,8 @@ _PRIMITIVE_MODULE_TOKENS: Final[tuple[str, ...]] = (
     "primitives",
     "primitive",
 )
+_SNAKE_BOUNDARY_RE: Final[re.Pattern[str]] = re.compile(r"(?<!^)(?=[A-Z])")
+_NON_IDENT_RE: Final[re.Pattern[str]] = re.compile(r"[^a-z0-9_]+")
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +52,13 @@ def normalize_api_symbol(symbol: str | ApiSymbol) -> ApiSymbol:
     return ApiSymbol(module=module, name=name)
 
 
+def _normalize_policy_name(name: str) -> str:
+    normalized = _SNAKE_BOUNDARY_RE.sub("_", name).lower()
+    normalized = normalized.replace("-", "_")
+    normalized = _NON_IDENT_RE.sub("_", normalized).strip("_")
+    return normalized
+
+
 def tier_for_api_symbol(
     symbol: str | ApiSymbol,
     *,
@@ -62,8 +72,9 @@ def tier_for_api_symbol(
     3) internal fallback
     """
     normalized = normalize_api_symbol(symbol)
+    normalized_name = _normalize_policy_name(normalized.name)
 
-    if normalized.name in golden_path_symbols:
+    if normalized_name in golden_path_symbols:
         return "golden_path"
 
     module_lc = normalized.module.lower()

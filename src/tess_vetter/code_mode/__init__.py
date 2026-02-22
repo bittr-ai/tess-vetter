@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from tess_vetter.code_mode.adapters import (
+    default_adapter_registration_plan,
+    legacy_manual_seed_ids,
+)
 from tess_vetter.code_mode.operation_spec import (
     OperationCitation,
     OperationExample,
@@ -19,5 +23,7 @@ __all__ = [
     "OpsLibrary",
     "SafetyClass",
     "SafetyRequirements",
+    "default_adapter_registration_plan",
+    "legacy_manual_seed_ids",
     "make_default_ops_library",
 ]

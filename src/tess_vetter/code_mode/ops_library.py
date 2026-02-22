@@ -6,8 +6,7 @@ import builtins
 
 from tess_vetter.code_mode.adapters import (
     OperationAdapter,
-    discover_api_export_adapters,
-    manual_seed_adapters,
+    default_adapter_registration_plan,
 )
 
 
@@ -41,15 +40,10 @@ class OpsLibrary:
 
 
 def make_default_ops_library() -> OpsLibrary:
-    """Construct the default operation library from seed and discovered adapters."""
+    """Construct the default operation library from the adapter registration plan."""
     library = OpsLibrary()
-
-    for adapter in manual_seed_adapters():
+    for adapter in default_adapter_registration_plan():
         library.register(adapter)
-
-    for adapter in discover_api_export_adapters(existing_ids=set(library.list_ids())):
-        library.register(adapter)
-
     return library
 
 

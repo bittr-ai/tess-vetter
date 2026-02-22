@@ -13,6 +13,18 @@ from tess_vetter.code_mode.operation_spec import (
     SafetyRequirements,
 )
 
+_LEGACY_MANUAL_SEED_IDS: tuple[str, ...] = (
+    "code_mode.golden.vet_candidate",
+    "code_mode.golden.run_periodogram",
+    "code_mode.primitive.fold",
+    "code_mode.primitive.median_detrend",
+)
+
+
+def legacy_manual_seed_ids() -> tuple[str, ...]:
+    """Return legacy/manual seed operation ids in deterministic registration order."""
+    return _LEGACY_MANUAL_SEED_IDS
+
 
 def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
     """Return stable seed adapters that are always present by design."""
@@ -95,4 +107,4 @@ def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
     )
 
 
-__all__ = ["manual_seed_adapters"]
+__all__ = ["legacy_manual_seed_ids", "manual_seed_adapters"]

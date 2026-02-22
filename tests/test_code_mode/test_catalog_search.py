@@ -75,6 +75,54 @@ def test_build_catalog_shuffled_input_invariant() -> None:
     assert build_base.canonical_lines == build_shuffled.canonical_lines
 
 
+def test_build_catalog_normalizes_legacy_tier_labels_for_order_and_hash() -> None:
+    legacy = [
+        {
+            "id": "legacy_golden",
+            "tier": "golden",
+            "title": "Legacy golden",
+            "description": "Legacy tier label",
+            "tags": ["legacy"],
+            "schema": {"type": "object", "properties": {}},
+        },
+        {
+            "id": "legacy_api",
+            "tier": "api",
+            "title": "Legacy api",
+            "description": "Legacy tier label",
+            "tags": ["legacy"],
+            "schema": {"type": "object", "properties": {}},
+        },
+        {
+            "id": "new_internal",
+            "tier": "internal",
+            "title": "Internal",
+            "description": "Expanded tier label",
+            "tags": ["legacy"],
+            "schema": {"type": "object", "properties": {}},
+        },
+    ]
+    expanded = deepcopy(legacy)
+    expanded[0]["tier"] = "golden_path"
+    expanded[1]["tier"] = "primitive"
+
+    build_legacy = build_catalog(legacy)
+    build_expanded = build_catalog(expanded)
+
+    assert [entry.tier for entry in build_legacy.entries] == [
+        "golden_path",
+        "primitive",
+        "internal",
+    ]
+    assert [entry.id for entry in build_legacy.entries] == [
+        "legacy_golden",
+        "legacy_api",
+        "new_internal",
+    ]
+    assert build_legacy.canonical_lines == build_expanded.canonical_lines
+    assert build_legacy.catalog_version_hash == build_expanded.catalog_version_hash
+
+
 def test_schema_change_changes_catalog_hash() -> None:
     original = _sample_entries()
     changed = deepcopy(original)
@@ -176,6 +224,82 @@ def test_search_tiebreak_by_id_for_equal_rank() -> None:
 
     assert [match.entry.id for match in matches] == ["a_same_rank", "z_same_rank"]
     assert matches[0].score == matches[1].score
+
+
+def test_search_legacy_and_expanded_tiers_rank_identically() -> None:
+    legacy_catalog = build_catalog(
+        [
+            {
+                "id": "legacy_golden",
+                "tier": "golden",
+                "title": "Golden path legacy",
+                "description": "Flow",
+                "tags": ["catalog"],
+                "schema": {"type": "object", "properties": {}},
+            },
+            {
+                "id": "legacy_api",
+                "tier": "api",
+                "title": "Primitive legacy",
+                "description": "Flow",
+                "tags": ["catalog"],
+                "schema": {"type": "object", "properties": {}},
+            },
+            {
+                "id": "native_internal",
+                "tier": "internal",
+                "title": "Internal native",
+                "description": "Flow",
+                "tags": ["catalog"],
+                "schema": {"type": "object", "properties": {}},
+            },
+        ]
+    )
+    expanded_catalog = build_catalog(
+        [
+            {
+                "id": "legacy_golden",
+                "tier": "golden_path",
+                "title": "Golden path legacy",
+                "description": "Flow",
+                "tags": ["catalog"],
+                "schema": {"type": "object", "properties": {}},
+            },
+            {
+                "id": "legacy_api",
+                "tier": "primitive",
+                "title": "Primitive legacy",
+                "description": "Flow",
+                "tags": ["catalog"],
+                "schema": {"type": "object", "properties": {}},
+            },
+            {
+                "id": "native_internal",
+                "tier": "internal",
+                "title": "Internal native",
+                "description": "Flow",
+                "tags": ["catalog"],
+                "schema": {"type": "object", "properties": {}},
+            },
+        ]
+    )
+
+    legacy_matches = search_catalog(legacy_catalog.entries, query="", tags=[], limit=3)
+    expanded_matches = search_catalog(expanded_catalog.entries, query="", tags=[], limit=3)
+
+    assert [match.entry.id for match in legacy_matches] == [
+        "legacy_golden",
+        "legacy_api",
+        "native_internal",
+    ]
+    assert [match.entry.id for match in expanded_matches] == [
+        "legacy_golden",
+        "legacy_api",
+        "native_internal",
+    ]
+    assert [match.score for match in legacy_matches] == [match.score for match in expanded_matches]
+    assert any(reason == "tier:golden_path:30" for reason in legacy_matches[0].why_matched)
+    assert any(reason == "tier:primitive:20" for reason in legacy_matches[1].why_matched)
 
 
 def test_search_limit_is_deterministic_across_input_order() -> None:

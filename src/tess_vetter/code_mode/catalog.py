@@ -12,6 +12,16 @@ CatalogTier = Literal["golden_path", "primitive", "internal"]
 
 TIER_ORDER: tuple[CatalogTier, ...] = ("golden_path", "primitive", "internal")
 _TIER_RANK: dict[str, int] = {tier: idx for idx, tier in enumerate(TIER_ORDER)}
+_TIER_ALIASES: dict[str, CatalogTier] = {
+    "golden": "golden_path",
+    "golden_path": "golden_path",
+    "golden-path": "golden_path",
+    "golden path": "golden_path",
+    "api": "primitive",
+    "primitive": "primitive",
+    "primitives": "primitive",
+    "internal": "internal",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +99,12 @@ def _tier_sort_key(tier: str) -> tuple[int, str]:
     return (_TIER_RANK.get(tier, len(TIER_ORDER)), tier)
 
 
+def normalize_tier_label(raw_tier: Any) -> str:
+    """Normalize tier labels for compatibility across legacy and expanded names."""
+    tier = str(raw_tier).strip().lower()
+    return _TIER_ALIASES.get(tier, tier)
+
+
 def _canonical_line(entry: CatalogEntry) -> str:
     tags = ",".join(entry.tags)
     replacement = entry.replacement or ""
@@ -119,7 +135,7 @@ def build_catalog(entries: list[dict[str, Any]]) -> CatalogBuildResult:
 
     for raw in entries:
         entry_id = str(raw["id"])
-        tier = str(raw["tier"])
+        tier = normalize_tier_label(raw["tier"])
         title = str(raw.get("title") or raw.get("name") or entry_id)
         description = str(raw.get("description") or "")
         tags = _normalize_tags(raw.get("tags"))
@@ -170,6 +186,7 @@ __all__ = [
     "TIER_ORDER",
     "build_catalog",
     "canonicalize_value",
+    "normalize_tier_label",
     "schema_fingerprint",
     "short_hash",
 ]

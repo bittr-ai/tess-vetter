@@ -6,7 +6,7 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from tess_vetter.code_mode.catalog import CatalogEntry
+from tess_vetter.code_mode.catalog import CatalogEntry, normalize_tier_label
 
 _TIER_BIAS: dict[str, int] = {
     "golden_path": 30,
@@ -80,11 +80,12 @@ def search_catalog(
     max_tag_matches = 0
     max_text_score = 0
     for entry in entries:
-        tier_bias = _TIER_BIAS.get(entry.tier, 0)
+        normalized_tier = normalize_tier_label(entry.tier)
+        tier_bias = _TIER_BIAS.get(normalized_tier, 0)
         tag_matches = len(requested_tags.intersection(entry.tags))
         text_score, text_reasons = _text_relevance(query_tokens, entry)
 
-        why: list[str] = [f"tier:{entry.tier}:{tier_bias}"]
+        why: list[str] = [f"tier:{normalized_tier}:{tier_bias}"]
         if tag_matches > 0:
             why.append(f"tags:{tag_matches}")
         why.extend(text_reasons)

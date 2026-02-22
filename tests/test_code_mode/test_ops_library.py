@@ -1,8 +1,51 @@
 from __future__ import annotations
 
+import inspect
+
+import tess_vetter.api as public_api
 import tess_vetter.code_mode.adapters.manual as manual_adapters
 from tess_vetter.code_mode.operation_spec import OperationSpec
 from tess_vetter.code_mode.ops_library import OperationAdapter, OpsLibrary, make_default_ops_library
+from tess_vetter.code_mode.registries.operation_ids import (
+    build_operation_id,
+    normalize_operation_name,
+)
+from tess_vetter.code_mode.registries.tiering import ApiSymbol, tier_for_api_symbol
+
+_DOCUMENTED_OPTIONAL_EXPORT_SKIPS: frozenset[str] = frozenset(
+    set(public_api._MLX_GUARDED_EXPORTS) | set(public_api._MATPLOTLIB_GUARDED_EXPORTS)
+)
+
+
+def _expected_loadable_operation_ids_from_export_map() -> tuple[set[str], set[str], set[str]]:
+    expected: set[str] = set()
+    unloadable_documented: set[str] = set()
+    unloadable_unexpected: set[str] = set()
+
+    for export_name, (module_name, _attr_name) in sorted(public_api._get_export_map().items()):
+        symbol = ApiSymbol(module=module_name, name=export_name)
+        try:
+            value = getattr(public_api, export_name)
+        except (AttributeError, ImportError, ModuleNotFoundError):
+            if export_name in _DOCUMENTED_OPTIONAL_EXPORT_SKIPS:
+                unloadable_documented.add(export_name)
+            else:
+                unloadable_unexpected.add(export_name)
+            continue
+
+        if inspect.isclass(value):
+            continue
+        if not (inspect.isroutine(value) or callable(value)):
+            continue
+
+        expected.add(
+            build_operation_id(
+                tier=tier_for_api_symbol(symbol),
+                name=normalize_operation_name(symbol.name),
+            )
+        )
+
+    return expected, unloadable_documented, unloadable_unexpected
 
 
 def test_operation_adapter_forwards_call_unchanged() -> None:
@@ -85,11 +128,28 @@ def test_default_library_includes_seed_and_broad_discovered_exports() -> None:
     assert "code_mode.primitive.median_detrend" in ids
 
     # Auto-discovered callable exports provide much broader surface coverage.
-    discovered_ids = [op_id for op_id in ids if op_id.startswith("code_mode.api.")]
-    assert len(discovered_ids) >= 20
-    assert len(ids) >= 24
+    discovered_ids = [op_id for op_id in ids if op_id.startswith(("code_mode.golden_path.", "code_mode.internal."))]
+    assert len(discovered_ids) >= 100
+    assert len(ids) >= 120
 
     # Key golden-path and primitive exports should be auto-registered too.
-    assert "code_mode.api.vet_candidate" in ids
-    assert "code_mode.api.run_periodogram" in ids
-    assert "code_mode.primitive.check_odd_even_depth" in ids
+    assert "code_mode.golden_path.vet_candidate" in ids
+    assert "code_mode.golden_path.run_periodogram" in ids
+    assert "code_mode.internal.calculate_fpp" in ids
+    assert "code_mode.primitive.box_model" in ids
+
+
+def test_default_library_fully_covers_loadable_operation_like_exports() -> None:
+    library_ids = set(make_default_ops_library().list_ids())
+    expected_ids, unloadable_documented, unloadable_unexpected = (
+        _expected_loadable_operation_ids_from_export_map()
+    )
+
+    assert not unloadable_unexpected, f"Unexpected unloadable exports: {sorted(unloadable_unexpected)}"
+    assert unloadable_documented <= _DOCUMENTED_OPTIONAL_EXPORT_SKIPS
+
+    missing = expected_ids - library_ids
+    assert not missing, f"Missing discovered operation ids: {sorted(missing)}"
+
+    coverage = len(expected_ids - missing) / max(len(expected_ids), 1)
+    assert coverage == 1.0

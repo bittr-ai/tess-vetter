@@ -3,40 +3,40 @@
 from __future__ import annotations
 
 import inspect
-import re
-from types import ModuleType
 
 import tess_vetter.api as _api
-from tess_vetter.api import primitives as _api_primitives
 from tess_vetter.code_mode.adapters.base import OperationAdapter
 from tess_vetter.code_mode.operation_spec import OperationCitation, OperationSpec, SafetyClass
-
-_SNAKE_BOUNDARY_RE = re.compile(r"(?<!^)(?=[A-Z])")
-_NON_IDENT_RE = re.compile(r"[^a-z0-9_]+")
-
-
-def _normalize_export_name(name: str) -> str:
-    normalized = _SNAKE_BOUNDARY_RE.sub("_", name).lower()
-    normalized = normalized.replace("-", "_")
-    normalized = _NON_IDENT_RE.sub("_", normalized).strip("_")
-    if not normalized:
-        normalized = "export"
-    if not normalized[0].isalpha():
-        normalized = f"fn_{normalized}"
-    return normalized
+from tess_vetter.code_mode.registries.operation_ids import (
+    build_operation_id,
+    normalize_operation_name,
+)
+from tess_vetter.code_mode.registries.tiering import ApiSymbol, tier_for_api_symbol
 
 
-def _iter_module_callables(module: ModuleType) -> list[tuple[str, object]]:
-    export_names = tuple(getattr(module, "__all__", ()))
-    callables: list[tuple[str, object]] = []
-    for name in sorted(set(export_names)):
+def _iter_api_export_callables() -> list[tuple[ApiSymbol, object]]:
+    """Resolve callable exports from ``tess_vetter.api`` export map deterministically."""
+    export_map = _api._get_export_map()
+    exports: list[tuple[ApiSymbol, object]] = []
+
+    # Deterministic discovery order independent of dict insertion behavior.
+    for export_name in sorted(export_map):
+        module_name, _attr_name = export_map[export_name]
+        symbol = ApiSymbol(module=module_name, name=export_name)
         try:
-            value = getattr(module, name)
-        except (AttributeError, ImportError):
+            value = getattr(_api, export_name)
+        except (AttributeError, ImportError, ModuleNotFoundError):
+            # Optional guarded exports are intentionally skipped when unavailable.
             continue
-        if callable(value):
-            callables.append((name, value))
-    return callables
+
+        if inspect.isclass(value):
+            continue
+        if not (inspect.isroutine(value) or callable(value)):
+            continue
+
+        exports.append((symbol, value))
+
+    return exports
 
 
 def _build_auto_adapter(operation_id: str, export_name: str, fn: object, *, module_name: str) -> OperationAdapter:
@@ -59,20 +59,18 @@ def discover_api_export_adapters(existing_ids: set[str] | None = None) -> tuple[
     """Discover callable API exports and convert them into adapters deterministically."""
     used_ids = set(existing_ids or ())
     discovered: list[OperationAdapter] = []
-    discovery_plan: tuple[tuple[str, ModuleType], ...] = (
-        ("api", _api),
-        ("primitive", _api_primitives),
-    )
 
-    for tier, module in discovery_plan:
-        for export_name, fn in _iter_module_callables(module):
-            operation_id = f"code_mode.{tier}.{_normalize_export_name(export_name)}"
-            if operation_id in used_ids:
-                continue
-            used_ids.add(operation_id)
-            discovered.append(
-                _build_auto_adapter(operation_id, export_name, fn, module_name=module.__name__)
-            )
+    for symbol, fn in _iter_api_export_callables():
+        operation_id = build_operation_id(
+            tier=tier_for_api_symbol(symbol),
+            name=normalize_operation_name(symbol.name),
+        )
+        if operation_id in used_ids:
+            continue
+        used_ids.add(operation_id)
+        discovered.append(
+            _build_auto_adapter(operation_id, symbol.name, fn, module_name=symbol.module)
+        )
 
     return tuple(sorted(discovered, key=lambda adapter: adapter.id))
 
