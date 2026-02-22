@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hashlib import sha256
 from typing import Any
 
 from tess_vetter.code_mode.mcp_adapter import (
@@ -17,38 +16,46 @@ from tess_vetter.code_mode.mcp_adapter import (
 @dataclass(frozen=True)
 class SecurityScenario:
     name: str
-    request: SearchRequest | ExecuteRequest
+    request: Any
     expected_error_code: str
 
 
 def build_matrix_adapter() -> MCPAdapter:
     def _search_handler(_req: SearchRequest) -> SearchResponse:
         return SearchResponse(
-            ok=True,
-            catalog_version_hash="catalog-v1",
             results=[
                 SearchResult(
                     id="ops.run",
                     title="Run",
-                    snippet="Run operation",
+                    snippet="Run plan",
                     score=1.0,
-                    metadata={"version": "1.2.3", "tier": "golden_path"},
+                    metadata={
+                        "operation_id": "ops.run",
+                        "operation_version": "1.2.3",
+                        "operation_tier": "golden_path",
+                        "operation_tags": ["core"],
+                        "operation_requirements": {},
+                        "operation_safety_class": "sandboxed",
+                        "is_callable": True,
+                    },
                 )
             ],
+            total=1,
+            cursor=None,
+            catalog_version_hash="catalog-v1",
+            error=None,
         )
 
-    def _execute_handler(_req: ExecuteRequest) -> ExecuteResponse:
-        return ExecuteResponse(ok=True, output={"status": "ok"})
+    def _execute_handler(req: ExecuteRequest) -> ExecuteResponse:
+        return ExecuteResponse(
+            status="ok",
+            result={"status": "ok", "hash": req.catalog_version_hash},
+            error=None,
+            trace=None,
+            catalog_version_hash=req.catalog_version_hash,
+        )
 
     return MCPAdapter(
         search_handler=_search_handler,
         execute_handler=_execute_handler,
     )
-
-
-def canonical_payload_hash(payload: dict[str, Any]) -> str:
-    import json
-
-    return sha256(
-        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    ).hexdigest()

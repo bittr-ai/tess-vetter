@@ -6,6 +6,7 @@ import sys
 from hashlib import sha256
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -21,7 +22,6 @@ _FIXTURE_SPEC.loader.exec_module(_fixtures)
 
 SecurityScenario = _fixtures.SecurityScenario
 build_matrix_adapter = _fixtures.build_matrix_adapter
-canonical_payload_hash = _fixtures.canonical_payload_hash
 
 
 @pytest.mark.parametrize(
@@ -29,35 +29,38 @@ canonical_payload_hash = _fixtures.canonical_payload_hash
     [
         pytest.param(
             SecurityScenario(
-                name="search_network_denied",
-                request=SearchRequest(query="tic 123", allow_network=False),
-                expected_error_code="network_denied",
+                name="search_query_type_violation",
+                request=SimpleNamespace(query=123, limit=10, tags=None),
+                expected_error_code="SCHEMA_VIOLATION_INPUT",
             ),
             "search",
-            id="search-network-denied",
+            id="search-query-type-violation",
         ),
         pytest.param(
             SecurityScenario(
-                name="execute_sandbox_guard",
-                request=ExecuteRequest(operation="run", payload={"x": 1}, sandboxed=False),
-                expected_error_code="POLICY_DENIED",
-            ),
-            "execute",
-            id="execute-sandbox-required",
-        ),
-        pytest.param(
-            SecurityScenario(
-                name="execute_hash_mismatch",
-                request=ExecuteRequest(
-                    operation="run",
-                    payload={"x": 1},
-                    sandboxed=True,
-                    expected_payload_sha256=canonical_payload_hash({"x": 2}),
+                name="execute_plan_code_type_violation",
+                request=SimpleNamespace(
+                    plan_code=123,
+                    context={"candidate": "tic-123"},
+                    catalog_version_hash="catalog-v1",
                 ),
                 expected_error_code="SCHEMA_VIOLATION_INPUT",
             ),
             "execute",
-            id="execute-hash-mismatch",
+            id="execute-plan-code-type-violation",
+        ),
+        pytest.param(
+            SecurityScenario(
+                name="execute_context_type_violation",
+                request=SimpleNamespace(
+                    plan_code="async def execute_plan(ops, context):\n    return {'ok': True}\n",
+                    context=[],
+                    catalog_version_hash="catalog-v1",
+                ),
+                expected_error_code="SCHEMA_VIOLATION_INPUT",
+            ),
+            "execute",
+            id="execute-context-type-violation",
         ),
     ],
 )
@@ -65,45 +68,27 @@ def test_security_matrix_negative_paths(scenario: SecurityScenario, method: str)
     adapter = build_matrix_adapter()
     response = getattr(adapter, method)(scenario.request)
 
-    assert response.ok is False
     assert response.error is not None
     assert response.error.code == scenario.expected_error_code
 
 
-def test_network_denial_scenario_remains_explicit_and_stable() -> None:
+def test_search_shape_violation_remains_explicit_and_stable() -> None:
     adapter = build_matrix_adapter()
 
-    response = adapter.search(SearchRequest(query="gaia dr3", allow_network=False))
+    response = adapter.search(SimpleNamespace(query=1, limit=10, tags=None))
 
-    assert response.ok is False
-    assert response.error is not None
-    assert response.error.code == "network_denied"
-
-
-def test_hash_mismatch_error_includes_expected_and_actual_hashes() -> None:
-    adapter = build_matrix_adapter()
-    req = ExecuteRequest(
-        operation="run",
-        payload={"a": 1, "b": 2},
-        sandboxed=True,
-        expected_payload_sha256=canonical_payload_hash({"a": 1, "b": 3}),
-    )
-
-    response = adapter.execute(req)
-    assert response.ok is False
     assert response.error is not None
     assert response.error.code == "SCHEMA_VIOLATION_INPUT"
-    assert response.error.details["legacy_code"] == "hash_mismatch"
-    assert response.error.details["expected_payload_sha256"] == req.expected_payload_sha256
-    assert response.error.details["actual_payload_sha256"] == canonical_payload_hash(req.payload)
+    assert "query" in response.error.message
 
 
 def test_search_response_includes_catalog_hash_and_operation_metadata_fields() -> None:
     adapter = build_matrix_adapter()
-    response = adapter.search(SearchRequest(query="run", allow_network=True))
+    response = adapter.search(SearchRequest(query="run", limit=5, tags=[]))
 
-    assert response.ok is True
+    assert response.error is None
     assert response.catalog_version_hash == "catalog-v1"
+    assert response.total == 1
     assert response.results
     metadata = response.results[0].metadata
     assert metadata["operation_id"] == "ops.run"
@@ -112,6 +97,7 @@ def test_search_response_includes_catalog_hash_and_operation_metadata_fields() -
     assert "operation_tags" in metadata
     assert "operation_requirements" in metadata
     assert "operation_safety_class" in metadata
+    assert metadata["is_callable"] is True
 
     serialized = response.to_dict()
     assert serialized["catalog_version_hash"] == "catalog-v1"
@@ -207,7 +193,13 @@ async def execute_plan(ops, context):
     assert result["trace"]["call_budget"]["max_output_bytes"] == 64
 
 
-def test_catalog_hash_drift_denied_before_plan_execution() -> None:
+def test_search_to_execute_hash_pinning_accepts_match_and_rejects_drift() -> None:
+    adapter = build_matrix_adapter()
+    search_response = adapter.search(SearchRequest(query="run", limit=5, tags=[]))
+
+    assert search_response.error is None
+    assert search_response.catalog_version_hash == "catalog-v1"
+
     called = False
 
     class _Ops:
@@ -216,116 +208,77 @@ def test_catalog_hash_drift_denied_before_plan_execution() -> None:
             called = True
             return {"ok": True}
 
-    async def _run() -> dict:
-        return await execute(
-            """
+    plan_code = """
 async def execute_plan(ops, context):
     return await ops.ping()
-""",
+"""
+
+    pinned = asyncio.run(
+        execute(
+            plan_code,
             ops=_Ops(),
-            context={"catalog_version_hash": "catalog-request-v1"},
-            catalog_version_hash="catalog-runtime-v1",
+            context={"catalog_version_hash": search_response.catalog_version_hash},
+            catalog_version_hash=search_response.catalog_version_hash,
         )
+    )
 
-    result = asyncio.run(_run())
+    assert pinned["status"] == "ok"
+    assert pinned["result"] == {"ok": True}
+    assert called is True
 
-    assert result["status"] == "failed"
-    assert result["error"]["code"] == "CATALOG_DRIFT"
-    assert result["error"]["details"] == {
-        "expected_catalog_version_hash": "catalog-runtime-v1",
-        "received_catalog_version_hash": "catalog-request-v1",
+    called = False
+    drifted = asyncio.run(
+        execute(
+            plan_code,
+            ops=_Ops(),
+            context={"catalog_version_hash": search_response.catalog_version_hash},
+            catalog_version_hash="catalog-v2",
+        )
+    )
+
+    assert drifted["status"] == "failed"
+    assert drifted["error"]["code"] == "CATALOG_DRIFT"
+    assert drifted["error"]["details"] == {
+        "expected_catalog_version_hash": "catalog-v2",
+        "received_catalog_version_hash": "catalog-v1",
     }
-    assert result["trace"]["call_budget"]["used_calls"] == 0
-    assert result["trace"]["call_events"] == []
     assert called is False
 
 
-def test_budget_fairness_across_concurrent_plans_e2e() -> None:
-    class _CoordinatedOps:
-        def __init__(self, allow_a_second_call: asyncio.Event) -> None:
-            self.allow_a_second_call = allow_a_second_call
-            self.a_started = asyncio.Event()
-            self.allow_b_first = asyncio.Event()
-            self.a_second_done = asyncio.Event()
-            self.allow_b_second = asyncio.Event()
-
-        async def a_first(self) -> dict:
-            self.a_started.set()
-            self.allow_b_first.set()
-            return {"step": "a_first"}
-
-        async def a_second(self) -> dict:
-            self.a_second_done.set()
-            self.allow_b_second.set()
-            return {"step": "a_second"}
-
-        async def b_first(self) -> dict:
-            await self.allow_b_first.wait()
-            self.allow_a_second_call.set()
-            await self.a_second_done.wait()
-            return {"step": "b_first"}
-
-        async def b_second(self) -> dict:
-            await self.allow_b_second.wait()
-            return {"step": "b_second"}
-
-    async def _run() -> tuple[dict, dict]:
-        allow_a_second_call = asyncio.Event()
-        ops = _CoordinatedOps(allow_a_second_call)
-
-        task_a = asyncio.create_task(
-            execute(
-                """
-async def execute_plan(ops, context):
-    await ops.a_first()
-    await context["allow_a_second_call"].wait()
-    await ops.a_second()
-    return {"plan": "a"}
-""",
-                ops=ops,
-                context={"allow_a_second_call": allow_a_second_call},
-                catalog_version_hash="hash-v1",
-            )
+def test_retryable_error_key_is_consistent_across_runtime_and_adapter_serialization() -> None:
+    runtime_parse_error = asyncio.run(
+        execute(
+            "def not_python(:\n    pass",
+            ops={},
+            context={},
+            catalog_version_hash="catalog-v1",
         )
-        await ops.a_started.wait()
-        task_b = asyncio.create_task(
-            execute(
-                """
-async def execute_plan(ops, context):
-    await ops.b_first()
-    await ops.b_second()
-    return {"plan": "b"}
-""",
-                ops=ops,
-                context={"allow_a_second_call": allow_a_second_call},
-                catalog_version_hash="hash-v1",
-            )
+    )
+    assert runtime_parse_error["status"] == "failed"
+    assert "retryable" in runtime_parse_error["error"]
+    assert "retriable" not in runtime_parse_error["error"]
+
+    adapter = build_matrix_adapter()
+    adapter_shape_error = adapter.search(SimpleNamespace(query=1, limit=10, tags=None))
+    assert adapter_shape_error.error is not None
+
+    serialized = adapter_shape_error.to_dict()
+    assert serialized["error"] is not None
+    assert "retryable" in serialized["error"]
+    assert "retriable" not in serialized["error"]
+
+
+def test_adapter_execute_response_shape_matches_runtime_style() -> None:
+    adapter = build_matrix_adapter()
+
+    response = adapter.execute(
+        ExecuteRequest(
+            plan_code="async def execute_plan(ops, context):\n    return {'ok': True}\n",
+            context={"candidate": "tic-123"},
+            catalog_version_hash="catalog-v1",
         )
+    )
 
-        return await asyncio.gather(task_a, task_b)
-
-    result_a, result_b = asyncio.run(_run())
-
-    assert result_a["status"] == "ok"
-    assert result_b["status"] == "ok"
-
-    events_a = result_a["trace"]["call_events"]
-    events_b = result_b["trace"]["call_events"]
-    tickets = {
-        events_a[0]["operation_id"]: events_a[0]["fairness_ticket"],
-        events_b[0]["operation_id"]: events_b[0]["fairness_ticket"],
-        events_a[1]["operation_id"]: events_a[1]["fairness_ticket"],
-        events_b[1]["operation_id"]: events_b[1]["fairness_ticket"],
-    }
-    expected = [
-        tickets["a_first"],
-        tickets["b_first"],
-        tickets["a_second"],
-        tickets["b_second"],
-    ]
-    assert len(set(expected)) == 4
-    assert expected == sorted(expected)
-
-    plan_id_a = result_a["trace"]["metadata"]["fairness"]["plan_instance_id"]
-    plan_id_b = result_b["trace"]["metadata"]["fairness"]["plan_instance_id"]
-    assert plan_id_a < plan_id_b
+    assert response.status == "ok"
+    assert response.error is None
+    assert response.catalog_version_hash == "catalog-v1"

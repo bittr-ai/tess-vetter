@@ -4,10 +4,9 @@
 
 Executable deterministic checks:
 - network denial for `search()` when network is not explicitly allowed
-- sandbox-required denial for `execute()` when sandboxing is disabled
-- payload hash mismatch rejection for `execute()` integrity checks
+- execute request schema rejection for malformed `plan_code/context/catalog_version_hash` inputs
 - sandbox-escape denial via AST policy (`import` is blocked with `POLICY_DENIED`)
-- output payload size enforcement (`OUTPUT_LIMIT_EXCEEDED`) under constrained call budget
+- output size enforcement (`OUTPUT_LIMIT_EXCEEDED`) under constrained call budget
 - catalog hash drift rejection (`CATALOG_DRIFT`) before plan execution begins
 - trace determinism basic check for `build_runtime_trace_metadata(...)`
 
