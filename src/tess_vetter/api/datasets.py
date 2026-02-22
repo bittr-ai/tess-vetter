@@ -23,6 +23,34 @@ from numpy.typing import NDArray
 
 from tess_vetter.api.types import LightCurve, TPFStamp
 
+LOCAL_DATASET_SCHEMA_VERSION = 1
+LOCAL_DATASET_LC_CSV_PATTERN = "sector{sector}_pdcsap.csv"
+LOCAL_DATASET_TPF_NPZ_PATTERN = "sector{sector}_tpf.npz"
+LOCAL_DATASET_PATTERN_DEFAULTS: dict[str, str] = {
+    "lc_csv": LOCAL_DATASET_LC_CSV_PATTERN,
+    "tpf_npz": LOCAL_DATASET_TPF_NPZ_PATTERN,
+}
+
+
+class LocalDatasetSummaryPayload(TypedDict):
+    """Stable JSON payload contract returned by LocalDataset.summary()."""
+
+    schema_version: int
+    root: str
+    sectors_lc: list[int]
+    sectors_tpf: list[int]
+    artifacts: list[str]
+
+
+class LocalDatasetLoadPayload(TypedDict):
+    """Stable in-memory contract represented by a LocalDataset instance."""
+
+    schema_version: int
+    root: Path
+    lc_by_sector: dict[int, LightCurve]
+    tpf_by_sector: dict[int, TPFStamp]
+    artifacts: dict[str, Any]
+
 
 @dataclass(frozen=True)
 class LocalDataset:
@@ -34,7 +62,7 @@ class LocalDataset:
     tpf_by_sector: dict[int, TPFStamp] = field(default_factory=dict)
     artifacts: dict[str, Any] = field(default_factory=dict)
 
-    def summary(self) -> dict[str, Any]:
+    def summary(self) -> LocalDatasetSummaryPayload:
         return {
             "schema_version": int(self.schema_version),
             "root": str(self.root),
@@ -43,9 +71,19 @@ class LocalDataset:
             "artifacts": sorted(self.artifacts.keys()),
         }
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> LocalDatasetSummaryPayload:
         """JSON-serializable metadata summary (does not embed array data)."""
         return self.summary()
+
+    def load_payload(self) -> LocalDatasetLoadPayload:
+        """Stable in-memory payload contract for loaded dataset contents."""
+        return {
+            "schema_version": int(self.schema_version),
+            "root": self.root,
+            "lc_by_sector": dict(self.lc_by_sector),
+            "tpf_by_sector": dict(self.tpf_by_sector),
+            "artifacts": dict(self.artifacts),
+        }
 
 
 class _CSVData(TypedDict):
@@ -124,10 +162,7 @@ def load_local_dataset(
     if not root.exists() or not root.is_dir():
         raise FileNotFoundError(f"Dataset folder not found: {root}")
 
-    patterns = {
-        "lc_csv": "sector{sector}_pdcsap.csv",
-        "tpf_npz": "sector{sector}_tpf.npz",
-    }
+    patterns = dict(LOCAL_DATASET_PATTERN_DEFAULTS)
     if pattern_overrides:
         patterns.update({str(k): str(v) for k, v in pattern_overrides.items()})
 
@@ -180,7 +215,7 @@ def load_local_dataset(
     artifacts["files"] = sorted(p.name for p in root.iterdir() if p.is_file())
 
     return LocalDataset(
-        schema_version=1,
+        schema_version=LOCAL_DATASET_SCHEMA_VERSION,
         root=root,
         lc_by_sector=lc_by_sector,
         tpf_by_sector=tpf_by_sector,
@@ -197,4 +232,14 @@ def load_tutorial_target(name: str) -> LocalDataset:
     return load_local_dataset(base / name)
 
 
-__all__: list[str] = ["LocalDataset", "load_local_dataset", "load_tutorial_target"]
+__all__: list[str] = [
+    "LOCAL_DATASET_LC_CSV_PATTERN",
+    "LOCAL_DATASET_PATTERN_DEFAULTS",
+    "LOCAL_DATASET_SCHEMA_VERSION",
+    "LOCAL_DATASET_TPF_NPZ_PATTERN",
+    "LocalDataset",
+    "LocalDatasetLoadPayload",
+    "LocalDatasetSummaryPayload",
+    "load_local_dataset",
+    "load_tutorial_target",
+]

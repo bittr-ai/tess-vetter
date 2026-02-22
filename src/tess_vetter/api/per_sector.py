@@ -7,7 +7,7 @@ independently per sector/chunk. Outputs are policy-free and metrics-first.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypedDict
 
 import numpy as np
 
@@ -24,6 +24,39 @@ from tess_vetter.api.types import (
 )
 from tess_vetter.api.vet import vet_candidate
 
+PER_SECTOR_SCHEMA_VERSION = 1
+PER_SECTOR_PROVENANCE_SCHEMA_VERSION = 1
+
+
+class PerSectorSummaryRecord(TypedDict):
+    """Stable summary row contract for per-sector vetting output."""
+
+    sector: int
+    checks: int
+    ok: int
+    error: int
+    skipped: int
+
+
+class PerSectorProvenance(TypedDict):
+    """Stable provenance contract emitted by :func:`per_sector_vet`."""
+
+    schema_version: int
+    preset: str
+    checks: list[str] | None
+    sectors: list[int]
+    has_tpf_by_sector: bool
+
+
+class PerSectorVettingPayload(TypedDict):
+    """Stable payload contract returned by :meth:`PerSectorVettingResult.to_dict`."""
+
+    schema_version: int
+    bundles_by_sector: dict[int, dict[str, Any]]
+    sector_ephemeris_metrics: list[dict[str, float | int]]
+    summary_records: list[PerSectorSummaryRecord]
+    provenance: PerSectorProvenance
+
 
 @dataclass(frozen=True)
 class PerSectorVettingResult:
@@ -32,18 +65,38 @@ class PerSectorVettingResult:
     schema_version: int
     bundles_by_sector: dict[int, VettingBundleResult]
     sector_ephemeris_metrics: list[SectorEphemerisMetrics]
-    summary_records: list[dict[str, Any]]
-    provenance: dict[str, Any]
+    summary_records: list[PerSectorSummaryRecord]
+    provenance: PerSectorProvenance
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> PerSectorVettingPayload:
+        provenance: PerSectorProvenance = {
+            "schema_version": int(self.provenance["schema_version"]),
+            "preset": str(self.provenance["preset"]),
+            "checks": (
+                [str(check_id) for check_id in self.provenance["checks"]]
+                if self.provenance["checks"] is not None
+                else None
+            ),
+            "sectors": [int(sector) for sector in self.provenance["sectors"]],
+            "has_tpf_by_sector": bool(self.provenance["has_tpf_by_sector"]),
+        }
         return {
             "schema_version": int(self.schema_version),
             "bundles_by_sector": {
                 int(k): v.model_dump() for k, v in sorted(self.bundles_by_sector.items())
             },
             "sector_ephemeris_metrics": [m.to_dict() for m in self.sector_ephemeris_metrics],
-            "summary_records": list(self.summary_records),
-            "provenance": dict(self.provenance),
+            "summary_records": [
+                {
+                    "sector": int(row["sector"]),
+                    "checks": int(row["checks"]),
+                    "ok": int(row["ok"]),
+                    "error": int(row["error"]),
+                    "skipped": int(row["skipped"]),
+                }
+                for row in self.summary_records
+            ],
+            "provenance": provenance,
         }
 
 
@@ -114,7 +167,7 @@ def per_sector_vet(
         raise ValueError("lc_by_sector cannot be empty")
 
     bundles_by_sector: dict[int, VettingBundleResult] = {}
-    summary_records: list[dict[str, Any]] = []
+    summary_records: list[PerSectorSummaryRecord] = []
 
     for sec in sorted(lc_by_sector.keys()):
         lc = lc_by_sector[int(sec)]
@@ -158,8 +211,8 @@ def per_sector_vet(
         duration_hours=float(candidate.ephemeris.duration_hours),
     )
 
-    provenance = {
-        "schema_version": 1,
+    provenance: PerSectorProvenance = {
+        "schema_version": PER_SECTOR_PROVENANCE_SCHEMA_VERSION,
         "preset": str(preset),
         "checks": list(checks) if checks is not None else None,
         "sectors": sorted(int(s) for s in lc_by_sector),
@@ -167,7 +220,7 @@ def per_sector_vet(
     }
 
     return PerSectorVettingResult(
-        schema_version=1,
+        schema_version=PER_SECTOR_SCHEMA_VERSION,
         bundles_by_sector=bundles_by_sector,
         sector_ephemeris_metrics=metrics,
         summary_records=summary_records,
@@ -175,5 +228,12 @@ def per_sector_vet(
     )
 
 
-__all__ = ["PerSectorVettingResult", "per_sector_vet"]
-
+__all__ = [
+    "PER_SECTOR_PROVENANCE_SCHEMA_VERSION",
+    "PER_SECTOR_SCHEMA_VERSION",
+    "PerSectorProvenance",
+    "PerSectorSummaryRecord",
+    "PerSectorVettingPayload",
+    "PerSectorVettingResult",
+    "per_sector_vet",
+]

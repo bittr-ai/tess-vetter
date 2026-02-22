@@ -21,8 +21,12 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
+from tess_vetter.api.contracts import (
+    callable_input_schema_from_signature,
+    model_output_schema,
+)
 from tess_vetter.api.references import (
     COUGHLIN_2016,
     GUERRERO_2021,
@@ -47,11 +51,36 @@ if TYPE_CHECKING:
 REFERENCES = [ref.to_dict() for ref in [COUGHLIN_2016, THOMPSON_2018, GUERRERO_2021]]
 
 
-def _pipeline_config_provenance(config: PipelineConfig) -> dict[str, Any]:
+class PipelineConfigProvenance(TypedDict):
+    """Provenance-safe serialized pipeline configuration."""
+
+    timeout_seconds: float | None
+    random_seed: int | None
+    emit_warnings: bool
+    fail_fast: bool
+    extra_params: dict[str, Any]
+
+
+class VetManySummaryRow(TypedDict):
+    """Stable boundary row payload for vet_many summary output."""
+
+    candidate_index: int
+    period_days: float
+    t0_btjd: float
+    duration_hours: float
+    depth_ppm: float
+    n_ok: int
+    n_skipped: int
+    n_error: int
+    flags_top: list[str]
+    runtime_ms: float | None
+
+
+def _pipeline_config_provenance(config: PipelineConfig) -> PipelineConfigProvenance:
     """Serialize effective pipeline config into provenance-safe primitives."""
     data = asdict(config)
     data["extra_params"] = dict(data.get("extra_params", {}))
-    return data
+    return cast(PipelineConfigProvenance, data)
 
 
 @cites(
@@ -201,7 +230,7 @@ def vet_many(
     checks: list[str] | None = None,
     context: dict[str, Any] | None = None,
     pipeline_config: PipelineConfig | None = None,
-) -> tuple[list[SchemaVettingBundleResult], list[dict[str, Any]]]:
+) -> tuple[list[SchemaVettingBundleResult], list[VetManySummaryRow]]:
     """Run vetting for multiple candidates against one light curve.
 
     This is the common workflow-building primitive for researchers:
@@ -257,7 +286,7 @@ def vet_many(
     config_provenance = _pipeline_config_provenance(effective_pipeline_config)
     for bundle in bundles:
         bundle.provenance["pipeline_config"] = dict(config_provenance)
-    return (bundles, summary)
+    return (bundles, cast(list[VetManySummaryRow], summary))
 
 
 # Legacy wrapper for backward compatibility with 'enabled' parameter
@@ -307,3 +336,52 @@ def _vet_candidate_legacy(
         checks=checks_list,
         context=context,
     )
+
+
+VET_CANDIDATE_CALL_SCHEMA = callable_input_schema_from_signature(vet_candidate)
+VET_CANDIDATE_OUTPUT_SCHEMA = model_output_schema(SchemaVettingBundleResult)
+VET_MANY_CALL_SCHEMA = callable_input_schema_from_signature(vet_many)
+VET_MANY_SUMMARY_ROW_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "candidate_index": {"type": "integer"},
+        "period_days": {"type": "number"},
+        "t0_btjd": {"type": "number"},
+        "duration_hours": {"type": "number"},
+        "depth_ppm": {"type": "number"},
+        "n_ok": {"type": "integer"},
+        "n_skipped": {"type": "integer"},
+        "n_error": {"type": "integer"},
+        "flags_top": {"type": "array", "items": {"type": "string"}},
+        "runtime_ms": {"type": ["number", "null"]},
+    },
+    "required": [
+        "candidate_index",
+        "period_days",
+        "t0_btjd",
+        "duration_hours",
+        "depth_ppm",
+        "n_ok",
+        "n_skipped",
+        "n_error",
+        "flags_top",
+        "runtime_ms",
+    ],
+    "additionalProperties": False,
+}
+VET_MANY_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "array",
+    "prefixItems": [
+        {
+            "type": "array",
+            "items": VET_CANDIDATE_OUTPUT_SCHEMA,
+        },
+        {
+            "type": "array",
+            "items": VET_MANY_SUMMARY_ROW_SCHEMA,
+        },
+    ],
+    "items": False,
+    "minItems": 2,
+    "maxItems": 2,
+}
