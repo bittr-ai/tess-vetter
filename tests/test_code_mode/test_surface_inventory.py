@@ -84,6 +84,7 @@ def test_surface_inventory_is_deterministic_and_json_serializable() -> None:
 def test_surface_inventory_has_basic_coverage_counts() -> None:
     rows = build_surface_inventory()
     payload = surface_inventory_jsonable(rows)
+    by_operation_id = {item["operation_id"]: item for item in payload}
 
     assert payload
     assert all(item["operation_id"] for item in payload)
@@ -91,6 +92,7 @@ def test_surface_inventory_has_basic_coverage_counts() -> None:
     assert all(item["symbol"] for item in payload)
     assert all(item["module"] for item in payload)
     assert all(item["status"] for item in payload)
+    assert {item["status"] for item in payload} <= {"available", "planned", "unavailable"}
 
     tier_counts: dict[str, int] = {}
     for item in payload:
@@ -111,6 +113,14 @@ def test_surface_inventory_has_basic_coverage_counts() -> None:
 
     assert any(item["symbol"] == "vet_candidate" for item in payload)
     assert all(not item["replaced_by"] for item in payload)
+    assert by_operation_id["code_mode.golden_path.vet_candidate"]["status"] == "available"
+    assert by_operation_id["code_mode.golden_path.vet_candidate"]["module"] == "tess_vetter.api.vet"
+    assert by_operation_id["code_mode.golden_path.run_periodogram"]["status"] == "available"
+    assert by_operation_id["code_mode.golden_path.run_periodogram"]["module"] == "tess_vetter.api.periodogram"
+    assert by_operation_id["code_mode.internal.vet_catalog"]["status"] == "available"
+    assert by_operation_id["code_mode.internal.vet_catalog"]["module"] == "tess_vetter.api.catalog"
+    assert by_operation_id["code_mode.internal.run_check"]["status"] == "available"
+    assert by_operation_id["code_mode.internal.run_check"]["module"] == "tess_vetter.api.check_runner"
 
 
 def test_surface_inventory_fully_covers_loadable_export_map_routines() -> None:
@@ -168,4 +178,9 @@ def test_surface_inventory_emits_unavailable_rows_for_unloadable_exports(monkeyp
 
     payload = surface_inventory_jsonable(build_surface_inventory())
     assert [item["symbol"] for item in payload] == ["loadable_fn", "missing_optional"]
+    assert [item["operation_id"] for item in payload] == [
+        "code_mode.internal.loadable_fn",
+        "code_mode.internal.missing_optional",
+    ]
+    assert [item["tier"] for item in payload] == ["internal", "internal"]
     assert [item["status"] for item in payload] == ["available", "unavailable"]

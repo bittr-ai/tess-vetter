@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+import functools
 import time
 from collections.abc import Callable
-from typing import TypeVar
+from typing import ParamSpec, TypeVar
 
 from tess_vetter.code_mode.retry.policies import RetryPolicy
 
 T = TypeVar("T")
+P = ParamSpec("P")
 
 DEFAULT_TRANSIENT_EXCEPTIONS: tuple[type[BaseException], ...] = (
     TimeoutError,
     ConnectionError,
 )
+DEFAULT_NETWORK_RETRY_POLICY = RetryPolicy()
 
 
 class TransientExhaustionError(RuntimeError):
@@ -60,9 +63,34 @@ def retry_transient(
             sleep(delay)
 
 
+def wrap_with_transient_retry(
+    operation: Callable[P, T],
+    *,
+    policy: RetryPolicy = DEFAULT_NETWORK_RETRY_POLICY,
+    transient_exceptions: tuple[type[BaseException], ...] = DEFAULT_TRANSIENT_EXCEPTIONS,
+    sleep: Callable[[float], None] = time.sleep,
+    use_jitter: bool = True,
+) -> Callable[P, T]:
+    """Return a callable that applies transient retry inside a single invocation."""
+
+    @functools.wraps(operation)
+    def _wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
+        return retry_transient(
+            lambda: operation(*args, **kwargs),
+            policy=policy,
+            transient_exceptions=transient_exceptions,
+            sleep=sleep,
+            use_jitter=use_jitter,
+        )
+
+    return _wrapped
+
+
 __all__ = [
+    "DEFAULT_NETWORK_RETRY_POLICY",
     "DEFAULT_TRANSIENT_EXCEPTIONS",
     "TransientExhaustionError",
     "make_transient_exhaustion_payload",
     "retry_transient",
+    "wrap_with_transient_retry",
 ]

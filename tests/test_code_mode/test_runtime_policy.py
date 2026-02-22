@@ -139,3 +139,40 @@ async def execute_plan(ops, context):
     assert result["trace"]["call_events"][0]["operation_id"] == "block"
     assert result["trace"]["call_events"][0]["status"] == "timeout"
     assert result["trace"]["call_events"][0]["error_code"] == "TIMEOUT_EXCEEDED"
+
+
+def test_readonly_local_transitively_denies_outbound_socket_in_operation() -> None:
+    class _Ops:
+        def nested_network(self) -> dict:
+            import socket
+
+            def _helper() -> None:
+                socket.create_connection(("example.com", 443), timeout=0.1)
+
+            _helper()
+            return {"ok": True}
+
+    async def _run() -> dict:
+        return await execute(
+            """
+async def execute_plan(ops, context):
+    return await ops.nested_network()
+""",
+            ops=_Ops(),
+            context={"policy_profile": POLICY_PROFILE_READONLY_LOCAL},
+            catalog_version_hash="hash-v1",
+        )
+
+    result = asyncio.run(_run())
+
+    assert result["status"] == "failed"
+    assert result["error"]["code"] == "POLICY_DENIED"
+    assert result["error"]["details"] == {
+        "policy_profile": POLICY_PROFILE_READONLY_LOCAL,
+        "boundary": "socket.create_connection",
+        "target": "('example.com', 443)",
+    }
+    assert result["trace"]["call_budget"]["used_calls"] == 1
+    assert result["trace"]["call_events"][0]["operation_id"] == "nested_network"
+    assert result["trace"]["call_events"][0]["status"] == "failed"
+    assert result["trace"]["call_events"][0]["error_code"] == "POLICY_DENIED"

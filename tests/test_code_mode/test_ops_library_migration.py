@@ -174,3 +174,48 @@ def test_summarize_legacy_seed_coverage_delta_reports_counts_and_breakdown() -> 
         ),
     )
     assert summary["unavailable_ids"] == ("code_mode.adapters.new_two",)
+
+
+def test_summarize_legacy_seed_coverage_delta_handles_wrapper_id_migration_deterministically() -> None:
+    summary = summarize_legacy_seed_coverage_delta(
+        legacy_seed_ids=[
+            "code_mode.golden.vet_candidate",
+            "code_mode.golden.run_periodogram",
+            "code_mode.primitive.fold",
+        ],
+        discovered_modular_ids=[
+            "code_mode.golden_path.vet_candidate",
+            "code_mode.golden_path.run_periodogram",
+            "code_mode.primitive.fold",
+            "code_mode.internal.vet_catalog",
+            "code_mode.internal.run_check",
+        ],
+        renamed_id_hints={
+            "code_mode.golden.vet_candidate": "code_mode.golden_path.vet_candidate",
+            "code_mode.golden.run_periodogram": "code_mode.golden_path.run_periodogram",
+        },
+        unavailable_operation_ids=[
+            "code_mode.internal.vet_catalog",
+            "code_mode.internal.missing_from_discovery",
+            "code_mode.internal.vet_catalog",
+        ],
+    )
+
+    assert summary["coverage_delta_counts"] == {
+        "legacy_seed_total": 3,
+        "expanded_discovery_total": 5,
+        "missing_total": 0,
+        "added_total": 2,
+        "renamed_total": 2,
+        "unavailable_total": 1,
+        "unavailable_added_total": 1,
+        "net_new_total": 2,
+    }
+    assert summary["missing_by_tier_prefix"] == ()
+    assert summary["added_by_tier_prefix"] == (
+        (
+            "code_mode.internal",
+            ("code_mode.internal.run_check", "code_mode.internal.vet_catalog"),
+        ),
+    )
+    assert summary["unavailable_ids"] == ("code_mode.internal.vet_catalog",)

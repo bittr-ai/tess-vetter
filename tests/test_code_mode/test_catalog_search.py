@@ -4,6 +4,7 @@ from copy import deepcopy
 from random import Random
 
 import pytest
+from pydantic import BaseModel
 
 from tess_vetter.code_mode.catalog import build_catalog
 from tess_vetter.code_mode.search import search_catalog
@@ -390,3 +391,119 @@ def test_search_score_respects_tag_over_text_precedence() -> None:
 
     assert [match.entry.id for match in matches] == ["low_text_two_tags", "high_text_one_tag"]
     assert matches[0].score > matches[1].score
+
+
+def test_wrapper_backed_entry_exposes_static_input_output_schema_snippets() -> None:
+    class WrapperInput(BaseModel):
+        candidate_id: str
+        max_rows: int = 10
+
+    class WrapperOutput(BaseModel):
+        accepted: bool
+        score: float
+
+    catalog = build_catalog(
+        [
+            {
+                "id": "wrapper_schema_op",
+                "tier": "primitive",
+                "title": "Wrapper schema op",
+                "description": "Wrapper-backed operation",
+                "tags": ["wrapper"],
+                "schema": {"type": "object"},
+                "input_model": WrapperInput,
+                "output_model": WrapperOutput,
+            }
+        ]
+    )
+
+    entry = catalog.entries[0]
+    assert isinstance(entry.schema, dict)
+    wrapper_schemas = entry.schema.get("wrapper_schemas")
+    assert isinstance(wrapper_schemas, dict)
+    assert "input" in wrapper_schemas
+    assert "output" in wrapper_schemas
+
+    input_schema = wrapper_schemas["input"]
+    output_schema = wrapper_schemas["output"]
+
+    assert input_schema["type"] == "object"
+    assert set(input_schema["properties"]) == {"candidate_id", "max_rows"}
+    assert input_schema["properties"]["candidate_id"]["type"] == "string"
+    assert input_schema["properties"]["max_rows"]["type"] == "integer"
+    assert input_schema["required"] == ["candidate_id"]
+    assert "title" not in input_schema
+
+    assert output_schema["type"] == "object"
+    assert set(output_schema["properties"]) == {"accepted", "score"}
+    assert output_schema["properties"]["accepted"]["type"] == "boolean"
+    assert output_schema["properties"]["score"]["type"] == "number"
+    assert output_schema["required"] == ["accepted", "score"]
+    assert "title" not in output_schema
+
+
+def test_wrapper_schema_snippet_hash_is_stable_for_equivalent_model_shapes() -> None:
+    class InputShapeA(BaseModel):
+        candidate_id: str
+        max_rows: int = 10
+
+    class OutputShapeA(BaseModel):
+        accepted: bool
+
+    class InputShapeB(BaseModel):
+        candidate_id: str
+        max_rows: int = 10
+
+    class OutputShapeB(BaseModel):
+        accepted: bool
+
+    base_entry = {
+        "id": "wrapper_shape_stability",
+        "tier": "primitive",
+        "title": "Wrapper shape stability",
+        "description": "Wrapper-backed operation",
+        "tags": ["wrapper"],
+        "schema": {"type": "object"},
+    }
+
+    build_a = build_catalog([{**base_entry, "input_model": InputShapeA, "output_model": OutputShapeA}])
+    build_b = build_catalog([{**base_entry, "input_model": InputShapeB, "output_model": OutputShapeB}])
+
+    assert build_a.catalog_version_hash == build_b.catalog_version_hash
+    assert build_a.canonical_lines == build_b.canonical_lines
+    assert build_a.entries[0].schema == build_b.entries[0].schema
+
+
+def test_search_rank_is_unchanged_by_wrapper_schema_metadata() -> None:
+    class WrapperInput(BaseModel):
+        candidate_id: str
+
+    class WrapperOutput(BaseModel):
+        accepted: bool
+
+    catalog = build_catalog(
+        [
+            {
+                "id": "a_schema",
+                "tier": "primitive",
+                "title": "Transit helper",
+                "description": "No query terms",
+                "tags": ["infra"],
+                "schema": {"type": "object"},
+                "input_model": WrapperInput,
+                "output_model": WrapperOutput,
+            },
+            {
+                "id": "b_no_schema",
+                "tier": "primitive",
+                "title": "Transit helper",
+                "description": "No query terms",
+                "tags": ["infra"],
+                "schema": {"type": "object"},
+            },
+        ]
+    )
+
+    matches = search_catalog(catalog.entries, query="report", tags=["pipeline"], limit=2)
+    assert [match.entry.id for match in matches] == ["a_schema", "b_no_schema"]
+    assert matches[0].score == matches[1].score

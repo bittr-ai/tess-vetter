@@ -5,6 +5,7 @@ from __future__ import annotations
 import tess_vetter.api as _api
 from tess_vetter.api import primitives as _api_primitives
 from tess_vetter.code_mode.adapters.base import OperationAdapter
+from tess_vetter.code_mode.adapters.check_wrappers import check_wrapper_functions
 from tess_vetter.code_mode.operation_spec import (
     OperationCitation,
     OperationExample,
@@ -12,6 +13,7 @@ from tess_vetter.code_mode.operation_spec import (
     SafetyClass,
     SafetyRequirements,
 )
+from tess_vetter.code_mode.retry.wrappers import wrap_with_transient_retry
 
 _LEGACY_MANUAL_SEED_IDS: tuple[str, ...] = (
     "code_mode.golden.vet_candidate",
@@ -28,7 +30,7 @@ def legacy_manual_seed_ids() -> tuple[str, ...]:
 
 def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
     """Return stable seed adapters that are always present by design."""
-    return (
+    legacy = (
         OperationAdapter(
             spec=OperationSpec(
                 id="code_mode.golden.vet_candidate",
@@ -50,7 +52,7 @@ def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
                     OperationCitation(label="tess_vetter.api.vet_candidate"),
                 ),
             ),
-            fn=_api.vet_candidate,
+            fn=wrap_with_transient_retry(_api.vet_candidate),
         ),
         OperationAdapter(
             spec=OperationSpec(
@@ -105,6 +107,26 @@ def manual_seed_adapters() -> tuple[OperationAdapter, ...]:
             fn=_api_primitives.median_detrend,
         ),
     )
+    wrappers = tuple(
+        OperationAdapter(
+            spec=OperationSpec(
+                id=definition.operation_id,
+                name=definition.name,
+                description=definition.description,
+                tier_tags=("manual", "typed-check-wrapper", definition.check_id.lower()),
+                safety_class=SafetyClass.GUARDED if definition.needs_network else SafetyClass.SAFE,
+                safety_requirements=SafetyRequirements(needs_network=definition.needs_network),
+                input_json_schema=definition.input_model.model_json_schema(mode="validation"),
+                output_json_schema=definition.output_model.model_json_schema(mode="serialization"),
+                citations=(
+                    OperationCitation(label=f"tess_vetter.api.run_check[{definition.check_id}]"),
+                ),
+            ),
+            fn=wrapper,
+        )
+        for definition, wrapper in check_wrapper_functions()
+    )
+    return (*legacy, *wrappers)
 
 
 __all__ = ["legacy_manual_seed_ids", "manual_seed_adapters"]

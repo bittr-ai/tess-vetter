@@ -22,6 +22,9 @@ _TIER_ALIASES: dict[str, CatalogTier] = {
     "primitives": "primitive",
     "internal": "internal",
 }
+_SCHEMA_VOLATILE_KEYS: frozenset[str] = frozenset(
+    {"$defs", "$id", "$schema", "default", "description", "examples", "title"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +127,78 @@ def _canonical_line(entry: CatalogEntry) -> str:
     return "|".join(parts)
 
 
+def _resolve_local_json_ref(root: dict[str, Any], ref: str) -> Any:
+    if not ref.startswith("#/"):
+        return {"$ref": ref}
+    node: Any = root
+    for raw_part in ref[2:].split("/"):
+        part = raw_part.replace("~1", "/").replace("~0", "~")
+        if not isinstance(node, dict) or part not in node:
+            return {"$ref": ref}
+        node = node[part]
+    return node
+
+
+def _static_schema_snippet(value: Any, root: dict[str, Any]) -> Any:
+    if isinstance(value, dict):
+        resolved = value
+        ref_value = value.get("$ref")
+        if isinstance(ref_value, str):
+            target = _resolve_local_json_ref(root, ref_value)
+            if isinstance(target, dict):
+                resolved = {**target, **{k: v for k, v in value.items() if k != "$ref"}}
+
+        cleaned: dict[str, Any] = {}
+        for key in sorted(resolved, key=lambda k: str(k)):
+            if key in _SCHEMA_VOLATILE_KEYS:
+                continue
+            if key == "properties" and isinstance(resolved[key], dict):
+                cleaned[key] = {
+                    str(prop_key): _static_schema_snippet(prop_value, root)
+                    for prop_key, prop_value in sorted(
+                        resolved[key].items(),
+                        key=lambda item: str(item[0]),
+                    )
+                }
+                continue
+            cleaned[key] = _static_schema_snippet(resolved[key], root)
+        return cleaned
+    if isinstance(value, list):
+        return [_static_schema_snippet(item, root) for item in value]
+    return value
+
+
+def _pydantic_model_schema_snippet(model: Any, *, mode: str) -> dict[str, Any] | None:
+    model_json_schema = getattr(model, "model_json_schema", None)
+    if not callable(model_json_schema):
+        return None
+    raw_schema = model_json_schema(mode=mode)
+    if not isinstance(raw_schema, dict):
+        return None
+    snippet = _static_schema_snippet(raw_schema, raw_schema)
+    if not isinstance(snippet, dict):
+        return None
+    return snippet
+
+
+def _wrapper_schema_snippets(raw: dict[str, Any]) -> dict[str, Any] | None:
+    input_schema = raw.get("input_schema_snippet")
+    if input_schema is None:
+        input_schema = _pydantic_model_schema_snippet(raw.get("input_model"), mode="validation")
+    output_schema = raw.get("output_schema_snippet")
+    if output_schema is None:
+        output_schema = _pydantic_model_schema_snippet(raw.get("output_model"), mode="serialization")
+
+    snippets: dict[str, Any] = {}
+    if input_schema is not None:
+        snippets["input"] = canonicalize_value(input_schema)
+    if output_schema is not None:
+        snippets["output"] = canonicalize_value(output_schema)
+    if not snippets:
+        return None
+    return snippets
+
+
 def short_hash(value: str, *, length: int = 12) -> str:
     """Return a compact prefix for a hash string."""
     if length < 1:
@@ -153,6 +228,19 @@ def build_catalog(entries: list[dict[str, Any]]) -> CatalogBuildResult:
 
         raw_schema = raw.get("schema", {})
         canonical_schema = canonicalize_value(raw_schema)
+        wrapper_schemas = _wrapper_schema_snippets(raw)
+        if wrapper_schemas is not None:
+            if isinstance(canonical_schema, dict):
+                canonical_schema = {
+                    **canonical_schema,
+                    "wrapper_schemas": wrapper_schemas,
+                }
+            else:
+                canonical_schema = {
+                    "schema": canonical_schema,
+                    "wrapper_schemas": wrapper_schemas,
+                }
+            canonical_schema = canonicalize_value(canonical_schema)
         schema_fp = schema_fingerprint(canonical_schema)
 
         normalized.append(

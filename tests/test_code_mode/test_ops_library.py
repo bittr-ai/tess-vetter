@@ -9,6 +9,7 @@ from tess_vetter.code_mode.registries.operation_ids import (
     normalize_operation_name,
 )
 from tess_vetter.code_mode.registries.tiering import ApiSymbol, tier_for_api_symbol
+from tess_vetter.code_mode.retry import RetryPolicy, retry_transient
 
 _DOCUMENTED_OPTIONAL_EXPORT_SKIPS: frozenset[str] = frozenset(
     set(public_api._MLX_GUARDED_EXPORTS) | set(public_api._MATPLOTLIB_GUARDED_EXPORTS)
@@ -101,6 +102,35 @@ def test_default_library_uses_current_api_callables(monkeypatch) -> None:  # typ
     assert result == "ok"
     assert seen["args"] == ("lc", "candidate")
     assert seen["kwargs"] == {"network": False}
+
+
+def test_default_library_applies_retry_wrapper_to_network_seed(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    calls = {"count": 0}
+
+    def _flaky_vet_candidate(*_args: object, **_kwargs: object) -> str:
+        calls["count"] += 1
+        if calls["count"] < 3:
+            raise TimeoutError("temporary network timeout")
+        return "ok"
+
+    def _deterministic_retry_wrapper(fn):  # type: ignore[no-untyped-def]
+        def _wrapped(*args: object, **kwargs: object) -> object:
+            return retry_transient(
+                lambda: fn(*args, **kwargs),
+                policy=RetryPolicy(attempts=3, backoff_seconds=0.0, jitter=0.0, cap_seconds=0.0),
+                sleep=lambda _seconds: None,
+                use_jitter=False,
+            )
+
+        return _wrapped
+
+    monkeypatch.setattr(manual_adapters._api, "vet_candidate", _flaky_vet_candidate)
+    monkeypatch.setattr(manual_adapters, "wrap_with_transient_retry", _deterministic_retry_wrapper)
+
+    library = make_default_ops_library()
+    op = library.get("code_mode.golden.vet_candidate")
+    assert op("lc", "candidate", network=True) == "ok"
+    assert calls["count"] == 3
 
 
 def test_default_library_ids_are_stable_sorted_and_unique() -> None:

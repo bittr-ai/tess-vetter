@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import ast
+import socket
+import urllib.request
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -66,6 +70,15 @@ class PolicyProfile:
     allow_network: bool
 
 
+@dataclass(frozen=True, slots=True)
+class NetworkBoundaryViolationError(Exception):
+    boundary: str
+    target: str
+
+    def __str__(self) -> str:
+        return f"{self.boundary}:{self.target}"
+
+
 PROFILE_TABLE: dict[str, PolicyProfile] = {
     POLICY_PROFILE_READONLY_LOCAL: PolicyProfile(
         name=POLICY_PROFILE_READONLY_LOCAL,
@@ -84,6 +97,53 @@ PROFILE_TABLE: dict[str, PolicyProfile] = {
         allow_network=True,
     ),
 }
+
+
+@contextmanager
+def network_boundary_guard(*, allow_network: bool) -> Iterator[None]:
+    if allow_network:
+        yield
+        return
+
+    original_socket = socket.socket
+    original_create_connection = socket.create_connection
+    original_urlopen = urllib.request.urlopen
+    original_opener_open = urllib.request.OpenerDirector.open
+
+    def _deny(boundary: str, target: Any) -> None:
+        raise NetworkBoundaryViolationError(boundary=boundary, target=str(target))
+
+    class _GuardedSocket(original_socket):
+        def connect(self, address: Any) -> None:
+            _deny("socket.connect", address)
+
+        def connect_ex(self, address: Any) -> int:
+            _deny("socket.connect_ex", address)
+
+    def _guarded_create_connection(address: Any, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        _deny("socket.create_connection", address)
+
+    def _guarded_urlopen(url: Any, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        _deny("urllib.request.urlopen", url)
+
+    def _guarded_opener_open(self: Any, fullurl: Any, *args: Any, **kwargs: Any) -> Any:
+        del self, args, kwargs
+        _deny("urllib.request.OpenerDirector.open", fullurl)
+
+    socket.socket = _GuardedSocket
+    socket.create_connection = _guarded_create_connection
+    urllib.request.urlopen = _guarded_urlopen
+    urllib.request.OpenerDirector.open = _guarded_opener_open
+
+    try:
+        yield
+    finally:
+        socket.socket = original_socket
+        socket.create_connection = original_create_connection
+        urllib.request.urlopen = original_urlopen
+        urllib.request.OpenerDirector.open = original_opener_open
 
 
 def resolve_profile(profile_name: str | None) -> PolicyProfile:
@@ -143,6 +203,7 @@ __all__ = [
     "NETWORK_ALLOWED_MAX_CALLS",
     "NETWORK_ALLOWED_MAX_OUTPUT_BYTES",
     "NETWORK_ALLOWED_PLAN_TIMEOUT_MS",
+    "NetworkBoundaryViolationError",
     "POLICY_PROFILE_NETWORK_ALLOWED",
     "POLICY_PROFILE_READONLY_LOCAL",
     "PROFILE_TABLE",
@@ -150,6 +211,7 @@ __all__ = [
     "READONLY_LOCAL_MAX_CALLS",
     "READONLY_LOCAL_MAX_OUTPUT_BYTES",
     "READONLY_LOCAL_PLAN_TIMEOUT_MS",
+    "network_boundary_guard",
     "resolve_profile",
     "safe_builtins",
     "validate_plan_ast",

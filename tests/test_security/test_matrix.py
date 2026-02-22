@@ -138,6 +138,36 @@ async def execute_plan(ops, context):
     assert result["error"]["details"]["node_type"] == "Import"
 
 
+def test_runtime_readonly_local_denies_transitive_urllib_boundary() -> None:
+    class _Ops:
+        def fetch_remote(self) -> dict:
+            import urllib.request
+
+            urllib.request.urlopen("https://example.com")  # pragma: no cover - guarded path
+            return {"ok": True}
+
+    async def _run() -> dict:
+        return await execute(
+            """
+async def execute_plan(ops, context):
+    return await ops.fetch_remote()
+""",
+            ops=_Ops(),
+            context={"policy_profile": "readonly_local"},
+            catalog_version_hash="hash-v1",
+        )
+
+    result = asyncio.run(_run())
+
+    assert result["status"] == "failed"
+    assert result["error"]["code"] == "POLICY_DENIED"
+    assert result["error"]["details"] == {
+        "policy_profile": "readonly_local",
+        "boundary": "urllib.request.urlopen",
+        "target": "https://example.com",
+    }
+
+
 def test_trace_metadata_determinism_basic_check() -> None:
     kwargs = {
         "trace_id": "trace-security-matrix",

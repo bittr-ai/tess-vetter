@@ -13,12 +13,24 @@ from tess_vetter.code_mode.operation_spec import (
     OperationCitation,
     OperationSpec,
     SafetyClass,
+    SafetyRequirements,
 )
 from tess_vetter.code_mode.registries.operation_ids import (
     build_operation_id,
     normalize_operation_name,
 )
 from tess_vetter.code_mode.registries.tiering import ApiSymbol, tier_for_api_symbol
+from tess_vetter.code_mode.retry.wrappers import wrap_with_transient_retry
+
+_NETWORK_PARAM_HINTS: frozenset[str] = frozenset(
+    {
+        "network",
+        "allow_network",
+        "use_network",
+        "download",
+        "allow_download",
+    }
+)
 
 
 def _iter_api_export_callables() -> list[tuple[ApiSymbol, object]]:
@@ -52,10 +64,12 @@ def _build_auto_adapter(
     fn: object,
     *,
     module_name: str,
+    needs_network: bool = False,
     availability: OperationAvailability = OperationAvailability.AVAILABLE,
 ) -> OperationAdapter:
     doc = inspect.getdoc(fn)
     first_line = doc.splitlines()[0].strip() if doc else ""
+    wrapped_fn = wrap_with_transient_retry(fn) if needs_network and availability == OperationAvailability.AVAILABLE else fn
     return OperationAdapter(
         spec=OperationSpec(
             id=operation_id,
@@ -63,11 +77,21 @@ def _build_auto_adapter(
             description=first_line,
             tier_tags=("api-export", "auto-discovered"),
             safety_class=SafetyClass.SAFE,
+            safety_requirements=SafetyRequirements(needs_network=needs_network),
             availability=availability,
             citations=(OperationCitation(label=f"{module_name}.{export_name}"),),
         ),
-        fn=fn,
+        fn=wrapped_fn,
     )
+
+
+def _is_network_bound_callable(fn: object) -> bool:
+    try:
+        signature = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return False
+
+    return any(param_name.lower() in _NETWORK_PARAM_HINTS for param_name in signature.parameters)
 
 
 def _build_unavailable_adapter_fn(
@@ -128,7 +152,15 @@ def discover_api_export_adapters(existing_ids: set[str] | None = None) -> tuple[
             continue
 
         used_ids.add(operation_id)
-        discovered.append(_build_auto_adapter(operation_id, symbol.name, value, module_name=symbol.module))
+        discovered.append(
+            _build_auto_adapter(
+                operation_id,
+                symbol.name,
+                value,
+                module_name=symbol.module,
+                needs_network=_is_network_bound_callable(value),
+            )
+        )
 
     return tuple(sorted(discovered, key=lambda adapter: adapter.id))
 

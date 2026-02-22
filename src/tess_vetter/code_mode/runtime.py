@@ -11,7 +11,9 @@ from typing import Any
 
 from tess_vetter.code_mode.policy import (
     DEFAULT_PROFILE_NAME,
+    NetworkBoundaryViolationError,
     PolicyProfile,
+    network_boundary_guard,
     resolve_profile,
     safe_builtins,
     validate_plan_ast,
@@ -188,6 +190,21 @@ async def execute(
             event["status"] = "failed"
             event["duration_ms"] = int((time.perf_counter() - started) * 1000)
             raise
+        except NetworkBoundaryViolationError as exc:
+            event["status"] = "failed"
+            event["duration_ms"] = int((time.perf_counter() - started) * 1000)
+            event["error_code"] = "POLICY_DENIED"
+            raise _RuntimeExecutionError(
+                _error(
+                    "POLICY_DENIED",
+                    "Network access is not allowed under current policy profile.",
+                    {
+                        "policy_profile": profile.name,
+                        "boundary": exc.boundary,
+                        "target": exc.target,
+                    },
+                )
+            ) from exc
         except Exception as exc:
             event["status"] = "failed"
             event["duration_ms"] = int((time.perf_counter() - started) * 1000)
@@ -210,10 +227,11 @@ async def execute(
 
     try:
         started = time.perf_counter()
-        result = await asyncio.wait_for(
-            execute_plan(proxy_ops, MappingProxyType(request_context)),
-            timeout=budget.plan_timeout_ms / 1000.0,
-        )
+        with network_boundary_guard(allow_network=profile.allow_network):
+            result = await asyncio.wait_for(
+                execute_plan(proxy_ops, MappingProxyType(request_context)),
+                timeout=budget.plan_timeout_ms / 1000.0,
+            )
         plan_duration_ms = int((time.perf_counter() - started) * 1000)
     except TimeoutError:
         return _failure_response(
@@ -232,6 +250,24 @@ async def execute(
     except _RuntimeExecutionError as exc:
         return _failure_response(
             exc.error,
+            profile_name=profile.name,
+            profile=profile,
+            budget=budget,
+            call_events=call_events,
+            catalog_hash=catalog_version_hash,
+            used_calls=used_calls,
+        )
+    except NetworkBoundaryViolationError as exc:
+        return _failure_response(
+            _error(
+                "POLICY_DENIED",
+                "Network access is not allowed under current policy profile.",
+                {
+                    "policy_profile": profile.name,
+                    "boundary": exc.boundary,
+                    "target": exc.target,
+                },
+            ),
             profile_name=profile.name,
             profile=profile,
             budget=budget,

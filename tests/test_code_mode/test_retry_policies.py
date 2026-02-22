@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from tess_vetter.code_mode.retry import RetryPolicy, TransientExhaustionError, retry_transient
+from tess_vetter.code_mode.retry.wrappers import wrap_with_transient_retry
 
 
 def test_backoff_schedule_without_jitter_is_deterministic() -> None:
@@ -52,3 +53,37 @@ def test_retry_transient_raises_deterministic_transient_exhaustion_payload() -> 
         "last_exception_text": "temporary outage",
     }
     assert sleeps == [0.1, 0.2]
+
+
+def test_wrap_with_transient_retry_surfaces_deterministic_transient_exhaustion() -> None:
+    calls = {"count": 0}
+    sleeps: list[float] = []
+
+    def _op() -> str:
+        calls["count"] += 1
+        raise ConnectionError("upstream unavailable")
+
+    wrapped = wrap_with_transient_retry(
+        _op,
+        policy=RetryPolicy(attempts=2, backoff_seconds=0.1, jitter=0.4, cap_seconds=0.2),
+        sleep=sleeps.append,
+        use_jitter=False,
+    )
+
+    with pytest.raises(TransientExhaustionError) as exc_info:
+        wrapped()
+
+    payload = exc_info.value.payload
+    assert payload["code"] == "TRANSIENT_EXHAUSTION"
+    assert payload["message"] == "Transient retry attempts exhausted."
+    assert payload["retryable"] is False
+    assert payload["details"] == {
+        "attempts": 2,
+        "backoff_seconds": 0.1,
+        "jitter": 0.4,
+        "cap_seconds": 0.2,
+        "last_exception_type": "ConnectionError",
+        "last_exception_text": "upstream unavailable",
+    }
+    assert calls["count"] == 2
+    assert sleeps == [0.1]

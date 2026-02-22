@@ -5,6 +5,14 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from tess_vetter.code_mode.adapters.base import OperationAdapter
+from tess_vetter.code_mode.adapters.check_wrappers import (
+    CheckWrapperDefinition,
+    CheckWrapperInput,
+    TypedCheckResultBase,
+    check_wrapper_definitions,
+    check_wrapper_functions,
+    make_check_wrapper,
+)
 from tess_vetter.code_mode.adapters.discovery import discover_api_export_adapters
 from tess_vetter.code_mode.adapters.manual import legacy_manual_seed_ids, manual_seed_adapters
 
@@ -33,6 +41,12 @@ def default_adapter_registration_plan() -> tuple[OperationAdapter, ...]:
 
 __all__ = [
     "OperationAdapter",
+    "CheckWrapperDefinition",
+    "CheckWrapperInput",
+    "TypedCheckResultBase",
+    "check_wrapper_definitions",
+    "check_wrapper_functions",
+    "make_check_wrapper",
     "default_adapter_registration_plan",
     "discover_api_export_adapters",
     "legacy_manual_seed_ids",
