@@ -6,6 +6,8 @@ may attach mapped PRD codes as metadata (for example, ``provenance.error_code``)
 
 from __future__ import annotations
 
+from typing import Any
+
 DEFAULT_PRD_ERROR_CODE = "SCHEMA_VIOLATION_OUTPUT"
 
 _LEGACY_ERROR_CLASS_TO_PRD_CODE: dict[str, str] = {
@@ -38,6 +40,61 @@ _LEGACY_ERROR_CLASS_TO_PRD_CODE: dict[str, str] = {
     "SCHEMA_VIOLATION_OUTPUT": "SCHEMA_VIOLATION_OUTPUT",
 }
 
+_POLICY_REASON_FLAGS: frozenset[str] = frozenset({"NETWORK_DISABLED", "NETWORK_ERROR"})
+
+
+def _normalized_reason_flag(reason_flag: str | None) -> str | None:
+    if not isinstance(reason_flag, str):
+        return None
+    normalized_reason = reason_flag.strip().upper()
+    return normalized_reason or None
+
+
+def map_legacy_denial_details(
+    error_class: str | None,
+    *,
+    reason_flag: str | None = None,
+) -> dict[str, Any]:
+    """Map legacy denial/error context into standardized blocker detail fields."""
+    normalized_reason = _normalized_reason_flag(reason_flag)
+    if normalized_reason and normalized_reason.startswith("EXTRA_MISSING:"):
+        extra = normalized_reason.split(":", 1)[1].strip().lower()
+        return {
+            "reason_flag": normalized_reason,
+            "dependency": extra,
+            "dependency_blockers": [
+                {
+                    "type": "optional_dependency_missing",
+                    "summary": f"Missing optional dependency extra '{extra}'.",
+                    "action": f"Install optional dependency with: pip install 'tess-vetter[{extra}]'",
+                    "dependency": extra,
+                    "install_hint": f"pip install 'tess-vetter[{extra}]'",
+                }
+            ],
+            "policy_blockers": [],
+        }
+
+    if normalized_reason in _POLICY_REASON_FLAGS or error_class in {
+        "NoDownloadError",
+        "OfflineNoLocalDataError",
+        "POLICY_DENIED",
+    }:
+        reason = normalized_reason or "POLICY_DENIED"
+        return {
+            "reason_flag": reason,
+            "policy_blockers": [
+                {
+                    "type": "network_policy_denied",
+                    "summary": "Network access is denied by policy.",
+                    "action": "Re-run in a network-enabled policy profile or provide local artifacts.",
+                    "reason": reason,
+                }
+            ],
+            "dependency_blockers": [],
+        }
+
+    return {}
+
 
 def map_legacy_error_to_prd_code(
     error_class: str | None,
@@ -53,11 +110,11 @@ def map_legacy_error_to_prd_code(
     Returns:
         PRD taxonomy code.
     """
-    if isinstance(reason_flag, str):
-        normalized_reason = reason_flag.strip().upper()
+    normalized_reason = _normalized_reason_flag(reason_flag)
+    if normalized_reason:
         if normalized_reason.startswith("EXTRA_MISSING:"):
             return "DEPENDENCY_MISSING"
-        if normalized_reason in {"NETWORK_DISABLED", "NETWORK_ERROR"}:
+        if normalized_reason in _POLICY_REASON_FLAGS:
             return "POLICY_DENIED"
         if normalized_reason == "NETWORK_TIMEOUT":
             return "TIMEOUT_EXCEEDED"
@@ -82,5 +139,6 @@ def map_legacy_error_to_prd_code(
 
 __all__ = [
     "DEFAULT_PRD_ERROR_CODE",
+    "map_legacy_denial_details",
     "map_legacy_error_to_prd_code",
 ]

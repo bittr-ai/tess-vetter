@@ -10,7 +10,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from tess_vetter.code_mode.mcp_adapter import ExecuteRequest, SearchRequest
+from tess_vetter.code_mode.mcp_adapter import (
+    ErrorPayload,
+    ExecuteRequest,
+    ExecuteResponse,
+    MCPAdapter,
+    SearchRequest,
+)
 from tess_vetter.code_mode.runtime import execute
 from tess_vetter.code_mode.trace import build_runtime_trace_metadata
 
@@ -122,6 +128,8 @@ async def execute_plan(ops, context):
     assert result["status"] == "failed"
     assert result["error"]["code"] == "POLICY_DENIED"
     assert result["error"]["details"]["node_type"] == "Import"
+    assert result["error"]["details"]["policy_blockers"][0]["type"] == "restricted_python_construct"
+    assert result["error"]["details"]["dependency_blockers"] == []
 
 
 def test_runtime_readonly_local_denies_transitive_urllib_boundary() -> None:
@@ -282,3 +290,73 @@ def test_adapter_execute_response_shape_matches_runtime_style() -> None:
     assert response.status == "ok"
     assert response.error is None
     assert response.catalog_version_hash == "catalog-v1"
+
+
+def test_adapter_normalizes_policy_denials_to_actionable_blockers() -> None:
+    adapter = MCPAdapter(
+        execute_handler=lambda _request: ExecuteResponse(
+            status="failed",
+            result=None,
+            error=ErrorPayload(
+                code="POLICY_DENIED",
+                message="Network access is not allowed under current policy profile.",
+                retryable=False,
+                details={
+                    "policy_profile": "readonly_local",
+                    "boundary": "urllib.request.urlopen",
+                    "target": "https://example.com",
+                },
+            ),
+            trace=None,
+            catalog_version_hash="catalog-v1",
+        )
+    )
+
+    response = adapter.execute(
+        ExecuteRequest(
+            plan_code="async def execute_plan(ops, context):\n    return {'ok': True}\n",
+            context={},
+            catalog_version_hash="catalog-v1",
+        )
+    )
+
+    assert response.status == "failed"
+    assert response.error is not None
+    assert response.error.code == "POLICY_DENIED"
+    assert response.error.retryable is False
+    assert response.error.details["policy_blockers"][0]["type"] == "network_boundary_denied"
+    assert response.error.details["policy_blockers"][0]["boundary"] == "urllib.request.urlopen"
+    assert response.error.details["dependency_blockers"] == []
+
+
+def test_adapter_normalizes_dependency_denials_and_preserves_retryable_envelope() -> None:
+    adapter = MCPAdapter(
+        execute_handler=lambda _request: ExecuteResponse(
+            status="failed",
+            result=None,
+            error=ErrorPayload(
+                code="DEPENDENCY_MISSING",
+                message="Missing optional dependency extra 'tls'.",
+                retryable=True,
+                details={"dependency": "tls"},
+            ),
+            trace=None,
+            catalog_version_hash="catalog-v1",
+        )
+    )
+
+    response = adapter.execute(
+        ExecuteRequest(
+            plan_code="async def execute_plan(ops, context):\n    return {'ok': True}\n",
+            context={},
+            catalog_version_hash="catalog-v1",
+        )
+    )
+
+    assert response.status == "failed"
+    assert response.error is not None
+    assert response.error.code == "DEPENDENCY_MISSING"
+    assert response.error.retryable is True
+    assert response.error.details["dependency_blockers"][0]["type"] == "optional_dependency_missing"
+    assert response.error.details["dependency_blockers"][0]["dependency"] == "tls"
+    assert response.error.details["policy_blockers"] == []

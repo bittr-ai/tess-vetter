@@ -60,6 +60,33 @@ _BANNED_NAME_IDS = {
 }
 
 
+def _policy_blocker(
+    *,
+    blocker_type: str,
+    summary: str,
+    action: str,
+    **fields: Any,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "type": blocker_type,
+        "summary": summary,
+        "action": action,
+    }
+    payload.update(fields)
+    return payload
+
+
+def policy_denied_details(
+    *,
+    blocker: dict[str, Any],
+    **fields: Any,
+) -> dict[str, Any]:
+    details: dict[str, Any] = dict(fields)
+    details["policy_blockers"] = [blocker]
+    details["dependency_blockers"] = []
+    return details
+
+
 @dataclass(frozen=True, slots=True)
 class PolicyProfile:
     name: str
@@ -178,21 +205,45 @@ def validate_plan_ast(plan_code: str) -> dict[str, Any] | None:
                 "code": "POLICY_DENIED",
                 "message": "Plan contains a restricted Python construct.",
                 "retryable": False,
-                "details": {"node_type": node.__class__.__name__},
+                "details": policy_denied_details(
+                    blocker=_policy_blocker(
+                        blocker_type="restricted_python_construct",
+                        summary="Plan uses a Python construct blocked by sandbox policy.",
+                        action="Remove restricted constructs (import/global/nonlocal) from plan code.",
+                        node_type=node.__class__.__name__,
+                    ),
+                    node_type=node.__class__.__name__,
+                ),
             }
         if isinstance(node, ast.Name) and node.id in _BANNED_NAME_IDS:
             return {
                 "code": "POLICY_DENIED",
                 "message": "Plan references a restricted builtin.",
                 "retryable": False,
-                "details": {"name": node.id},
+                "details": policy_denied_details(
+                    blocker=_policy_blocker(
+                        blocker_type="restricted_builtin",
+                        summary="Plan references a builtin blocked by sandbox policy.",
+                        action="Use provided safe builtins and operation APIs instead.",
+                        name=node.id,
+                    ),
+                    name=node.id,
+                ),
             }
         if isinstance(node, ast.Attribute) and node.attr.startswith("__"):
             return {
                 "code": "POLICY_DENIED",
                 "message": "Plan references a restricted attribute.",
                 "retryable": False,
-                "details": {"attribute": node.attr},
+                "details": policy_denied_details(
+                    blocker=_policy_blocker(
+                        blocker_type="restricted_attribute",
+                        summary="Plan references a dunder attribute blocked by sandbox policy.",
+                        action="Remove dunder attribute access from plan code.",
+                        attribute=node.attr,
+                    ),
+                    attribute=node.attr,
+                ),
             }
     return None
 
@@ -212,6 +263,7 @@ __all__ = [
     "READONLY_LOCAL_MAX_OUTPUT_BYTES",
     "READONLY_LOCAL_PLAN_TIMEOUT_MS",
     "network_boundary_guard",
+    "policy_denied_details",
     "resolve_profile",
     "safe_builtins",
     "validate_plan_ast",

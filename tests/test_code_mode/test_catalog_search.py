@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from copy import deepcopy
 from random import Random
+from typing import Any
 
 import pytest
 from pydantic import BaseModel
 
 from tess_vetter.code_mode.catalog import build_catalog
+from tess_vetter.code_mode.mcp_adapter import SearchRequest, make_default_mcp_adapter
 from tess_vetter.code_mode.search import search_catalog
 
 
@@ -507,3 +509,75 @@ def test_search_rank_is_unchanged_by_wrapper_schema_metadata() -> None:
     matches = search_catalog(catalog.entries, query="report", tags=["pipeline"], limit=2)
     assert [match.entry.id for match in matches] == ["a_schema", "b_no_schema"]
     assert matches[0].score == matches[1].score
+
+
+def _tranche_active_search_rows() -> list[dict[str, Any]]:
+    response = make_default_mcp_adapter().search(SearchRequest(query="", limit=1_000, tags=[]))
+    assert response.error is None
+    tranche_rows: list[dict[str, Any]] = []
+    for row in response.results:
+        metadata = row.metadata
+        if metadata.get("operation_tier") not in {"golden_path", "primitive"}:
+            continue
+        if metadata.get("availability") != "available":
+            continue
+        if metadata.get("status") != "active":
+            continue
+        tranche_rows.append({"operation_id": row.id, "metadata": metadata})
+    return tranche_rows
+
+
+def _schema_required_paths(schema: dict[str, Any], prefix: str = "") -> list[str]:
+    if not isinstance(schema, dict):
+        return []
+    if schema.get("type") != "object":
+        return []
+
+    required = schema.get("required")
+    properties = schema.get("properties")
+    if not isinstance(required, list) or not isinstance(properties, dict):
+        return []
+
+    paths: list[str] = []
+    for key in required:
+        if not isinstance(key, str) or not key:
+            continue
+        path = f"{prefix}.{key}" if prefix else key
+        paths.append(path)
+        nested = properties.get(key)
+        if isinstance(nested, dict):
+            paths.extend(_schema_required_paths(nested, prefix=path))
+    return paths
+
+
+def test_tranche_callability_required_paths_match_input_schema_required_paths() -> None:
+    failing_ops: list[str] = []
+
+    for row in _tranche_active_search_rows():
+        operation_id = row["operation_id"]
+        metadata = row["metadata"]
+        callability = metadata.get("operation_callability")
+        schema_snippet = metadata.get("schema_snippet")
+
+        if not isinstance(callability, dict) or not isinstance(schema_snippet, dict):
+            failing_ops.append(operation_id)
+            continue
+
+        input_schema = schema_snippet.get("input")
+        if not isinstance(input_schema, dict):
+            failing_ops.append(operation_id)
+            continue
+
+        expected = sorted(set(_schema_required_paths(input_schema)))
+        actual_raw = callability.get("required_paths")
+        if not isinstance(actual_raw, list) or any(not isinstance(path, str) for path in actual_raw):
+            failing_ops.append(operation_id)
+            continue
+
+        actual = sorted(set(actual_raw))
+        if actual != expected:
+            failing_ops.append(operation_id)
+
+    assert not failing_ops, (
+        "required_paths mismatch or missing for operation ids: " f"{sorted(set(failing_ops))}"
+    )

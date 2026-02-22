@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import asyncio
 import inspect
 import json
@@ -22,6 +23,7 @@ from tess_vetter.code_mode.policy import (
 )
 
 ERROR_CATALOG_DRIFT = "CATALOG_DRIFT"
+MODE_PREFLIGHT = "preflight"
 _FAIRNESS_LOCK = threading.Lock()
 _FAIRNESS_PLAN_SEQUENCE = count(1)
 _FAIRNESS_CALL_SEQUENCE = count(1)
@@ -134,6 +136,66 @@ async def execute(
             used_calls=used_calls,
             plan_instance_id=plan_instance_id,
         )
+
+    if _is_preflight_mode(request_context):
+        blockers_payload = _collect_preflight_blockers(
+            plan_code=plan_code,
+            context=request_context,
+            profile=profile,
+        )
+        preflight_result = {
+            "mode": MODE_PREFLIGHT,
+            "ready": _is_preflight_ready(blockers_payload),
+            "operation_ids": blockers_payload["operation_ids"],
+            "blockers": blockers_payload["blockers"],
+        }
+        if not preflight_result["ready"]:
+            return {
+                "status": "failed",
+                "result": preflight_result,
+                "error": _select_preflight_error(blockers_payload["blockers"]),
+                "catalog_version_hash": catalog_version_hash,
+                "trace": {
+                    "policy_profile": profile.name,
+                    "policy_limits": _policy_limits(profile),
+                    "call_budget": {
+                        "max_calls": budget.max_calls,
+                        "used_calls": used_calls,
+                        "max_output_bytes": budget.max_output_bytes,
+                        "plan_timeout_ms": budget.plan_timeout_ms,
+                        "per_call_timeout_ms": budget.per_call_timeout_ms,
+                    },
+                    "call_events": call_events,
+                    "metadata": {
+                        "short_circuit": True,
+                        "mode": MODE_PREFLIGHT,
+                        "fairness": {"plan_instance_id": plan_instance_id},
+                    },
+                },
+            }
+        return {
+            "status": "ok",
+            "result": preflight_result,
+            "error": None,
+            "catalog_version_hash": catalog_version_hash,
+            "trace": {
+                "policy_profile": profile.name,
+                "policy_limits": _policy_limits(profile),
+                "call_budget": {
+                    "max_calls": budget.max_calls,
+                    "used_calls": used_calls,
+                    "max_output_bytes": budget.max_output_bytes,
+                    "plan_timeout_ms": budget.plan_timeout_ms,
+                    "per_call_timeout_ms": budget.per_call_timeout_ms,
+                },
+                "call_events": call_events,
+                "metadata": {
+                    "short_circuit": True,
+                    "mode": MODE_PREFLIGHT,
+                    "fairness": {"plan_instance_id": plan_instance_id},
+                },
+            },
+        }
 
     plan_fn_or_error = _load_execute_plan(plan_code)
     if isinstance(plan_fn_or_error, dict):
@@ -429,6 +491,302 @@ def _pick_profile_name(context: Mapping[str, Any]) -> str:
     if isinstance(context.get("safety_profile"), str):
         return str(context["safety_profile"])
     return DEFAULT_PROFILE_NAME
+
+
+def _is_preflight_mode(context: Mapping[str, Any]) -> bool:
+    return str(context.get("mode", "")).strip().lower() == MODE_PREFLIGHT
+
+
+def _is_preflight_ready(payload: Mapping[str, Any]) -> bool:
+    blockers = payload.get("blockers")
+    if not isinstance(blockers, Mapping):
+        return True
+    return not any(bool(blockers.get(key)) for key in ("missing_fields", "type_mismatches", "policy_blockers", "dependency_blockers"))
+
+
+def _select_preflight_error(blockers: Mapping[str, Any]) -> dict[str, Any]:
+    if blockers.get("missing_fields") or blockers.get("type_mismatches"):
+        return _error(
+            "SCHEMA_VIOLATION_INPUT",
+            "Preflight detected schema blockers.",
+            {"mode": MODE_PREFLIGHT, "blockers": dict(blockers)},
+        )
+    if blockers.get("policy_blockers"):
+        return _error(
+            "POLICY_DENIED",
+            "Preflight detected policy blockers.",
+            {"mode": MODE_PREFLIGHT, "blockers": dict(blockers)},
+        )
+    return _error(
+        "DEPENDENCY_MISSING",
+        "Preflight detected dependency blockers.",
+        {"mode": MODE_PREFLIGHT, "blockers": dict(blockers)},
+    )
+
+
+def _collect_preflight_blockers(
+    *,
+    plan_code: str,
+    context: Mapping[str, Any],
+    profile: PolicyProfile,
+) -> dict[str, Any]:
+    try:
+        tree = ast.parse(plan_code, mode="exec")
+    except SyntaxError:
+        return {
+            "operation_ids": [],
+            "blockers": {
+                "missing_fields": [],
+                "type_mismatches": [],
+                "policy_blockers": [],
+                "dependency_blockers": [],
+            },
+        }
+
+    operation_catalog = context.get("preflight_operation_catalog")
+    if isinstance(operation_catalog, Mapping):
+        raw_catalog: Mapping[str, Any] = operation_catalog
+    else:
+        raw_catalog = {}
+
+    call_sites = _extract_operation_call_sites(tree)
+    missing_fields: list[dict[str, Any]] = []
+    type_mismatches: list[dict[str, Any]] = []
+    policy_blockers: list[dict[str, Any]] = []
+    dependency_blockers: list[dict[str, Any]] = []
+
+    for call_site in call_sites:
+        operation_id = call_site["operation_id"]
+        call_ref = {"line": call_site["line"], "column": call_site["column"]}
+        raw_entry = raw_catalog.get(operation_id)
+        entry = dict(raw_entry) if isinstance(raw_entry, Mapping) else None
+
+        if entry is None:
+            dependency_blockers.append(
+                {
+                    "operation_id": operation_id,
+                    "reason": "operation_not_found",
+                    "call_site": call_ref,
+                }
+            )
+            continue
+
+        availability = entry.get("availability")
+        if availability != "available":
+            dependency_blockers.append(
+                {
+                    "operation_id": operation_id,
+                    "reason": "operation_unavailable",
+                    "availability": availability,
+                    "call_site": call_ref,
+                }
+            )
+
+        requirements = entry.get("safety_requirements")
+        if isinstance(requirements, Mapping):
+            if bool(requirements.get("needs_network")) and not profile.allow_network:
+                policy_blockers.append(
+                    {
+                        "operation_id": operation_id,
+                        "requirement": "needs_network",
+                        "policy_profile": profile.name,
+                        "call_site": call_ref,
+                    }
+                )
+            if bool(requirements.get("requires_human_review")) and not bool(context.get("human_review_approved")):
+                policy_blockers.append(
+                    {
+                        "operation_id": operation_id,
+                        "requirement": "requires_human_review",
+                        "policy_profile": profile.name,
+                        "call_site": call_ref,
+                    }
+                )
+            if bool(requirements.get("needs_secrets")) and not bool(context.get("secrets_available")):
+                policy_blockers.append(
+                    {
+                        "operation_id": operation_id,
+                        "requirement": "needs_secrets",
+                        "policy_profile": profile.name,
+                        "call_site": call_ref,
+                    }
+                )
+            if bool(requirements.get("needs_filesystem")) and not bool(context.get("filesystem_available", True)):
+                policy_blockers.append(
+                    {
+                        "operation_id": operation_id,
+                        "requirement": "needs_filesystem",
+                        "policy_profile": profile.name,
+                        "call_site": call_ref,
+                    }
+                )
+
+        if call_site["has_dynamic_kwargs"]:
+            continue
+
+        args = call_site["args"]
+        if not isinstance(args, Mapping):
+            continue
+
+        required_fields = entry.get("required_fields")
+        required: tuple[str, ...]
+        if isinstance(required_fields, list):
+            required = tuple(str(field) for field in required_fields)
+        else:
+            required = ()
+
+        for field_name in required:
+            if field_name not in args:
+                missing_fields.append(
+                    {
+                        "operation_id": operation_id,
+                        "field": field_name,
+                        "call_site": call_ref,
+                    }
+                )
+
+        field_types = entry.get("field_types")
+        if isinstance(field_types, Mapping):
+            for field_name, expected_raw in sorted(field_types.items()):
+                if field_name not in args:
+                    continue
+                value = args[field_name]
+                expected_types = _normalize_expected_types(expected_raw)
+                if not expected_types:
+                    continue
+                if _value_matches_expected_types(value, expected_types):
+                    continue
+                type_mismatches.append(
+                    {
+                        "operation_id": operation_id,
+                        "field": field_name,
+                        "expected_types": list(expected_types),
+                        "received_type": type(value).__name__,
+                        "call_site": call_ref,
+                    }
+                )
+
+    return {
+        "operation_ids": sorted({call["operation_id"] for call in call_sites}),
+        "blockers": {
+            "missing_fields": sorted(
+                missing_fields,
+                key=lambda row: (
+                    str(row.get("operation_id")),
+                    str(row.get("field")),
+                    int(row.get("call_site", {}).get("line", 0)),
+                ),
+            ),
+            "type_mismatches": sorted(
+                type_mismatches,
+                key=lambda row: (
+                    str(row.get("operation_id")),
+                    str(row.get("field")),
+                    int(row.get("call_site", {}).get("line", 0)),
+                ),
+            ),
+            "policy_blockers": sorted(
+                policy_blockers,
+                key=lambda row: (
+                    str(row.get("operation_id")),
+                    str(row.get("requirement")),
+                    int(row.get("call_site", {}).get("line", 0)),
+                ),
+            ),
+            "dependency_blockers": sorted(
+                dependency_blockers,
+                key=lambda row: (
+                    str(row.get("operation_id")),
+                    str(row.get("reason")),
+                    int(row.get("call_site", {}).get("line", 0)),
+                ),
+            ),
+        },
+    }
+
+
+def _extract_operation_call_sites(tree: ast.AST) -> list[dict[str, Any]]:
+    call_sites: list[dict[str, Any]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        operation_id = _resolve_operation_id(node.func)
+        if operation_id is None:
+            continue
+        kwargs, has_dynamic_kwargs = _extract_literal_kwargs(node)
+        call_sites.append(
+            {
+                "operation_id": operation_id,
+                "args": kwargs,
+                "has_dynamic_kwargs": has_dynamic_kwargs,
+                "line": int(getattr(node, "lineno", 0)),
+                "column": int(getattr(node, "col_offset", 0)),
+            }
+        )
+    return sorted(call_sites, key=lambda row: (str(row["operation_id"]), int(row["line"]), int(row["column"])))
+
+
+def _resolve_operation_id(func: ast.AST) -> str | None:
+    if isinstance(func, ast.Subscript) and isinstance(func.value, ast.Name) and func.value.id == "ops":
+        key_value = _literal_eval_or_none(func.slice)
+        if isinstance(key_value, str):
+            return key_value
+    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id == "ops":
+        return str(func.attr)
+    return None
+
+
+def _extract_literal_kwargs(node: ast.Call) -> tuple[dict[str, Any], bool]:
+    kwargs: dict[str, Any] = {}
+    has_dynamic_kwargs = False
+    for keyword in node.keywords:
+        if keyword.arg is None:
+            has_dynamic_kwargs = True
+            continue
+        literal = _literal_eval_or_none(keyword.value)
+        if literal is None and not _is_none_literal(keyword.value):
+            has_dynamic_kwargs = True
+            continue
+        kwargs[keyword.arg] = literal
+    return kwargs, has_dynamic_kwargs
+
+
+def _is_none_literal(node: ast.AST) -> bool:
+    return isinstance(node, ast.Constant) and node.value is None
+
+
+def _literal_eval_or_none(node: ast.AST) -> Any:
+    try:
+        return ast.literal_eval(node)
+    except Exception:
+        return None
+
+
+def _normalize_expected_types(raw: Any) -> tuple[str, ...]:
+    if isinstance(raw, str):
+        return (raw,)
+    if isinstance(raw, list):
+        return tuple(sorted({str(item) for item in raw if isinstance(item, str)}))
+    return ()
+
+
+def _value_matches_expected_types(value: Any, expected_types: tuple[str, ...]) -> bool:
+    for expected in expected_types:
+        if expected == "string" and isinstance(value, str):
+            return True
+        if expected == "integer" and isinstance(value, int) and not isinstance(value, bool):
+            return True
+        if expected == "number" and ((isinstance(value, int) and not isinstance(value, bool)) or isinstance(value, float)):
+            return True
+        if expected == "boolean" and isinstance(value, bool):
+            return True
+        if expected == "array" and isinstance(value, list):
+            return True
+        if expected == "object" and isinstance(value, dict):
+            return True
+        if expected == "null" and value is None:
+            return True
+    return False
 
 
 def _first_int(data: Mapping[str, Any], *keys: str) -> int | None:

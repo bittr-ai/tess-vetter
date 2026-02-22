@@ -10,6 +10,10 @@ from tess_vetter.code_mode.adapters import (
     OperationAdapter,
     default_adapter_registration_plan,
 )
+from tess_vetter.code_mode.catalog import (
+    DEFAULT_REQUIRED_PATHS_CAP,
+    extract_required_input_paths,
+)
 from tess_vetter.code_mode.operation_spec import OperationCitation, OperationSpec, SafetyClass
 from tess_vetter.code_mode.registries.operation_ids import (
     build_operation_id,
@@ -45,6 +49,15 @@ class OpsLibrary:
 
     def __len__(self) -> int:
         return len(self._ops)
+
+
+def required_input_paths_for_adapter(
+    adapter: OperationAdapter,
+    *,
+    max_paths: int = DEFAULT_REQUIRED_PATHS_CAP,
+) -> tuple[str, ...]:
+    """Return deterministic required input paths derived from adapter input schema."""
+    return extract_required_input_paths(adapter.spec.input_json_schema, max_paths=max_paths)
 
 
 def _build_unavailable_guarded_stub(*, export_name: str) -> Callable[..., object]:
@@ -106,4 +119,5 @@ __all__ = [
     "OperationAdapter",
     "OpsLibrary",
     "make_default_ops_library",
+    "required_input_paths_for_adapter",
 ]

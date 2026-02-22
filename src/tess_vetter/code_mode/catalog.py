@@ -25,6 +25,7 @@ _TIER_ALIASES: dict[str, CatalogTier] = {
 _SCHEMA_VOLATILE_KEYS: frozenset[str] = frozenset(
     {"$defs", "$id", "$schema", "default", "description", "examples", "title"}
 )
+DEFAULT_REQUIRED_PATHS_CAP = 64
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,6 +200,121 @@ def _wrapper_schema_snippets(raw: dict[str, Any]) -> dict[str, Any] | None:
     return snippets
 
 
+def _join_object_path(prefix: str, key: str) -> str:
+    return key if not prefix else f"{prefix}.{key}"
+
+
+def _join_array_path(prefix: str) -> str:
+    return "[]" if not prefix else f"{prefix}[]"
+
+
+def _schema_type_set(schema: dict[str, Any]) -> frozenset[str]:
+    raw_type = schema.get("type")
+    if isinstance(raw_type, str):
+        return frozenset((raw_type,))
+    if isinstance(raw_type, list):
+        return frozenset(str(item) for item in raw_type if isinstance(item, str))
+    return frozenset()
+
+
+def _iter_required_property_names(schema: dict[str, Any]) -> tuple[str, ...]:
+    raw_required = schema.get("required")
+    if not isinstance(raw_required, list):
+        return ()
+    return tuple(sorted({name for name in raw_required if isinstance(name, str) and name}))
+
+
+def _collect_required_paths(schema: Any, *, prefix: str = "") -> set[str]:
+    if not isinstance(schema, dict):
+        return set()
+
+    paths: set[str] = set()
+
+    raw_all_of = schema.get("allOf")
+    if isinstance(raw_all_of, list):
+        for branch in raw_all_of:
+            paths.update(_collect_required_paths(branch, prefix=prefix))
+
+    schema_types = _schema_type_set(schema)
+    is_object = "object" in schema_types or "properties" in schema or "required" in schema
+    if is_object:
+        raw_properties = schema.get("properties")
+        properties = raw_properties if isinstance(raw_properties, dict) else {}
+        for property_name in _iter_required_property_names(schema):
+            path = _join_object_path(prefix, property_name)
+            paths.add(path)
+            nested = properties.get(property_name)
+            if isinstance(nested, dict):
+                paths.update(_collect_required_paths(nested, prefix=path))
+
+    is_array = "array" in schema_types or "items" in schema
+    if is_array:
+        array_prefix = _join_array_path(prefix)
+        raw_items = schema.get("items")
+        if isinstance(raw_items, dict):
+            paths.update(_collect_required_paths(raw_items, prefix=array_prefix))
+        elif isinstance(raw_items, list):
+            for item_schema in raw_items:
+                paths.update(_collect_required_paths(item_schema, prefix=array_prefix))
+
+    for branch_key in ("anyOf", "oneOf"):
+        raw_branches = schema.get(branch_key)
+        if not isinstance(raw_branches, list):
+            continue
+        branch_sets = [
+            _collect_required_paths(branch, prefix=prefix)
+            for branch in raw_branches
+            if isinstance(branch, dict)
+        ]
+        if not branch_sets:
+            continue
+        common = set.intersection(*branch_sets) if len(branch_sets) > 1 else set(branch_sets[0])
+        paths.update(common)
+
+    return paths
+
+
+def _cap_sorted_paths(paths: set[str], *, max_paths: int) -> tuple[str, ...]:
+    if max_paths < 0:
+        raise ValueError("max_paths must be >= 0")
+    if max_paths == 0:
+        return ()
+    return tuple(sorted(paths))[:max_paths]
+
+
+def extract_required_paths(schema: Any, *, max_paths: int = DEFAULT_REQUIRED_PATHS_CAP) -> tuple[str, ...]:
+    """Extract deterministic required field paths from a JSON schema."""
+    return _cap_sorted_paths(_collect_required_paths(schema), max_paths=max_paths)
+
+
+def extract_required_input_paths(
+    schema: Any,
+    *,
+    wrapper_schemas: Any | None = None,
+    max_paths: int = DEFAULT_REQUIRED_PATHS_CAP,
+) -> tuple[str, ...]:
+    """Extract required input paths from operation schema and optional wrapper schema."""
+    operation_schema = schema
+    resolved_wrapper_schemas = wrapper_schemas
+
+    if isinstance(schema, dict):
+        raw_input_schema = schema.get("input")
+        if isinstance(raw_input_schema, dict):
+            operation_schema = raw_input_schema
+        if resolved_wrapper_schemas is None:
+            embedded_wrapper_schemas = schema.get("wrapper_schemas")
+            if isinstance(embedded_wrapper_schemas, dict):
+                resolved_wrapper_schemas = embedded_wrapper_schemas
+
+    paths = _collect_required_paths(operation_schema)
+    if isinstance(resolved_wrapper_schemas, dict):
+        wrapper_input_schema = resolved_wrapper_schemas.get("input")
+        if isinstance(wrapper_input_schema, dict):
+            paths.update(_collect_required_paths(wrapper_input_schema))
+
+    return _cap_sorted_paths(paths, max_paths=max_paths)
+
+
 def short_hash(value: str, *, length: int = 12) -> str:
     """Return a compact prefix for a hash string."""
     if length < 1:
@@ -275,9 +391,12 @@ __all__ = [
     "CatalogBuildResult",
     "CatalogEntry",
     "CatalogTier",
+    "DEFAULT_REQUIRED_PATHS_CAP",
     "TIER_ORDER",
     "build_catalog",
     "canonicalize_value",
+    "extract_required_input_paths",
+    "extract_required_paths",
     "normalize_tier_label",
     "schema_fingerprint",
     "short_hash",

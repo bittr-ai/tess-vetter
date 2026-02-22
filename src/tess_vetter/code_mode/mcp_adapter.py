@@ -8,7 +8,12 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, TypedDict, cast, get_args
 
 from tess_vetter.code_mode.catalog import CatalogBuildResult, CatalogEntry, build_catalog
-from tess_vetter.code_mode.ops_library import OperationAdapter, OpsLibrary, make_default_ops_library
+from tess_vetter.code_mode.ops_library import (
+    OperationAdapter,
+    OpsLibrary,
+    make_default_ops_library,
+    required_input_paths_for_adapter,
+)
 from tess_vetter.code_mode.runtime import execute as runtime_execute
 from tess_vetter.code_mode.search import search_catalog
 
@@ -384,10 +389,23 @@ def _normalize_execute_response(response: ExecuteResponse) -> ExecuteResponse:
             details={"contract": "ExecuteResponse"},
         )
 
+    normalized_details = _normalize_blocker_details(
+        code=error.code,
+        message=error.message,
+        details=dict(error.details),
+    )
+    result_payload: Any = None
+    if isinstance(response.result, dict) and str(response.result.get("mode", "")).strip().lower() == "preflight":
+        result_payload = dict(response.result)
     return ExecuteResponse(
         status="failed",
-        result=None,
-        error=error,
+        result=result_payload,
+        error=ErrorPayload(
+            code=error.code,
+            message=error.message,
+            retryable=error.retryable,
+            details=normalized_details,
+        ),
         trace=None if response.trace is None else dict(response.trace),
         catalog_version_hash=response.catalog_version_hash,
     )
@@ -418,16 +436,160 @@ def _coerce_error_code(raw_code: Any) -> ErrorCode:
     return "OPERATION_RUNTIME_ERROR"
 
 
+def _policy_blocker_from_details(details: dict[str, Any], message: str) -> dict[str, Any]:
+    if isinstance(details.get("boundary"), str):
+        target = details.get("target")
+        return {
+            "type": "network_boundary_denied",
+            "summary": "Network access was denied by policy.",
+            "action": "Use a network-enabled profile or provide required local artifacts.",
+            "policy_profile": details.get("policy_profile"),
+            "boundary": details.get("boundary"),
+            "target": str(target) if target is not None else None,
+        }
+    if isinstance(details.get("node_type"), str):
+        return {
+            "type": "restricted_python_construct",
+            "summary": "Plan uses a Python construct blocked by policy.",
+            "action": "Remove restricted constructs (import/global/nonlocal) from plan code.",
+            "node_type": details.get("node_type"),
+        }
+    if isinstance(details.get("name"), str):
+        return {
+            "type": "restricted_builtin",
+            "summary": "Plan references a builtin blocked by policy.",
+            "action": "Use provided safe builtins and operation APIs instead.",
+            "name": details.get("name"),
+        }
+    if isinstance(details.get("attribute"), str):
+        return {
+            "type": "restricted_attribute",
+            "summary": "Plan references a dunder attribute blocked by policy.",
+            "action": "Remove dunder attribute access from plan code.",
+            "attribute": details.get("attribute"),
+        }
+    if isinstance(details.get("requested_profile"), str):
+        return {
+            "type": "policy_profile_denied",
+            "summary": "Requested policy profile is not allowed.",
+            "action": "Use one of the supported profiles: readonly_local, network_allowed.",
+            "requested_profile": details.get("requested_profile"),
+        }
+    return {
+        "type": "policy_denied",
+        "summary": message,
+        "action": "Adjust plan/context to satisfy runtime policy constraints.",
+    }
+
+
+def _dependency_blocker_from_details(details: dict[str, Any], message: str) -> dict[str, Any]:
+    dependency = details.get("dependency")
+    if not isinstance(dependency, str):
+        dependency = details.get("extra")
+    install_hint = details.get("install_hint")
+    if not isinstance(install_hint, str) and isinstance(dependency, str) and dependency.strip():
+        install_hint = f"pip install 'tess-vetter[{dependency}]'"
+    blocker: dict[str, Any] = {
+        "type": "optional_dependency_missing",
+        "summary": message,
+        "action": "Install required optional dependency and retry.",
+        "dependency": dependency,
+    }
+    if isinstance(install_hint, str):
+        blocker["install_hint"] = install_hint
+    return blocker
+
+
+def _normalize_blocker_details(
+    *,
+    code: ErrorCode,
+    message: str,
+    details: dict[str, Any],
+) -> dict[str, Any]:
+    normalized = dict(details)
+    if code == "POLICY_DENIED":
+        policy_blockers = normalized.get("policy_blockers")
+        if not isinstance(policy_blockers, list):
+            policy_blockers = [_policy_blocker_from_details(normalized, message)]
+        dependency_blockers = normalized.get("dependency_blockers")
+        normalized["policy_blockers"] = policy_blockers
+        normalized["dependency_blockers"] = (
+            dependency_blockers if isinstance(dependency_blockers, list) else []
+        )
+        return normalized
+
+    if code == "DEPENDENCY_MISSING":
+        dependency_blockers = normalized.get("dependency_blockers")
+        if not isinstance(dependency_blockers, list):
+            dependency_blockers = [_dependency_blocker_from_details(normalized, message)]
+        policy_blockers = normalized.get("policy_blockers")
+        normalized["dependency_blockers"] = dependency_blockers
+        normalized["policy_blockers"] = policy_blockers if isinstance(policy_blockers, list) else []
+        return normalized
+
+    return normalized
+
+
+def _build_minimal_execute_plan_code(operation_id: str) -> str:
+    return (
+        "async def execute_plan(ops, context):\n"
+        "    kwargs = context.get('operation_kwargs')\n"
+        f"    op = ops['{operation_id}']\n"
+        "    if isinstance(kwargs, dict):\n"
+        "        return await op(**kwargs)\n"
+        "    return await op()\n"
+    )
+
+
+def _callability_score_and_flags(
+    *,
+    entry: CatalogEntry,
+    adapter: OperationAdapter | None,
+) -> tuple[float, tuple[str, ...]]:
+    score = 1.0
+    flags: list[str] = []
+
+    if adapter is None:
+        score -= 0.40
+        flags.append("adapter_missing")
+    if entry.availability != "available":
+        score -= 0.35
+        flags.append("availability_unavailable")
+    if entry.status != "active":
+        score -= 0.15
+        flags.append("status_inactive")
+    if entry.deprecated:
+        score -= 0.10
+        flags.append("deprecated")
+    if entry.replacement:
+        flags.append("replacement_available")
+
+    if not flags:
+        flags.append("direct_execute_ready")
+
+    if score < 0:
+        score = 0.0
+    return round(score, 2), tuple(flags)
+
+
 def _search_metadata(
     *,
     entry: CatalogEntry,
     adapter: OperationAdapter | None,
     why_matched: tuple[str, ...],
 ) -> dict[str, Any]:
+    callability_score, callability_reason_flags = _callability_score_and_flags(
+        entry=entry,
+        adapter=adapter,
+    )
+    required_paths = list(required_input_paths_for_adapter(adapter)) if adapter is not None else []
+    request_required_paths = ["plan_code", "context", "catalog_version_hash"]
     metadata: dict[str, Any] = {
         "operation_id": entry.id,
         "operation_tier": entry.tier,
         "operation_tags": list(entry.tags),
+        "callability_score": callability_score,
+        "callability_reason_flags": list(callability_reason_flags),
         "operation_callability": {
             "tool": "execute",
             "request_type": "ExecuteRequest",
@@ -437,6 +599,19 @@ def _search_metadata(
             "hash_field": "catalog_version_hash",
             "sandbox_required": True,
             "operation": entry.id,
+            "required_paths": list(required_paths),
+            "request_required_paths": list(request_required_paths),
+            "minimal_payload_example": {
+                "plan_code": _build_minimal_execute_plan_code(entry.id),
+                "context": {
+                    "operation_kwargs": {
+                        "example": "replace_with_valid_operation_kwargs"
+                    }
+                },
+                "catalog_version_hash": "<from_search_response.catalog_version_hash>",
+            },
+            "callability_score": callability_score,
+            "reason_flags": list(callability_reason_flags),
         },
         "why_matched": list(why_matched),
         "availability": entry.availability,
@@ -466,10 +641,15 @@ def _execute_via_runtime(
     *,
     catalog: CatalogBuildResult,
     runtime_ops: dict[str, Any],
+    preflight_operation_catalog: dict[str, dict[str, Any]],
 ) -> ExecuteResponse:
     context = dict(request.context)
     if request.catalog_version_hash is not None:
         context["catalog_version_hash"] = request.catalog_version_hash
+    context["preflight_operation_catalog"] = {
+        operation_id: dict(payload)
+        for operation_id, payload in preflight_operation_catalog.items()
+    }
 
     runtime_response = asyncio.run(
         runtime_execute(
@@ -498,14 +678,22 @@ def _execute_via_runtime(
     raw_error = runtime_response.get("error")
     if isinstance(raw_error, dict):
         details = raw_error.get("details")
+        code = _coerce_error_code(raw_error.get("code"))
+        message = str(raw_error.get("message") or "Execution failed.")
+        normalized_details = _normalize_blocker_details(
+            code=code,
+            message=message,
+            details=dict(details) if isinstance(details, dict) else {},
+        )
+        result_payload = runtime_response.get("result")
         return ExecuteResponse(
             status="failed",
-            result=None,
+            result=result_payload,
             error=ErrorPayload(
-                code=_coerce_error_code(raw_error.get("code")),
-                message=str(raw_error.get("message") or "Execution failed."),
+                code=code,
+                message=message,
                 retryable=bool(raw_error.get("retryable", False)),
-                details=dict(details) if isinstance(details, dict) else {},
+                details=normalized_details,
             ),
             trace=trace,
             catalog_version_hash=catalog_hash,
@@ -532,6 +720,7 @@ def make_default_mcp_adapter() -> MCPAdapter:
     catalog = build_catalog([_catalog_entry_from_adapter(adapter) for adapter in adapters])
     adapters_by_id = {adapter.id: adapter for adapter in adapters}
     runtime_ops = {adapter.id: adapter.fn for adapter in adapters}
+    preflight_operation_catalog = _build_preflight_operation_catalog(adapters)
 
     def _search_handler(request: SearchRequest) -> SearchResponse:
         matches = search_catalog(
@@ -563,9 +752,63 @@ def make_default_mcp_adapter() -> MCPAdapter:
         )
 
     def _execute_handler(request: ExecuteRequest) -> ExecuteResponse:
-        return _execute_via_runtime(request, catalog=catalog, runtime_ops=runtime_ops)
+        return _execute_via_runtime(
+            request,
+            catalog=catalog,
+            runtime_ops=runtime_ops,
+            preflight_operation_catalog=preflight_operation_catalog,
+        )
 
     return MCPAdapter(search_handler=_search_handler, execute_handler=_execute_handler)
+
+
+def _build_preflight_operation_catalog(adapters: list[OperationAdapter]) -> dict[str, dict[str, Any]]:
+    operation_catalog: dict[str, dict[str, Any]] = {}
+    for adapter in adapters:
+        schema = adapter.spec.input_json_schema if isinstance(adapter.spec.input_json_schema, dict) else {}
+        properties = schema.get("properties", {}) if isinstance(schema.get("properties"), dict) else {}
+        required = schema.get("required", []) if isinstance(schema.get("required"), list) else []
+        field_types: dict[str, list[str]] = {}
+        for field_name, field_schema in properties.items():
+            if not isinstance(field_name, str) or not isinstance(field_schema, dict):
+                continue
+            json_types = _extract_json_types(field_schema)
+            if json_types:
+                field_types[field_name] = list(json_types)
+        operation_catalog[adapter.id] = {
+            "availability": adapter.spec.availability.value,
+            "required_fields": sorted(str(name) for name in required if isinstance(name, str)),
+            "field_types": field_types,
+            "safety_requirements": adapter.spec.safety_requirements.model_dump(),
+        }
+    return operation_catalog
+
+
+def _extract_json_types(field_schema: dict[str, Any]) -> tuple[str, ...]:
+    types: set[str] = set()
+    direct_type = field_schema.get("type")
+    if isinstance(direct_type, str):
+        types.add(direct_type)
+    elif isinstance(direct_type, list):
+        for item in direct_type:
+            if isinstance(item, str):
+                types.add(item)
+
+    for key in ("anyOf", "oneOf"):
+        variants = field_schema.get(key)
+        if not isinstance(variants, list):
+            continue
+        for variant in variants:
+            if not isinstance(variant, dict):
+                continue
+            variant_type = variant.get("type")
+            if isinstance(variant_type, str):
+                types.add(variant_type)
+            elif isinstance(variant_type, list):
+                for item in variant_type:
+                    if isinstance(item, str):
+                        types.add(item)
+    return tuple(sorted(types))
 
 
 __all__ = [
