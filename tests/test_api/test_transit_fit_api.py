@@ -5,7 +5,21 @@ import types
 import numpy as np
 import pytest
 
-from tess_vetter.api.transit_fit import fit_transit
+from tess_vetter.api.contracts import callable_input_schema_from_signature, opaque_object_schema
+from tess_vetter.api.transit_fit import (
+    FIT_TRANSIT_CALL_SCHEMA,
+    FIT_TRANSIT_OUTPUT_SCHEMA,
+    QUICK_ESTIMATE_CALL_SCHEMA,
+    QUICK_ESTIMATE_OUTPUT_SCHEMA,
+    TRANSIT_FIT_BOUNDARY_CONTRACT,
+    TRANSIT_FIT_BOUNDARY_SCHEMA_VERSION,
+    TRANSIT_FIT_MCMC_FALLBACK_METHOD,
+    TRANSIT_FIT_METHODS,
+    TRANSIT_FIT_MIN_USABLE_POINTS,
+    TRANSIT_FIT_STATUSES,
+    fit_transit,
+    quick_estimate,
+)
 from tess_vetter.api.types import Candidate, Ephemeris, LightCurve, StellarParams
 
 
@@ -110,6 +124,7 @@ def test_fit_transit_insufficient_points_returns_error(monkeypatch: pytest.Monke
     result = fit_transit(lc, cand, stellar, method="optimize")
     assert result.status == "error"
     assert "Insufficient usable points" in (result.error_message or "")
+    assert f"need >={TRANSIT_FIT_MIN_USABLE_POINTS}" in (result.error_message or "")
 
 
 def test_fit_transit_mcmc_falls_back_to_optimize_if_emcee_missing(
@@ -167,3 +182,60 @@ def test_fit_transit_mcmc_falls_back_to_optimize_if_emcee_missing(
     assert seen["method"] == "optimize"
     assert result.status == "success"
     assert result.fit_method == "optimize"
+
+
+def test_transit_fit_boundary_contract_constants_are_stable() -> None:
+    assert TRANSIT_FIT_BOUNDARY_SCHEMA_VERSION == 1
+    assert TRANSIT_FIT_MIN_USABLE_POINTS == 20
+    assert TRANSIT_FIT_METHODS == ("optimize", "mcmc")
+    assert TRANSIT_FIT_STATUSES == ("success", "failed", "error")
+    assert TRANSIT_FIT_MCMC_FALLBACK_METHOD == "optimize"
+
+
+def test_transit_fit_boundary_contract_schema_is_stable() -> None:
+    assert TRANSIT_FIT_BOUNDARY_CONTRACT == {
+        "schema_version": 1,
+        "methods": ("optimize", "mcmc"),
+        "statuses": ("success", "failed", "error"),
+        "default_method": "optimize",
+        "mcmc_fallback_method": "optimize",
+        "min_usable_points": 20,
+    }
+
+
+def test_transit_fit_schema_constants_track_contract_helpers() -> None:
+    assert callable_input_schema_from_signature(fit_transit) == FIT_TRANSIT_CALL_SCHEMA
+    assert callable_input_schema_from_signature(quick_estimate) == QUICK_ESTIMATE_CALL_SCHEMA
+    assert opaque_object_schema() == FIT_TRANSIT_OUTPUT_SCHEMA
+    assert opaque_object_schema() == QUICK_ESTIMATE_OUTPUT_SCHEMA
+
+
+def test_transit_fit_call_schema_is_stable() -> None:
+    assert FIT_TRANSIT_CALL_SCHEMA == {
+        "type": "object",
+        "properties": {
+            "candidate": {},
+            "fit_limb_darkening": {},
+            "lc": {},
+            "mcmc_burn": {},
+            "mcmc_samples": {},
+            "method": {},
+            "stellar": {},
+        },
+        "additionalProperties": False,
+        "required": ["candidate", "lc", "stellar"],
+    }
+
+
+def test_quick_estimate_call_schema_is_stable() -> None:
+    assert QUICK_ESTIMATE_CALL_SCHEMA == {
+        "type": "object",
+        "properties": {
+            "depth_ppm": {},
+            "duration_hours": {},
+            "period_days": {},
+            "stellar_density_gcc": {},
+        },
+        "additionalProperties": False,
+        "required": ["depth_ppm", "duration_hours", "period_days"],
+    }

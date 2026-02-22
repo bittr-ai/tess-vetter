@@ -32,8 +32,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypedDict
 
+from tess_vetter.api.contracts import callable_input_schema_from_signature, opaque_object_schema
 from tess_vetter.api.references import (
     CLARET_2018,
     CLARET_SOUTHWORTH_2022,
@@ -54,6 +55,39 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# API boundary contracts
+# =============================================================================
+
+TRANSIT_FIT_BOUNDARY_SCHEMA_VERSION = 1
+TRANSIT_FIT_MIN_USABLE_POINTS = 20
+
+TransitFitMethod: TypeAlias = Literal["optimize", "mcmc"]
+TransitFitStatus: TypeAlias = Literal["success", "failed", "error"]
+
+TRANSIT_FIT_METHODS: tuple[TransitFitMethod, ...] = ("optimize", "mcmc")
+TRANSIT_FIT_STATUSES: tuple[TransitFitStatus, ...] = ("success", "failed", "error")
+TRANSIT_FIT_MCMC_FALLBACK_METHOD: TransitFitMethod = "optimize"
+
+
+class TransitFitBoundaryContract(TypedDict):
+    schema_version: int
+    methods: tuple[TransitFitMethod, ...]
+    statuses: tuple[TransitFitStatus, ...]
+    default_method: TransitFitMethod
+    mcmc_fallback_method: TransitFitMethod
+    min_usable_points: int
+
+
+TRANSIT_FIT_BOUNDARY_CONTRACT = TransitFitBoundaryContract(
+    schema_version=TRANSIT_FIT_BOUNDARY_SCHEMA_VERSION,
+    methods=TRANSIT_FIT_METHODS,
+    statuses=TRANSIT_FIT_STATUSES,
+    default_method="optimize",
+    mcmc_fallback_method=TRANSIT_FIT_MCMC_FALLBACK_METHOD,
+    min_usable_points=TRANSIT_FIT_MIN_USABLE_POINTS,
+)
 
 # =============================================================================
 # Module-level references for programmatic access (generated from central registry)
@@ -250,6 +284,10 @@ def quick_estimate(
     }
 
 
+QUICK_ESTIMATE_CALL_SCHEMA = callable_input_schema_from_signature(quick_estimate)
+QUICK_ESTIMATE_OUTPUT_SCHEMA = opaque_object_schema()
+
+
 @cites(
     cite(MANDEL_AGOL_2002, "§2-3 analytic transit model with LD"),
     cite(KREIDBERG_2015, "§2 batman algorithm, §3 performance"),
@@ -260,7 +298,7 @@ def fit_transit(
     candidate: Candidate,
     stellar: StellarParams,
     *,
-    method: Literal["optimize", "mcmc"] = "optimize",
+    method: TransitFitMethod = "optimize",
     fit_limb_darkening: bool = False,
     mcmc_samples: int = 2000,
     mcmc_burn: int = 500,
@@ -305,9 +343,10 @@ def fit_transit(
     flux = internal_lc.flux[internal_lc.valid_mask]
     flux_err = internal_lc.flux_err[internal_lc.valid_mask]
 
-    if len(time) < 20:
+    if len(time) < TRANSIT_FIT_MIN_USABLE_POINTS:
         return _make_error_result(
-            f"Insufficient usable points for transit fit (need >=20, got {len(time)})"
+            "Insufficient usable points for transit fit "
+            f"(need >={TRANSIT_FIT_MIN_USABLE_POINTS}, got {len(time)})"
         )
 
     # Check for batman dependency (only after validating inputs)
@@ -330,7 +369,7 @@ def fit_transit(
                 "emcee not installed, falling back to optimize method. "
                 "Install with: pip install 'tess-vetter[fit]'"
             )
-            actual_method = "optimize"
+            actual_method = TRANSIT_FIT_MCMC_FALLBACK_METHOD
 
     # Extract ephemeris
     period = candidate.ephemeris.period_days
@@ -399,3 +438,7 @@ def fit_transit(
         status="success" if internal_result.converged else "failed",
         error_message=None,
     )
+
+
+FIT_TRANSIT_CALL_SCHEMA = callable_input_schema_from_signature(fit_transit)
+FIT_TRANSIT_OUTPUT_SCHEMA = opaque_object_schema()

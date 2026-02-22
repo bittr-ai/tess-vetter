@@ -16,16 +16,20 @@ import csv
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
 
+from tess_vetter.api.contracts import callable_input_schema_from_signature
 from tess_vetter.api.types import LightCurve, TPFStamp
 
 LOCAL_DATASET_SCHEMA_VERSION = 1
 LOCAL_DATASET_LC_CSV_PATTERN = "sector{sector}_pdcsap.csv"
 LOCAL_DATASET_TPF_NPZ_PATTERN = "sector{sector}_tpf.npz"
+LOAD_TUTORIAL_TARGET_SCHEMA_VERSION = 1
+LOAD_TUTORIAL_TARGET_REQUIRED_FIELDS: tuple[str, ...] = ("name",)
+LOAD_TUTORIAL_TARGET_DATA_ROOT_PARTS: tuple[str, str, str] = ("docs", "tutorials", "data")
 LOCAL_DATASET_PATTERN_DEFAULTS: dict[str, str] = {
     "lc_csv": LOCAL_DATASET_LC_CSV_PATTERN,
     "tpf_npz": LOCAL_DATASET_TPF_NPZ_PATTERN,
@@ -91,6 +95,14 @@ class _CSVData(TypedDict):
     flux: NDArray[np.float64]
     flux_err: NDArray[np.float64]
     quality: NDArray[np.int32]
+
+
+class LoadTutorialTargetBoundaryContract(TypedDict):
+    """Stable contract constants for ``load_tutorial_target`` wrapper inputs."""
+
+    schema_version: int
+    required_fields: tuple[Literal["name"],]
+    data_root_parts: tuple[str, str, str]
 
 
 def _read_csv_no_pandas(path: Path) -> _CSVData:
@@ -228,11 +240,24 @@ def load_tutorial_target(name: str) -> LocalDataset:
 
     This is a repo convenience wrapper around :func:`load_local_dataset`.
     """
-    base = Path(__file__).resolve().parents[3] / "docs" / "tutorials" / "data"
+    base = Path(__file__).resolve().parents[3].joinpath(*LOAD_TUTORIAL_TARGET_DATA_ROOT_PARTS)
     return load_local_dataset(base / name)
 
 
+LOAD_TUTORIAL_TARGET_CALL_SCHEMA = callable_input_schema_from_signature(load_tutorial_target)
+LOAD_TUTORIAL_TARGET_BOUNDARY_CONTRACT: LoadTutorialTargetBoundaryContract = {
+    "schema_version": LOAD_TUTORIAL_TARGET_SCHEMA_VERSION,
+    "required_fields": ("name",),
+    "data_root_parts": LOAD_TUTORIAL_TARGET_DATA_ROOT_PARTS,
+}
+
+
 __all__: list[str] = [
+    "LOAD_TUTORIAL_TARGET_BOUNDARY_CONTRACT",
+    "LOAD_TUTORIAL_TARGET_CALL_SCHEMA",
+    "LOAD_TUTORIAL_TARGET_DATA_ROOT_PARTS",
+    "LOAD_TUTORIAL_TARGET_REQUIRED_FIELDS",
+    "LOAD_TUTORIAL_TARGET_SCHEMA_VERSION",
     "LOCAL_DATASET_LC_CSV_PATTERN",
     "LOCAL_DATASET_PATTERN_DEFAULTS",
     "LOCAL_DATASET_SCHEMA_VERSION",
@@ -240,6 +265,7 @@ __all__: list[str] = [
     "LocalDataset",
     "LocalDatasetLoadPayload",
     "LocalDatasetSummaryPayload",
+    "LoadTutorialTargetBoundaryContract",
     "load_local_dataset",
     "load_tutorial_target",
 ]

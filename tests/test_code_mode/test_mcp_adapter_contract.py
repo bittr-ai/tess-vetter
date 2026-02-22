@@ -49,6 +49,29 @@ _LR04_CHANGED_API_SYMBOLS: tuple[tuple[str, str], ...] = (
     ("tess_vetter.api.vetting_report", "summarize_bundle"),
 )
 
+_LR05_CHANGED_API_MODULES: tuple[str, ...] = (
+    "tess_vetter.api.datasets",
+    "tess_vetter.api.periodogram",
+    "tess_vetter.api.sector_metrics",
+    "tess_vetter.api.transit_fit",
+    "tess_vetter.api.wcs_localization",
+)
+
+
+def _lr05_changed_api_symbols() -> tuple[tuple[str, str], ...]:
+    export_map = public_api._get_export_map()
+    symbols: list[tuple[str, str]] = []
+    for export_name, (module_name, _attr_name) in sorted(export_map.items()):
+        if module_name not in _LR05_CHANGED_API_MODULES:
+            continue
+        export_value = getattr(public_api, export_name)
+        if inspect.isclass(export_value):
+            continue
+        if not (inspect.isroutine(export_value) or callable(export_value)):
+            continue
+        symbols.append((module_name, export_name))
+    return tuple(symbols)
+
 
 def test_manual_seed_adapters_import_upstream_contract_utilities() -> None:
     assert (
@@ -160,6 +183,51 @@ def test_lr04_changed_api_adapters_remain_thin_against_upstream_callables() -> N
             continue
         if not (inspect.isroutine(export_value) or callable(export_value)):
             continue
+
+        symbol = ApiSymbol(module=module_name, name=export_name)
+        operation_id = build_operation_id(
+            tier=tier_for_api_symbol(symbol),
+            name=normalize_operation_name(symbol.name),
+        )
+        op = library.get(operation_id)
+
+        # Thin adapter contract: either call the upstream export directly, or a wrapper
+        # that preserves upstream identity through functools.wraps.
+        wrapped = getattr(op.fn, "__wrapped__", None)
+        assert op.fn is export_value or wrapped is export_value
+
+
+def test_lr05_changed_api_adapters_keep_opaque_upstream_schemas() -> None:
+    library = make_default_ops_library()
+    operation_ids = set(library.list_ids())
+    expected_operation_ids: list[str] = []
+
+    for module_name, export_name in _lr05_changed_api_symbols():
+        symbol = ApiSymbol(module=module_name, name=export_name)
+        expected_operation_ids.append(
+            build_operation_id(
+                tier=tier_for_api_symbol(symbol),
+                name=normalize_operation_name(symbol.name),
+            )
+        )
+
+    for operation_id in expected_operation_ids:
+        assert operation_id in operation_ids
+        op = library.get(operation_id)
+        assert op.spec.input_json_schema == api_contracts.opaque_object_schema()
+        assert op.spec.output_json_schema == api_contracts.opaque_object_schema()
+        assert set(op.spec.input_json_schema) == {"type"}
+        assert set(op.spec.output_json_schema) == {"type"}
+
+
+def test_lr05_changed_api_adapters_remain_thin_against_upstream_callables() -> None:
+    library = make_default_ops_library()
+    export_map = public_api._get_export_map()
+
+    for module_name, export_name in _lr05_changed_api_symbols():
+        assert export_name in export_map
+        assert export_map[export_name][0] == module_name
+        export_value = getattr(public_api, export_name)
 
         symbol = ApiSymbol(module=module_name, name=export_name)
         operation_id = build_operation_id(

@@ -3,12 +3,21 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
+import tess_vetter.api.datasets as datasets_api
+from tess_vetter.api.contracts import callable_input_schema_from_signature
 from tess_vetter.api.datasets import (
+    LOAD_TUTORIAL_TARGET_BOUNDARY_CONTRACT,
+    LOAD_TUTORIAL_TARGET_CALL_SCHEMA,
+    LOAD_TUTORIAL_TARGET_DATA_ROOT_PARTS,
+    LOAD_TUTORIAL_TARGET_REQUIRED_FIELDS,
+    LOAD_TUTORIAL_TARGET_SCHEMA_VERSION,
     LOCAL_DATASET_PATTERN_DEFAULTS,
     LOCAL_DATASET_SCHEMA_VERSION,
     LocalDatasetLoadPayload,
     load_local_dataset,
+    load_tutorial_target,
 )
 
 
@@ -97,3 +106,44 @@ def test_pattern_overrides_do_not_mutate_defaults(tmp_path: Path) -> None:
     ds = load_local_dataset(tmp_path, pattern_overrides={"lc_csv": "sector{sector}_custom.csv"})
     assert 9 in ds.lc_by_sector
     assert defaults_before == LOCAL_DATASET_PATTERN_DEFAULTS
+
+
+def test_load_tutorial_target_contract_constants_are_stable() -> None:
+    assert LOAD_TUTORIAL_TARGET_SCHEMA_VERSION == 1
+    assert LOAD_TUTORIAL_TARGET_REQUIRED_FIELDS == ("name",)
+    assert LOAD_TUTORIAL_TARGET_DATA_ROOT_PARTS == ("docs", "tutorials", "data")
+    assert LOAD_TUTORIAL_TARGET_BOUNDARY_CONTRACT == {
+        "schema_version": LOAD_TUTORIAL_TARGET_SCHEMA_VERSION,
+        "required_fields": ("name",),
+        "data_root_parts": LOAD_TUTORIAL_TARGET_DATA_ROOT_PARTS,
+    }
+
+    expected = {
+        "type": "object",
+        "properties": {"name": {}},
+        "additionalProperties": False,
+        "required": ["name"],
+    }
+    assert expected == LOAD_TUTORIAL_TARGET_CALL_SCHEMA
+    assert callable_input_schema_from_signature(load_tutorial_target) == LOAD_TUTORIAL_TARGET_CALL_SCHEMA
+
+
+def test_load_tutorial_target_delegates_to_local_loader(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Path] = {}
+    sentinel = datasets_api.LocalDataset(
+        schema_version=LOCAL_DATASET_SCHEMA_VERSION,
+        root=Path("/tmp/example"),
+    )
+
+    def _stub(path: str | Path, *, pattern_overrides: object = None) -> datasets_api.LocalDataset:
+        assert pattern_overrides is None
+        captured["path"] = Path(path)
+        return sentinel
+
+    monkeypatch.setattr(datasets_api, "load_local_dataset", _stub)
+    out = datasets_api.load_tutorial_target("tic_123")
+    expected_base = Path(datasets_api.__file__).resolve().parents[3].joinpath(
+        *LOAD_TUTORIAL_TARGET_DATA_ROOT_PARTS
+    )
+    assert out is sentinel
+    assert captured["path"] == expected_base / "tic_123"

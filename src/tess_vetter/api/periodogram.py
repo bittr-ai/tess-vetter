@@ -6,7 +6,7 @@ applications don't need to import from internal `compute.*` modules.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, TypeAlias, TypedDict
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict
@@ -40,6 +40,30 @@ from tess_vetter.compute.periodogram import (  # noqa: F401
 from tess_vetter.compute.periodogram import refine_period as _refine_period_compute
 from tess_vetter.domain.detection import PeriodogramPeak, PeriodogramResult  # noqa: F401
 
+PeriodogramPresetLiteral: TypeAlias = Literal["fast", "thorough", "deep"]
+PeriodogramMethodLiteral: TypeAlias = Literal["tls", "ls", "auto"]
+PERIODOGRAM_PRESET_VALUES: tuple[PeriodogramPresetLiteral, ...] = ("fast", "thorough", "deep")
+PERIODOGRAM_METHOD_VALUES: tuple[PeriodogramMethodLiteral, ...] = ("tls", "ls", "auto")
+RUN_PERIODOGRAM_AUTO_N_PEAKS = 5
+
+
+class AutoPeriodogramWrapperContract(TypedDict):
+    """Stable constants for the host wrapper around ``auto_periodogram``."""
+
+    schema_version: int
+    preset_values: tuple[PeriodogramPresetLiteral, ...]
+    method_values: tuple[PeriodogramMethodLiteral, ...]
+    forwarded_n_peaks: int
+
+
+AUTO_PERIODOGRAM_WRAPPER_SCHEMA_VERSION = 1
+AUTO_PERIODOGRAM_WRAPPER_CONTRACT: AutoPeriodogramWrapperContract = {
+    "schema_version": AUTO_PERIODOGRAM_WRAPPER_SCHEMA_VERSION,
+    "preset_values": PERIODOGRAM_PRESET_VALUES,
+    "method_values": PERIODOGRAM_METHOD_VALUES,
+    "forwarded_n_peaks": RUN_PERIODOGRAM_AUTO_N_PEAKS,
+}
+
 
 class RunPeriodogramRequest(BaseModel):
     """Typed request payload for periodogram API boundary contracts."""
@@ -51,8 +75,8 @@ class RunPeriodogramRequest(BaseModel):
     flux_err: list[float] | None = None
     min_period: float = 0.5
     max_period: float | None = None
-    preset: Literal["fast", "thorough", "deep"] | str = "fast"
-    method: Literal["tls", "ls", "auto"] = "auto"
+    preset: PeriodogramPresetLiteral | str = "fast"
+    method: PeriodogramMethodLiteral = "auto"
     max_planets: int = 1
     data_ref: str = ""
     tic_id: int | None = None
@@ -110,8 +134,8 @@ def run_periodogram(
     flux_err: np.ndarray | None = None,
     min_period: float = 0.5,
     max_period: float | None = None,
-    preset: Literal["fast", "thorough", "deep"] | str = "fast",
-    method: Literal["tls", "ls", "auto"] = "auto",
+    preset: PeriodogramPresetLiteral | str = "fast",
+    method: PeriodogramMethodLiteral = "auto",
     max_planets: int = 1,
     data_ref: str = "",
     tic_id: int | None = None,
@@ -141,7 +165,7 @@ def run_periodogram(
         max_period=float(max_period) if max_period is not None else None,
         preset=str(preset),
         method=method,  # type: ignore[arg-type]
-        n_peaks=5,
+        n_peaks=RUN_PERIODOGRAM_AUTO_N_PEAKS,
         data_ref=str(data_ref),
         tic_id=tic_id,
         stellar_radius_rsun=stellar_radius_rsun,
@@ -195,9 +219,16 @@ REFINE_PERIOD_CALL_SCHEMA = callable_input_schema_from_signature(refine_period)
 
 
 __all__ = [
+    "AUTO_PERIODOGRAM_WRAPPER_CONTRACT",
+    "AUTO_PERIODOGRAM_WRAPPER_SCHEMA_VERSION",
+    "AutoPeriodogramWrapperContract",
     "PerformancePreset",
     "PeriodogramPeak",
+    "PeriodogramMethodLiteral",
+    "PeriodogramPresetLiteral",
     "PeriodogramResult",
+    "PERIODOGRAM_METHOD_VALUES",
+    "PERIODOGRAM_PRESET_VALUES",
     "REFINE_PERIOD_CALL_SCHEMA",
     "REFINE_PERIOD_INPUT_SCHEMA",
     "REFINE_PERIOD_OUTPUT_SCHEMA",
@@ -208,6 +239,7 @@ __all__ = [
     "RUN_PERIODOGRAM_OUTPUT_SCHEMA",
     "RunPeriodogramRequest",
     "RunPeriodogramResponse",
+    "RUN_PERIODOGRAM_AUTO_N_PEAKS",
     "run_periodogram",
     "compute_transit_model",
     "auto_periodogram",
