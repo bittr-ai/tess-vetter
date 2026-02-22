@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import inspect
 import socket
 import urllib.request
 from collections.abc import Iterator
@@ -58,6 +59,12 @@ _BANNED_NAME_IDS = {
     "open",
     "vars",
 }
+
+EXPORT_POLICY_ACTIONABLE = "actionable"
+EXPORT_POLICY_LEGACY_DYNAMIC = "legacy_dynamic"
+
+_LEGACY_DYNAMIC_EXPORT_NAMES = frozenset({"generate_control"})
+_LEGACY_DYNAMIC_MODULE_PREFIXES = ("tess_vetter.plotting",)
 
 
 def _policy_blocker(
@@ -184,6 +191,56 @@ def safe_builtins() -> dict[str, Any]:
     return dict(SAFE_BUILTINS_ALLOWLIST)
 
 
+def classify_api_export_policy(
+    *,
+    export_name: str,
+    module_name: str,
+    value: object | None,
+) -> str:
+    """Classify API export handling policy for discovery/inventory surfaces."""
+    if export_name in _LEGACY_DYNAMIC_EXPORT_NAMES:
+        return EXPORT_POLICY_LEGACY_DYNAMIC
+    if module_name.startswith(_LEGACY_DYNAMIC_MODULE_PREFIXES):
+        return EXPORT_POLICY_LEGACY_DYNAMIC
+
+    if value is None:
+        return EXPORT_POLICY_ACTIONABLE
+
+    if inspect.isclass(value):
+        return EXPORT_POLICY_LEGACY_DYNAMIC
+    if not (inspect.isroutine(value) or callable(value)):
+        return EXPORT_POLICY_LEGACY_DYNAMIC
+
+    try:
+        signature = inspect.signature(inspect.unwrap(value))
+    except (TypeError, ValueError):
+        return EXPORT_POLICY_LEGACY_DYNAMIC
+
+    has_variadic_params = any(
+        parameter.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+        for parameter in signature.parameters.values()
+    )
+    if has_variadic_params:
+        return EXPORT_POLICY_LEGACY_DYNAMIC
+    return EXPORT_POLICY_ACTIONABLE
+
+
+def is_actionable_api_export(
+    *,
+    export_name: str,
+    module_name: str,
+    value: object | None,
+) -> bool:
+    return (
+        classify_api_export_policy(
+            export_name=export_name,
+            module_name=module_name,
+            value=value,
+        )
+        == EXPORT_POLICY_ACTIONABLE
+    )
+
+
 def validate_plan_ast(plan_code: str) -> dict[str, Any] | None:
     try:
         tree = ast.parse(plan_code, mode="exec")
@@ -251,6 +308,8 @@ def validate_plan_ast(plan_code: str) -> dict[str, Any] | None:
 __all__ = [
     "DEFAULT_PER_CALL_TIMEOUT_MS",
     "DEFAULT_PROFILE_NAME",
+    "EXPORT_POLICY_ACTIONABLE",
+    "EXPORT_POLICY_LEGACY_DYNAMIC",
     "NETWORK_ALLOWED_MAX_CALLS",
     "NETWORK_ALLOWED_MAX_OUTPUT_BYTES",
     "NETWORK_ALLOWED_PLAN_TIMEOUT_MS",
@@ -263,6 +322,8 @@ __all__ = [
     "READONLY_LOCAL_MAX_OUTPUT_BYTES",
     "READONLY_LOCAL_PLAN_TIMEOUT_MS",
     "network_boundary_guard",
+    "classify_api_export_policy",
+    "is_actionable_api_export",
     "policy_denied_details",
     "resolve_profile",
     "safe_builtins",

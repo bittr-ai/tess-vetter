@@ -18,6 +18,11 @@ from tess_vetter.code_mode.operation_spec import (
     SafetyClass,
     SafetyRequirements,
 )
+from tess_vetter.code_mode.policy import (
+    EXPORT_POLICY_ACTIONABLE,
+    classify_api_export_policy,
+    is_actionable_api_export,
+)
 from tess_vetter.code_mode.registries.operation_ids import (
     build_operation_id,
     normalize_operation_name,
@@ -51,9 +56,11 @@ def _iter_api_export_callables() -> list[tuple[ApiSymbol, object]]:
             # Optional guarded exports are intentionally skipped when unavailable.
             continue
 
-        if inspect.isclass(value):
-            continue
-        if not (inspect.isroutine(value) or callable(value)):
+        if not is_actionable_api_export(
+            export_name=export_name,
+            module_name=module_name,
+            value=value,
+        ):
             continue
 
         exports.append((symbol, value))
@@ -134,6 +141,13 @@ def discover_api_export_adapters(existing_ids: set[str] | None = None) -> tuple[
         try:
             value = getattr(_api, export_name)
         except (AttributeError, ImportError, ModuleNotFoundError) as exc:
+            export_policy = classify_api_export_policy(
+                export_name=export_name,
+                module_name=module_name,
+                value=None,
+            )
+            if export_policy != EXPORT_POLICY_ACTIONABLE:
+                continue
             used_ids.add(operation_id)
             discovered.append(
                 _build_auto_adapter(
@@ -151,9 +165,11 @@ def discover_api_export_adapters(existing_ids: set[str] | None = None) -> tuple[
             )
             continue
 
-        if inspect.isclass(value):
-            continue
-        if not (inspect.isroutine(value) or callable(value)):
+        if not is_actionable_api_export(
+            export_name=export_name,
+            module_name=module_name,
+            value=value,
+        ):
             continue
 
         used_ids.add(operation_id)

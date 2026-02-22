@@ -5,6 +5,11 @@ import tess_vetter.code_mode.adapters.check_wrappers as check_wrappers
 import tess_vetter.code_mode.adapters.manual as manual_adapters
 from tess_vetter.code_mode.operation_spec import OperationSpec
 from tess_vetter.code_mode.ops_library import OperationAdapter, OpsLibrary, make_default_ops_library
+from tess_vetter.code_mode.policy import (
+    EXPORT_POLICY_ACTIONABLE,
+    EXPORT_POLICY_LEGACY_DYNAMIC,
+    classify_api_export_policy,
+)
 from tess_vetter.code_mode.registries.operation_ids import (
     build_operation_id,
     normalize_operation_name,
@@ -17,9 +22,10 @@ _DOCUMENTED_OPTIONAL_EXPORT_SKIPS: frozenset[str] = frozenset(
 )
 
 
-def _expected_operation_ids_from_export_map() -> tuple[set[str], set[str], set[str]]:
+def _expected_operation_ids_from_export_map() -> tuple[set[str], set[str], set[str], set[str]]:
     available: set[str] = set()
     unavailable: set[str] = set()
+    legacy_dynamic: set[str] = set()
     unloadable_unexpected: set[str] = set()
 
     for export_name, (module_name, _attr_name) in sorted(public_api._get_export_map().items()):
@@ -32,20 +38,32 @@ def _expected_operation_ids_from_export_map() -> tuple[set[str], set[str], set[s
         try:
             value = getattr(public_api, export_name)
         except (AttributeError, ImportError, ModuleNotFoundError):
+            export_policy = classify_api_export_policy(
+                export_name=export_name,
+                module_name=module_name,
+                value=None,
+            )
+            if export_policy == EXPORT_POLICY_LEGACY_DYNAMIC:
+                legacy_dynamic.add(operation_id)
+                continue
             if export_name in _DOCUMENTED_OPTIONAL_EXPORT_SKIPS:
                 unavailable.add(operation_id)
             else:
                 unloadable_unexpected.add(operation_id)
             continue
 
-        if isinstance(value, type):
-            continue
-        if not callable(value):
+        export_policy = classify_api_export_policy(
+            export_name=export_name,
+            module_name=module_name,
+            value=value,
+        )
+        if export_policy != EXPORT_POLICY_ACTIONABLE:
+            legacy_dynamic.add(operation_id)
             continue
 
         available.add(operation_id)
 
-    return available, unavailable, unloadable_unexpected
+    return available, unavailable, legacy_dynamic, unloadable_unexpected
 
 
 def test_operation_adapter_forwards_call_unchanged() -> None:
@@ -253,10 +271,11 @@ def test_default_library_includes_seed_and_broad_discovered_exports() -> None:
 def test_default_library_fully_covers_export_map_operation_ids_including_unavailable() -> None:
     library = make_default_ops_library()
     library_ids = set(library.list_ids())
-    available_ids, unavailable_ids, unloadable_unexpected = _expected_operation_ids_from_export_map()
+    available_ids, unavailable_ids, legacy_dynamic_ids, unloadable_unexpected = _expected_operation_ids_from_export_map()
 
     assert not unloadable_unexpected, f"Unexpected unloadable exports: {sorted(unloadable_unexpected)}"
     assert unavailable_ids
+    assert legacy_dynamic_ids
 
     expected_ids = available_ids | unavailable_ids
     missing = expected_ids - library_ids
@@ -273,3 +292,5 @@ def test_default_library_fully_covers_export_map_operation_ids_including_unavail
             pass
         else:
             raise AssertionError(f"Unavailable operation did not raise ImportError: {operation_id}")
+
+    assert not (library_ids & legacy_dynamic_ids)

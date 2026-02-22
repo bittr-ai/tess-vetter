@@ -15,6 +15,7 @@ from tess_vetter.code_mode.catalog import (
     extract_required_input_paths,
 )
 from tess_vetter.code_mode.operation_spec import OperationCitation, OperationSpec, SafetyClass
+from tess_vetter.code_mode.policy import is_actionable_api_export
 from tess_vetter.code_mode.registries.operation_ids import (
     build_operation_id,
     normalize_operation_name,
@@ -87,6 +88,12 @@ def _iter_unavailable_guarded_export_adapters() -> builtins.list[OperationAdapte
         try:
             getattr(public_api, export_name)
         except (AttributeError, ImportError, ModuleNotFoundError):
+            if not is_actionable_api_export(
+                export_name=export_name,
+                module_name=module_name,
+                value=None,
+            ):
+                continue
             unavailable.append(
                 OperationAdapter(
                     spec=OperationSpec(

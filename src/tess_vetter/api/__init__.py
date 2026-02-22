@@ -166,6 +166,11 @@ __all__ = [
     # -------------------------------------------------------------------------
     "list_checks",
     "describe_checks",
+    "get_legacy_dynamic_export_policy_registry",
+    "is_agent_actionable_export",
+    "is_legacy_dynamic_export",
+    "is_unloadable_export",
+    "list_legacy_dynamic_exports",
     # -------------------------------------------------------------------------
     # Registry Types (for extensibility)
     # -------------------------------------------------------------------------
@@ -880,6 +885,71 @@ _ALIASES: dict[str, str] = {
     "localize": "localize_transit_source",
     "aperture_family_depth_curve": "compute_aperture_family_depth_curve",
 }
+
+_TYPING_ALIAS_ARTIFACT_EXPORTS: frozenset[str] = frozenset(
+    {
+        "ConsistencyClass",
+        "ControlType",
+        "ExportFormat",
+        "LocalizationImages",
+        "MatchClass",
+        "PRFBackend",
+    }
+)
+_ALIAS_ARTIFACT_EXPORTS: frozenset[str] = frozenset(_ALIASES.keys())
+_UNLOADABLE_EXPORTS: frozenset[str] = frozenset(
+    set(_MLX_GUARDED_EXPORTS) | set(_MATPLOTLIB_GUARDED_EXPORTS)
+)
+_LEGACY_DYNAMIC_EXPORT_POLICY_REGISTRY: dict[str, str] = {
+    # Legacy dynamic plotting surface (matplotlib optional + variadic style kwargs).
+    **dict.fromkeys(_MATPLOTLIB_GUARDED_EXPORTS, "plotting_variadic"),
+    # Legacy variadic negative-control dispatcher.
+    "generate_control": "variadic_dispatch",
+    # Legacy type-alias artifacts retained for compatibility.
+    **dict.fromkeys(_TYPING_ALIAS_ARTIFACT_EXPORTS, "typing_alias_artifact"),
+    # Alias artifacts retained for backward compatibility.
+    **dict.fromkeys(_ALIAS_ARTIFACT_EXPORTS, "alias_artifact"),
+}
+
+
+def get_legacy_dynamic_export_policy_registry() -> dict[str, str]:
+    """Return explicit policy classes for legacy dynamic exports.
+
+    Categories:
+        - plotting_variadic
+        - variadic_dispatch
+        - typing_alias_artifact
+        - alias_artifact
+    """
+    return dict(_LEGACY_DYNAMIC_EXPORT_POLICY_REGISTRY)
+
+
+def list_legacy_dynamic_exports() -> list[str]:
+    """Return sorted names for exports tracked as legacy dynamic."""
+    return sorted(_LEGACY_DYNAMIC_EXPORT_POLICY_REGISTRY.keys())
+
+
+def is_legacy_dynamic_export(name: str) -> bool:
+    """Return True when `name` is tracked as a legacy dynamic export."""
+    return name in _LEGACY_DYNAMIC_EXPORT_POLICY_REGISTRY
+
+
+def is_unloadable_export(name: str) -> bool:
+    """Return True for exports that can be unavailable due to optional deps."""
+    return name in _UNLOADABLE_EXPORTS
+
+
+def is_agent_actionable_export(name: str) -> bool:
+    """Return True if an export should be treated as agent-actionable.
+
+    This is a static policy signal for discovery/filtering. It does not attempt
+    runtime loading or inspect callability.
+    """
+    return (
+        name in _get_export_map()
+        and not is_legacy_dynamic_export(name)
+        and not is_unloadable_export(name)
+    )
 
 
 def __getattr__(name: str) -> Any:

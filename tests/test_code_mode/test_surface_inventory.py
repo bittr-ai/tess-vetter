@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import json
 
 import tess_vetter.api as public_api
@@ -9,6 +8,11 @@ from tess_vetter.api.primitives_catalog import list_primitives
 from tess_vetter.code_mode.generators.surface_inventory import (
     build_surface_inventory,
     surface_inventory_jsonable,
+)
+from tess_vetter.code_mode.policy import (
+    EXPORT_POLICY_ACTIONABLE,
+    EXPORT_POLICY_LEGACY_DYNAMIC,
+    classify_api_export_policy,
 )
 from tess_vetter.code_mode.registries.operation_ids import (
     build_operation_id,
@@ -21,8 +25,8 @@ _DOCUMENTED_OPTIONAL_EXPORT_SKIPS: frozenset[str] = frozenset(
 )
 
 
-def _expected_discovery_aligned_rows() -> tuple[set[tuple[str, str, str, str, str]], set[str], set[str]]:
-    expected: set[tuple[str, str, str, str, str]] = set()
+def _expected_discovery_aligned_rows() -> tuple[set[tuple[str, str, str, str, str, str]], set[str], set[str]]:
+    expected: set[tuple[str, str, str, str, str, str]] = set()
     unloadable_documented: set[str] = set()
     unloadable_unexpected: set[str] = set()
 
@@ -36,30 +40,37 @@ def _expected_discovery_aligned_rows() -> tuple[set[tuple[str, str, str, str, st
             else:
                 unloadable_unexpected.add(export_name)
             tier = tier_for_api_symbol(symbol)
+            export_policy = classify_api_export_policy(
+                export_name=export_name,
+                module_name=module_name,
+                value=None,
+            )
             expected.add(
                 (
                     symbol.name,
                     symbol.module,
                     build_operation_id(tier=tier, name=normalize_operation_name(symbol.name)),
                     tier,
-                    "unavailable",
+                    "unavailable" if export_policy == EXPORT_POLICY_ACTIONABLE else "legacy_dynamic",
+                    export_policy,
                 )
             )
             continue
 
-        if inspect.isclass(value):
-            continue
-        if not (inspect.isroutine(value) or callable(value)):
-            continue
-
         tier = tier_for_api_symbol(symbol)
+        export_policy = classify_api_export_policy(
+            export_name=export_name,
+            module_name=module_name,
+            value=value,
+        )
         expected.add(
             (
                 symbol.name,
                 symbol.module,
                 build_operation_id(tier=tier, name=normalize_operation_name(symbol.name)),
                 tier,
-                "available",
+                "available" if export_policy == EXPORT_POLICY_ACTIONABLE else "legacy_dynamic",
+                export_policy,
             )
         )
 
@@ -92,7 +103,8 @@ def test_surface_inventory_has_basic_coverage_counts() -> None:
     assert all(item["symbol"] for item in payload)
     assert all(item["module"] for item in payload)
     assert all(item["status"] for item in payload)
-    assert {item["status"] for item in payload} <= {"available", "planned", "unavailable"}
+    assert {item["status"] for item in payload} <= {"available", "planned", "unavailable", "legacy_dynamic"}
+    assert {item["export_policy"] for item in payload} <= {"actionable", "legacy_dynamic"}
 
     tier_counts: dict[str, int] = {}
     for item in payload:
@@ -113,6 +125,7 @@ def test_surface_inventory_has_basic_coverage_counts() -> None:
 
     assert any(item["symbol"] == "vet_candidate" for item in payload)
     assert all(not item["replaced_by"] for item in payload)
+    assert by_operation_id["code_mode.golden_path.vet_candidate"]["export_policy"] == EXPORT_POLICY_ACTIONABLE
     assert by_operation_id["code_mode.golden_path.vet_candidate"]["status"] == "available"
     assert by_operation_id["code_mode.golden_path.vet_candidate"]["module"] == "tess_vetter.api.vet"
     assert by_operation_id["code_mode.golden_path.run_periodogram"]["status"] == "available"
@@ -121,6 +134,8 @@ def test_surface_inventory_has_basic_coverage_counts() -> None:
     assert by_operation_id["code_mode.internal.vet_catalog"]["module"] == "tess_vetter.api.catalog"
     assert by_operation_id["code_mode.internal.run_check"]["status"] == "available"
     assert by_operation_id["code_mode.internal.run_check"]["module"] == "tess_vetter.api.check_runner"
+    assert by_operation_id["code_mode.internal.generate_control"]["status"] == "legacy_dynamic"
+    assert by_operation_id["code_mode.internal.generate_control"]["export_policy"] == EXPORT_POLICY_LEGACY_DYNAMIC
 
 
 def test_surface_inventory_fully_covers_loadable_export_map_routines() -> None:
@@ -132,7 +147,14 @@ def test_surface_inventory_fully_covers_loadable_export_map_routines() -> None:
 
     expected_symbols = {row[0] for row in expected_rows}
     actual_rows = {
-        (item["symbol"], item["module"], item["operation_id"], item["tier"], item["status"])
+        (
+            item["symbol"],
+            item["module"],
+            item["operation_id"],
+            item["tier"],
+            item["status"],
+            item["export_policy"],
+        )
         for item in payload
         if item["symbol"] in expected_symbols
     }
@@ -148,8 +170,6 @@ def test_surface_inventory_emits_unavailable_rows_for_unloadable_exports(monkeyp
         "missing_optional": ("tess_vetter.api.optional", "missing_optional"),
         "loadable_fn": ("tess_vetter.api.loadable", "loadable_fn"),
     }
-
-    symbol = ApiSymbol(module="tess_vetter.api.loadable", name="loadable_fn")
 
     class FakeApi:
         def _get_export_map(self) -> dict[str, tuple[str, str]]:
@@ -167,11 +187,6 @@ def test_surface_inventory_emits_unavailable_rows_for_unloadable_exports(monkeyp
     monkeypatch.setattr(surface_inventory_module, "_api", FakeApi())
     monkeypatch.setattr(
         surface_inventory_module,
-        "_iter_api_export_callables",
-        lambda: [(symbol, FakeApi.loadable_fn)],
-    )
-    monkeypatch.setattr(
-        surface_inventory_module,
         "list_primitives",
         lambda include_unimplemented=True: {},
     )
@@ -184,3 +199,4 @@ def test_surface_inventory_emits_unavailable_rows_for_unloadable_exports(monkeyp
     ]
     assert [item["tier"] for item in payload] == ["internal", "internal"]
     assert [item["status"] for item in payload] == ["available", "unavailable"]
+    assert [item["export_policy"] for item in payload] == ["actionable", "actionable"]

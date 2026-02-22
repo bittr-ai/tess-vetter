@@ -371,6 +371,42 @@ def test_default_search_metadata_exposes_truthful_execute_callability_contract()
     assert callability["reason_flags"] == metadata["callability_reason_flags"]
 
 
+def test_search_classifies_unavailable_dynamic_exports_without_hiding_them() -> None:
+    adapter = make_default_mcp_adapter()
+
+    response = adapter.search(SearchRequest(query="", limit=1_000, tags=[]))
+
+    assert response.error is None
+    unavailable_dynamic_rows = [
+        row
+        for row in response.results
+        if row.metadata.get("availability") == "unavailable"
+        and {"api-export", "auto-discovered"}.issubset(set(row.metadata.get("operation_tags", [])))
+    ]
+    assert unavailable_dynamic_rows, "Expected at least one unavailable dynamic export to be classified"
+
+    for row in unavailable_dynamic_rows:
+        flags = row.metadata.get("callability_reason_flags", [])
+        assert "availability_unavailable" in flags
+        assert "direct_execute_ready" not in flags
+
+
+def test_search_keeps_actionable_exports_available_with_dynamic_classification() -> None:
+    adapter = make_default_mcp_adapter()
+
+    response = adapter.search(SearchRequest(query="", limit=1_000, tags=[]))
+
+    assert response.error is None
+    by_id = {row.id: row for row in response.results}
+
+    assert "code_mode.golden_path.run_periodogram" in by_id
+    periodogram = by_id["code_mode.golden_path.run_periodogram"]
+    metadata = periodogram.metadata
+    assert metadata["availability"] == "available"
+    assert "direct_execute_ready" in metadata["callability_reason_flags"]
+    assert metadata["operation_callability"]["tool"] == "execute"
+
+
 def test_callability_score_prefers_direct_execute_constructor_and_policy_ready() -> None:
     entry = CatalogEntry(
         id="code_mode.golden_path.unit_ready",
