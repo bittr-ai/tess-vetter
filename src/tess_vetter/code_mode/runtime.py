@@ -6,7 +6,7 @@ import inspect
 import json
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from itertools import count
 from types import MappingProxyType
@@ -863,9 +863,9 @@ def _path_exists(candidate: Any, tokens: tuple[tuple[str, int], ...]) -> bool:
     for _ in range(list_depth):
         expanded: list[Any] = []
         for item in current_items:
-            if not isinstance(item, list) or not item:
+            if isinstance(item, (str, bytes, bytearray, Mapping)) or not isinstance(item, Sequence):
                 return False
-            expanded.extend(item)
+            expanded.extend(list(item))
         current_items = expanded
 
     return all(_path_exists(item, remaining) for item in current_items)

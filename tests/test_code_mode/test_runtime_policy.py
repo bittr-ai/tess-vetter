@@ -338,3 +338,71 @@ async def execute_plan(ops, context):
     assert result["trace"]["call_budget"]["used_calls"] == 0
     assert result["trace"]["call_events"] == []
     assert state["called"] is False
+
+
+def test_preflight_allows_empty_sequence_for_nested_required_path() -> None:
+    class _Ops:
+        async def nested_required(self, **kwargs) -> dict:
+            return {"ok": True, "kwargs": kwargs}
+
+    async def _run() -> dict:
+        return await execute(
+            """
+async def execute_plan(ops, context):
+    return await ops.nested_required(payload={"items": []})
+""",
+            ops=_Ops(),
+            context={
+                "mode": "preflight",
+                "preflight_operation_catalog": {
+                    "nested_required": {
+                        "availability": "available",
+                        "required_fields": ["payload.items[].value"],
+                        "field_types": {},
+                        "safety_requirements": {},
+                    }
+                },
+            },
+            catalog_version_hash="hash-v1",
+        )
+
+    result = asyncio.run(_run())
+
+    assert result["status"] == "ok"
+    assert result["result"]["mode"] == "preflight"
+    assert result["result"]["ready"] is True
+    assert result["result"]["blockers"]["missing_fields"] == []
+
+
+def test_preflight_accepts_tuple_for_nested_required_path() -> None:
+    class _Ops:
+        async def nested_required(self, **kwargs) -> dict:
+            return {"ok": True, "kwargs": kwargs}
+
+    async def _run() -> dict:
+        return await execute(
+            """
+async def execute_plan(ops, context):
+    return await ops.nested_required(payload={"items": ({"value": 1}, {"value": 2})})
+""",
+            ops=_Ops(),
+            context={
+                "mode": "preflight",
+                "preflight_operation_catalog": {
+                    "nested_required": {
+                        "availability": "available",
+                        "required_fields": ["payload.items[].value"],
+                        "field_types": {},
+                        "safety_requirements": {},
+                    }
+                },
+            },
+            catalog_version_hash="hash-v1",
+        )
+
+    result = asyncio.run(_run())
+
+    assert result["status"] == "ok"
+    assert result["result"]["mode"] == "preflight"
+    assert result["result"]["ready"] is True
+    assert result["result"]["blockers"]["missing_fields"] == []
