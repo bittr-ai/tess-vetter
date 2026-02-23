@@ -27,7 +27,7 @@ classifiers = [
 urls = { Repository = "https://github.com/bittr-ai/bittr-tess-vetter", Issues = "https://github.com/bittr-ai/bittr-tess-vetter/issues" }
 
 dependencies = [
-  "numpy>=1.24.0,<2.4.0",
+  "numpy>=1.24.0,<2.5.0",
   "scipy>=1.10.0",
   "pydantic>=2.4.0",  # CVE-2024-3772 fix
   "astropy>=5.0.0",
