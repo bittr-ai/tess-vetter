@@ -52,6 +52,9 @@ def retry_transient(
     use_jitter: bool = True,
 ) -> T:
     """Execute operation with exponential backoff for transient exceptions."""
+    if policy.attempts < 1:
+        raise ValueError("Retry policy must allow at least one attempt.")
+
     for attempt in range(1, policy.attempts + 1):
         try:
             return operation()
@@ -61,6 +64,8 @@ def retry_transient(
                 raise TransientExhaustionError(payload) from exc
             delay = policy.backoff_delay(attempt, use_jitter=use_jitter)
             sleep(delay)
+
+    raise RuntimeError("retry_transient reached an unexpected terminal state")
 
 
 def wrap_with_transient_retry(

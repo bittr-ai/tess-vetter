@@ -100,10 +100,10 @@ def search_catalog(
     text_base = max_text_score + 1
 
     matches: list[SearchMatch] = []
-    for entry, tier_bias, tag_matches, text_score, why in entry_rows:
+    for entry, tier_bias, tag_matches, text_score, why_matched in entry_rows:
         # Pack ranking dimensions so exposed score is monotonic with sort precedence.
         score = ((tier_bias * tag_base) + tag_matches) * text_base + text_score
-        matches.append(SearchMatch(entry=entry, score=score, why_matched=why))
+        matches.append(SearchMatch(entry=entry, score=score, why_matched=why_matched))
 
     matches.sort(key=lambda m: (-m.score, m.entry.id))
     return tuple(matches[:limit])

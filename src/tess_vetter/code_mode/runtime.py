@@ -46,7 +46,8 @@ class BudgetConfig:
 
     @classmethod
     def from_context(cls, context: Mapping[str, Any], profile: PolicyProfile) -> BudgetConfig:
-        budget = context.get("budget") if isinstance(context.get("budget"), Mapping) else {}
+        raw_budget = context.get("budget")
+        budget: Mapping[str, Any] = raw_budget if isinstance(raw_budget, Mapping) else {}
         return cls(
             max_calls=_clamp_budget_value(
                 _first_int(budget, "max_calls", "calls"),

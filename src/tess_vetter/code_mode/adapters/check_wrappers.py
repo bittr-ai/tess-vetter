@@ -11,15 +11,38 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
+import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
-import tess_vetter.api as _api
+from tess_vetter.api.types import (
+    Candidate,
+    CheckResult,
+    Ephemeris,
+    LightCurve,
+    StellarParams,
+    TPFStamp,
+)
 from tess_vetter.code_mode.retry.wrappers import wrap_with_transient_retry
 
 MetricScalar = float | int | str | bool | None
 CheckStatus = Literal["ok", "skipped", "error"]
+
+
+@dataclass
+class _ApiBridge:
+    run_check: Callable[..., CheckResult] | None = None
+
+    def resolve_run_check(self) -> Callable[..., CheckResult]:
+        if self.run_check is not None:
+            return self.run_check
+        from tess_vetter.api.check_runner import run_check as api_run_check
+
+        return api_run_check
+
+
+_api = _ApiBridge()
 
 
 class EphemerisInput(BaseModel):
@@ -279,9 +302,9 @@ class CheckWrapperDefinition:
     needs_network: bool = False
 
 
-def _to_api_candidate(candidate: CandidateInput) -> _api.Candidate:
-    return _api.Candidate(
-        ephemeris=_api.Ephemeris(
+def _to_api_candidate(candidate: CandidateInput) -> Candidate:
+    return Candidate(
+        ephemeris=Ephemeris(
             period_days=candidate.ephemeris.period_days,
             t0_btjd=candidate.ephemeris.t0_btjd,
             duration_hours=candidate.ephemeris.duration_hours,
@@ -291,36 +314,38 @@ def _to_api_candidate(candidate: CandidateInput) -> _api.Candidate:
     )
 
 
-def _to_api_lightcurve(lc: LightCurveInput) -> _api.LightCurve:
-    return _api.LightCurve(
-        time=lc.time,
-        flux=lc.flux,
-        flux_err=lc.flux_err,
-        quality=lc.quality,
-        valid_mask=lc.valid_mask,
+def _to_api_lightcurve(lc: LightCurveInput) -> LightCurve:
+    return LightCurve(
+        time=np.asarray(lc.time, dtype=np.float64),
+        flux=np.asarray(lc.flux, dtype=np.float64),
+        flux_err=None if lc.flux_err is None else np.asarray(lc.flux_err, dtype=np.float64),
+        quality=None if lc.quality is None else np.asarray(lc.quality, dtype=np.int32),
+        valid_mask=None if lc.valid_mask is None else np.asarray(lc.valid_mask, dtype=np.bool_),
     )
 
 
-def _to_api_tpf(tpf: TPFInput | None) -> _api.TPFStamp | None:
+def _to_api_tpf(tpf: TPFInput | None) -> TPFStamp | None:
     if tpf is None:
         return None
-    return _api.TPFStamp(
-        time=tpf.time,
-        flux=tpf.flux,
-        flux_err=tpf.flux_err,
-        aperture_mask=tpf.aperture_mask,
-        quality=tpf.quality,
+    return TPFStamp(
+        time=np.asarray(tpf.time, dtype=np.float64),
+        flux=np.asarray(tpf.flux, dtype=np.float64),
+        flux_err=None if tpf.flux_err is None else np.asarray(tpf.flux_err, dtype=np.float64),
+        aperture_mask=None
+        if tpf.aperture_mask is None
+        else np.asarray(tpf.aperture_mask, dtype=np.bool_),
+        quality=None if tpf.quality is None else np.asarray(tpf.quality, dtype=np.int32),
     )
 
 
-def _to_api_stellar(stellar: dict[str, Any] | None) -> _api.StellarParams | None:
+def _to_api_stellar(stellar: dict[str, Any] | None) -> StellarParams | None:
     if stellar is None:
         return None
-    return _api.StellarParams(**stellar)
+    return StellarParams(**stellar)
 
 
 def _typed_metrics(
-    result: _api.CheckResult,
+    result: CheckResult,
     *,
     metrics_model: type[CheckMetricsBase],
     known_fields: tuple[str, ...],
@@ -332,24 +357,26 @@ def _typed_metrics(
 
 
 def _build_result(
-    result: _api.CheckResult,
+    result: CheckResult,
     *,
     definition: CheckWrapperDefinition,
 ) -> TypedCheckResultBase:
-    return definition.output_model(
-        check_id=definition.check_id,
-        check_name=result.name,
-        status=result.status,
-        confidence=result.confidence,
-        metrics=_typed_metrics(
-            result,
-            metrics_model=definition.metrics_model,
-            known_fields=definition.known_metric_fields,
-        ),
-        flags=list(result.flags),
-        notes=list(result.notes),
-        provenance=dict(result.provenance),
-        raw=result.raw,
+    return definition.output_model.model_validate(
+        {
+            "check_id": definition.check_id,
+            "check_name": result.name,
+            "status": result.status,
+            "confidence": result.confidence,
+            "metrics": _typed_metrics(
+                result,
+                metrics_model=definition.metrics_model,
+                known_fields=definition.known_metric_fields,
+            ),
+            "flags": list(result.flags),
+            "notes": list(result.notes),
+            "provenance": dict(result.provenance),
+            "raw": result.raw,
+        }
     )
 
 
@@ -358,7 +385,7 @@ def make_check_wrapper(definition: CheckWrapperDefinition) -> Callable[..., Type
 
     def _wrapper(**kwargs: Any) -> TypedCheckResultBase:
         payload = definition.input_model.model_validate(kwargs)
-        result = _api.run_check(
+        result = _api.resolve_run_check()(
             lc=_to_api_lightcurve(payload.lc),
             candidate=_to_api_candidate(payload.candidate),
             check_id=definition.check_id,
@@ -375,7 +402,7 @@ def make_check_wrapper(definition: CheckWrapperDefinition) -> Callable[..., Type
 
     _wrapper.__name__ = f"check_wrapper_{definition.check_id.lower()}"
     _wrapper.__doc__ = f"Typed wrapper for {definition.check_id} ({definition.name})."
-    _wrapper.__code_mode_check_id__ = definition.check_id  # type: ignore[attr-defined]
+    cast(Any, _wrapper).__code_mode_check_id__ = definition.check_id
     return _wrapper
 
 

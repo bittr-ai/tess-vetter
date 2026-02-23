@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 import tess_vetter.api as _api
 from tess_vetter.api.contracts import (
@@ -41,10 +41,20 @@ _NETWORK_PARAM_HINTS: frozenset[str] = frozenset(
 )
 
 
-def _iter_api_export_callables() -> list[tuple[ApiSymbol, object]]:
+def _api_export_map() -> dict[str, tuple[str, str]]:
+    export_map_factory = getattr(_api, "_get_export_map", None)
+    if not callable(export_map_factory):
+        return {}
+    export_map = export_map_factory()
+    if not isinstance(export_map, dict):
+        return {}
+    return cast(dict[str, tuple[str, str]], export_map)
+
+
+def _iter_api_export_callables() -> list[tuple[ApiSymbol, Callable[..., Any]]]:
     """Resolve callable exports from ``tess_vetter.api`` export map deterministically."""
-    export_map = _api._get_export_map()
-    exports: list[tuple[ApiSymbol, object]] = []
+    export_map = _api_export_map()
+    exports: list[tuple[ApiSymbol, Callable[..., Any]]] = []
 
     # Deterministic discovery order independent of dict insertion behavior.
     for export_name in sorted(export_map):
@@ -63,7 +73,9 @@ def _iter_api_export_callables() -> list[tuple[ApiSymbol, object]]:
         ):
             continue
 
-        exports.append((symbol, value))
+        if not callable(value):
+            continue
+        exports.append((symbol, cast(Callable[..., Any], value)))
 
     return exports
 
@@ -71,7 +83,7 @@ def _iter_api_export_callables() -> list[tuple[ApiSymbol, object]]:
 def _build_auto_adapter(
     operation_id: str,
     export_name: str,
-    fn: object,
+    fn: Callable[..., Any],
     *,
     module_name: str,
     needs_network: bool = False,
@@ -79,7 +91,11 @@ def _build_auto_adapter(
 ) -> OperationAdapter:
     doc = inspect.getdoc(fn)
     first_line = doc.splitlines()[0].strip() if doc else ""
-    wrapped_fn = wrap_with_transient_retry(fn) if needs_network and availability == OperationAvailability.AVAILABLE else fn
+    wrapped_fn = (
+        wrap_with_transient_retry(fn)
+        if needs_network and availability == OperationAvailability.AVAILABLE
+        else fn
+    )
     return OperationAdapter(
         spec=OperationSpec(
             id=operation_id,
@@ -97,7 +113,7 @@ def _build_auto_adapter(
     )
 
 
-def _is_network_bound_callable(fn: object) -> bool:
+def _is_network_bound_callable(fn: Callable[..., Any]) -> bool:
     try:
         signature = inspect.signature(fn)
     except (TypeError, ValueError):
@@ -129,7 +145,7 @@ def discover_api_export_adapters(existing_ids: set[str] | None = None) -> tuple[
     used_ids = set(existing_ids or ())
     discovered: list[OperationAdapter] = []
 
-    for export_name, (module_name, _attr_name) in sorted(_api._get_export_map().items()):
+    for export_name, (module_name, _attr_name) in sorted(_api_export_map().items()):
         symbol = ApiSymbol(module=module_name, name=export_name)
         operation_id = build_operation_id(
             tier=tier_for_api_symbol(symbol),
@@ -172,14 +188,18 @@ def discover_api_export_adapters(existing_ids: set[str] | None = None) -> tuple[
         ):
             continue
 
+        if not callable(value):
+            continue
+        callable_value = cast(Callable[..., Any], value)
+
         used_ids.add(operation_id)
         discovered.append(
             _build_auto_adapter(
                 operation_id,
                 symbol.name,
-                value,
+                callable_value,
                 module_name=symbol.module,
-                needs_network=_is_network_bound_callable(value),
+                needs_network=_is_network_bound_callable(callable_value),
             )
         )
 

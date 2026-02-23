@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 from collections.abc import Callable
+from typing import cast
 
 import tess_vetter.api as public_api
 from tess_vetter.code_mode.adapters import (
@@ -21,6 +22,25 @@ from tess_vetter.code_mode.registries.operation_ids import (
     normalize_operation_name,
 )
 from tess_vetter.code_mode.registries.tiering import ApiSymbol, tier_for_api_symbol
+
+
+def _api_export_map() -> dict[str, tuple[str, str]]:
+    export_map_factory = getattr(public_api, "_get_export_map", None)
+    if not callable(export_map_factory):
+        return {}
+    export_map = export_map_factory()
+    if not isinstance(export_map, dict):
+        return {}
+    return cast(dict[str, tuple[str, str]], export_map)
+
+
+def _guarded_export_names() -> set[str]:
+    guarded: set[str] = set()
+    for attr_name in ("_MLX_GUARDED_EXPORTS", "_MATPLOTLIB_GUARDED_EXPORTS"):
+        names = getattr(public_api, attr_name, ())
+        if isinstance(names, (set, frozenset, list, tuple)):
+            guarded.update(str(name) for name in names)
+    return guarded
 
 
 class OpsLibrary:
@@ -70,8 +90,8 @@ def _build_unavailable_guarded_stub(*, export_name: str) -> Callable[..., object
 
 
 def _iter_unavailable_guarded_export_adapters() -> builtins.list[OperationAdapter]:
-    guarded_exports = set(public_api._MLX_GUARDED_EXPORTS) | set(public_api._MATPLOTLIB_GUARDED_EXPORTS)
-    export_map = public_api._get_export_map()
+    guarded_exports = _guarded_export_names()
+    export_map = _api_export_map()
     unavailable: builtins.list[OperationAdapter] = []
 
     for export_name in sorted(export_map):
