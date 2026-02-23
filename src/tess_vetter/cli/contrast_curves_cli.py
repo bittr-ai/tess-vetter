@@ -89,9 +89,7 @@ def _is_likely_contrast_row(row: ExoFopFileRow) -> bool:
     # Prefer extension-based eligibility over brittle keyword-only matching.
     if _LIKELY_FILENAME_RE.search(filename):
         return True
-    if _LIKELY_TEXT_RE.search(description):
-        return True
-    return False
+    return bool(_LIKELY_TEXT_RE.search(description))
 
 
 def _selector_for_likely_contrast_files(*, max_files: int) -> ExoFopSelectors:

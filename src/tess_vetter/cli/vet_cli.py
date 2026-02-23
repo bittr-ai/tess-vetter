@@ -22,7 +22,6 @@ from tess_vetter.api.transit_masks import (
 )
 from tess_vetter.api.types import Candidate, Ephemeris, LightCurve, TPFStamp
 from tess_vetter.api.vet import vet_candidate
-from tess_vetter.cli.stellar_inputs import load_auto_stellar_with_fallback, resolve_stellar_inputs
 from tess_vetter.cli.common_cli import (
     EXIT_DATA_UNAVAILABLE,
     EXIT_INPUT_ERROR,
@@ -43,13 +42,14 @@ from tess_vetter.cli.progress_metadata import (
     read_progress_metadata,
     write_progress_metadata_atomic,
 )
+from tess_vetter.cli.stellar_inputs import load_auto_stellar_with_fallback, resolve_stellar_inputs
 from tess_vetter.domain.target import StellarParameters
+from tess_vetter.platform.catalogs.exoplanet_archive import match_known_planet_ephemeris
 from tess_vetter.platform.catalogs.toi_resolution import (
     LookupStatus,
     lookup_tic_coordinates,
     resolve_toi_to_tic_ephemeris_depth,
 )
-from tess_vetter.platform.catalogs.exoplanet_archive import match_known_planet_ephemeris
 from tess_vetter.platform.io import TargetNotFoundError
 from tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
 from tess_vetter.report import build_vet_lc_summary_blocks
@@ -894,9 +894,7 @@ def _lc_summary_inputs_sufficient(*, lc: LightCurve, candidate: Candidate) -> bo
         and np.isfinite(float(eph.duration_hours))
     ):
         return False
-    if float(eph.period_days) <= 0.0 or float(eph.duration_hours) <= 0.0:
-        return False
-    return True
+    return not (float(eph.period_days) <= 0.0 or float(eph.duration_hours) <= 0.0)
 
 
 def _attach_lc_summary_payload(

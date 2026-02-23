@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
 import numpy as np
 
-from tess_vetter.cli.common_cli import EXIT_DATA_UNAVAILABLE, EXIT_INPUT_ERROR, BtvCliError, load_json_file
+from tess_vetter.cli.common_cli import (
+    EXIT_DATA_UNAVAILABLE,
+    EXIT_INPUT_ERROR,
+    BtvCliError,
+    load_json_file,
+)
 from tess_vetter.platform.catalogs.exofop_toi_table import fetch_exofop_toi_table
 from tess_vetter.platform.io.mast_client import MASTClient
 

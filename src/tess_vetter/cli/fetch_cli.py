@@ -22,7 +22,10 @@ from tess_vetter.cli.diagnostics_report_inputs import (
     resolve_inputs_from_report_file,
 )
 from tess_vetter.domain.lightcurve import make_data_ref
-from tess_vetter.platform.catalogs.toi_resolution import LookupStatus, resolve_toi_to_tic_ephemeris_depth
+from tess_vetter.platform.catalogs.toi_resolution import (
+    LookupStatus,
+    resolve_toi_to_tic_ephemeris_depth,
+)
 from tess_vetter.platform.io import LightCurveNotFoundError, MASTClient, PersistentCache
 
 
@@ -224,7 +227,7 @@ def _discover_cached_sectors(*, client: MASTClient, tic_id: int) -> list[int]:
         return []
     return sorted(
         {
-            int(getattr(row, "sector"))
+            int(row.sector)
             for row in rows
             if getattr(row, "sector", None) is not None
         }
@@ -314,7 +317,7 @@ def fetch_command(
         cache = PersistentCache(cache_dir=cache_dir)
         staged: list[tuple[int, str]] = []
         for lc_data in lightcurves:
-            sector = int(getattr(lc_data, "sector"))
+            sector = int(lc_data.sector)
             key = make_data_ref(int(resolved_tic_id), int(sector), normalized_flux_type)
             cache.put(key, lc_data)
             staged.append((sector, key))
@@ -464,7 +467,7 @@ def cache_sectors_command(
                 sectors=[int(s) for s in missing_before],
             )
             for lc_data in downloaded:
-                sector = int(getattr(lc_data, "sector"))
+                sector = int(lc_data.sector)
                 key = make_data_ref(int(resolved_tic_id), int(sector), normalized_flux_type)
                 cache.put(key, lc_data)
                 filled.append(int(sector))

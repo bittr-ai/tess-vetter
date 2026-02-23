@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from tess_vetter.cli.common_cli import BtvCliError, EXIT_INPUT_ERROR, load_json_file
+from tess_vetter.cli.common_cli import EXIT_INPUT_ERROR, BtvCliError, load_json_file
 
 REFERENCE_SOURCES_SCHEMA_VERSION = "reference_sources.v1"
 

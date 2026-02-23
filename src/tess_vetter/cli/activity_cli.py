@@ -8,10 +8,10 @@ from typing import Any
 import click
 import numpy as np
 
+from tess_vetter.activity.rotation_context import build_rotation_context
 from tess_vetter.api.activity import characterize_activity
 from tess_vetter.api.stitch import stitch_lightcurve_data
 from tess_vetter.api.types import LightCurve
-from tess_vetter.activity.rotation_context import build_rotation_context
 from tess_vetter.cli.common_cli import (
     EXIT_DATA_UNAVAILABLE,
     EXIT_INPUT_ERROR,

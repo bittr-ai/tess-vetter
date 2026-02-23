@@ -20,8 +20,8 @@ from tess_vetter.cli.common_cli import (
     resolve_optional_output_path,
 )
 from tess_vetter.cli.vet_cli import _resolve_candidate_inputs
-from tess_vetter.platform.catalogs.toi_resolution import LookupStatus, lookup_tic_coordinates
 from tess_vetter.pixel.tpf_fits import TPFFitsData, TPFFitsRef
+from tess_vetter.platform.catalogs.toi_resolution import LookupStatus, lookup_tic_coordinates
 from tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
 
 CLI_LOCALIZE_SCHEMA_VERSION = "cli.localize.v1"

@@ -8,8 +8,8 @@ from typing import Any
 import click
 import numpy as np
 
-from tess_vetter.api.detrend import median_detrend
 from tess_vetter.api import model_competition as model_competition_api
+from tess_vetter.api.detrend import median_detrend
 from tess_vetter.api.stitch import stitch_lightcurve_data
 from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 from tess_vetter.cli.common_cli import (
@@ -26,8 +26,11 @@ from tess_vetter.cli.diagnostics_report_inputs import (
     load_lightcurves_with_sector_policy,
     resolve_inputs_from_report_file,
 )
-from tess_vetter.cli.vet_cli import _resolve_candidate_inputs
-from tess_vetter.cli.vet_cli import _detrend_lightcurve_for_vetting, _validate_detrend_args
+from tess_vetter.cli.vet_cli import (
+    _detrend_lightcurve_for_vetting,
+    _resolve_candidate_inputs,
+    _validate_detrend_args,
+)
 from tess_vetter.platform.io.mast_client import LightCurveNotFoundError, TargetNotFoundError
 
 _SUPPORTED_DETREND_METHODS: tuple[str, ...] = (

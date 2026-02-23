@@ -9,8 +9,7 @@ from typing import Any
 import click
 
 from tess_vetter.cli.common_cli import EXIT_INPUT_ERROR, BtvCliError
-from tess_vetter.pipeline_composition.executor import _OP_TO_COMMAND
-from tess_vetter.pipeline_composition.executor import run_composition
+from tess_vetter.pipeline_composition.executor import _OP_TO_COMMAND, run_composition
 from tess_vetter.pipeline_composition.registry import get_profile, list_profiles
 from tess_vetter.pipeline_composition.schema import CompositionSpec, load_composition_file
 
@@ -84,11 +83,11 @@ def pipeline_run_command(
     )
     manifest = result["manifest"]
     click.echo(
-        (
+
             f"Pipeline run complete: n_tois={manifest['counts']['n_tois']} "
             f"ok={manifest['counts']['n_ok']} partial={manifest['counts']['n_partial']} "
             f"failed={manifest['counts']['n_failed']} out_dir={out_dir}"
-        )
+
     )
 
 
