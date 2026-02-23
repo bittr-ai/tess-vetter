@@ -104,14 +104,17 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: uv sync --group dev
-      - name: Run core-library coverage gate (>90%, first-party core only)
+      - name: Run core-library coverage and generate XML
         run: |
           uv run coverage run \
             --rcfile=coverage.core.ini \
             -m pytest -q -m "not slow"
-          uv run coverage report --rcfile=coverage.core.ini
+          uv run coverage report --rcfile=coverage.core.ini || true
           uv run coverage xml -o coverage.xml
+      - name: Enforce core-library coverage gate (>90%, first-party core only)
+        run: uv run coverage report --rcfile=coverage.core.ini
       - name: Upload core-library coverage to Codecov
+        if: ${{ always() }}
         continue-on-error: true
         uses: codecov/codecov-action@v5
         with:

@@ -22,6 +22,7 @@
 # tess-vetter
 
 [![Coverage](https://codecov.io/gh/bittr-ai/tess-vetter/branch/main/graph/badge.svg)](https://codecov.io/gh/bittr-ai/tess-vetter)
+[![PyPI](https://img.shields.io/pypi/v/tess-vetter.svg)](https://pypi.org/project/tess-vetter/)
 [![DOI](https://zenodo.org/badge/1164740674.svg)](https://doi.org/10.5281/zenodo.18743916)
 
 Domain-first Python library for TESS transit detection + vetting (array-in/array-out).
