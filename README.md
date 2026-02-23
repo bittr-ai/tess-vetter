@@ -36,11 +36,12 @@ The `platform/` module is entirely optional and only used when explicitly import
 
 ## What's in here
 
-- **Vetting pipeline**: default preset runs 15 checks (V01-V12, V13, V15, V11b); opt-in extended preset adds metrics-only diagnostics (V16-V21) via `vet_candidate(..., preset="extended")` (`tess_vetter.api.vet`)
+- **Vetting pipeline**: default preset runs 15 checks (V01-V12, V13, V15, V11b); opt-in extended preset adds metrics-only diagnostics (V16-V21), for 21 total checks available via profiles (`tess_vetter.api.vet`)
 - **Transit detection**: TLS/LS periodograms, multi-planet search, candidate merging (`tess_vetter.api.periodogram`)
 - **Pixel diagnostics**: centroid shift, difference images, WCS-aware localization, aperture dependence (`tess_vetter.api.pixel`)
 - **Transit recovery**: detrend + stack + trapezoid fitting for active stars (`tess_vetter.api.recovery`)
 - **FPP (optional)**: TRICERATOPS+ support with a vendored copy under `src/tess_vetter/ext/` (`tess_vetter.api.fpp`)
+- **Code mode (experimental)**: operation-catalog and MCP tooling under `tess_vetter.code_mode`; this surface is experimental and may change
 - **Citations**: many public API entry points carry machine-readable literature references (see `REFERENCES.md` and `tess_vetter.api.references`)
 
 ## Installation
@@ -224,6 +225,8 @@ Many public API entry points and vetting checks include a list of literature ref
 Cache files (light curves, TRICERATOPS results) use pickle serialization for performance. Ensure cache directories have appropriate permissions in shared or multi-user environments.
 
 ## Development
+
+Run development commands in the project environment with `uv run`:
 
 ```bash
 uv run pytest

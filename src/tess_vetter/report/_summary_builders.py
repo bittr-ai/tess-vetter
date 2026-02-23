@@ -226,7 +226,7 @@ def _build_variability_summary(
     stellar_radius_rsun = None
     if stellar is not None:
         if hasattr(stellar, "radius"):
-            stellar_radius_rsun = _coerce_finite_float(getattr(stellar, "radius"))
+            stellar_radius_rsun = _coerce_finite_float(stellar.radius)
         elif isinstance(stellar, dict):
             stellar_radius_rsun = _coerce_finite_float(stellar.get("radius"))
     rotation_context = build_rotation_context(

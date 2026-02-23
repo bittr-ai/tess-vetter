@@ -20,7 +20,10 @@ from tess_vetter.cli.common_cli import (
     load_json_file,
     resolve_optional_output_path,
 )
-from tess_vetter.cli.diagnostics_report_inputs import choose_effective_sectors, resolve_inputs_from_report_file
+from tess_vetter.cli.diagnostics_report_inputs import (
+    choose_effective_sectors,
+    resolve_inputs_from_report_file,
+)
 from tess_vetter.cli.vet_cli import _resolve_candidate_inputs
 from tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
 from tess_vetter.validation.detrend_grid_defaults import (

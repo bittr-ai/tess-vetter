@@ -15,7 +15,7 @@ _src_dir = _repo_root / "src"
 if str(_src_dir) not in sys.path:
     sys.path.insert(0, str(_src_dir))
 
-import tess_vetter.api as btv
+import tess_vetter.api as btv  # noqa: E402
 
 # Stable identifiers
 TIC_ID = 188646744

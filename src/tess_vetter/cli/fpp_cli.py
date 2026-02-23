@@ -2,23 +2,28 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
 import logging
 import re
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import click
 import numpy as np
 
 from tess_vetter.api.fpp import TUTORIAL_PRESET_OVERRIDES, calculate_fpp
 from tess_vetter.api.stitch import stitch_lightcurve_data
+from tess_vetter.api.transit_masks import (
+    get_in_transit_mask,
+    get_out_of_transit_mask,
+    measure_transit_depth,
+)
 from tess_vetter.api.triceratops_cache import (
     load_cached_triceratops_target,
     stage_triceratops_runtime_artifacts,
 )
-from tess_vetter.api.transit_masks import get_in_transit_mask, get_out_of_transit_mask, measure_transit_depth
 from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 from tess_vetter.cli.common_cli import (
     EXIT_DATA_UNAVAILABLE,
@@ -40,8 +45,8 @@ from tess_vetter.cli.vet_cli import (
     _resolve_candidate_inputs,
     _validate_detrend_args,
 )
-from tess_vetter.domain.lightcurve import make_data_ref
 from tess_vetter.contrast_curves import parse_contrast_curve_with_provenance
+from tess_vetter.domain.lightcurve import make_data_ref
 from tess_vetter.platform.io import (
     LightCurveNotFoundError,
     MASTClient,
@@ -325,7 +330,7 @@ def _cached_sectors_for_tic(
 ) -> list[int]:
     sectors: list[int] = []
     wanted_flux = str(flux_type).lower()
-    for key in cache.keys():
+    for key in cache:
         match = _LC_KEY_PATTERN.match(str(key))
         if match is None:
             continue
@@ -1130,7 +1135,7 @@ def fpp_prepare_command(
             )
         except Exception as exc:
             mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
-            sectors_key = "-".join(str(int(s)) for s in sorted(set(int(s) for s in sectors_loaded)))
+            sectors_key = "-".join(str(int(s)) for s in sorted({int(s) for s in sectors_loaded}))
             stage_state_path = (
                 Path(cache.cache_dir) / "triceratops" / "staging_state" / f"tic_{int(resolved_tic_id)}__sectors_{sectors_key}.json"
             )
@@ -1164,7 +1169,7 @@ def fpp_prepare_command(
 
     manifest: dict[str, Any] = {
         "schema_version": _FPP_PREPARE_SCHEMA_VERSION,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "tic_id": int(resolved_tic_id),
         "period_days": float(resolved_period_days),
         "t0_btjd": float(resolved_t0_btjd),

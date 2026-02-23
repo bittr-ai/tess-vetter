@@ -76,11 +76,7 @@ def _normalize(obj: object) -> JSONValue:
 
     if isinstance(obj, (set, frozenset)):
         normalized_items = [_normalize(x) for x in obj]
-        try:
-            return sorted(normalized_items)
-        except TypeError:
-            # Mixed types: fall back to string sort for determinism.
-            return sorted(normalized_items, key=lambda x: str(x))
+        return sorted(normalized_items, key=lambda x: str(x))
 
     if isinstance(obj, dict):
         out: dict[str, JSONValue] = {}

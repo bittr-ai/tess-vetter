@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 REPORT_SRC = Path(__file__).resolve().parents[2] / "src" / "tess_vetter" / "report"
 
 

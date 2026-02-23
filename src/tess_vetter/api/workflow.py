@@ -13,8 +13,12 @@ from typing import Any, TypedDict
 import numpy as np
 
 from tess_vetter.api.datasets import LocalDataset
-from tess_vetter.api.per_sector import PerSectorVettingResult, per_sector_vet
-from tess_vetter.api.stitch import StitchedLC, stitch_lightcurves
+from tess_vetter.api.per_sector import (
+    PerSectorVettingPayload,
+    PerSectorVettingResult,
+    per_sector_vet,
+)
+from tess_vetter.api.stitch import StitchedLC, StitchLightCurveInput, stitch_lightcurves
 from tess_vetter.api.types import (
     Candidate,
     LightCurve,
@@ -68,7 +72,7 @@ class WorkflowResultPayload(TypedDict):
 
     schema_version: int
     bundle: dict[str, Any]
-    per_sector: dict[str, Any] | None
+    per_sector: PerSectorVettingPayload | None
     stitched: WorkflowStitchedSummary | None
     provenance: WorkflowProvenance
 
@@ -81,7 +85,7 @@ def _package_version() -> str:
 
 
 def _stitch_from_mapping(lc_by_sector: dict[int, LightCurve]) -> StitchedLC:
-    lc_list: list[dict[str, Any]] = []
+    lc_list: list[StitchLightCurveInput | dict[str, Any]] = []
     for sec in sorted(lc_by_sector.keys()):
         lc = lc_by_sector[int(sec)]
         t = np.asarray(lc.time, dtype=np.float64)
@@ -115,8 +119,8 @@ class WorkflowResult:
             "schema_version": int(self.schema_version),
             "bundle": self.bundle.model_dump(),
             "per_sector": self.per_sector.to_dict() if self.per_sector is not None else None,
-            "stitched": dict(self.stitched) if self.stitched is not None else None,
-            "provenance": dict(self.provenance),
+            "stitched": self.stitched,
+            "provenance": self.provenance,
         }
 
 

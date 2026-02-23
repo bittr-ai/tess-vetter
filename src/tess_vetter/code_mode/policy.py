@@ -7,7 +7,7 @@ import urllib.request
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import tess_vetter.api as _api
 
@@ -67,6 +67,16 @@ EXPORT_POLICY_LEGACY_DYNAMIC = "legacy_dynamic"
 
 _LEGACY_DYNAMIC_EXPORT_NAMES = frozenset({"generate_control"})
 _LEGACY_DYNAMIC_MODULE_PREFIXES = ("tess_vetter.plotting",)
+
+
+def _api_export_map() -> dict[str, tuple[str, str]]:
+    export_map_factory = getattr(_api, "_get_export_map", None)
+    if not callable(export_map_factory):
+        return {}
+    export_map = export_map_factory()
+    if not isinstance(export_map, dict):
+        return {}
+    return cast(dict[str, tuple[str, str]], export_map)
 
 
 def _policy_blocker(
@@ -149,37 +159,53 @@ def network_boundary_guard(*, allow_network: bool) -> Iterator[None]:
     def _deny(boundary: str, target: Any) -> None:
         raise NetworkBoundaryViolationError(boundary=boundary, target=str(target))
 
-    class _GuardedSocket(original_socket):
+    class _GuardedSocketProxy:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            self._inner = original_socket(*args, **kwargs)
+
         def connect(self, address: Any) -> None:
             _deny("socket.connect", address)
+            raise AssertionError("unreachable")
 
         def connect_ex(self, address: Any) -> int:
             _deny("socket.connect_ex", address)
+            raise AssertionError("unreachable")
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._inner, name)
+
+    def _guarded_socket(*args: Any, **kwargs: Any) -> Any:
+        return _GuardedSocketProxy(*args, **kwargs)
 
     def _guarded_create_connection(address: Any, *args: Any, **kwargs: Any) -> Any:
         del args, kwargs
         _deny("socket.create_connection", address)
+        raise AssertionError("unreachable")
 
     def _guarded_urlopen(url: Any, *args: Any, **kwargs: Any) -> Any:
         del args, kwargs
         _deny("urllib.request.urlopen", url)
+        raise AssertionError("unreachable")
 
     def _guarded_opener_open(self: Any, fullurl: Any, *args: Any, **kwargs: Any) -> Any:
         del self, args, kwargs
         _deny("urllib.request.OpenerDirector.open", fullurl)
+        raise AssertionError("unreachable")
 
-    socket.socket = _GuardedSocket
-    socket.create_connection = _guarded_create_connection
-    urllib.request.urlopen = _guarded_urlopen
-    urllib.request.OpenerDirector.open = _guarded_opener_open
+    socket_module = cast(Any, socket)
+    urllib_request_module = cast(Any, urllib.request)
+    socket_module.socket = _guarded_socket
+    socket_module.create_connection = _guarded_create_connection
+    urllib_request_module.urlopen = _guarded_urlopen
+    urllib_request_module.OpenerDirector.open = _guarded_opener_open
 
     try:
         yield
     finally:
-        socket.socket = original_socket
-        socket.create_connection = original_create_connection
-        urllib.request.urlopen = original_urlopen
-        urllib.request.OpenerDirector.open = original_opener_open
+        socket_module.socket = original_socket
+        socket_module.create_connection = original_create_connection
+        urllib_request_module.urlopen = original_urlopen
+        urllib_request_module.OpenerDirector.open = original_opener_open
 
 
 def resolve_profile(profile_name: str | None) -> PolicyProfile:
@@ -200,7 +226,7 @@ def classify_api_export_policy(
     value: object | None,
 ) -> str:
     """Classify API export handling policy for discovery/inventory surfaces."""
-    if export_name in _api._get_export_map() and not _api.is_agent_actionable_export(export_name):
+    if export_name in _api_export_map() and not _api.is_agent_actionable_export(export_name):
         return EXPORT_POLICY_LEGACY_DYNAMIC
 
     if export_name in _LEGACY_DYNAMIC_EXPORT_NAMES:

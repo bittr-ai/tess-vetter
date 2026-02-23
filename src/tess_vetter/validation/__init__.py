@@ -46,11 +46,6 @@ from tess_vetter.validation.register_defaults import (
     register_all_defaults,
     register_extended_defaults,
 )
-from tess_vetter.validation.report_bridge import (
-    compute_alias_summary,
-    compute_timing_series,
-    run_lc_checks,
-)
 from tess_vetter.validation.registry import (
     DEFAULT_REGISTRY,
     CheckConfig,
@@ -60,6 +55,11 @@ from tess_vetter.validation.registry import (
     CheckTier,
     VettingCheck,
     get_default_registry,
+)
+from tess_vetter.validation.report_bridge import (
+    compute_alias_summary,
+    compute_timing_series,
+    run_lc_checks,
 )
 from tess_vetter.validation.result_schema import (
     CheckResult,

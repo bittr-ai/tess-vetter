@@ -17,6 +17,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+import tess_vetter.report._build_panels as report_build_panels
 from tess_vetter.api.types import (
     Candidate,
     CheckResult,
@@ -39,7 +40,6 @@ from tess_vetter.report import (
     TransitTimingPlotData,
     build_report,
 )
-import tess_vetter.report._build_panels as report_build_panels
 from tess_vetter.report._build_core import _validate_build_inputs
 from tess_vetter.report._build_utils import (
     _bin_phase_data,

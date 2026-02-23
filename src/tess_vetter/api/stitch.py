@@ -198,7 +198,7 @@ def stitch_lightcurves(
             normalized_flux = flux
             normalized_flux_err = flux_err
 
-        sector_arr = np.full(n_cadences, sector, dtype=np.int32)
+        sector_arr: NDArray[np.integer[Any]] = np.full(n_cadences, sector, dtype=np.int32)
         quality_summary = _summarize_quality_flags(quality)
 
         diagnostics.append(
@@ -263,7 +263,7 @@ def stitch_lightcurve_data(
     if len(lightcurves) < 2:
         raise ValueError("stitch_lightcurve_data requires at least 2 input light curves")
 
-    lc_list: list[dict[str, Any]] = []
+    lc_list: list[StitchLightCurveInput | dict[str, Any]] = []
     for lc in lightcurves:
         lc_list.append(
             {

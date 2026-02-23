@@ -241,14 +241,16 @@ class TestSearchLightcurve:
 
         mock_lightkurve.search_lightcurve.side_effect = _sleepy_search
 
-        with patch.dict("sys.modules", {"lightkurve": mock_lightkurve}):
-            with patch.dict(os.environ, {"BTV_MAST_SEARCH_TIMEOUT_SECONDS": "0.01"}):
-                client = MASTClient()
-                client._lk = mock_lightkurve
-                client._lk_imported = True
+        with (
+            patch.dict("sys.modules", {"lightkurve": mock_lightkurve}),
+            patch.dict(os.environ, {"BTV_MAST_SEARCH_TIMEOUT_SECONDS": "0.01"}),
+        ):
+            client = MASTClient()
+            client._lk = mock_lightkurve
+            client._lk_imported = True
 
-                with pytest.raises(MASTClientError, match="timed out"):
-                    client.search_lightcurve(tic_id=261136679)
+            with pytest.raises(MASTClientError, match="timed out"):
+                client.search_lightcurve(tic_id=261136679)
 
     def test_search_multiple_sectors(self, mock_lightkurve):
         """search_lightcurve() returns multiple SearchResults sorted by sector."""

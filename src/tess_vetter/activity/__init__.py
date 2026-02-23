@@ -25,13 +25,13 @@ from tess_vetter.activity.primitives import (
     mask_flares,
     measure_rotation_period,
 )
-from tess_vetter.activity.rotation_context import (
-    build_rotation_context,
-    estimate_v_eq_kms,
-)
 from tess_vetter.activity.result import (
     ActivityResult,
     Flare,
+)
+from tess_vetter.activity.rotation_context import (
+    build_rotation_context,
+    estimate_v_eq_kms,
 )
 
 __all__ = [

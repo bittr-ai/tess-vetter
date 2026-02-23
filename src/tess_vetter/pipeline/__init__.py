@@ -48,13 +48,13 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     from tess_vetter.domain.lightcurve import LightCurveData
 
+from tess_vetter.code_mode.errors import map_legacy_error_to_prd_code
 from tess_vetter.features import (
     EnrichedRow,
     FeatureConfig,
     RawEvidencePacket,
     build_features,
 )
-from tess_vetter.code_mode.errors import map_legacy_error_to_prd_code
 
 logger = logging.getLogger(__name__)
 
@@ -222,6 +222,7 @@ def enrich_candidate(
     import numpy as np
 
     from tess_vetter.api.aperture_family import compute_aperture_family_depth_curve
+    from tess_vetter.api.evidence_contracts import compute_code_hash
     from tess_vetter.api.ghost_features import compute_ghost_features
     from tess_vetter.api.io import (
         LightCurveNotFoundError,
@@ -230,7 +231,13 @@ def enrich_candidate(
         SearchResult,
     )
     from tess_vetter.api.localization import TransitParams, compute_localization_diagnostics
-    from tess_vetter.api.evidence_contracts import compute_code_hash
+    from tess_vetter.api.pixel_prf import (
+        aggregate_timeseries_evidence,
+        extract_transit_windows,
+        fit_all_hypotheses_timeseries,
+        get_prf_model,
+        select_best_hypothesis_timeseries,
+    )
     from tess_vetter.api.stellar_dilution import (
         HostHypothesis,
         compute_dilution_scenarios,
@@ -240,13 +247,6 @@ def enrich_candidate(
     from tess_vetter.api.stitch import stitch_lightcurve_data
     from tess_vetter.api.types import Candidate, Ephemeris, LightCurve, TPFStamp
     from tess_vetter.api.vet import vet_candidate as run_vetting
-    from tess_vetter.api.pixel_prf import (
-        aggregate_timeseries_evidence,
-        extract_transit_windows,
-        fit_all_hypotheses_timeseries,
-        get_prf_model,
-        select_best_hypothesis_timeseries,
-    )
     from tess_vetter.data_sources.sector_selection import select_sectors
     from tess_vetter.features import FEATURE_SCHEMA_VERSION
     from tess_vetter.features.evidence import SkipBlock, make_skip_block
@@ -607,11 +607,11 @@ def enrich_candidate(
 
     try:
         t_valid = np.asarray(stitched_lc_data.time[stitched_lc_data.valid_mask], dtype=np.float64)
-        n_in_lc, n_out_lc = _count_in_out(
+        n_in_lc, _n_out_lc = _count_in_out(
             time_arr=t_valid, t0=float(t0_btjd), dur_h=float(duration_hours)
         )
     except Exception:
-        n_in_lc, n_out_lc = 0, 0
+        n_in_lc, _n_out_lc = 0, 0
 
     if n_in_lc <= 0:
         # Optional: attempt a bounded local t0 refinement to rescue slightly-off ephemerides.
@@ -1193,7 +1193,7 @@ def enrich_candidate(
                         and int(config.pixel_timeseries_max_hypotheses) > 1
                     ):
                         neighbors = sorted(
-                            list(getattr(gaia_query, "neighbors", []) or []),
+                            getattr(gaia_query, "neighbors", []) or [],
                             key=lambda n: float(getattr(n, "separation_arcsec", 1e9)),
                         )
 
@@ -1249,9 +1249,7 @@ def enrich_candidate(
                     consensus = str(pixel_host_hypotheses.get("consensus_best_source_id") or "")
                     agrees: bool | None = None
                     if best_source_id:
-                        if best_source_id == "target" and consensus.startswith("tic:"):
-                            agrees = True
-                        elif best_source_id == consensus:
+                        if best_source_id == "target" and consensus.startswith("tic:") or best_source_id == consensus:
                             agrees = True
                         else:
                             agrees = False

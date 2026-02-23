@@ -26,7 +26,6 @@ from tess_vetter.validation.result_schema import (
     skipped_result,
 )
 
-
 _TIMEOUT_ERROR_TYPES = {
     "TIMEOUT",
     "TIMEOUTERROR",

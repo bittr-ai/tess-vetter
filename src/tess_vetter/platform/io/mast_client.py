@@ -16,16 +16,16 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 import time as time_module
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
-from pathlib import Path
-import re
 
 from tess_vetter.api.lightcurve import LightCurveData, LightCurveProvenance
 from tess_vetter.api.target import Target
@@ -341,7 +341,7 @@ def _extract_ra_dec_from_lk_meta(obj: Any) -> tuple[float | None, float | None]:
         try:
             # astropy Quantity
             if hasattr(v, "value"):
-                v = getattr(v, "value")
+                v = v.value
         except Exception:
             pass
         try:
@@ -1615,13 +1615,13 @@ class MASTClient:
                     author=search_author,
                 )
                 if search_all is not None and len(search_all) > 0:
-                    requested_set = set(int(s) for s in sorted_sectors)
+                    requested_set = {int(s) for s in sorted_sectors}
                     for idx in range(len(search_all)):
                         row = search_all[idx]
                         sec: int | None = None
                         try:
                             if hasattr(row, "sequence_number"):
-                                seq = getattr(row, "sequence_number")
+                                seq = row.sequence_number
                                 if seq is not None:
                                     sec = int(seq)
                         except Exception:
@@ -1950,8 +1950,8 @@ class MASTClient:
             wcs = getattr(tpf, "wcs", None)
 
             aperture_mask = None
-            if hasattr(tpf, "pipeline_mask") and getattr(tpf, "pipeline_mask") is not None:
-                aperture_mask = np.asarray(getattr(tpf, "pipeline_mask"), dtype=np.int32)
+            if hasattr(tpf, "pipeline_mask") and tpf.pipeline_mask is not None:
+                aperture_mask = np.asarray(tpf.pipeline_mask, dtype=np.int32)
         except Exception as e:
             logger.error(f"Failed to extract arrays from downloaded TPF for {target}: {e}")
             raise MASTClientError(f"Failed to process TPF TIC {tic_id} sector {sector}: {e}") from e
@@ -2018,108 +2018,3 @@ class MASTClient:
         aperture_mask = np.asarray(tpf.pipeline_mask, dtype=np.bool_) if hasattr(tpf, "pipeline_mask") else None
         quality = np.asarray(tpf.quality, dtype=np.int32) if hasattr(tpf, "quality") else None
         return time, flux, flux_err, wcs, aperture_mask, quality
-
-        def _row_author(row: Any) -> str | None:
-            try:
-                if hasattr(row, "author") and row.author is not None:
-                    return str(row.author)
-            except Exception:
-                return None
-            return None
-
-        def _row_exptime(row: Any) -> float | None:
-            if not hasattr(row, "exptime"):
-                return None
-            return _coerce_float(getattr(row, "exptime", None))
-
-        # Select best matching product
-        candidate_indices = list(range(len(search_result)))
-        requested_exptime = exptime
-        if requested_exptime is not None:
-            candidate_indices = [
-                i
-                for i in candidate_indices
-                if (_row_exptime(search_result[i]) is not None)
-                and abs(float(_row_exptime(search_result[i]) or 0.0) - requested_exptime) < 1.0
-            ]
-
-            if not candidate_indices:
-                available_exptimes: list[float] = []
-                for i in range(len(search_result)):
-                    exptime_i = _row_exptime(search_result[i])
-                    if exptime_i is not None:
-                        available_exptimes.append(float(exptime_i))
-                raise LightCurveNotFoundError(
-                    f"No TPF found for TIC {tic_id} sector {sector} "
-                    f"with exptime={requested_exptime}s. Available exptimes: {available_exptimes}"
-                )
-
-        preferred_author = author if author is not None else self.author
-        preferred_exptime = requested_exptime if requested_exptime is not None else 120.0
-
-        def _selection_key(i: int) -> tuple[int, float, str, float, int]:
-            row = search_result[i]
-            author_i = _row_author(row) or ""
-            exptime_i = _row_exptime(row)
-
-            author_match = 1
-            if preferred_author is not None and author_i.lower() == preferred_author.lower():
-                author_match = 0
-
-            exptime_delta = (
-                abs(float(exptime_i) - preferred_exptime) if exptime_i is not None else 1e9
-            )
-            exptime_val = float(exptime_i) if exptime_i is not None else 1e9
-            return (author_match, exptime_delta, author_i, exptime_val, i)
-
-        selected_index = min(candidate_indices, key=_selection_key)
-        selected_row = search_result[selected_index]
-
-        # Download the TPF
-        try:
-            tpf_result = selected_row.download()
-            # Handle LightCurveCollection vs single TPF
-            tpf = (
-                tpf_result[0]
-                if type(tpf_result).__name__ == "TargetPixelFileCollection"
-                else tpf_result
-            )
-        except Exception as e:
-            logger.error(f"TPF download failed for {target} sector {sector}: {e}")
-            raise MASTClientError(
-                f"Failed to download TPF for TIC {tic_id} sector {sector}: {e}"
-            ) from e
-
-        # Extract data arrays
-        try:
-            time = np.asarray(tpf.time.value, dtype=np.float64)
-            flux = np.asarray(tpf.flux.value, dtype=np.float64)
-
-            # Flux errors (optional)
-            flux_err = None
-            if hasattr(tpf, "flux_err") and tpf.flux_err is not None:
-                flux_err = np.asarray(tpf.flux_err.value, dtype=np.float64)
-
-            # WCS (optional)
-            wcs = getattr(tpf, "wcs", None)
-
-            # Aperture mask
-            aperture_mask = None
-            if hasattr(tpf, "pipeline_mask") and tpf.pipeline_mask is not None:
-                aperture_mask = np.asarray(tpf.pipeline_mask, dtype=bool)
-
-            # Quality flags
-            quality = None
-            if hasattr(tpf, "quality") and tpf.quality is not None:
-                quality = np.asarray(tpf.quality, dtype=np.int32)
-
-            logger.info(
-                f"Downloaded TPF for TIC {tic_id} sector {sector}: "
-                f"{flux.shape[0]} cadences, {flux.shape[1]}x{flux.shape[2]} pixels"
-            )
-
-            return time, flux, flux_err, wcs, aperture_mask, quality
-
-        except Exception as e:
-            logger.error(f"Failed to extract data from TPF: {e}")
-            raise MASTClientError(f"Failed to process TPF data: {e}") from e

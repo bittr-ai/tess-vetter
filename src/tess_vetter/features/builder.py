@@ -249,10 +249,7 @@ def _extract_host_plausibility_from_auto(
             # Support both legacy layout (scenario.host.source_id) and the newer
             # flat layout used by our enrichment pipeline (scenario.source_id).
             host = sc.get("host")
-            if isinstance(host, dict):
-                source_id = host.get("source_id")
-            else:
-                source_id = sc.get("source_id")
+            source_id = host.get("source_id") if isinstance(host, dict) else sc.get("source_id")
             if source_id is not None:
                 scenario["source_id"] = str(source_id)
                 scenario["physically_impossible"] = bool(
@@ -489,12 +486,13 @@ def build_features(
         # Use a conservative threshold consistent with "significant" language.
         secondary_significant = bool(secondary_depth_sigma >= 3.0)
 
-    if secondary_depth_sigma is None:
+    if secondary_depth_sigma is None and not (
+        isinstance(v02, dict) and "Invalid baseline" in str(v02.get("note") or "")
+    ):
         # Some secondary-epoch checks can be intentionally uncomputable when the
         # baseline flux is invalid (e.g., median <= 0 due to pathological product).
         # Treat this as a non-critical skip rather than a missing family.
-        if not (isinstance(v02, dict) and "Invalid baseline" in str(v02.get("note") or "")):
-            missing_feature_families.append("SECONDARY")
+        missing_feature_families.append("SECONDARY")
 
     # -------------------------------------------------------------------------
     # V03: Duration Ratio
@@ -763,7 +761,7 @@ def build_features(
         inputs_summary["cadence_seconds"] = ephemeris["cadence_seconds"]
     # Cache/provenance hints (useful for training reproducibility).
     if getattr(config, "cache_dir", None) is not None:
-        inputs_summary["cache_dir"] = str(getattr(config, "cache_dir"))
+        inputs_summary["cache_dir"] = str(config.cache_dir)
     inputs_summary["cache_only"] = bool(getattr(config, "no_download", False))
     if isinstance(provenance, dict):
         ch = provenance.get("code_hash")

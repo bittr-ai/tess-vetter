@@ -8,9 +8,9 @@ import numpy as np
 from click.testing import CliRunner
 
 import tess_vetter.cli.model_compete_cli as model_compete_cli
+from tess_vetter.api.types import LightCurve
 from tess_vetter.cli.model_compete_cli import model_compete_command
 from tess_vetter.domain.lightcurve import LightCurveData
-from tess_vetter.api.types import LightCurve
 
 
 def _make_lc(

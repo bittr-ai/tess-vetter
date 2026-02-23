@@ -18,9 +18,9 @@ from pathlib import Path
 
 # Ensure matplotlib uses non-interactive backend
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
 import numpy as np
 
 # Add src to path if needed
@@ -749,8 +749,8 @@ def generate_v20_plot(output_dir: Path) -> None:
 
 def generate_full_lightcurve_plot(output_dir: Path) -> None:
     """Generate full light curve plot."""
+    from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
     from tess_vetter.plotting import plot_full_lightcurve
-    from tess_vetter.api.types import LightCurve, Candidate, Ephemeris
 
     np.random.seed(42)
     # Create mock light curve with transits
@@ -780,8 +780,8 @@ def generate_full_lightcurve_plot(output_dir: Path) -> None:
 
 def generate_phase_folded_plot(output_dir: Path) -> None:
     """Generate phase-folded transit plot."""
+    from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
     from tess_vetter.plotting import plot_phase_folded
-    from tess_vetter.api.types import LightCurve, Candidate, Ephemeris
 
     np.random.seed(42)
     # Create mock light curve with transits
@@ -811,8 +811,8 @@ def generate_phase_folded_plot(output_dir: Path) -> None:
 
 def generate_transit_fit_plot(output_dir: Path) -> None:
     """Generate transit fit overlay plot."""
-    from tess_vetter.plotting import plot_transit_fit
     from tess_vetter.api.transit_fit import TransitFitResult
+    from tess_vetter.plotting import plot_transit_fit
 
     # Synthetic fitted model + data in phase space
     phase = np.linspace(-0.1, 0.1, 400)
@@ -857,8 +857,8 @@ def generate_transit_fit_plot(output_dir: Path) -> None:
 
 def generate_dvr_summary(output_dir: Path) -> None:
     """Generate DVR summary plot."""
+    from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
     from tess_vetter.plotting import plot_vetting_summary
-    from tess_vetter.api.types import LightCurve, Candidate, Ephemeris
     from tess_vetter.validation.result_schema import VettingBundleResult
 
     np.random.seed(42)

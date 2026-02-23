@@ -20,8 +20,7 @@ References:
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias
 
 from tess_vetter.api.references import (
     GUERRERO_2021,
@@ -53,7 +52,7 @@ class _CatalogCheckResultLike(Protocol):
     id: str
     name: str
     confidence: float
-    details: Mapping[str, object]
+    details: dict[str, Any]
 
 
 # Module-level references for programmatic access (generated from central registry)

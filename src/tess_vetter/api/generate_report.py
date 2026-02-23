@@ -77,6 +77,38 @@ class GenerateReportPlotDataContract(TypedDict, total=False):
     full_lc: dict[str, Any]
 
 
+def _extract_plot_data_contract(report_payload: dict[str, Any]) -> GenerateReportPlotDataContract:
+    """Build typed plot-data contract from report JSON payload."""
+    out: GenerateReportPlotDataContract = {}
+    raw_plot_data = report_payload.get(GENERATE_REPORT_PLOT_DATA_KEY)
+    if isinstance(raw_plot_data, dict):
+        full_lc = raw_plot_data.get("full_lc")
+        if isinstance(full_lc, dict):
+            out["full_lc"] = full_lc
+    return out
+
+
+def _extract_report_json_contract(report_payload: dict[str, Any]) -> GenerateReportJSONContract:
+    """Build typed report JSON contract (without top-level plot_data)."""
+    out: GenerateReportJSONContract = {}
+    schema_version = report_payload.get("schema_version")
+    if isinstance(schema_version, str):
+        out["schema_version"] = schema_version
+    verdict = report_payload.get("verdict")
+    if isinstance(verdict, str):
+        out["verdict"] = verdict
+    verdict_source = report_payload.get("verdict_source")
+    if isinstance(verdict_source, str):
+        out["verdict_source"] = verdict_source
+    summary = report_payload.get("summary")
+    if isinstance(summary, dict):
+        out["summary"] = summary
+    custom_views = report_payload.get("custom_views")
+    if isinstance(custom_views, dict):
+        out["custom_views"] = custom_views
+    return out
+
+
 def _to_optional_finite_float(value: Any) -> float | None:
     if value is None:
         return None
@@ -348,19 +380,16 @@ def generate_report(
         )
 
     full_report_json = report.to_json()
-    plot_data_json: GenerateReportPlotDataContract = dict(
-        full_report_json.get(GENERATE_REPORT_PLOT_DATA_KEY, {})
-    )
-    report_json: GenerateReportJSONContract = dict(full_report_json)
-    report_json.pop(GENERATE_REPORT_PLOT_DATA_KEY, None)
+    plot_data_json = _extract_plot_data_contract(full_report_json)
+    report_json = _extract_report_json_contract(full_report_json)
 
     # 7. Optional HTML
     html = render_html(report) if include_html else None
 
     return GenerateReportResult(
         report=report,
-        report_json=report_json,
-        plot_data_json=plot_data_json,
+        report_json=dict(report_json),
+        plot_data_json=dict(plot_data_json),
         html=html,
         sectors_used=sectors_used,
         stitch_diagnostics=stitch_diag,

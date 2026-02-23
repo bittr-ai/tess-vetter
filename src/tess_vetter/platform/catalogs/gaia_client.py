@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any, ClassVar
 
@@ -370,11 +371,8 @@ class GaiaClient:
     def _cache_conn(self) -> sqlite3.Connection | None:
         if not self.cache_path:
             return None
-        try:
+        with suppress(Exception):
             os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
-        except Exception:
-            # Allow cache_path with no directory component.
-            pass
         try:
             conn = sqlite3.connect(self.cache_path)
         except Exception:
@@ -391,10 +389,8 @@ class GaiaClient:
             )
             conn.commit()
         except Exception:
-            try:
+            with suppress(Exception):
                 conn.close()
-            except Exception:
-                pass
             return None
         return conn
 
@@ -429,10 +425,8 @@ class GaiaClient:
         except Exception:
             return None
         finally:
-            try:
+            with suppress(Exception):
                 conn.close()
-            except Exception:
-                pass
 
     def _cache_put(self, cache_key: str, payload: dict[str, Any]) -> None:
         conn = self._cache_conn()
@@ -450,10 +444,8 @@ class GaiaClient:
         except Exception:
             return
         finally:
-            try:
+            with suppress(Exception):
                 conn.close()
-            except Exception:
-                pass
 
     def _execute_tap_query(self, query: str) -> list[dict[str, Any]]:
         """Execute a synchronous TAP query.
@@ -909,10 +901,8 @@ def query_gaia_by_position_sync(
         except Exception:
             pass
     result = asyncio.run(client.query_by_position(ra, dec, radius_arcsec))
-    try:
+    with suppress(Exception):
         client._cache_put(cache_key, result.model_dump(mode="json"))
-    except Exception:
-        pass
     return result
 
 

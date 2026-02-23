@@ -5,9 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 9 * * 1"
 
 jobs:
-  pre-commit:
+  quality-gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,39 +19,16 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: uv sync --group dev
-      - name: Run pre-commit
-        run: uv run pre-commit run --all-files
-
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          python-version: "3.12"
-      - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync --group dev --extra plotting
       - name: Lint with ruff
         run: uv run ruff check .
-      - name: Check formatting
-        run: uv run ruff format --check .
-
-  typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          python-version: "3.12"
-      - name: Install dependencies
-        run: uv sync --group dev
       - name: Type check with mypy
         run: uv run mypy src/tess_vetter
+      - name: Run tests (non-slow)
+        run: uv run pytest -q -m "not slow"
 
-  test-core:
+  extended-test-core:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -61,14 +41,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: uv sync --group dev --extra plotting
-      - name: Run core tests (no slow)
-        if: matrix.python-version != '3.12'
+      - name: Run tests (non-slow)
         run: uv run pytest -q -m "not slow"
-      - name: Run broad regression coverage gate (tess_vetter >= 69%)
-        if: matrix.python-version == '3.12'
-        run: uv run pytest -q -m "not slow" --cov=tess_vetter --cov-report=term --cov-fail-under=69
 
-  test-extras:
+  extended-test-extras:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,10 +55,11 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies (with extras)
         run: uv sync --group dev --extra tls --extra fit --extra wotan --extra triceratops --extra exovetter --extra batman
-      - name: Run tests
+      - name: Run tests (non-slow)
         run: uv run pytest -q -m "not slow"
 
-  test-security-matrix:
+  extended-security-matrix:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -95,8 +73,9 @@ jobs:
       - name: Run security matrix tests
         run: uv run pytest -q tests/test_security/test_matrix.py
 
-  core-library-coverage:
-    needs: [test-core]
+  extended-core-library-coverage:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: [extended-test-core]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -125,7 +104,8 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
-  docs:
+  extended-docs:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

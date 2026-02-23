@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
 from tess_vetter.api.periodogram import run_periodogram as _run_periodogram
@@ -103,9 +104,11 @@ def run_periodogram_typed(**kwargs: Any) -> RunPeriodogramOutputModel:
     """Typed wrapper around `tess_vetter.api.periodogram.run_periodogram`."""
     payload = RunPeriodogramInputModel.model_validate(kwargs)
     result = _run_periodogram(
-        time=payload.time,
-        flux=payload.flux,
-        flux_err=payload.flux_err,
+        time=np.asarray(payload.time, dtype=np.float64),
+        flux=np.asarray(payload.flux, dtype=np.float64),
+        flux_err=(
+            np.asarray(payload.flux_err, dtype=np.float64) if payload.flux_err is not None else None
+        ),
         min_period=payload.min_period,
         max_period=payload.max_period,
         preset=payload.preset,

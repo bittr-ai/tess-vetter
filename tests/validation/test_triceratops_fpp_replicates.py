@@ -13,11 +13,11 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+from tess_vetter.platform.network.timeout import NetworkTimeoutError
 from tess_vetter.validation.triceratops_fpp import (
     _aggregate_replicate_results,
     _is_result_degenerate,
 )
-from tess_vetter.platform.network.timeout import NetworkTimeoutError
 
 # =============================================================================
 # Test _is_result_degenerate helper

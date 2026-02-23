@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import tess_vetter.api as _api
 from tess_vetter.api.primitives_catalog import list_primitives
@@ -60,6 +60,16 @@ _LEGACY_DYNAMIC_EXPORTS: frozenset[str] = frozenset(
 )
 
 
+def _api_export_map() -> dict[str, tuple[str, str]]:
+    export_map_factory = getattr(_api, "_get_export_map", None)
+    if not callable(export_map_factory):
+        return {}
+    export_map = export_map_factory()
+    if not isinstance(export_map, dict):
+        return {}
+    return cast(dict[str, tuple[str, str]], export_map)
+
+
 @dataclass(frozen=True, slots=True)
 class SurfaceInventoryRow:
     """Single callable-surface row."""
@@ -85,7 +95,7 @@ def _sort_key(row: SurfaceInventoryRow) -> tuple[int, str, str, str, str, str, s
 
 
 def _iter_api_callable_rows() -> list[SurfaceInventoryRow]:
-    export_map = _api._get_export_map()
+    export_map = _api_export_map()
     rows: list[SurfaceInventoryRow] = []
 
     for export_name in sorted(export_map):
@@ -178,7 +188,7 @@ def dynamic_export_metrics() -> dict[str, Any]:
     actionable: list[str] = []
     legacy: list[str] = []
 
-    for export_name in sorted(_api._get_export_map()):
+    for export_name in sorted(_api_export_map()):
         try:
             value = getattr(_api, export_name)
         except (AttributeError, ImportError, ModuleNotFoundError):

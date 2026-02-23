@@ -42,7 +42,7 @@ def test_depth_stability_metrics_increase_with_epoch_depth_scatter() -> None:
 
     # Use the same set of epochs for both LCs to isolate depth variability.
     epochs = list(range(0, 12))
-    stable = {ep: 0.0010 for ep in epochs}
+    stable = dict.fromkeys(epochs, 0.001)
     variable = {ep: (0.0016 if (ep % 2 == 0) else 0.0004) for ep in epochs}
 
     lc_stable = _make_lc(depths_by_epoch=stable)
