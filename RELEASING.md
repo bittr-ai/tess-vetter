@@ -8,6 +8,9 @@ Run the full local smoke suite:
 ./scripts/release_smoke.sh
 ```
 
+Use `uv run ...` for all release/test commands so tooling runs in the project
+environment (`.venv`). Avoid running bare `pytest` from another active venv.
+
 ## Coverage gate (required)
 
 Before tagging a release:
@@ -46,6 +49,8 @@ Release-order note:
 3. Apply DOI updates above in a follow-up commit (no new tag required unless policy says otherwise).
 
 ## Tag and push
+
+From a clean `main` that is synced with `origin/main`:
 
 ```bash
 git tag -a "vX.Y.Z" -m "vX.Y.Z"
