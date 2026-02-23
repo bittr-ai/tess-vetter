@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Literal, NotRequired, Protocol, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -28,17 +28,8 @@ from tess_vetter.api.references import (
     cite,
     cites,
 )
+from tess_vetter.platform.io import PersistentCache
 from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
-
-
-class PersistentCache(Protocol):
-    """Minimal cache protocol required by the FPP API boundary."""
-
-    cache_dir: str | None
-
-    def keys(self) -> list[str]: ...
-
-    def get(self, key: str) -> object: ...
 
 
 class FppPresetOverrides(TypedDict, total=False):
@@ -219,6 +210,61 @@ def calculate_fpp(
     base = FAST_PRESET if preset == "fast" else STANDARD_PRESET
     preset_overrides = TUTORIAL_PRESET_OVERRIDES if preset == "tutorial" else {}
     extra = {**preset_overrides, **(overrides or {})}
+    missing = object()
+
+    def _optional_int(value: object, fallback: int | None) -> int | None:
+        if value is missing:
+            return fallback
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return fallback
+        if isinstance(value, int):
+            return int(value)
+        if isinstance(value, float) and np.isfinite(value) and value.is_integer():
+            return int(value)
+        return fallback
+
+    def _optional_float(value: object, fallback: float | None) -> float | None:
+        if value is missing:
+            return fallback
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return fallback
+        if isinstance(value, (int, float)) and np.isfinite(float(value)):
+            return float(value)
+        return fallback
+
+    def _required_float(value: object, fallback: float) -> float:
+        out = _optional_float(value, fallback)
+        return fallback if out is None else out
+
+    def _bool(value: object, fallback: bool) -> bool:
+        if isinstance(value, bool):
+            return value
+        return fallback
+
+    def _drop_scenario(value: object) -> list[str] | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, list) and all(isinstance(item, str) for item in value):
+            return value
+        return None
+
+    mc_draws = _optional_int(extra.get("mc_draws", missing), base.mc_draws)
+    window_duration_mult = _optional_float(
+        extra.get("window_duration_mult", missing), base.window_duration_mult
+    )
+    max_points = _optional_int(extra.get("max_points", missing), base.max_points)
+    min_flux_err = _required_float(extra.get("min_flux_err", missing), base.min_flux_err)
+    use_empirical_noise_floor = _bool(
+        extra.get("use_empirical_noise_floor"), base.use_empirical_noise_floor
+    )
+    drop_scenario = _drop_scenario(extra.get("drop_scenario"))
+
     return calculate_fpp_handler(
         cache=cache,
         tic_id=tic_id,
@@ -231,16 +277,12 @@ def calculate_fpp(
         stellar_mass=stellar_mass,
         tmag=tmag,
         timeout_seconds=timeout_seconds,
-        mc_draws=int(extra.get("mc_draws", base.mc_draws))
-        if base.mc_draws is not None
-        else extra.get("mc_draws"),
-        window_duration_mult=extra.get("window_duration_mult", base.window_duration_mult),
-        max_points=extra.get("max_points", base.max_points),
-        min_flux_err=float(extra.get("min_flux_err", base.min_flux_err)),
-        use_empirical_noise_floor=bool(
-            extra.get("use_empirical_noise_floor", base.use_empirical_noise_floor)
-        ),
-        drop_scenario=extra.get("drop_scenario"),
+        mc_draws=mc_draws,
+        window_duration_mult=window_duration_mult,
+        max_points=max_points,
+        min_flux_err=min_flux_err,
+        use_empirical_noise_floor=use_empirical_noise_floor,
+        drop_scenario=drop_scenario,
         replicates=replicates,
         seed=seed,
         external_lightcurves=external_lightcurves,

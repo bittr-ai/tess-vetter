@@ -11,8 +11,8 @@ from tess_vetter.validation.ephemeris_reliability import (  # noqa: F401
     EphemerisReliabilityRegimeResult,
     PeriodNeighborhoodResult,
     SchedulabilitySummary,
-    compute_schedulability_summary_from_regime_result,
     compute_reliability_regime_numpy,
+    compute_schedulability_summary_from_regime_result,
 )
 
 __all__ = [

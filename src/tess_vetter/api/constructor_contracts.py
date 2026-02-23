@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 from pydantic import BaseModel, ConfigDict
 
-import tess_vetter.api as _api
 from tess_vetter.api.contracts import model_input_schema, model_output_schema
+from tess_vetter.api.types import Candidate, Ephemeris, LightCurve, StellarParams, TPFStamp
 
 
 class _EphemerisPayload(BaseModel):
@@ -123,8 +124,8 @@ COMPOSE_TPF_OUTPUT_SCHEMA = model_output_schema(_ComposeTPFOutput)
 
 def compose_candidate(**kwargs: Any) -> dict[str, Any]:
     payload = _ComposeCandidateInput.model_validate(kwargs)
-    candidate = _api.Candidate(
-        ephemeris=_api.Ephemeris(
+    candidate = Candidate(
+        ephemeris=Ephemeris(
             period_days=payload.ephemeris.period_days,
             t0_btjd=payload.ephemeris.t0_btjd,
             duration_hours=payload.ephemeris.duration_hours,
@@ -147,12 +148,16 @@ def compose_candidate(**kwargs: Any) -> dict[str, Any]:
 
 def compose_lightcurve(**kwargs: Any) -> dict[str, Any]:
     payload = _ComposeLightCurveInput.model_validate(kwargs)
-    lc = _api.LightCurve(
-        time=payload.time,
-        flux=payload.flux,
-        flux_err=payload.flux_err,
-        quality=payload.quality,
-        valid_mask=payload.valid_mask,
+    lc = LightCurve(
+        time=np.asarray(payload.time, dtype=np.float64),
+        flux=np.asarray(payload.flux, dtype=np.float64),
+        flux_err=(
+            np.asarray(payload.flux_err, dtype=np.float64) if payload.flux_err is not None else None
+        ),
+        quality=np.asarray(payload.quality, dtype=np.int32) if payload.quality is not None else None,
+        valid_mask=(
+            np.asarray(payload.valid_mask, dtype=np.bool_) if payload.valid_mask is not None else None
+        ),
     )
     lc.to_internal()
     return _ComposeLightCurveOutput(
@@ -167,7 +172,7 @@ def compose_lightcurve(**kwargs: Any) -> dict[str, Any]:
 
 
 def compose_stellar(**kwargs: Any) -> dict[str, Any]:
-    stellar = _api.StellarParams(**kwargs)
+    stellar = StellarParams(**kwargs)
     return _ComposeStellarOutput(
         stellar=_StellarPayload(**stellar.model_dump(mode="python"))
     ).model_dump(mode="json")
@@ -175,12 +180,18 @@ def compose_stellar(**kwargs: Any) -> dict[str, Any]:
 
 def compose_tpf(**kwargs: Any) -> dict[str, Any]:
     payload = _ComposeTPFInput.model_validate(kwargs)
-    _api.TPFStamp(
-        time=payload.time,
-        flux=payload.flux,
-        flux_err=payload.flux_err,
-        aperture_mask=payload.aperture_mask,
-        quality=payload.quality,
+    TPFStamp(
+        time=np.asarray(payload.time, dtype=np.float64),
+        flux=np.asarray(payload.flux, dtype=np.float64),
+        flux_err=(
+            np.asarray(payload.flux_err, dtype=np.float64) if payload.flux_err is not None else None
+        ),
+        aperture_mask=(
+            np.asarray(payload.aperture_mask, dtype=np.bool_)
+            if payload.aperture_mask is not None
+            else None
+        ),
+        quality=np.asarray(payload.quality, dtype=np.int32) if payload.quality is not None else None,
     )
     return _ComposeTPFOutput(
         tpf=_TPFPayload(

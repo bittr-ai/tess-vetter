@@ -467,6 +467,21 @@ def _derive_action_hint(
     return PIXEL_LOCALIZE_ACTION_HINT_HOST_OFF_TARGET_CANDIDATE_REVIEW
 
 
+def _as_pixel_localize_verdict(value: object | None) -> PixelLocalizeVerdict:
+    if isinstance(value, str) and value in PIXEL_LOCALIZE_VERDICTS:
+        return cast(PixelLocalizeVerdict, value)
+    return "INVALID"
+
+
+def _as_interpretation_code(value: object | None) -> PixelLocalizeInterpretationCode | None:
+    if (
+        isinstance(value, str)
+        and value == PIXEL_LOCALIZE_INTERPRETATION_INSUFFICIENT_DISCRIMINATION
+    ):
+        return PIXEL_LOCALIZE_INTERPRETATION_INSUFFICIENT_DISCRIMINATION
+    return None
+
+
 def _annotate_fit_physical(hypotheses: list[dict[str, Any]]) -> None:
     for row in hypotheses:
         if "fit_amplitude" not in row:
@@ -817,12 +832,14 @@ def localize_transit_host_single_sector_with_baseline_check(
     )
 
     if global_res.get("status") != "ok":
+        local_verdict = _as_pixel_localize_verdict(local.get("verdict"))
+        global_verdict = _as_pixel_localize_verdict(global_res.get("verdict"))
         local["baseline_consistency"] = BaselineConsistencyResult(
             checked=False,
             centroid_shift_pixels=None,
             centroid_shift_threshold_pixels=float(centroid_shift_threshold_pixels),
-            verdict_local=str(local.get("verdict") or "INVALID"),
-            verdict_global=str(global_res.get("verdict") or "INVALID"),
+            verdict_local=local_verdict,
+            verdict_global=global_verdict,
             inconsistent=None,
         )
         return local
@@ -832,12 +849,14 @@ def localize_transit_host_single_sector_with_baseline_check(
     global_row = global_res.get("centroid_row")
     global_col = global_res.get("centroid_col")
     if None in (local_row, local_col, global_row, global_col):
+        local_verdict = _as_pixel_localize_verdict(local.get("verdict"))
+        global_verdict = _as_pixel_localize_verdict(global_res.get("verdict"))
         local["baseline_consistency"] = BaselineConsistencyResult(
             checked=False,
             centroid_shift_pixels=None,
             centroid_shift_threshold_pixels=float(centroid_shift_threshold_pixels),
-            verdict_local=str(local.get("verdict") or "INVALID"),
-            verdict_global=str(global_res.get("verdict") or "INVALID"),
+            verdict_local=local_verdict,
+            verdict_global=global_verdict,
             inconsistent=None,
         )
         return local
@@ -849,8 +868,8 @@ def localize_transit_host_single_sector_with_baseline_check(
     rc_local = (float(local_row), float(local_col))
     rc_global = (float(global_row), float(global_col))
     shift_px = float(np.hypot(rc_local[0] - rc_global[0], rc_local[1] - rc_global[1]))
-    verdict_local = str(local.get("verdict") or "INVALID")
-    verdict_global = str(global_res.get("verdict") or "INVALID")
+    verdict_local = _as_pixel_localize_verdict(local.get("verdict"))
+    verdict_global = _as_pixel_localize_verdict(global_res.get("verdict"))
     inconsistent = bool(
         (verdict_local != verdict_global)
         or (np.isfinite(shift_px) and shift_px > float(centroid_shift_threshold_pixels))
@@ -1012,9 +1031,7 @@ def localize_transit_host_multi_sector(
         else None,
         consensus_margin=consensus_margin,
         reliability_flagged=consensus_reliability_flagged,
-        interpretation_code=str(consensus.get("interpretation_code"))
-        if consensus.get("interpretation_code") is not None
-        else None,
+        interpretation_code=_as_interpretation_code(consensus.get("interpretation_code")),
         target_source_id=target_source_id,
     )
     if consensus_reliability_flags:
