@@ -67,7 +67,7 @@ def _parse_composition_text(text: str, *, source: str) -> dict[str, Any]:
             raise BtvCliError(
                 f"Composition {source} must parse to an object.",
                 exit_code=EXIT_INPUT_ERROR,
-            )
+            ) from None
         return dict(loaded)
     if not isinstance(payload, dict):
         raise BtvCliError(

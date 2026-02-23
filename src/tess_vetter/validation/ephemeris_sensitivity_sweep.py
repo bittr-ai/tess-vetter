@@ -9,14 +9,14 @@ from numpy.typing import NDArray
 
 from tess_vetter.api.detrend import bin_median_trend, sigma_clip
 from tess_vetter.api.transit_masks import get_out_of_transit_mask
-from tess_vetter.validation.ephemeris_specificity import (
-    SmoothTemplateConfig,
-    score_fixed_period_numpy,
-)
 from tess_vetter.validation.detrend_grid_defaults import (
     DEFAULT_TRANSIT_MASKED_BIN_HOURS,
     DEFAULT_TRANSIT_MASKED_BUFFER_FACTORS,
     DEFAULT_TRANSIT_MASKED_SIGMA_CLIPS,
+)
+from tess_vetter.validation.ephemeris_specificity import (
+    SmoothTemplateConfig,
+    score_fixed_period_numpy,
 )
 
 # Optional dependency for "deep" preset. Kept optional on purpose.

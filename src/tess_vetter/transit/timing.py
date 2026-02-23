@@ -213,7 +213,12 @@ def _measure_single_transit_detailed(
         else:
             initial_depth = 0.002
 
-        def chi_squared(params: NDArray[np.float64]) -> float:
+        def chi_squared(
+            params: NDArray[np.float64],
+            t_valid: NDArray[np.float64] = t_valid,
+            f_valid: NDArray[np.float64] = f_valid,
+            f_err_valid: NDArray[np.float64] = f_err_valid,
+        ) -> float:
             tc, depth, duration, ingress_ratio = params
             model = _trapezoid_model_with_center(t_valid, tc, depth, duration, ingress_ratio)
             residuals = (f_valid - model) / f_err_valid
