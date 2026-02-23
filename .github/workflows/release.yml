@@ -93,7 +93,7 @@ jobs:
           python -c "from tess_vetter.api import Ephemeris, LightCurve, Candidate; print('Types imported')"
 
   publish-pypi:
-    if: ${{ !contains(github.ref_name, 'rc') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'alpha') && !contains(github.ref_name, 'dev') && !contains(github.ref_name, 'pre') }}
+    if: ${{ vars.PYPI_PUBLISH_ENABLED == 'true' && !contains(github.ref_name, 'rc') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'alpha') && !contains(github.ref_name, 'dev') && !contains(github.ref_name, 'pre') }}
     needs: [build, test-build]
     runs-on: ubuntu-latest
     environment:
@@ -140,7 +140,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-testpypi:
-    if: contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'dev') || contains(github.ref_name, 'pre')
+    if: ${{ vars.PYPI_PUBLISH_ENABLED == 'true' && (contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'dev') || contains(github.ref_name, 'pre')) }}
     needs: [build, test-build]
     runs-on: ubuntu-latest
     environment:
