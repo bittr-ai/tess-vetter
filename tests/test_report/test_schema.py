@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 
 import pytest
+from pydantic import ValidationError
 
 from tess_vetter.api.types import Candidate, Ephemeris, LightCurve
 from tess_vetter.report import (
@@ -58,7 +59,7 @@ def test_report_payload_rejects_missing_custom_views_top_level() -> None:
     payload = copy.deepcopy(payload)
     payload.pop("custom_views")
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         ReportPayloadModel.model_validate(payload)
 
 
@@ -196,7 +197,7 @@ def test_report_payload_rejects_invalid_typed_reference_shape() -> None:
     payload = copy.deepcopy(payload)
     payload["summary"]["references"] = [{"title": "Missing key field"}]
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         ReportPayloadModel.model_validate(payload)
 
 
@@ -428,7 +429,7 @@ def test_report_payload_rejects_non_scalar_values_in_new_summary_blocks() -> Non
         "provenance": [],
     }
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         ReportPayloadModel.model_validate(payload)
 
 
@@ -467,7 +468,7 @@ def test_report_payload_rejects_invalid_check_execution_types() -> None:
         "v03_disabled_reason": 123,
     }
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         ReportPayloadModel.model_validate(payload)
 
 
@@ -515,5 +516,5 @@ def test_report_payload_rejects_invalid_metric_contract_payload_meta_types() -> 
         }
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         ReportPayloadModel.model_validate(payload)

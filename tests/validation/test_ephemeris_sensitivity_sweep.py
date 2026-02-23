@@ -272,7 +272,7 @@ def test_compute_sensitivity_sweep_adds_note_when_gp_variant_fails(monkeypatch) 
     gp_rows = [row for row in result.sweep_table if row.variant_id == "celerite2_sho"]
     assert len(gp_rows) == 1
     assert gp_rows[0].status == "failed"
-    assert any("celerite2_sho variant failed: synthetic gp failure" == note for note in result.notes)
+    assert any(note == "celerite2_sho variant failed: synthetic gp failure" for note in result.notes)
 
 
 def _make_gp_test_arrays(n: int = 120) -> tuple[np.ndarray, np.ndarray, np.ndarray]:

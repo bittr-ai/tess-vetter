@@ -5,8 +5,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from tess_vetter.pipeline import enrich_candidate
 from tess_vetter.features import FeatureConfig
+from tess_vetter.pipeline import enrich_candidate
 
 
 @dataclass(frozen=True)
@@ -75,10 +75,9 @@ class _FakeMASTClient:
 
         # Candidate ephemeris for the test: t0=1.0, P=5d, duration=2h.
         # Sector 1 time range avoids transit; sector 2 includes multiple transits.
-        if sector == 1:
-            time = np.linspace(0.2, 0.8, n)  # far from phase 0
-        else:
-            time = np.linspace(0.95, 1.05, n)  # straddles t0
+        time = (
+            np.linspace(0.2, 0.8, n) if sector == 1 else np.linspace(0.95, 1.05, n)
+        )  # far from phase 0 vs straddles t0
 
         cube = np.zeros((n, stamp[0], stamp[1]), dtype=np.float64)
         # OOT baseline
@@ -141,4 +140,3 @@ def test_pipeline_tries_other_tpf_sector_when_first_has_no_transit_coverage(monk
     # Ensure JSON serializability for logging / JSONL output.
     json.dumps(raw)
     json.dumps(row)
-

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+import importlib
 import json
 from dataclasses import dataclass
-import importlib
 
 import numpy as np
 
 from tess_vetter.domain.lightcurve import LightCurveData
+from tess_vetter.features import FEATURE_SCHEMA_VERSION, FeatureConfig
 from tess_vetter.features.evidence import is_skip_block
 from tess_vetter.pipeline import enrich_candidate
-from tess_vetter.features import FEATURE_SCHEMA_VERSION, FeatureConfig
 
 
 @dataclass
@@ -143,7 +143,7 @@ def test_enrich_candidate_local_data_missing_sets_error_status(monkeypatch) -> N
     )
 
     assert row["status"] == "ERROR"
-    assert row["error_class"] in {"LocalDataNotFoundError", "LocalDataNotFoundError"}
+    assert row["error_class"] in {"LocalDataNotFoundError"}
     assert "local" in str(row["error"]).lower() or "no local" in str(row["error"]).lower()
 
     # Ensure raw still contains audit-friendly skip blocks

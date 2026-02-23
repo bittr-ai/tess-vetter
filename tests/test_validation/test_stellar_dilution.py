@@ -9,8 +9,8 @@ from tess_vetter.validation.stellar_dilution import (
     HostHypothesis,
     compute_depth_correction_factor_from_flux_fraction,
     compute_dilution_scenarios,
-    evaluate_physics_flags,
     compute_target_flux_fraction_from_neighbor_mags,
+    evaluate_physics_flags,
 )
 
 

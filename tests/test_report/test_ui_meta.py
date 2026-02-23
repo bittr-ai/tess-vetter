@@ -7,8 +7,8 @@ import pytest
 from tess_vetter.report._ui_meta import (
     UI_META_VERSION,
     _model_property_types,
-    main,
     build_ui_meta_artifact,
+    main,
     write_ui_meta_artifact,
 )
 

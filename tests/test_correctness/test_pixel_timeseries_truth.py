@@ -4,8 +4,8 @@ import numpy as np
 
 from tess_vetter.api.pixel_prf import get_prf_model
 from tess_vetter.compute.pixel_timeseries import (
-    TransitWindow,
     TimeseriesEvidence,
+    TransitWindow,
     aggregate_timeseries_evidence,
     fit_all_hypotheses_timeseries,
     select_best_hypothesis_timeseries,

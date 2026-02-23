@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+from tess_vetter.api.types import StellarParams
 from tess_vetter.report import (
     AliasHarmonicSummaryData,
     LCSummary,
     ReportData,
     TransitTimingPlotData,
 )
-from tess_vetter.api.types import StellarParams
 from tess_vetter.validation.result_schema import (
     VettingBundleResult,
     error_result,

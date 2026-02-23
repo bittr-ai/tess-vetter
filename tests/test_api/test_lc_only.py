@@ -11,7 +11,7 @@ from tess_vetter.api.lc_only import (
     vet_lc_only,
 )
 from tess_vetter.api.transit_primitives import odd_even_result
-from tess_vetter.api.types import CheckResult, Ephemeris, LightCurve, VettingBundleResult
+from tess_vetter.api.types import Ephemeris, LightCurve, VettingBundleResult
 
 
 def _make_box_transit_lc(

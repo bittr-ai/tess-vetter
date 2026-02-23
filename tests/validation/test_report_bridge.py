@@ -21,7 +21,6 @@ from tess_vetter.validation.report_bridge import (
     run_lc_checks,
 )
 
-
 _REL_TOL = 1e-9
 _ABS_TOL = 1e-12
 
