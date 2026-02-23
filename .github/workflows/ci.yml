@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: uv sync --group dev --extra plotting
+        run: uv sync --group dev
       - name: Lint with ruff
         run: uv run ruff check .
       - name: Type check with mypy
@@ -85,7 +85,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync --group dev --extra plotting
       - name: Run security matrix tests
         run: uv run pytest -q tests/test_security/test_matrix.py
 
@@ -103,7 +103,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync --group dev --extra plotting
       - name: Run core-library coverage and generate XML
         run: |
           uv run coverage run \

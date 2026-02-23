@@ -103,7 +103,7 @@ def test_api_pipeline_skip_dependency_includes_prd_error_code() -> None:
     registry.register(
         _FakeCheck(
             _id="V99",
-            _requirements=CheckRequirements(optional_deps=("tls",)),
+            _requirements=CheckRequirements(optional_deps=("nonexistent_extra_for_test",)),
             _runner=lambda _inputs, _config: ok_result("V99", "V99", metrics={}),
         )
     )
@@ -113,7 +113,7 @@ def test_api_pipeline_skip_dependency_includes_prd_error_code() -> None:
 
     result = bundle.results[0]
     assert result.status == "skipped"
-    assert result.flags == ["SKIPPED:EXTRA_MISSING:tls"]
+    assert result.flags == ["SKIPPED:EXTRA_MISSING:nonexistent_extra_for_test"]
     assert result.provenance["error_code"] == "DEPENDENCY_MISSING"
 
 
