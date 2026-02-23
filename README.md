@@ -198,10 +198,10 @@ Many public API entry points and vetting checks include a list of literature ref
 
 ### Project DOI (Zenodo)
 
-`TODO(DOI-before-release):` After Zenodo mints the GitHub release DOI, add it here as:
+[![DOI](https://zenodo.org/badge/1164740674.svg)](https://doi.org/10.5281/zenodo.18743917)
 
-- `DOI: 10.5281/zenodo.<record-id>`
-- Link: `https://doi.org/10.5281/zenodo.<record-id>`
+- DOI (concept/latest release): `10.5281/zenodo.18743917`
+- DOI URL: `https://doi.org/10.5281/zenodo.18743917`
 
 ## Code map
 
