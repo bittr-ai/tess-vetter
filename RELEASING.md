@@ -33,15 +33,12 @@ uv run pytest -q tests/test_packaging_version_integrity.py
 
 ## Zenodo DOI readiness (no minting in this repo)
 
-`TODO(DOI-before-release):` once Zenodo has minted the DOI for the tagged release, update these exact locations before finalizing release comms:
+After Zenodo has minted the DOI for the tagged release, update these exact locations before finalizing release comms:
 
 1. `CITATION.cff`
-   - Replace `identifiers[0].value` with the minted DOI:
-     - `10.5281/zenodo.<record-id>` -> `10.5281/zenodo.<actual-record-id>`
+   - Set `identifiers[0].value` to the minted version DOI (example: `10.5281/zenodo.18743917`).
 2. `README.md`
-   - In `Project DOI (Zenodo)`, replace both placeholders:
-     - `DOI: 10.5281/zenodo.<record-id>`
-     - `https://doi.org/10.5281/zenodo.<record-id>`
+   - In `Project DOI (Zenodo)`, use the concept DOI (latest release DOI) for the badge/link (example: `10.5281/zenodo.18743916`).
 
 Release-order note:
 1. Create/push tag and let GitHub Release publish artifacts.

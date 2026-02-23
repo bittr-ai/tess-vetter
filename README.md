@@ -21,7 +21,8 @@
 
 # tess-vetter
 
-[![Coverage](https://codecov.io/gh/bittr-ai/bittr-tess-vetter/branch/main/graph/badge.svg)](https://codecov.io/gh/bittr-ai/bittr-tess-vetter)
+[![Coverage](https://codecov.io/gh/bittr-ai/tess-vetter/branch/main/graph/badge.svg)](https://codecov.io/gh/bittr-ai/tess-vetter)
+[![DOI](https://zenodo.org/badge/1164740674.svg)](https://doi.org/10.5281/zenodo.18743916)
 
 Domain-first Python library for TESS transit detection + vetting (array-in/array-out).
 
@@ -195,13 +196,6 @@ Catalog-backed checks are always opt-in. You must pass `network=True` (and provi
 ## Citations
 
 Many public API entry points and vetting checks include a list of literature references in their results. The full reference list lives in `REFERENCES.md` (and is also available programmatically via `tess_vetter.api.references`).
-
-### Project DOI (Zenodo)
-
-[![DOI](https://zenodo.org/badge/1164740674.svg)](https://doi.org/10.5281/zenodo.18743917)
-
-- DOI (concept/latest release): `10.5281/zenodo.18743917`
-- DOI URL: `https://doi.org/10.5281/zenodo.18743917`
 
 ## Code map
 

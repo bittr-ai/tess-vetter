@@ -2,16 +2,15 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
 title: "tess-vetter"
-version: 0.2.2
-date-released: 2026-02-20
-# TODO(DOI-before-release): replace placeholder with minted Zenodo DOI for this release.
+version: 0.3.2
+date-released: 2026-02-23
 identifiers:
   - type: doi
-    value: "10.5281/zenodo.<record-id>"
-    description: "Zenodo DOI for this release"
+    value: "10.5281/zenodo.18743917"
+    description: "Zenodo DOI for release v0.3.2"
 license: BSD-3-Clause
-repository-code: "https://github.com/bittr-ai/bittr-tess-vetter"
-url: "https://github.com/bittr-ai/bittr-tess-vetter"
+repository-code: "https://github.com/bittr-ai/tess-vetter"
+url: "https://github.com/bittr-ai/tess-vetter"
 abstract: "Domain-only TESS transit detection and vetting library providing array-in/array-out algorithms for exoplanet candidate validation."
 keywords:
   - tess
