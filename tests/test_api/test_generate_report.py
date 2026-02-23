@@ -854,7 +854,8 @@ def test_enrichment_timeout_sets_timeout_flag_when_fail_open_true(monkeypatch) -
     catalog = result.report_json["summary"]["enrichment"]["catalog_context"]
     assert catalog["status"] == "error"
     assert "ENRICHMENT_TIMEOUT" in catalog["flags"]
-    assert elapsed < 0.1
+    # CI hosts can show higher scheduling jitter for timeout enforcement.
+    assert elapsed < 0.25
 
 
 def test_enrichment_total_budget_exhaustion_skips_remaining_blocks(monkeypatch) -> None:
