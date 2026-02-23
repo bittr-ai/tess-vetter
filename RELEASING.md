@@ -38,7 +38,7 @@ After Zenodo has minted the DOI for the tagged release, update these exact locat
 1. `CITATION.cff`
    - Set `identifiers[0].value` to the minted version DOI (example: `10.5281/zenodo.18743917`).
 2. `README.md`
-   - In `Project DOI (Zenodo)`, use the concept DOI (latest release DOI) for the badge/link (example: `10.5281/zenodo.18743916`).
+   - In the top badge row under the title, use the concept DOI (latest release DOI) for the Zenodo badge/link (example: `10.5281/zenodo.18743916`).
 
 Release-order note:
 1. Create/push tag and let GitHub Release publish artifacts.

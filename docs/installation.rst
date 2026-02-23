@@ -23,8 +23,8 @@ Or install from source:
 
 .. code-block:: bash
 
-   git clone https://github.com/bittr-ai/bittr-tess-vetter.git
-   cd bittr-tess-vetter
+   git clone https://github.com/bittr-ai/tess-vetter.git
+   cd tess-vetter
    pip install -e .
 
 Using uv (recommended for development)
@@ -35,8 +35,8 @@ for development:
 
 .. code-block:: bash
 
-   git clone https://github.com/bittr-ai/bittr-tess-vetter.git
-   cd bittr-tess-vetter
+   git clone https://github.com/bittr-ai/tess-vetter.git
+   cd tess-vetter
    uv sync --all-extras --group dev
 
 Python Imports

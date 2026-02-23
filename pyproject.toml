@@ -24,7 +24,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Astronomy",
   "Typing :: Typed",
 ]
-urls = { Repository = "https://github.com/bittr-ai/bittr-tess-vetter", Issues = "https://github.com/bittr-ai/bittr-tess-vetter/issues" }
+urls = { Repository = "https://github.com/bittr-ai/tess-vetter", Issues = "https://github.com/bittr-ai/tess-vetter/issues" }
 
 dependencies = [
   "numpy>=1.24.0,<2.5.0",

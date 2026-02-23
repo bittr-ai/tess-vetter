@@ -6,8 +6,8 @@ Thank you for your interest in contributing to tess-vetter!
 
 ```bash
 # Clone the repository
-git clone https://github.com/bittr-ai/bittr-tess-vetter.git
-cd bittr-tess-vetter
+git clone https://github.com/bittr-ai/tess-vetter.git
+cd tess-vetter
 
 # Install uv if you haven't already
 curl -LsSf https://astral.sh/uv/install.sh | sh
