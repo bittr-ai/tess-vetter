@@ -113,8 +113,18 @@ jobs:
           uv run coverage xml -o coverage.xml
       - name: Enforce core-library coverage gate (>90%, first-party core only)
         run: uv run coverage report --rcfile=coverage.core.ini
-      - name: Upload core-library coverage to Codecov
-        if: ${{ always() }}
+      - name: Upload core-library coverage to Codecov (token)
+        if: ${{ always() && secrets.CODECOV_TOKEN != '' }}
+        continue-on-error: true
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          disable_search: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          verbose: true
+      - name: Upload core-library coverage to Codecov (OIDC fallback)
+        if: ${{ always() && secrets.CODECOV_TOKEN == '' }}
         continue-on-error: true
         uses: codecov/codecov-action@v5
         with:
