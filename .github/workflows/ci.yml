@@ -95,7 +95,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@v6
       - name: Install uv
@@ -113,16 +112,6 @@ jobs:
           uv run coverage xml -o coverage.xml
       - name: Enforce core-library coverage gate (>90%, first-party core only)
         run: uv run coverage report --rcfile=coverage.core.ini
-      - name: Upload core-library coverage to Codecov
-        if: ${{ always() }}
-        continue-on-error: true
-        uses: codecov/codecov-action@v5
-        with:
-          files: coverage.xml
-          disable_search: true
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
-          verbose: true
 
   extended-docs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
