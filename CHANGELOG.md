@@ -4,7 +4,11 @@ This project follows semantic versioning (SemVer).
 
 ## Unreleased
 
-- No unreleased changes.
+- Added CLI entrypoint ergonomics so all of these now work equivalently:
+  `btv ...`, `tess-vetter ...`, and `python -m tess_vetter ...`.
+- Added `btv doctor --profile vet` for environment/dependency preflight checks.
+- Added early `btv vet` runtime dependency preflight for `lightkurve` with
+  explicit remediation guidance.
 
 ## 0.3.4 (2026-02-23)
 

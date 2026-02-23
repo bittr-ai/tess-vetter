@@ -34,6 +34,7 @@ from tess_vetter.cli.contrast_curves_cli import (
 from tess_vetter.cli.describe_checks_cli import describe_checks_command
 from tess_vetter.cli.detrend_grid_cli import detrend_grid_command
 from tess_vetter.cli.dilution_cli import dilution_command
+from tess_vetter.cli.doctor_cli import doctor_command
 from tess_vetter.cli.ephemeris_reliability_cli import ephemeris_reliability_command
 from tess_vetter.cli.fetch_cli import cache_sectors_command, fetch_command
 from tess_vetter.cli.followup_cli import followup_command
@@ -105,6 +106,7 @@ cli.add_command(report_command)
 cli.add_command(resolve_stellar_command)
 cli.add_command(resolve_neighbors_command)
 cli.add_command(describe_checks_command)
+cli.add_command(doctor_command)
 cli.add_command(measure_sectors_command)
 cli.add_command(detrend_grid_command)
 cli.add_command(localize_command)

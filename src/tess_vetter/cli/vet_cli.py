@@ -31,6 +31,7 @@ from tess_vetter.cli.common_cli import (
     BtvCliError,
     dump_json_output,
     emit_progress,
+    ensure_module_available,
     load_json_file,
     parse_extra_params,
     resolve_optional_output_path,
@@ -90,6 +91,13 @@ def _to_optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _needs_lightkurve_preflight() -> bool:
+    return (
+        getattr(MASTClient, "__module__", "") == "tess_vetter.platform.io.mast_client"
+        and getattr(_execute_vet, "__module__", "") == __name__
+    )
 
 
 def _to_required_finite_float(value: Any, *, label: str) -> float:
@@ -1668,6 +1676,13 @@ def vet_command(
         fail_fast=fail_fast,
         extra_params=parse_extra_params(extra_params),
     )
+    if _needs_lightkurve_preflight():
+        ensure_module_available(
+            "lightkurve",
+            reason="`btv vet` light-curve loading and MAST queries",
+            install_hint="pip install lightkurve",
+            exit_code=EXIT_DATA_UNAVAILABLE,
+        )
 
     try:
         payload = _execute_vet(

@@ -59,6 +59,12 @@ CLI entrypoints (equivalent):
 - `tess-vetter ...`
 - `python -m tess_vetter ...`
 
+Preflight your environment before demos/runs:
+
+```bash
+btv doctor --profile vet
+```
+
 ### With transit detection (TLS)
 ```bash
 pip install 'tess-vetter[tls]'

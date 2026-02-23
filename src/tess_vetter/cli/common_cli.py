@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 from typing import Any
@@ -100,3 +101,19 @@ def resolve_optional_output_path(output_arg: str | None) -> Path | None:
     if value in {"", "-"}:
         return None
     return Path(value)
+
+
+def ensure_module_available(
+    module_name: str,
+    *,
+    reason: str,
+    install_hint: str,
+    exit_code: int = EXIT_DATA_UNAVAILABLE,
+) -> None:
+    """Validate a runtime dependency and raise a user-facing CLI error if missing."""
+    if importlib.util.find_spec(module_name) is not None:
+        return
+    raise BtvCliError(
+        f"{module_name} is required for {reason}. Install with: {install_hint}",
+        exit_code=exit_code,
+    )
