@@ -40,6 +40,7 @@ dependencies = [
 
 [project.scripts]
 btv = "tess_vetter.cli.enrich_cli:main"
+tess-vetter = "tess_vetter.cli.enrich_cli:main"
 
 [project.optional-dependencies]
 # Transit detection (TLS + numba for JIT compilation)

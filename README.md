@@ -54,6 +54,11 @@ Requires Python 3.11–3.12.
 pip install tess-vetter
 ```
 
+CLI entrypoints (equivalent):
+- `btv ...`
+- `tess-vetter ...`
+- `python -m tess_vetter ...`
+
 ### With transit detection (TLS)
 ```bash
 pip install 'tess-vetter[tls]'
