@@ -6,6 +6,18 @@ This project follows semantic versioning (SemVer).
 
 - No unreleased changes.
 
+## 0.3.6 (2026-02-23)
+
+- Fixed report sidecar payload projection to preserve schema-backed plot fields
+  (not only `full_lc`), including `phase_folded`, `odd_even_phase`, and
+  `secondary_scan`.
+- Fixed `report_json` projection to preserve `payload_meta` and normalized
+  verdict projection compatibility across top-level and summary fields.
+- Fixed report vet-artifact coercion to accept top-level
+  `known_planet_match` in valid `cli.vet.v2` payloads.
+- Fixed code-mode execute error normalization to preserve non-preflight
+  `result` payloads on failed responses.
+
 ## 0.3.5 (2026-02-23)
 
 - Added CLI entrypoint ergonomics so all of these now work equivalently:
