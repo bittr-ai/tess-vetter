@@ -6,6 +6,14 @@ This project follows semantic versioning (SemVer).
 
 - No unreleased changes.
 
+## 0.3.9 (2026-02-24)
+
+- Fixed NumPy 2.x compatibility for vendored TRICERATOPS+ likelihood imports by
+  injecting a `np.trapz` alias to `np.trapezoid` before `pytransit`
+  module-level imports execute.
+- This unblocks `triceratops` extra workflows that previously failed during
+  import due to `pytransit` expecting `numpy.trapz` on newer NumPy stacks.
+
 ## 0.3.8 (2026-02-24)
 
 - Added `--mast-timeout-seconds` for `btv measure-sectors`, `btv vet`,
