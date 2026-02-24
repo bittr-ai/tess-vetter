@@ -17,7 +17,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass
-from typing import Any, Literal, TypedDict, overload
+from typing import Any, Literal, TypedDict, cast, overload
 
 import numpy as np
 
@@ -49,6 +49,7 @@ from tess_vetter.report import (
     build_report,
     render_html,
 )
+from tess_vetter.report.schema import ReportPlotDataModel
 from tess_vetter.validation.base import get_in_transit_mask
 from tess_vetter.validation.register_defaults import register_all_defaults
 from tess_vetter.validation.registry import CheckRegistry, CheckTier
@@ -74,18 +75,31 @@ class GenerateReportJSONContract(TypedDict, total=False):
 class GenerateReportPlotDataContract(TypedDict, total=False):
     """Stable plot-data payload emitted separately from report_json."""
 
+    check_overlays: dict[str, Any]
     full_lc: dict[str, Any]
+    phase_folded: dict[str, Any]
+    per_transit_stack: dict[str, Any]
+    local_detrend: dict[str, Any]
+    odd_even_phase: dict[str, Any]
+    secondary_scan: dict[str, Any]
+    oot_context: dict[str, Any]
+    timing_series: dict[str, Any]
+    alias_summary: dict[str, Any]
+    lc_robustness: dict[str, Any]
 
 
 def _extract_plot_data_contract(report_payload: dict[str, Any]) -> GenerateReportPlotDataContract:
     """Build typed plot-data contract from report JSON payload."""
-    out: GenerateReportPlotDataContract = {}
     raw_plot_data = report_payload.get(GENERATE_REPORT_PLOT_DATA_KEY)
-    if isinstance(raw_plot_data, dict):
-        full_lc = raw_plot_data.get("full_lc")
-        if isinstance(full_lc, dict):
-            out["full_lc"] = full_lc
-    return out
+    if not isinstance(raw_plot_data, dict):
+        return {}
+
+    # Validate through the report schema model, while preserving additive keys.
+    plot_data_model = ReportPlotDataModel.model_validate(raw_plot_data)
+    return cast(
+        GenerateReportPlotDataContract,
+        plot_data_model.model_dump(mode="python", exclude_none=True),
+    )
 
 
 def _extract_report_json_contract(report_payload: dict[str, Any]) -> GenerateReportJSONContract:

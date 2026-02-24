@@ -64,7 +64,7 @@ def coerce_vetting_bundle(payload: VettingBundleResult | dict[str, Any]) -> Vett
     cli_vet_envelope_keys = {
         "schema_version", "verdict", "verdict_source", "summary",
         "result", "stellar", "lc_summary", "lc_summary_meta",
-        "sector_gating", "sector_measurements",
+        "sector_gating", "sector_measurements", "known_planet_match",
     }
     filtered = {k: v for k, v in payload.items() if k not in cli_vet_envelope_keys}
     return VettingBundleResult.model_validate(filtered)

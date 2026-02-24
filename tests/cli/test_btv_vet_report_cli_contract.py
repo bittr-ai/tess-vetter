@@ -495,6 +495,59 @@ def test_btv_report_forwards_vet_result_payload(monkeypatch, tmp_path: Path) -> 
     assert isinstance(vet_payload.get("results"), list)
 
 
+def test_btv_report_accepts_vet_result_with_known_planet_match(monkeypatch, tmp_path: Path) -> None:
+    def _ok(**_kwargs):
+        return {
+            "report_json": {
+                "schema_version": "cli.report.v3",
+                "provenance": {"vet_artifact": {"provided": True}},
+                "report": {"schema_version": "2.0.0", "summary": {}},
+            },
+            "plot_data_json": {},
+            "html": None,
+        }
+
+    monkeypatch.setattr("tess_vetter.cli.report_cli._execute_report", _ok)
+
+    vet_path = tmp_path / "vet_known_planet.json"
+    vet_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "cli.vet.v2",
+                "results": [],
+                "warnings": [],
+                "provenance": {},
+                "inputs_summary": {},
+                "known_planet_match": {"status": "confirmed_same_planet"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out_path = tmp_path / "report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "report",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--vet-result",
+            str(vet_path),
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+
+
 def test_btv_report_honors_plot_data_out_path(monkeypatch, tmp_path: Path) -> None:
     def _ok(**_kwargs):
         return {

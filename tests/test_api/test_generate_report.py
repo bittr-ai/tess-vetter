@@ -150,6 +150,42 @@ def test_happy_path_multi_sector() -> None:
     assert isinstance(_typed_plot_data, dict)
 
 
+def test_plot_data_sidecar_preserves_non_full_lc_keys(monkeypatch) -> None:
+    client = _mock_client(sectors=[1])
+    payload = {
+        "schema_version": "1",
+        "verdict": "candidate",
+        "verdict_source": "test",
+        "summary": {},
+        "custom_views": {"version": "1", "views": []},
+        "plot_data": {
+            "full_lc": {"time": [1.0], "flux": [1.0]},
+            "phase_folded": {"phase": [0.0], "flux": [1.0]},
+            "secondary_scan": {"phase": [0.5], "flux": [0.999]},
+            "odd_even_phase": {
+                "phase": [0.0],
+                "odd_flux": [1.0],
+                "even_flux": [0.999],
+            },
+        },
+    }
+
+    class _FakeReport:
+        enrichment = None
+
+        def to_json(self) -> dict[str, object]:
+            return payload
+
+    monkeypatch.setattr(generate_report_api, "build_report", lambda *args, **kwargs: _FakeReport())
+    result = generate_report(123456789, **_EPH, mast_client=client)
+
+    assert GENERATE_REPORT_PLOT_DATA_KEY not in result.report_json
+    assert "full_lc" in result.plot_data_json
+    assert "phase_folded" in result.plot_data_json
+    assert "secondary_scan" in result.plot_data_json
+    assert "odd_even_phase" in result.plot_data_json
+
+
 # ---------------------------------------------------------------------------
 # 2. Happy path, single sector
 # ---------------------------------------------------------------------------

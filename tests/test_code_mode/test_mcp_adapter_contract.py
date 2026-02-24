@@ -673,6 +673,37 @@ def test_search_to_execute_hash_pinning_and_drift_rejection() -> None:
     assert drift_response.error.details["received_catalog_version_hash"] == "catalog-v10"
 
 
+def test_execute_failed_response_preserves_non_preflight_result_payload() -> None:
+    adapter = MCPAdapter(
+        execute_handler=lambda _request: ExecuteResponse(
+            status="failed",
+            result={"partial_result": {"step": "download"}, "mode": "runtime"},
+            error=ErrorPayload(
+                code="OPERATION_RUNTIME_ERROR",
+                message="Operation failed after partial progress.",
+                retryable=False,
+                details={"operation_id": "code_mode.internal.synthetic"},
+            ),
+            trace={"short_circuit": False},
+            catalog_version_hash="catalog-v1",
+        )
+    )
+
+    response = adapter.execute(
+        ExecuteRequest(
+            plan_code="async def execute_plan(ops, context):\n    return {'ok': True}\n",
+            context={},
+            catalog_version_hash="catalog-v1",
+        )
+    )
+
+    assert response.status == "failed"
+    assert response.error is not None
+    assert response.result == {"partial_result": {"step": "download"}, "mode": "runtime"}
+    serialized = response.to_dict()
+    assert serialized["result"] == {"partial_result": {"step": "download"}, "mode": "runtime"}
+
+
 def test_error_serialization_uses_retryable_key_not_retriable() -> None:
     adapter = MCPAdapter(execute_handler=lambda _request: (_ for _ in ()).throw(RuntimeError("boom")))
 

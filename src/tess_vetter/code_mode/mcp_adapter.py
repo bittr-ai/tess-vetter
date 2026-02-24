@@ -400,8 +400,8 @@ def _normalize_execute_response(response: ExecuteResponse) -> ExecuteResponse:
         details=normalized_details,
         retryable=error.retryable,
     )
-    result_payload: Any = None
-    if isinstance(response.result, dict) and str(response.result.get("mode", "")).strip().lower() == "preflight":
+    result_payload: Any = response.result
+    if isinstance(response.result, dict):
         result_payload = dict(response.result)
     return ExecuteResponse(
         status="failed",
