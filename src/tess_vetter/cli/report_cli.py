@@ -38,6 +38,7 @@ from tess_vetter.cli.progress_metadata import (
     write_progress_metadata_atomic,
 )
 from tess_vetter.cli.report_seed import (
+    detect_lightkurve_cache_dir,
     load_report_seed,
     resolve_candidate_inputs_with_report_seed,
 )
@@ -112,6 +113,8 @@ def _execute_report(
     duration_hours: float,
     depth_ppm: float | None,
     toi: str | None,
+    network_ok: bool,
+    mast_timeout_seconds: float | None,
     sectors: list[int] | None,
     cache_dir: Path | None,
     flux_type: str,
@@ -124,6 +127,10 @@ def _execute_report(
     resolved_inputs: dict[str, Any],
     diagnostic_artifacts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    resolved_cache_dir = cache_dir
+    if resolved_cache_dir is None and not bool(network_ok):
+        resolved_cache_dir = detect_lightkurve_cache_dir()
+
     enrichment_cfg = EnrichmentConfig() if include_enrichment else None
     result = generate_report(
         tic_id=tic_id,
@@ -134,7 +141,15 @@ def _execute_report(
         toi=toi,
         sectors=sectors,
         flux_type=flux_type,
-        mast_client=(MASTClient(cache_dir=str(cache_dir)) if cache_dir is not None else None),
+        network_ok=bool(network_ok),
+        mast_client=(
+            MASTClient(
+                cache_dir=str(resolved_cache_dir),
+                mast_timeout_seconds=mast_timeout_seconds,
+            )
+            if resolved_cache_dir is not None
+            else MASTClient(mast_timeout_seconds=mast_timeout_seconds)
+        ),
         include_html=include_html,
         include_enrichment=include_enrichment,
         enrichment_config=enrichment_cfg,
@@ -240,6 +255,12 @@ def _apply_report_canonical_verdict(report_payload: dict[str, Any]) -> None:
     default=None,
     help="Optional cache directory for MAST/lightkurve products.",
 )
+@click.option(
+    "--mast-timeout-seconds",
+    type=float,
+    default=None,
+    help="Override MAST request timeout seconds (flag > BTV_MAST_TIMEOUT_SECONDS > 60).",
+)
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
     "--flux-type",
@@ -292,6 +313,7 @@ def report_command(
     toi: str | None,
     network_ok: bool,
     cache_dir: Path | None,
+    mast_timeout_seconds: float | None,
     sectors: tuple[int, ...],
     flux_type: str,
     include_html: bool,
@@ -439,6 +461,8 @@ def report_command(
             duration_hours=resolved_duration_hours,
             depth_ppm=resolved_depth_ppm,
             toi=resolved_toi,
+            network_ok=network_ok,
+            mast_timeout_seconds=mast_timeout_seconds,
             sectors=list(sectors) if sectors else None,
             cache_dir=cache_dir,
             flux_type=str(flux_type).lower(),

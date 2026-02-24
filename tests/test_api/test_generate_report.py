@@ -274,6 +274,73 @@ def test_no_sectors_raises() -> None:
         generate_report(123456789, **_EPH, mast_client=client)
 
 
+def test_generate_report_no_network_uses_cached_explicit_sectors() -> None:
+    client = MagicMock(
+        spec=[
+            "download_all_sectors",
+            "download_lightcurve_cached",
+            "search_lightcurve_cached",
+            "get_target_info",
+        ]
+    )
+    client.download_lightcurve_cached.side_effect = lambda tic_id, sector, flux_type: _make_lc_data(  # noqa: ARG005
+        int(sector)
+    )
+    client.search_lightcurve_cached.return_value = []
+    target = Target(
+        tic_id=123456789,
+        stellar=StellarParameters(teff=5800.0, radius=1.0, mass=1.0),
+    )
+    client.get_target_info.return_value = target
+
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        network_ok=False,
+        sectors=[14, 15],
+    )
+
+    assert result.sectors_used == [14, 15]
+    client.download_all_sectors.assert_not_called()
+    assert client.download_lightcurve_cached.call_count == 2
+
+
+def test_generate_report_no_network_cache_discovery_uses_cached_search_only() -> None:
+    client = MagicMock(
+        spec=[
+            "download_all_sectors",
+            "download_lightcurve_cached",
+            "search_lightcurve_cached",
+            "get_target_info",
+        ]
+    )
+    client.search_lightcurve_cached.return_value = [
+        MagicMock(sector=14),
+        MagicMock(sector=15),
+    ]
+    client.download_lightcurve_cached.side_effect = lambda tic_id, sector, flux_type: _make_lc_data(  # noqa: ARG005
+        int(sector)
+    )
+    target = Target(
+        tic_id=123456789,
+        stellar=StellarParameters(teff=5800.0, radius=1.0, mass=1.0),
+    )
+    client.get_target_info.return_value = target
+
+    result = generate_report(
+        123456789,
+        **_EPH,
+        mast_client=client,
+        network_ok=False,
+        sectors=None,
+    )
+
+    assert result.sectors_used == [14, 15]
+    client.download_all_sectors.assert_not_called()
+    client.search_lightcurve_cached.assert_called_once_with(tic_id=123456789)
+
+
 # ---------------------------------------------------------------------------
 # 4. Stellar auto-fetch succeeds
 # ---------------------------------------------------------------------------

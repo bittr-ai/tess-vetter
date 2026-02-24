@@ -461,6 +461,7 @@ class MASTClient:
         author: str | None = "SPOC",
         normalize: bool = True,
         cache_dir: str | None = None,
+        mast_timeout_seconds: float | None = None,
     ) -> None:
         """Initialize MAST client.
 
@@ -475,6 +476,7 @@ class MASTClient:
         self.author = author
         self.normalize = normalize
         self.cache_dir = cache_dir
+        self.mast_timeout_seconds = mast_timeout_seconds
         self._lk_imported = False
         self._cache_index_built = False
         self._cache_dirs_by_tic: dict[str, list[Path]] = {}
@@ -488,7 +490,12 @@ class MASTClient:
                 try:
                     from astroquery.mast import Conf as MastConf
 
-                    MastConf.timeout = float(os.getenv("BTV_MAST_TIMEOUT_SECONDS", "60"))
+                    timeout_seconds = (
+                        float(self.mast_timeout_seconds)
+                        if self.mast_timeout_seconds is not None
+                        else float(os.getenv("BTV_MAST_TIMEOUT_SECONDS", "60"))
+                    )
+                    MastConf.timeout = timeout_seconds
                 except Exception:
                     pass
 

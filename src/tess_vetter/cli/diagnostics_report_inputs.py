@@ -181,8 +181,13 @@ def load_lightcurves_with_sector_policy(
     explicit_sectors: bool,
     network_ok: bool = True,
     cache_dir: str | Path | None = None,
+    mast_timeout_seconds: float | None = None,
 ) -> tuple[list[Any], str]:
-    client = MASTClient(cache_dir=str(cache_dir)) if cache_dir is not None else MASTClient()
+    client = (
+        MASTClient(cache_dir=str(cache_dir), mast_timeout_seconds=mast_timeout_seconds)
+        if cache_dir is not None
+        else MASTClient(mast_timeout_seconds=mast_timeout_seconds)
+    )
 
     if explicit_sectors:
         if not sectors:

@@ -993,6 +993,7 @@ def _execute_vet(
     checks: list[str] | None,
     network_ok: bool,
     cache_dir: Path | None,
+    mast_timeout_seconds: float | None,
     sectors: list[int] | None,
     flux_type: str,
     fetch_tpf: bool,
@@ -1012,7 +1013,11 @@ def _execute_vet(
     stellar_block: dict[str, Any] | None = None,
     stellar_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    client = MASTClient(cache_dir=str(cache_dir)) if cache_dir is not None else MASTClient()
+    client = (
+        MASTClient(cache_dir=str(cache_dir), mast_timeout_seconds=mast_timeout_seconds)
+        if cache_dir is not None
+        else MASTClient(mast_timeout_seconds=mast_timeout_seconds)
+    )
     lightcurves = client.download_all_sectors(tic_id, flux_type=flux_type, sectors=sectors)
     if not lightcurves:
         raise LightCurveNotFoundError(f"No sectors available for TIC {tic_id}")
@@ -1289,6 +1294,12 @@ def _load_tpf_for_vetting(
     help="Optional cache directory for MAST/lightkurve products.",
 )
 @click.option(
+    "--mast-timeout-seconds",
+    type=float,
+    default=None,
+    help="Override MAST request timeout seconds (flag > BTV_MAST_TIMEOUT_SECONDS > 60).",
+)
+@click.option(
     "--fetch-tpf/--no-fetch-tpf",
     default=False,
     show_default=True,
@@ -1400,6 +1411,7 @@ def vet_command(
     checks: tuple[str, ...],
     network_ok: bool,
     cache_dir: Path | None,
+    mast_timeout_seconds: float | None,
     fetch_tpf: bool,
     require_tpf: bool,
     tpf_sector_strategy: str,
@@ -1706,6 +1718,7 @@ def vet_command(
             checks=list(checks) if checks else None,
             network_ok=network_ok,
             cache_dir=cache_dir,
+            mast_timeout_seconds=mast_timeout_seconds,
             fetch_tpf=effective_fetch_tpf,
             require_tpf=require_tpf,
             tpf_sector_strategy=str(tpf_sector_strategy).lower(),

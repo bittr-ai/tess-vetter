@@ -263,6 +263,12 @@ def _discover_cached_sectors(*, client: MASTClient, tic_id: int) -> list[int]:
     help="Optional cache directory used by MAST and persistent cache stores.",
 )
 @click.option(
+    "--mast-timeout-seconds",
+    type=float,
+    default=None,
+    help="Override MAST request timeout seconds (flag > BTV_MAST_TIMEOUT_SECONDS > 60).",
+)
+@click.option(
     "-o",
     "--out",
     "output_path_arg",
@@ -279,6 +285,7 @@ def fetch_command(
     sectors: tuple[int, ...],
     flux_type: str,
     cache_dir: Path | None,
+    mast_timeout_seconds: float | None,
     output_path_arg: str,
 ) -> None:
     """Prewarm long-term cache with sector light curves and cache keys."""
@@ -304,7 +311,10 @@ def fetch_command(
     normalized_flux_type = str(flux_type).lower()
 
     try:
-        client = MASTClient(cache_dir=_resolve_mast_cache_dir(cache_dir))
+        client = MASTClient(
+            cache_dir=_resolve_mast_cache_dir(cache_dir),
+            mast_timeout_seconds=mast_timeout_seconds,
+        )
         lightcurves, sector_load_path = _load_lightcurves_for_fetch(
             client=client,
             tic_id=int(resolved_tic_id),
@@ -402,6 +412,12 @@ def fetch_command(
     help="Optional cache directory used by MAST/lightkurve and persistent cache stores.",
 )
 @click.option(
+    "--mast-timeout-seconds",
+    type=float,
+    default=None,
+    help="Override MAST request timeout seconds (flag > BTV_MAST_TIMEOUT_SECONDS > 60).",
+)
+@click.option(
     "-o",
     "--out",
     "output_path_arg",
@@ -419,6 +435,7 @@ def cache_sectors_command(
     fill_missing: bool,
     flux_type: str,
     cache_dir: Path | None,
+    mast_timeout_seconds: float | None,
     output_path_arg: str,
 ) -> None:
     """Inspect cached sectors for a target and optionally backfill misses.
@@ -454,7 +471,10 @@ def cache_sectors_command(
     normalized_flux_type = str(flux_type).lower()
 
     try:
-        client = MASTClient(cache_dir=_resolve_mast_cache_dir(cache_dir))
+        client = MASTClient(
+            cache_dir=_resolve_mast_cache_dir(cache_dir),
+            mast_timeout_seconds=mast_timeout_seconds,
+        )
         cache = PersistentCache(cache_dir=cache_dir)
         cached_before = _discover_cached_sectors(client=client, tic_id=int(resolved_tic_id))
         missing_before = [int(s) for s in requested_sorted if int(s) not in set(cached_before)]

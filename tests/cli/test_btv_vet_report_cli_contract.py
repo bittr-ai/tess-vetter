@@ -261,6 +261,7 @@ def test_btv_report_execute_report_sets_wrapper_provenance_fields(monkeypatch) -
         duration_hours=2.5,
         depth_ppm=300.0,
         toi="TOI-123.01",
+        network_ok=True,
         sectors=[14, 15],
         cache_dir=None,
         flux_type="pdcsap",
@@ -270,6 +271,7 @@ def test_btv_report_execute_report_sets_wrapper_provenance_fields(monkeypatch) -
         pipeline_config=report_cli.PipelineConfig(),
         vet_result=None,
         vet_result_path=None,
+        mast_timeout_seconds=None,
         resolved_inputs={
             "tic_id": 123,
             "period_days": 10.5,
@@ -289,6 +291,57 @@ def test_btv_report_execute_report_sets_wrapper_provenance_fields(monkeypatch) -
         "duration_hours": 2.5,
         "depth_ppm": 300.0,
     }
+
+
+def test_btv_report_execute_report_no_network_passes_cache_only_settings(monkeypatch, tmp_path: Path) -> None:
+    class _FakeResult:
+        def __init__(self) -> None:
+            self.report_json = {"schema_version": "2.0.0", "summary": {"verdict": "PASS"}}
+            self.plot_data_json = {"full_lc": {"time": [1.0], "flux": [1.0]}}
+            self.html = None
+            self.sectors_used = [14]
+            self.vet_artifact_reuse = None
+
+    captured: dict[str, object] = {}
+
+    def _fake_generate_report(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return _FakeResult()
+
+    monkeypatch.setenv("LIGHTKURVE_CACHE_DIR", str(tmp_path / "lk_cache"))
+    monkeypatch.setattr("tess_vetter.cli.report_cli.generate_report", _fake_generate_report)
+
+    report_cli._execute_report(
+        tic_id=123,
+        period_days=10.5,
+        t0_btjd=2000.2,
+        duration_hours=2.5,
+        depth_ppm=300.0,
+        toi="TOI-123.01",
+        network_ok=False,
+        sectors=[14],
+        cache_dir=None,
+        flux_type="pdcsap",
+        include_html=False,
+        include_enrichment=False,
+        custom_views=None,
+        pipeline_config=report_cli.PipelineConfig(),
+        vet_result=None,
+        vet_result_path=None,
+        mast_timeout_seconds=None,
+        resolved_inputs={
+            "tic_id": 123,
+            "period_days": 10.5,
+            "t0_btjd": 2000.2,
+            "duration_hours": 2.5,
+            "depth_ppm": 300.0,
+        },
+    )
+
+    assert captured["network_ok"] is False
+    mast_client = captured["mast_client"]
+    assert mast_client is not None
+    assert mast_client.cache_dir == str(tmp_path / "lk_cache")
 
 
 def test_btv_report_passes_through_diagnostic_json_artifacts(monkeypatch, tmp_path: Path) -> None:
@@ -1311,6 +1364,9 @@ def test_btv_vet_emits_detrend_provenance_when_enabled(monkeypatch, tmp_path: Pa
     )
 
     class _FakeMASTClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
         def download_all_sectors(self, tic_id: int, *, flux_type: str, sectors: list[int] | None = None):
             return [lc_data]
 
@@ -1393,6 +1449,9 @@ def test_btv_vet_detrend_depth_unavailable_sets_note(monkeypatch, tmp_path: Path
             self.sector = 1
 
     class _FakeMASTClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
         def download_all_sectors(self, *_args, **_kwargs):
             return [_FakeLightCurveData()]
 
@@ -1444,6 +1503,9 @@ def test_btv_vet_warns_when_stellar_missing_with_network(monkeypatch, tmp_path: 
             self.sector = 1
 
     class _FakeMASTClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
         def download_all_sectors(self, *_args, **_kwargs):
             return [_FakeLightCurveData()]
 
@@ -1613,6 +1675,9 @@ def test_btv_vet_default_emits_lc_summary_and_meta_enabled_computed(monkeypatch,
     )
 
     class _FakeMASTClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
         def download_all_sectors(self, *_args, **_kwargs):
             return [lc_data]
 
@@ -1684,6 +1749,9 @@ def test_btv_vet_no_lc_summary_sets_disabled_reason_code(monkeypatch, tmp_path: 
     )
 
     class _FakeMASTClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
         def download_all_sectors(self, *_args, **_kwargs):
             return [lc_data]
 
@@ -1738,6 +1806,9 @@ def test_btv_vet_lc_summary_compute_failure_degrades_with_stable_reason(monkeypa
     )
 
     class _FakeMASTClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
         def download_all_sectors(self, *_args, **_kwargs):
             return [lc_data]
 

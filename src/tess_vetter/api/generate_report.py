@@ -238,6 +238,7 @@ def generate_report(
     toi: str | None = None,
     sectors: list[int] | None = None,
     flux_type: str = "pdcsap",
+    network_ok: bool = True,
     mast_client: MASTClient | None = None,
     include_html: bool = False,
     include_v03: bool = False,
@@ -274,6 +275,8 @@ def generate_report(
         toi: TOI designation for display.
         sectors: Specific sectors to download (None for all available).
         flux_type: Flux column to use ("pdcsap" or "sap").
+        network_ok: If False, use cache-only light-curve loading and never
+            call network-backed MAST search/download paths.
         mast_client: Injected MASTClient (created if None).
         include_html: If True, render standalone HTML.
         include_v03: If True, include V03 duration consistency check.
@@ -311,12 +314,61 @@ def generate_report(
     client = mast_client or MASTClient()
 
     # 3. Download (flux_type forwarded)
-    lightcurves = client.download_all_sectors(
-        tic_id,
-        flux_type=flux_type,
-        sectors=sectors,
-        progress_callback=progress_callback,
-    )
+    if network_ok:
+        lightcurves = client.download_all_sectors(
+            tic_id,
+            flux_type=flux_type,
+            sectors=sectors,
+            progress_callback=progress_callback,
+        )
+    else:
+        normalized_flux_type = str(flux_type).lower()
+        requested_sectors = sorted(set(sectors)) if sectors is not None else None
+        lightcurves = []
+        if requested_sectors is not None:
+            missing: list[int] = []
+            for sector in requested_sectors:
+                try:
+                    lightcurves.append(
+                        client.download_lightcurve_cached(
+                            tic_id=int(tic_id),
+                            sector=int(sector),
+                            flux_type=normalized_flux_type,
+                        )
+                    )
+                except Exception:
+                    missing.append(int(sector))
+            if missing:
+                missing_text = ", ".join(str(s) for s in sorted(set(missing)))
+                raise LightCurveNotFoundError(
+                    f"Cache-only report load failed for TIC {int(tic_id)}. "
+                    f"Missing cached light curve for sector(s): {missing_text}."
+                )
+        else:
+            cached_rows = client.search_lightcurve_cached(tic_id=int(tic_id))
+            cached_sectors = sorted(
+                {
+                    int(row.sector)
+                    for row in cached_rows
+                    if getattr(row, "sector", None) is not None
+                }
+            )
+            if not cached_sectors:
+                raise LightCurveNotFoundError(
+                    f"No cached sectors available for TIC {int(tic_id)} with --no-network. "
+                    "Provide --sectors for known cached sectors or enable --network-ok."
+                )
+            for sector in cached_sectors:
+                try:
+                    lightcurves.append(
+                        client.download_lightcurve_cached(
+                            tic_id=int(tic_id),
+                            sector=int(sector),
+                            flux_type=normalized_flux_type,
+                        )
+                    )
+                except Exception:
+                    continue
     if not lightcurves:
         raise LightCurveNotFoundError(f"No sectors available for TIC {tic_id}")
 

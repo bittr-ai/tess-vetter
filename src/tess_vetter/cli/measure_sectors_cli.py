@@ -69,6 +69,7 @@ def _execute_measure_sectors(
     flux_type: str,
     network_ok: bool,
     cache_dir: Path | None,
+    mast_timeout_seconds: float | None,
     detrend: str | None,
     detrend_bin_hours: float,
     detrend_buffer: float,
@@ -83,6 +84,7 @@ def _execute_measure_sectors(
         explicit_sectors=bool(sectors_explicit),
         network_ok=bool(network_ok),
         cache_dir=cache_dir,
+        mast_timeout_seconds=mast_timeout_seconds,
     )
 
     if len(lightcurves) == 1:
@@ -230,6 +232,12 @@ def _execute_measure_sectors(
     default=None,
     help="Optional cache directory for MAST/lightkurve products.",
 )
+@click.option(
+    "--mast-timeout-seconds",
+    type=float,
+    default=None,
+    help="Override MAST request timeout seconds (flag > BTV_MAST_TIMEOUT_SECONDS > 60).",
+)
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
     "--flux-type",
@@ -267,6 +275,7 @@ def measure_sectors_command(
     report_file: str | None,
     network_ok: bool,
     cache_dir: Path | None,
+    mast_timeout_seconds: float | None,
     sectors: tuple[int, ...],
     flux_type: str,
     detrend: str | None,
@@ -361,6 +370,7 @@ def measure_sectors_command(
             flux_type=str(flux_type).lower(),
             network_ok=bool(network_ok),
             cache_dir=cache_dir,
+            mast_timeout_seconds=mast_timeout_seconds,
             detrend=detrend_method,
             detrend_bin_hours=float(detrend_bin_hours),
             detrend_buffer=float(detrend_buffer),
