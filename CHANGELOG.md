@@ -6,6 +6,18 @@ This project follows semantic versioning (SemVer).
 
 - No unreleased changes.
 
+## 0.3.11 (2026-02-24)
+
+- Fixed NumPy 2.x scalar-coercion regressions in vendored TRICERATOPS+
+  limb-darkening lookup paths (`marginal_likelihoods.py`) and aperture flux
+  integration (`triceratops.py`) so `btv fpp`/`btv fpp-run` avoid
+  `only 0-dimensional arrays can be converted to Python scalars` failures.
+- Expanded regression coverage to guard against reintroducing masked-array
+  scalar assignment patterns in vendored TRICERATOPS+ code paths.
+- Improved FPP CLI usability by supporting prepared-manifest mode directly on
+  `btv fpp` and defaulting prepared-manifest runs to strict staged-artifact
+  enforcement (`require-prepared`).
+
 ## 0.3.10 (2026-02-24)
 
 - Fixed vendored TRICERATOPS Gaussian integrand behavior for SciPy `dblquad`
