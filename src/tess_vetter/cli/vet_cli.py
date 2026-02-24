@@ -710,17 +710,25 @@ def _split_vet_plot_data_payload(payload: dict[str, Any]) -> tuple[dict[str, Any
             updated_results.append(row)
             continue
         row_copy = dict(row)
-        if "plot_data" in row_copy:
-            check_id = row_copy.get("id")
+        check_id = row_copy.get("id")
+
+        extracted_plot_data: Any | None = None
+        raw_value = row_copy.get("raw")
+        if isinstance(raw_value, dict) and "plot_data" in raw_value:
+            raw_copy = dict(raw_value)
+            extracted_plot_data = raw_copy.pop("plot_data")
+            row_copy["raw"] = raw_copy
+        elif "plot_data" in row_copy:
+            extracted_plot_data = row_copy.pop("plot_data")
+
+        if extracted_plot_data is not None:
             split_checks.append(
                 {
                     "id": str(check_id) if check_id is not None else None,
-                    "plot_data": row_copy.pop("plot_data"),
+                    "plot_data": extracted_plot_data,
                 }
             )
-            row_copy["plot_data_ref"] = {
-                "check_id": str(check_id) if check_id is not None else None,
-            }
+            row_copy["plot_data_ref"] = {"check_id": str(check_id) if check_id is not None else None}
         updated_results.append(row_copy)
     core_payload["results"] = updated_results
     return core_payload, {"schema_version": CLI_VET_PLOT_DATA_SCHEMA_VERSION, "checks": split_checks}
@@ -1761,12 +1769,17 @@ def vet_command(
             provenance = provenance_raw if isinstance(provenance_raw, dict) else {}
             provenance["plot_data_split"] = True
             provenance["plot_data_path"] = str(plot_data_sidecar_path)
+            checks_raw = plot_data_payload.get("checks")
+            provenance["plot_data_split_count"] = len(checks_raw) if isinstance(checks_raw, list) else 0
+            provenance["plot_data_split_schema_version"] = CLI_VET_PLOT_DATA_SCHEMA_VERSION
             payload_to_write["provenance"] = provenance
         else:
             provenance_raw = payload_to_write.get("provenance")
             provenance = provenance_raw if isinstance(provenance_raw, dict) else {}
             provenance["plot_data_split"] = False
             provenance["plot_data_path"] = None
+            provenance["plot_data_split_count"] = 0
+            provenance["plot_data_split_schema_version"] = CLI_VET_PLOT_DATA_SCHEMA_VERSION
             payload_to_write["provenance"] = provenance
 
         dump_json_output(payload_to_write, out_path)

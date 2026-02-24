@@ -6,6 +6,16 @@ This project follows semantic versioning (SemVer).
 
 - No unreleased changes.
 
+## 0.3.7 (2026-02-24)
+
+- Fixed `btv vet --split-plot-data` so sidecar extraction pulls from
+  `results[*].raw.plot_data` (with top-level fallback) instead of producing
+  empty sidecars in common runs.
+- Added split provenance diagnostics on vet outputs:
+  `plot_data_split_count` and `plot_data_split_schema_version`.
+- Added CLI contract tests covering nested `raw.plot_data` split behavior and
+  explicit `--no-split-plot-data` file-output behavior.
+
 ## 0.3.6 (2026-02-23)
 
 - Fixed report sidecar payload projection to preserve schema-backed plot fields

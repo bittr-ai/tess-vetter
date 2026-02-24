@@ -1999,10 +1999,70 @@ def test_btv_vet_splits_plot_data_to_sidecar_for_file_output(monkeypatch, tmp_pa
     assert core_payload["results"][0]["plot_data_ref"]["check_id"] == "V01"
     assert core_payload["provenance"]["plot_data_split"] is True
     assert core_payload["provenance"]["plot_data_path"] == str(plot_path)
+    assert core_payload["provenance"]["plot_data_split_count"] == 1
+    assert core_payload["provenance"]["plot_data_split_schema_version"] == "cli.vet.plot_data.v1"
 
     assert plot_payload["schema_version"] == "cli.vet.plot_data.v1"
     assert plot_payload["checks"][0]["id"] == "V01"
     assert plot_payload["checks"][0]["plot_data"]["time"] == [1.0, 2.0]
+
+
+def test_btv_vet_splits_nested_raw_plot_data_to_sidecar(monkeypatch, tmp_path: Path) -> None:
+    def _fake_execute_vet(**_kwargs):
+        return {
+            "results": [
+                {
+                    "id": "V09",
+                    "status": "ok",
+                    "flags": [],
+                    "raw": {
+                        "plot_data": {"depth_map_ppm": [[1.0, 2.0], [3.0, 4.0]]},
+                        "other_raw": {"foo": "bar"},
+                    },
+                }
+            ],
+            "warnings": [],
+            "provenance": {},
+            "inputs_summary": {},
+        }
+
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+
+    out_path = tmp_path / "vet.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    core_payload = json.loads(out_path.read_text(encoding="utf-8"))
+    plot_path = tmp_path / "vet.json.plot_data.json"
+    plot_payload = json.loads(plot_path.read_text(encoding="utf-8"))
+
+    assert "plot_data" not in core_payload["results"][0]["raw"]
+    assert core_payload["results"][0]["raw"]["other_raw"]["foo"] == "bar"
+    assert core_payload["results"][0]["plot_data_ref"]["check_id"] == "V09"
+    assert core_payload["provenance"]["plot_data_split"] is True
+    assert core_payload["provenance"]["plot_data_path"] == str(plot_path)
+    assert core_payload["provenance"]["plot_data_split_count"] == 1
+    assert core_payload["provenance"]["plot_data_split_schema_version"] == "cli.vet.plot_data.v1"
+
+    assert plot_payload["schema_version"] == "cli.vet.plot_data.v1"
+    assert plot_payload["checks"][0]["id"] == "V09"
+    assert plot_payload["checks"][0]["plot_data"]["depth_map_ppm"][0] == [1.0, 2.0]
 
 
 def test_btv_vet_stdout_keeps_plot_data_inline(monkeypatch) -> None:
@@ -2043,6 +2103,57 @@ def test_btv_vet_stdout_keeps_plot_data_inline(monkeypatch) -> None:
     payload = json.loads(result.output)
     assert "plot_data" in payload["results"][0]
     assert payload["provenance"]["plot_data_split"] is False
+    assert payload["provenance"]["plot_data_split_count"] == 0
+    assert payload["provenance"]["plot_data_split_schema_version"] == "cli.vet.plot_data.v1"
+
+
+def test_btv_vet_no_split_plot_data_keeps_inline_for_file_output(monkeypatch, tmp_path: Path) -> None:
+    def _fake_execute_vet(**_kwargs):
+        return {
+            "results": [
+                {
+                    "id": "V01",
+                    "status": "ok",
+                    "flags": [],
+                    "plot_data": {"time": [1.0], "flux": [1.0]},
+                }
+            ],
+            "warnings": [],
+            "provenance": {},
+            "inputs_summary": {},
+        }
+
+    monkeypatch.setattr("tess_vetter.cli.vet_cli._execute_vet", _fake_execute_vet)
+
+    out_path = tmp_path / "vet.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "vet",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "10.5",
+            "--t0-btjd",
+            "2000.2",
+            "--duration-hours",
+            "2.5",
+            "--no-split-plot-data",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert "plot_data" in payload["results"][0]
+    assert "plot_data_ref" not in payload["results"][0]
+    assert payload["provenance"]["plot_data_split"] is False
+    assert payload["provenance"]["plot_data_split_count"] == 0
+    assert payload["provenance"]["plot_data_split_schema_version"] == "cli.vet.plot_data.v1"
+    assert payload["provenance"]["plot_data_path"] is None
+    assert not (tmp_path / "vet.json.plot_data.json").exists()
 
 
 def test_btv_vet_sector_measurements_schema_error_maps_to_exit_1(tmp_path: Path) -> None:
