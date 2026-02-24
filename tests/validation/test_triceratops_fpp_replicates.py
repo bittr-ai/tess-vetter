@@ -311,6 +311,20 @@ def test_vendor_gauss2d_returns_scalar_for_scalar_inputs() -> None:
     assert isinstance(value, float)
 
 
+def test_vendor_ldc_mask_assignments_use_scalar_extraction() -> None:
+    from pathlib import Path
+
+    vendor_file = Path(
+        "src/tess_vetter/ext/triceratops_plus_vendor/triceratops/marginal_likelihoods.py"
+    )
+    text = vendor_file.read_text(encoding="utf-8")
+    assert "u1, u2 = ldc_u1s[mask], ldc_u2s[mask]" not in text
+    assert "u1s_comp[i], u2s_comp[i] = u1s_at_Z[mask], u2s_at_Z[mask]" not in text
+    assert "ldc_u1s[mask], ldc_u2s[mask]" not in text
+    assert "ldc_P_u1s[mask_p], ldc_P_u2s[mask_p]" not in text
+    assert "u1s_at_Z_p[mask_p], u2s_at_Z_p[mask_p]" not in text
+
+
 def make_valid_target(fpp: float = 0.01, seed: int = 0) -> MockTriceratopsTarget:
     """Create a target that returns valid results with slight variation."""
     # Add small random variation based on seed for realistic replicate behavior

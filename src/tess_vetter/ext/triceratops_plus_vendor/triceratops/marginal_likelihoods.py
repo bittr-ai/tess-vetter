@@ -187,7 +187,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask] # gets the coefficients from the table for the corresponding T, logg and Z vals.
+    u1, u2 = float(ldc_u1s[mask][0]), float(ldc_u2s[mask][0]) # gets the coefficients from the table for the corresponding T, logg and Z vals.
 
     external_lcs = []
     if external_lc_files and filt_lcs:
@@ -218,7 +218,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                 & (ldc_P_Teffs == this_Teff_p)
                 & (ldc_P_loggs == this_logg_p)
             )
-            u1_p, u2_p = ldc_P_u1s[mask_p], ldc_P_u2s[mask_p]
+            u1_p, u2_p = float(ldc_P_u1s[mask_p][0]), float(ldc_P_u2s[mask_p][0])
             #print("limb darkening coeffs:", u1_p, u2_p)
 
             external_lc = np.loadtxt(lc_file)
@@ -419,7 +419,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         )
     # for printing out the properties of the star being eclipsed
     print("Z, Teff, logg:", this_Z, this_Teff, this_logg)
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = float(ldc_u1s[mask][0]), float(ldc_u2s[mask][0])
 
     external_lcs = []
     if external_lc_files and filt_lcs:
@@ -450,7 +450,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                 & (ldc_P_Teffs == this_Teff_p)
                 & (ldc_P_loggs == this_logg_p)
             )
-            u1_p, u2_p = ldc_P_u1s[mask_p], ldc_P_u2s[mask_p]
+            u1_p, u2_p = float(ldc_P_u1s[mask_p][0]), float(ldc_P_u2s[mask_p][0])
 
             external_lc = np.loadtxt(lc_file)
             time_p, flux_p, fluxerr_p = external_lc[:,0], external_lc[:,1], external_lc[:,2]
@@ -745,7 +745,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
     this_Teff = ldc_Teffs[np.argmin(np.abs(ldc_Teffs-Teff))]
     this_logg = ldc_loggs[np.argmin(np.abs(ldc_loggs-logg))]
     mask = (ldc_Zs == this_Z) & (ldc_Teffs == this_Teff) & (ldc_loggs == this_logg)
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = float(ldc_u1s[mask][0]), float(ldc_u2s[mask][0])
 
     external_lcs = []
     if external_lc_files and filt_lcs:
@@ -772,7 +772,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             this_Teff_p = ldc_P_Teffs[np.argmin(np.abs(ldc_P_Teffs-Teff))]
             this_logg_p = ldc_P_loggs[np.argmin(np.abs(ldc_P_loggs-logg))]
             mask_p = (ldc_P_Zs == this_Z_p) & (ldc_P_Teffs == this_Teff_p) & (ldc_P_loggs == this_logg_p)
-            u1_p, u2_p = ldc_P_u1s[mask_p], ldc_P_u2s[mask_p]
+            u1_p, u2_p = float(ldc_P_u1s[mask_p][0]), float(ldc_P_u2s[mask_p][0])
 
             external_lc = np.loadtxt(lc_file)
             time_p, flux_p, fluxerr_p = external_lc[:,0], external_lc[:,1], external_lc[:,2]
@@ -990,7 +990,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     this_Teff = ldc_Teffs[np.argmin(np.abs(ldc_Teffs-Teff))]
     this_logg = ldc_loggs[np.argmin(np.abs(ldc_loggs-logg))]
     mask = (ldc_Zs == this_Z) & (ldc_Teffs == this_Teff) & (ldc_loggs == this_logg)
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = float(ldc_u1s[mask][0]), float(ldc_u2s[mask][0])
 
     external_lcs = []
     if external_lc_files and filt_lcs:
@@ -1017,7 +1017,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             this_Teff_p = ldc_P_Teffs[np.argmin(np.abs(ldc_P_Teffs-Teff))]
             this_logg_p = ldc_P_loggs[np.argmin(np.abs(ldc_P_loggs-logg))]
             mask_p = (ldc_P_Zs == this_Z_p) & (ldc_P_Teffs == this_Teff_p) & (ldc_P_loggs == this_logg_p)
-            u1_p, u2_p = ldc_P_u1s[mask_p], ldc_P_u2s[mask_p]
+            u1_p, u2_p = float(ldc_P_u1s[mask_p][0]), float(ldc_P_u2s[mask_p][0])
 
             external_lc = np.loadtxt(lc_file)
             time_p, flux_p, fluxerr_p = external_lc[:,0], external_lc[:,1], external_lc[:,2]
@@ -1421,7 +1421,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
             zip(rounded_Teffs_comp, rounded_loggs_comp)
             ):
         mask = (Teffs_at_Z == comp_Teff) & (loggs_at_Z == comp_logg)
-        u1s_comp[i], u2s_comp[i] = u1s_at_Z[mask], u2s_at_Z[mask]
+        u1s_comp[i], u2s_comp[i] = float(u1s_at_Z[mask][0]), float(u2s_at_Z[mask][0])
         ldcs_mask.append(mask)
 
     ldcs_mask = np.array(ldcs_mask)
@@ -1455,7 +1455,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
             u1s_comp_p, u2s_comp_p = np.zeros(N), np.zeros(N)
             for i, (comp_Teff, comp_logg) in enumerate(zip(rounded_Teffs_comp, rounded_loggs_comp)):
                 mask_p = (Teffs_at_Z_p == comp_Teff) & (loggs_at_Z_p == comp_logg)
-                u1s_comp_p[i], u2s_comp_p[i] = u1s_at_Z_p[mask_p], u2s_at_Z_p[mask_p]
+                u1s_comp_p[i], u2s_comp_p[i] = float(u1s_at_Z_p[mask_p][0]), float(u2s_at_Z_p[mask_p][0])
 
             external_lc = np.loadtxt(lc_file)
             time_p, flux_p, fluxerr_p = external_lc[:,0], external_lc[:,1], external_lc[:,2]
@@ -1745,7 +1745,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             zip(rounded_Teffs_comp, rounded_loggs_comp)
             ):
         mask = (Teffs_at_Z == comp_Teff) & (loggs_at_Z == comp_logg)
-        u1s_comp[i], u2s_comp[i] = u1s_at_Z[mask], u2s_at_Z[mask]
+        u1s_comp[i], u2s_comp[i] = float(u1s_at_Z[mask][0]), float(u2s_at_Z[mask][0])
 
     # calculate properties of the drawn EBs
     masses = qs*masses_comp
@@ -1790,7 +1790,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             u1s_comp_p, u2s_comp_p = np.zeros(N), np.zeros(N)
             for i, (comp_Teff, comp_logg) in enumerate(zip(rounded_Teffs_comp, rounded_loggs_comp)):
                 mask_p = (Teffs_at_Z_p == comp_Teff) & (loggs_at_Z_p == comp_logg)
-                u1s_comp_p[i], u2s_comp_p[i] = u1s_at_Z_p[mask_p], u2s_at_Z_p[mask_p]
+                u1s_comp_p[i], u2s_comp_p[i] = float(u1s_at_Z_p[mask_p][0]), float(u2s_at_Z_p[mask_p][0])
 
             external_lc = np.loadtxt(lc_file)
             time_p, flux_p, fluxerr_p = external_lc[:,0], external_lc[:,1], external_lc[:,2]
@@ -2150,7 +2150,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = float(ldc_u1s[mask][0]), float(ldc_u2s[mask][0])
 
     # determine background star population properties
     (Tmags_comp, masses_comp, loggs_comp, Teffs_comp, Zs_comp,
@@ -2222,7 +2222,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                 & (ldc_P_Teffs == this_Teff_p)
                 & (ldc_P_loggs == this_logg_p)
             )
-            u1_p, u2_p = ldc_P_u1s[mask_p], ldc_P_u2s[mask_p]
+            u1_p, u2_p = float(ldc_P_u1s[mask_p][0]), float(ldc_P_u2s[mask_p][0])
 
             external_lc = np.loadtxt(lc_file)
             time_p, flux_p, fluxerr_p = external_lc[:,0], external_lc[:,1], external_lc[:,2]
@@ -2474,7 +2474,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = float(ldc_u1s[mask][0]), float(ldc_u2s[mask][0])
 
     # sample from inc and q prior distributions
     incs = sample_inc(np.random.rand(N))
@@ -2563,7 +2563,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                 & (ldc_P_Teffs == this_Teff_p)
                 & (ldc_P_loggs == this_logg_p)
             )
-            u1_p, u2_p = ldc_P_u1s[mask_p], ldc_P_u2s[mask_p]
+            u1_p, u2_p = float(ldc_P_u1s[mask_p][0]), float(ldc_P_u2s[mask_p][0])
 
             external_lc = np.loadtxt(lc_file)
             time_p, flux_p, fluxerr_p = external_lc[:,0], external_lc[:,1], external_lc[:,2]
@@ -2938,7 +2938,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
             & (ldc_Teffs == this_Teff)
             & (ldc_loggs == this_logg)
             )
-        u1s_comp[i], u2s_comp[i] = ldc_u1s[mask], ldc_u2s[mask]
+        u1s_comp[i], u2s_comp[i] = float(ldc_u1s[mask][0]), float(ldc_u2s[mask][0])
 
     # Check if the TIC returns nans for griz mags
     no_sdss_mags = (np.isnan(gmag)) and (np.isnan(rmag)) and \
@@ -3013,7 +3013,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
                     & (ldc_P_Teffs == this_Teff_p)
                     & (ldc_P_loggs == this_logg_p)
                 )
-                u1s_comp_p[i], u2s_comp_p[i] = ldc_P_u1s[mask_p], ldc_P_u2s[mask_p]
+                u1s_comp_p[i], u2s_comp_p[i] = float(ldc_P_u1s[mask_p][0]), float(ldc_P_u2s[mask_p][0])
 
             external_lcs.append({
                 'time': time_p,
@@ -3288,7 +3288,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
             & (ldc_Teffs == this_Teff)
             & (ldc_loggs == this_logg)
             )
-        u1s_comp[i], u2s_comp[i] = ldc_u1s[mask], ldc_u2s[mask]
+        u1s_comp[i], u2s_comp[i] = float(ldc_u1s[mask][0]), float(ldc_u2s[mask][0])
 
     # draw random sample of background stars
     idxs = np.random.randint(0, N_comp, N)
@@ -3374,7 +3374,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
                     & (ldc_P_Teffs == this_Teff_p)
                     & (ldc_P_loggs == this_logg_p)
                 )
-                u1s_comp_p[i], u2s_comp_p[i] = ldc_P_u1s[mask_p], ldc_P_u2s[mask_p]
+                u1s_comp_p[i], u2s_comp_p[i] = float(ldc_P_u1s[mask_p][0]), float(ldc_P_u2s[mask_p][0])
 
             external_lc = np.loadtxt(lc_file)
             time_p, flux_p, fluxerr_p = external_lc[:,0], external_lc[:,1], external_lc[:,2]
@@ -3765,7 +3765,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
             & (ldc_Teffs == this_Teff)
             & (ldc_loggs == this_logg)
             )
-        u1s_possible[i], u2s_possible[i] = ldc_u1s[mask], ldc_u2s[mask]
+        u1s_possible[i], u2s_possible[i] = float(ldc_u1s[mask][0]), float(ldc_u2s[mask][0])
     # draw random sample of background stars
     if N_possible > 0:
         idxs = np.random.randint(0, N_possible, N)
@@ -3964,7 +3964,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
             & (ldc_Teffs == this_Teff)
             & (ldc_loggs == this_logg)
             )
-        u1s_possible[i], u2s_possible[i] = ldc_u1s[mask], ldc_u2s[mask]
+        u1s_possible[i], u2s_possible[i] = float(ldc_u1s[mask][0]), float(ldc_u2s[mask][0])
     # draw random sample of background stars
     if N_possible > 0:
         idxs = np.random.randint(0, N_possible, N)
@@ -4219,7 +4219,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = float(ldc_u1s[mask][0]), float(ldc_u2s[mask][0])
 
     # sample from inc and R_p prior distributions
     rps = sample_rp(np.random.rand(N), np.full(N, M_s), flatpriors)
@@ -4360,7 +4360,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
         & (ldc_Teffs == this_Teff)
         & (ldc_loggs == this_logg)
         )
-    u1, u2 = ldc_u1s[mask], ldc_u2s[mask]
+    u1, u2 = float(ldc_u1s[mask][0]), float(ldc_u2s[mask][0])
 
     # sample from inc and q prior distributions
     incs = sample_inc(np.random.rand(N))
