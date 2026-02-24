@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
 title: "tess-vetter"
-version: 0.3.7
-date-released: 2026-02-23
+version: 0.3.8
+date-released: 2026-02-24
 identifiers:
   - type: doi
     value: "10.5281/zenodo.18743917"

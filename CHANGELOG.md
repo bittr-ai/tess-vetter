@@ -6,6 +6,15 @@ This project follows semantic versioning (SemVer).
 
 - No unreleased changes.
 
+## 0.3.8 (2026-02-24)
+
+- Added `--mast-timeout-seconds` for `btv measure-sectors`, `btv vet`,
+  `btv report`, `btv fetch`, and `btv cache-sectors`.
+- Added explicit timeout precedence for MAST calls:
+  CLI flag > `BTV_MAST_TIMEOUT_SECONDS` > 60s default.
+- Fixed `btv report --no-network` behavior so cache-only runs avoid MAST
+  metadata calls and fail fast only when required cached data is missing.
+
 ## 0.3.7 (2026-02-24)
 
 - Fixed `btv vet --split-plot-data` so sidecar extraction pulls from
