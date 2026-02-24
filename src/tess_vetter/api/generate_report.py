@@ -70,6 +70,7 @@ class GenerateReportJSONContract(TypedDict, total=False):
     verdict_source: str
     summary: dict[str, Any]
     custom_views: dict[str, Any]
+    payload_meta: dict[str, Any]
 
 
 class GenerateReportPlotDataContract(TypedDict, total=False):
@@ -108,18 +109,38 @@ def _extract_report_json_contract(report_payload: dict[str, Any]) -> GenerateRep
     schema_version = report_payload.get("schema_version")
     if isinstance(schema_version, str):
         out["schema_version"] = schema_version
+    summary = report_payload.get("summary")
+    summary_verdict: str | None = None
+    summary_verdict_source: str | None = None
+    if isinstance(summary, dict):
+        out["summary"] = summary
+        maybe_summary_verdict = summary.get("verdict")
+        if isinstance(maybe_summary_verdict, str):
+            summary_verdict = maybe_summary_verdict
+        maybe_summary_verdict_source = summary.get("verdict_source")
+        if isinstance(maybe_summary_verdict_source, str):
+            summary_verdict_source = maybe_summary_verdict_source
+
     verdict = report_payload.get("verdict")
     if isinstance(verdict, str):
         out["verdict"] = verdict
+    elif summary_verdict is not None:
+        out["verdict"] = summary_verdict
+
     verdict_source = report_payload.get("verdict_source")
     if isinstance(verdict_source, str):
         out["verdict_source"] = verdict_source
-    summary = report_payload.get("summary")
-    if isinstance(summary, dict):
-        out["summary"] = summary
+    elif summary_verdict_source is not None:
+        out["verdict_source"] = summary_verdict_source
+    elif summary_verdict is not None:
+        out["verdict_source"] = "$.summary.verdict"
+
     custom_views = report_payload.get("custom_views")
     if isinstance(custom_views, dict):
         out["custom_views"] = custom_views
+    payload_meta = report_payload.get("payload_meta")
+    if isinstance(payload_meta, dict):
+        out["payload_meta"] = payload_meta
     return out
 
 

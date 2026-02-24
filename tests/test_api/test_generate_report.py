@@ -186,6 +186,73 @@ def test_plot_data_sidecar_preserves_non_full_lc_keys(monkeypatch) -> None:
     assert "odd_even_phase" in result.plot_data_json
 
 
+def test_report_json_contract_preserves_payload_meta_and_summary_verdict(monkeypatch) -> None:
+    client = _mock_client(sectors=[1])
+    payload = {
+        "schema_version": "1",
+        "summary": {
+            "verdict": "ALL_CHECKS_PASSED",
+            "verdict_source": "$.summary.checks",
+        },
+        "custom_views": {"version": "1", "views": []},
+        "payload_meta": {
+            "summary_version": "1",
+            "plot_data_version": "1",
+            "custom_views_version": "1",
+            "summary_hash": "a" * 64,
+            "plot_data_hash": "b" * 64,
+            "custom_views_hash": "c" * 64,
+            "custom_view_hashes_by_id": {},
+            "custom_views_includes_ad_hoc": False,
+        },
+        "plot_data": {
+            "full_lc": {"time": [1.0], "flux": [1.0]},
+        },
+    }
+
+    class _FakeReport:
+        enrichment = None
+
+        def to_json(self) -> dict[str, object]:
+            return payload
+
+    monkeypatch.setattr(generate_report_api, "build_report", lambda *args, **kwargs: _FakeReport())
+    result = generate_report(123456789, **_EPH, mast_client=client)
+
+    assert result.report_json["verdict"] == "ALL_CHECKS_PASSED"
+    assert result.report_json["verdict_source"] == "$.summary.checks"
+    assert result.report_json["payload_meta"]["summary_hash"] == "a" * 64
+
+
+def test_report_json_contract_keeps_top_level_verdict_when_present(monkeypatch) -> None:
+    client = _mock_client(sectors=[1])
+    payload = {
+        "schema_version": "1",
+        "verdict": "legacy-top-level",
+        "verdict_source": "$.legacy.source",
+        "summary": {
+            "verdict": "ALL_CHECKS_PASSED",
+            "verdict_source": "$.summary.checks",
+        },
+        "custom_views": {"version": "1", "views": []},
+        "plot_data": {
+            "full_lc": {"time": [1.0], "flux": [1.0]},
+        },
+    }
+
+    class _FakeReport:
+        enrichment = None
+
+        def to_json(self) -> dict[str, object]:
+            return payload
+
+    monkeypatch.setattr(generate_report_api, "build_report", lambda *args, **kwargs: _FakeReport())
+    result = generate_report(123456789, **_EPH, mast_client=client)
+
+    assert result.report_json["verdict"] == "legacy-top-level"
+    assert result.report_json["verdict_source"] == "$.legacy.source"
+
+
 # ---------------------------------------------------------------------------
 # 2. Happy path, single sector
 # ---------------------------------------------------------------------------
