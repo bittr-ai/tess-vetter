@@ -1419,7 +1419,7 @@ def _run_fpp_from_prepare_manifest(
 )
 @click.option(
     "--require-prepared/--allow-missing-prepared",
-    default=False,
+    default=True,
     show_default=True,
     help="Fail fast when staged cache artifacts referenced by the manifest are missing.",
 )
@@ -1536,7 +1536,7 @@ def fpp_run_command(
 )
 @click.option(
     "--require-prepared/--allow-missing-prepared",
-    default=False,
+    default=True,
     show_default=True,
     help="Only used with --prepare-manifest. Fail fast when prepared artifacts are missing.",
 )

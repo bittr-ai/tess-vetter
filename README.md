@@ -215,12 +215,13 @@ Example:
 
 ```bash
 btv fpp-prepare --toi "TOI-5807.01" --network-ok --cache-dir outputs/cache -o outputs/fpp/toi_5807.prepare.json
-btv fpp --prepare-manifest outputs/fpp/toi_5807.prepare.json --require-prepared --preset fast --no-network -o outputs/fpp/toi_5807.fast.json
+btv fpp --prepare-manifest outputs/fpp/toi_5807.prepare.json --no-network -o outputs/fpp/toi_5807.fast.json
 ```
 
 Notes:
 - `--prepare-manifest` on `btv fpp` uses the same prepared-manifest compute path as `btv fpp-run`.
-- `--require-prepared` fails fast if staged artifacts are missing.
+- prepared-manifest mode now fails fast on missing staged artifacts by default (`--require-prepared`).
+- use `--allow-missing-prepared` only for debugging/recovery workflows.
 - In prepared mode, do not mix direct candidate/staging flags (for example `--tic-id`, `--period-days`, `--cache-dir`) with `--prepare-manifest`.
 
 ## Citations

@@ -1762,6 +1762,7 @@ def test_btv_fpp_run_emits_replicate_progress(monkeypatch, tmp_path: Path) -> No
             "fpp-run",
             "--prepare-manifest",
             str(manifest_path),
+            "--allow-missing-prepared",
             "--replicates",
             "2",
             "--seed",
