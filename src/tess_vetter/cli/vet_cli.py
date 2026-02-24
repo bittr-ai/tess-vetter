@@ -1013,11 +1013,12 @@ def _execute_vet(
     stellar_block: dict[str, Any] | None = None,
     stellar_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    client = (
-        MASTClient(cache_dir=str(cache_dir), mast_timeout_seconds=mast_timeout_seconds)
-        if cache_dir is not None
-        else MASTClient(mast_timeout_seconds=mast_timeout_seconds)
-    )
+    client_kwargs: dict[str, Any] = {}
+    if cache_dir is not None:
+        client_kwargs["cache_dir"] = str(cache_dir)
+    if mast_timeout_seconds is not None:
+        client_kwargs["mast_timeout_seconds"] = mast_timeout_seconds
+    client = MASTClient(**client_kwargs)
     lightcurves = client.download_all_sectors(tic_id, flux_type=flux_type, sectors=sectors)
     if not lightcurves:
         raise LightCurveNotFoundError(f"No sectors available for TIC {tic_id}")

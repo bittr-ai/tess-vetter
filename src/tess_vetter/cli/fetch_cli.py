@@ -311,10 +311,10 @@ def fetch_command(
     normalized_flux_type = str(flux_type).lower()
 
     try:
-        client = MASTClient(
-            cache_dir=_resolve_mast_cache_dir(cache_dir),
-            mast_timeout_seconds=mast_timeout_seconds,
-        )
+        client_kwargs: dict[str, Any] = {"cache_dir": _resolve_mast_cache_dir(cache_dir)}
+        if mast_timeout_seconds is not None:
+            client_kwargs["mast_timeout_seconds"] = mast_timeout_seconds
+        client = MASTClient(**client_kwargs)
         lightcurves, sector_load_path = _load_lightcurves_for_fetch(
             client=client,
             tic_id=int(resolved_tic_id),
@@ -471,10 +471,10 @@ def cache_sectors_command(
     normalized_flux_type = str(flux_type).lower()
 
     try:
-        client = MASTClient(
-            cache_dir=_resolve_mast_cache_dir(cache_dir),
-            mast_timeout_seconds=mast_timeout_seconds,
-        )
+        client_kwargs: dict[str, Any] = {"cache_dir": _resolve_mast_cache_dir(cache_dir)}
+        if mast_timeout_seconds is not None:
+            client_kwargs["mast_timeout_seconds"] = mast_timeout_seconds
+        client = MASTClient(**client_kwargs)
         cache = PersistentCache(cache_dir=cache_dir)
         cached_before = _discover_cached_sectors(client=client, tic_id=int(resolved_tic_id))
         missing_before = [int(s) for s in requested_sorted if int(s) not in set(cached_before)]

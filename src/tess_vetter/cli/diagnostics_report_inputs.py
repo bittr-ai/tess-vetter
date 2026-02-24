@@ -183,11 +183,12 @@ def load_lightcurves_with_sector_policy(
     cache_dir: str | Path | None = None,
     mast_timeout_seconds: float | None = None,
 ) -> tuple[list[Any], str]:
-    client = (
-        MASTClient(cache_dir=str(cache_dir), mast_timeout_seconds=mast_timeout_seconds)
-        if cache_dir is not None
-        else MASTClient(mast_timeout_seconds=mast_timeout_seconds)
-    )
+    client_kwargs: dict[str, Any] = {}
+    if cache_dir is not None:
+        client_kwargs["cache_dir"] = str(cache_dir)
+    if mast_timeout_seconds is not None:
+        client_kwargs["mast_timeout_seconds"] = mast_timeout_seconds
+    client = MASTClient(**client_kwargs)
 
     if explicit_sectors:
         if not sectors:

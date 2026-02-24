@@ -100,6 +100,7 @@ def generate_report(
     toi: str | None = ...,
     sectors: list[int] | None = ...,
     flux_type: str = ...,
+    network_ok: bool = ...,
     mast_client: Any | None = ...,
     include_html: bool = ...,
     include_v03: bool = ...,

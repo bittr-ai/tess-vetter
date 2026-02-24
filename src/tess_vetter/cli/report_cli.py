@@ -132,6 +132,12 @@ def _execute_report(
         resolved_cache_dir = detect_lightkurve_cache_dir()
 
     enrichment_cfg = EnrichmentConfig() if include_enrichment else None
+    client_kwargs: dict[str, Any] = {}
+    if resolved_cache_dir is not None:
+        client_kwargs["cache_dir"] = str(resolved_cache_dir)
+    if mast_timeout_seconds is not None:
+        client_kwargs["mast_timeout_seconds"] = mast_timeout_seconds
+
     result = generate_report(
         tic_id=tic_id,
         period_days=period_days,
@@ -142,14 +148,7 @@ def _execute_report(
         sectors=sectors,
         flux_type=flux_type,
         network_ok=bool(network_ok),
-        mast_client=(
-            MASTClient(
-                cache_dir=str(resolved_cache_dir),
-                mast_timeout_seconds=mast_timeout_seconds,
-            )
-            if resolved_cache_dir is not None
-            else MASTClient(mast_timeout_seconds=mast_timeout_seconds)
-        ),
+        mast_client=MASTClient(**client_kwargs),
         include_html=include_html,
         include_enrichment=include_enrichment,
         enrichment_config=enrichment_cfg,
