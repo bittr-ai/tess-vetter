@@ -204,6 +204,25 @@ bundle = vet_candidate(lc, candidate, checks=["V01", "V02", "V03", "V04", "V05"]
 
 Catalog-backed checks are always opt-in. You must pass `network=True` (and provide metadata like RA/Dec and TIC ID) to enable external queries; otherwise those checks return skipped results.
 
+## CLI FPP workflow (agent-safe)
+
+For repeatable FPP runs, use a two-step flow:
+
+1. `btv fpp-prepare` to stage light curves/runtime artifacts and emit a manifest.
+2. `btv fpp --prepare-manifest ...` (or `btv fpp-run --prepare-manifest ...`) to compute from the staged manifest.
+
+Example:
+
+```bash
+btv fpp-prepare --toi "TOI-5807.01" --network-ok --cache-dir outputs/cache -o outputs/fpp/toi_5807.prepare.json
+btv fpp --prepare-manifest outputs/fpp/toi_5807.prepare.json --require-prepared --preset fast --no-network -o outputs/fpp/toi_5807.fast.json
+```
+
+Notes:
+- `--prepare-manifest` on `btv fpp` uses the same prepared-manifest compute path as `btv fpp-run`.
+- `--require-prepared` fails fast if staged artifacts are missing.
+- In prepared mode, do not mix direct candidate/staging flags (for example `--tic-id`, `--period-days`, `--cache-dir`) with `--prepare-manifest`.
+
 ## Citations
 
 Many public API entry points and vetting checks include a list of literature references in their results. The full reference list lives in `REFERENCES.md` (and is also available programmatically via `tess_vetter.api.references`).

@@ -330,7 +330,9 @@ def _cached_sectors_for_tic(
 ) -> list[int]:
     sectors: list[int] = []
     wanted_flux = str(flux_type).lower()
-    for key in cache:
+    cache_keys = getattr(cache, "keys", None)
+    keys_iterable = cache_keys() if callable(cache_keys) else []
+    for key in keys_iterable:
         match = _LC_KEY_PATTERN.match(str(key))
         if match is None:
             continue
@@ -1199,79 +1201,7 @@ def fpp_prepare_command(
     dump_json_output(manifest, output_manifest_path)
 
 
-@click.command("fpp-run")
-@click.option(
-    "--prepare-manifest",
-    required=True,
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="Manifest JSON produced by btv fpp-prepare.",
-)
-@click.option(
-    "--require-prepared/--allow-missing-prepared",
-    default=False,
-    show_default=True,
-    help="Fail fast when staged cache artifacts referenced by the manifest are missing.",
-)
-@click.option(
-    "--preset",
-    type=click.Choice(["fast", "standard", "tutorial"], case_sensitive=False),
-    default="fast",
-    show_default=True,
-    help="TRICERATOPS runtime preset (standard typically expects a longer timeout budget).",
-)
-@click.option("--replicates", type=int, default=None, help="Replicate count for FPP aggregation.")
-@click.option("--seed", type=int, default=None, help="Base RNG seed.")
-@click.option("--override", "overrides", multiple=True, help="Repeat KEY=VALUE TRICERATOPS override entries.")
-@click.option(
-    "--timeout-seconds",
-    type=float,
-    default=None,
-    help="Optional timeout budget. If omitted with --preset standard, defaults to 900 seconds.",
-)
-@click.option(
-    "--contrast-curve",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    default=None,
-    help="ExoFOP-style .tbl/.dat contrast-curve file for TRICERATOPS companion constraints.",
-)
-@click.option(
-    "--contrast-curve-filter",
-    type=str,
-    default=None,
-    help="Optional band label override for --contrast-curve (for example Kcont, Ks, r).",
-)
-@click.option("--stellar-radius", type=float, default=None, help="Stellar radius (Rsun).")
-@click.option("--stellar-mass", type=float, default=None, help="Stellar mass (Msun).")
-@click.option("--stellar-tmag", type=float, default=None, help="TESS magnitude.")
-@click.option("--stellar-file", type=str, default=None, help="JSON file with stellar inputs.")
-@click.option(
-    "--use-stellar-auto/--no-use-stellar-auto",
-    default=False,
-    show_default=True,
-    help="Resolve stellar inputs from TIC when missing from explicit/file inputs.",
-)
-@click.option(
-    "--require-stellar/--no-require-stellar",
-    default=False,
-    show_default=True,
-    help="Fail unless stellar radius and mass resolve.",
-)
-@click.option(
-    "--network-ok/--no-network",
-    default=False,
-    show_default=True,
-    help="Allow network-dependent stellar auto resolution when requested.",
-)
-@click.option(
-    "-o",
-    "--out",
-    "output_path_arg",
-    type=str,
-    default="-",
-    show_default=True,
-    help="JSON output path; '-' writes to stdout.",
-)
-def fpp_run_command(
+def _run_fpp_from_prepare_manifest(
     prepare_manifest: Path,
     require_prepared: bool,
     preset: str,
@@ -1290,7 +1220,6 @@ def fpp_run_command(
     network_ok: bool,
     output_path_arg: str,
 ) -> None:
-    """Run FPP compute from a prepared staging manifest."""
     out_path = resolve_optional_output_path(output_path_arg)
     click.echo(f"[fpp-run] Loading prepare manifest: {prepare_manifest}")
     prepared = _load_prepare_manifest(prepare_manifest)
@@ -1481,8 +1410,136 @@ def fpp_run_command(
     dump_json_output(payload, out_path)
 
 
+@click.command("fpp-run")
+@click.option(
+    "--prepare-manifest",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Manifest JSON produced by btv fpp-prepare.",
+)
+@click.option(
+    "--require-prepared/--allow-missing-prepared",
+    default=False,
+    show_default=True,
+    help="Fail fast when staged cache artifacts referenced by the manifest are missing.",
+)
+@click.option(
+    "--preset",
+    type=click.Choice(["fast", "standard", "tutorial"], case_sensitive=False),
+    default="fast",
+    show_default=True,
+    help="TRICERATOPS runtime preset (standard typically expects a longer timeout budget).",
+)
+@click.option("--replicates", type=int, default=None, help="Replicate count for FPP aggregation.")
+@click.option("--seed", type=int, default=None, help="Base RNG seed.")
+@click.option("--override", "overrides", multiple=True, help="Repeat KEY=VALUE TRICERATOPS override entries.")
+@click.option(
+    "--timeout-seconds",
+    type=float,
+    default=None,
+    help="Optional timeout budget. If omitted with --preset standard, defaults to 900 seconds.",
+)
+@click.option(
+    "--contrast-curve",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="ExoFOP-style .tbl/.dat contrast-curve file for TRICERATOPS companion constraints.",
+)
+@click.option(
+    "--contrast-curve-filter",
+    type=str,
+    default=None,
+    help="Optional band label override for --contrast-curve (for example Kcont, Ks, r).",
+)
+@click.option("--stellar-radius", type=float, default=None, help="Stellar radius (Rsun).")
+@click.option("--stellar-mass", type=float, default=None, help="Stellar mass (Msun).")
+@click.option("--stellar-tmag", type=float, default=None, help="TESS magnitude.")
+@click.option("--stellar-file", type=str, default=None, help="JSON file with stellar inputs.")
+@click.option(
+    "--use-stellar-auto/--no-use-stellar-auto",
+    default=False,
+    show_default=True,
+    help="Resolve stellar inputs from TIC when missing from explicit/file inputs.",
+)
+@click.option(
+    "--require-stellar/--no-require-stellar",
+    default=False,
+    show_default=True,
+    help="Fail unless stellar radius and mass resolve.",
+)
+@click.option(
+    "--network-ok/--no-network",
+    default=False,
+    show_default=True,
+    help="Allow network-dependent stellar auto resolution when requested.",
+)
+@click.option(
+    "-o",
+    "--out",
+    "output_path_arg",
+    type=str,
+    default="-",
+    show_default=True,
+    help="JSON output path; '-' writes to stdout.",
+)
+def fpp_run_command(
+    prepare_manifest: Path,
+    require_prepared: bool,
+    preset: str,
+    replicates: int | None,
+    seed: int | None,
+    overrides: tuple[str, ...],
+    timeout_seconds: float | None,
+    contrast_curve: Path | None,
+    contrast_curve_filter: str | None,
+    stellar_radius: float | None,
+    stellar_mass: float | None,
+    stellar_tmag: float | None,
+    stellar_file: str | None,
+    use_stellar_auto: bool,
+    require_stellar: bool,
+    network_ok: bool,
+    output_path_arg: str,
+) -> None:
+    """Run FPP compute from a prepared staging manifest."""
+    _run_fpp_from_prepare_manifest(
+        prepare_manifest=prepare_manifest,
+        require_prepared=require_prepared,
+        preset=preset,
+        replicates=replicates,
+        seed=seed,
+        overrides=overrides,
+        timeout_seconds=timeout_seconds,
+        contrast_curve=contrast_curve,
+        contrast_curve_filter=contrast_curve_filter,
+        stellar_radius=stellar_radius,
+        stellar_mass=stellar_mass,
+        stellar_tmag=stellar_tmag,
+        stellar_file=stellar_file,
+        use_stellar_auto=use_stellar_auto,
+        require_stellar=require_stellar,
+        network_ok=network_ok,
+        output_path_arg=output_path_arg,
+    )
+
+
 @click.command("fpp")
 @click.argument("toi_arg", required=False)
+@click.option(
+    "--prepare-manifest",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help=(
+        "Manifest JSON produced by btv fpp-prepare. "
+        "When provided, btv fpp runs in prepared-manifest mode (same compute path as btv fpp-run)."
+    ),
+)
+@click.option(
+    "--require-prepared/--allow-missing-prepared",
+    default=False,
+    show_default=True,
+    help="Only used with --prepare-manifest. Fail fast when prepared artifacts are missing.",
+)
 @click.option("--tic-id", type=int, default=None, help="TIC identifier.")
 @click.option("--period-days", type=float, default=None, help="Orbital period in days.")
 @click.option("--t0-btjd", type=float, default=None, help="Reference epoch in BTJD.")
@@ -1601,6 +1658,8 @@ def fpp_run_command(
 )
 def fpp_command(
     toi_arg: str | None,
+    prepare_manifest: Path | None,
+    require_prepared: bool,
     tic_id: int | None,
     period_days: float | None,
     t0_btjd: float | None,
@@ -1635,6 +1694,67 @@ def fpp_command(
 ) -> None:
     """Calculate candidate FPP and emit schema-stable JSON."""
     out_path = resolve_optional_output_path(output_path_arg)
+    if prepare_manifest is not None:
+        conflicting_fields: list[str] = []
+        if toi_arg is not None:
+            conflicting_fields.append("TOI_ARG")
+        if tic_id is not None:
+            conflicting_fields.append("--tic-id")
+        if period_days is not None:
+            conflicting_fields.append("--period-days")
+        if t0_btjd is not None:
+            conflicting_fields.append("--t0-btjd")
+        if duration_hours is not None:
+            conflicting_fields.append("--duration-hours")
+        if depth_ppm is not None:
+            conflicting_fields.append("--depth-ppm")
+        if toi is not None:
+            conflicting_fields.append("--toi")
+        if report_file is not None:
+            conflicting_fields.append("--report-file")
+        if detrend is not None:
+            conflicting_fields.append("--detrend")
+        if bool(detrend_cache):
+            conflicting_fields.append("--detrend-cache")
+        if bool(sectors):
+            conflicting_fields.append("--sectors")
+        if bool(cache_only_sectors):
+            conflicting_fields.append("--cache-only-sectors")
+        if cache_dir is not None:
+            conflicting_fields.append("--cache-dir")
+        if bool(drop_scenarios):
+            conflicting_fields.append("--drop-scenario")
+
+        if conflicting_fields:
+            raise BtvCliError(
+                (
+                    "--prepare-manifest cannot be combined with direct candidate/staging options: "
+                    + ", ".join(conflicting_fields)
+                    + ". Use `btv fpp-run --prepare-manifest ...` semantics, or remove --prepare-manifest."
+                ),
+                exit_code=EXIT_INPUT_ERROR,
+            )
+        # Route through the prepared-manifest execution path.
+        return _run_fpp_from_prepare_manifest(
+            prepare_manifest=prepare_manifest,
+            require_prepared=bool(require_prepared),
+            preset=preset,
+            replicates=replicates,
+            seed=seed,
+            overrides=overrides,
+            timeout_seconds=timeout_seconds,
+            contrast_curve=contrast_curve,
+            contrast_curve_filter=contrast_curve_filter,
+            stellar_radius=stellar_radius,
+            stellar_mass=stellar_mass,
+            stellar_tmag=stellar_tmag,
+            stellar_file=stellar_file,
+            use_stellar_auto=use_stellar_auto,
+            require_stellar=require_stellar,
+            network_ok=network_ok,
+            output_path_arg=output_path_arg,
+        )
+
     if (
         report_file is None
         and toi_arg is not None

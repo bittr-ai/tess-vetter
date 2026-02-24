@@ -2206,3 +2206,85 @@ def test_btv_fpp_prepare_with_toi_prefers_toi_candidate_inputs(monkeypatch, tmp_
     assert seen["resolve"]["duration_hours"] is None
     assert seen["resolve"]["depth_ppm"] == 900.0
     assert seen["build_cache"]["sectors"] == [20, 21]
+
+
+def test_btv_fpp_supports_prepare_manifest_mode(monkeypatch, tmp_path: Path) -> None:
+    manifest = {
+        "schema_version": "cli.fpp.prepare.v1",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "tic_id": 123,
+        "period_days": 3.0,
+        "t0_btjd": 1500.0,
+        "duration_hours": 2.0,
+        "depth_ppm_used": 500.0,
+        "sectors_loaded": [10],
+        "cache_dir": str(tmp_path / "cache"),
+        "detrend": {},
+    }
+    manifest_path = tmp_path / "manifest_for_fpp.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    monkeypatch.setattr(
+        "tess_vetter.cli.fpp_cli.resolve_stellar_inputs",
+        lambda **_kwargs: ({}, {"source": "cli", "resolved_from": "cli"}),
+    )
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._cache_missing_sectors", lambda **_kwargs: [])
+    monkeypatch.setattr(
+        "tess_vetter.cli.fpp_cli._runtime_artifacts_ready",
+        lambda **_kwargs: (True, {"target_cached": True, "trilegal_cached": True, "trilegal_csv_path": "ok.csv"}),
+    )
+    monkeypatch.setattr(
+        "tess_vetter.cli.fpp_cli.calculate_fpp",
+        lambda **_kwargs: {"fpp": 0.01, "nfpp": 0.001, "base_seed": 101},
+    )
+
+    out_path = tmp_path / "fpp_from_manifest.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--prepare-manifest",
+            str(manifest_path),
+            "--require-prepared",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "cli.fpp.v3"
+    assert payload["provenance"]["prepare_manifest"]["path"] == str(manifest_path)
+
+
+def test_btv_fpp_prepare_manifest_rejects_conflicting_candidate_options(tmp_path: Path) -> None:
+    manifest = {
+        "schema_version": "cli.fpp.prepare.v1",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "tic_id": 123,
+        "period_days": 3.0,
+        "t0_btjd": 1500.0,
+        "duration_hours": 2.0,
+        "depth_ppm_used": 500.0,
+        "sectors_loaded": [10],
+        "cache_dir": str(tmp_path / "cache"),
+        "detrend": {},
+    }
+    manifest_path = tmp_path / "manifest_conflict.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--prepare-manifest",
+            str(manifest_path),
+            "--tic-id",
+            "123",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--prepare-manifest cannot be combined" in result.output

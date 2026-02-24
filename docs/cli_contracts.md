@@ -50,6 +50,7 @@ Backward compatibility note:
 - `btv vet`: `cli.vet.v2`
 - `btv vet --split-plot-data`: `cli.vet.plot_data.v1` (writes `<out>.plot_data.json` sidecar; default on)
 - `btv fpp`: `cli.fpp.v3`
+- `btv fpp --prepare-manifest <manifest.json>`: `cli.fpp.v3` (prepared-manifest compute mode; same runtime path as `btv fpp-run`)
 - `btv fpp-prepare`: `cli.fpp.prepare.v1`
 - `btv report`: `cli.report.v3`
 - `btv measure-sectors`: `cli.measure_sectors.v1`
