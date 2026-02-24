@@ -304,6 +304,13 @@ def test_vendor_triceratops_has_no_unconditional_griz_print() -> None:
     assert 'print("griz mags:' not in text
 
 
+def test_vendor_gauss2d_returns_scalar_for_scalar_inputs() -> None:
+    from tess_vetter.ext.triceratops_plus_vendor.triceratops.funcs import Gauss2D
+
+    value = Gauss2D(0.1, -0.2, 0.0, 0.0, 0.75, 1.0)
+    assert isinstance(value, float)
+
+
 def make_valid_target(fpp: float = 0.01, seed: int = 0) -> MockTriceratopsTarget:
     """Create a target that returns valid results with slight variation."""
     # Add small random variation based on seed for realistic replicate behavior

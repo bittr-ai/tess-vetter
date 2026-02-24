@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
 title: "tess-vetter"
-version: 0.3.9
+version: 0.3.10
 date-released: 2026-02-24
 identifiers:
   - type: doi

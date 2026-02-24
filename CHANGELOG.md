@@ -6,6 +6,14 @@ This project follows semantic versioning (SemVer).
 
 - No unreleased changes.
 
+## 0.3.10 (2026-02-24)
+
+- Fixed vendored TRICERATOPS Gaussian integrand behavior for SciPy `dblquad`
+  under newer NumPy stacks by returning a scalar `float` when scalar inputs are
+  provided.
+- Added regression coverage for scalar-input behavior in
+  `Gauss2D` used by `calc_depths` integration paths.
+
 ## 0.3.9 (2026-02-24)
 
 - Fixed NumPy 2.x compatibility for vendored TRICERATOPS+ likelihood imports by

@@ -250,6 +250,15 @@ def Gauss2D(x, y, mu_x, mu_y, sigma, A):
         A (float): Area under Gaussian.
     Returns:
     """
+    # scipy.integrate.dblquad expects scalar-valued integrands for scalar x/y.
+    # Keep scalar behavior explicit to avoid NumPy 2.x scalar/array coercion issues,
+    # while preserving legacy array-grid behavior for vector inputs.
+    if np.ndim(x) == 0 and np.ndim(y) == 0:
+        x0 = float(x)
+        y0 = float(y)
+        exponent = ((x0 - mu_x) ** 2 + (y0 - mu_y) ** 2) / (2 * sigma**2)
+        return float(A / (2 * np.pi * sigma**2) * np.exp(-exponent))
+
     xgrid, ygrid = np.meshgrid(x, y)
     exponent = ((xgrid-mu_x)**2 + (ygrid-mu_y)**2)/(2*sigma**2)
     GaussExp = np.exp(-exponent)
