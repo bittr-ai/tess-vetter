@@ -433,6 +433,34 @@ class TestTPFFitsCache:
         assert header_subset["TUNIT1"] == "d"
         assert header_subset["TUNIT2"] == "e-/s"
 
+    def test_get_normalizes_time_when_bjdref_not_btjd_zero(self, cache: TPFFitsCache, sample_data: TPFFitsData) -> None:
+        """get normalizes TIME to BTJD when BJDREF indicates non-BTJD reference."""
+        sample_data.time = np.array([1.0, 2.0, 3.0], dtype=np.float64)
+        sample_data.quality = np.zeros(3, dtype=np.int32)
+        sample_data.flux = sample_data.flux[:3]
+        sample_data.flux_err = sample_data.flux_err[:3] if sample_data.flux_err is not None else None
+        sample_data.meta.update({"BJDREFI": 2458000, "BJDREFF": 0.0, "TIMESYS": "TDB"})
+        cache.put(sample_data)
+
+        retrieved = cache.get(sample_data.ref)
+        assert retrieved is not None
+        np.testing.assert_allclose(retrieved.time, np.array([1001.0, 1002.0, 1003.0], dtype=np.float64))
+
+    def test_get_keeps_time_when_bjdref_is_btjd_reference(
+        self, cache: TPFFitsCache, sample_data: TPFFitsData
+    ) -> None:
+        """get preserves TIME values when BJDREF already equals BTJD reference."""
+        sample_data.time = np.array([1.0, 2.0, 3.0], dtype=np.float64)
+        sample_data.quality = np.zeros(3, dtype=np.int32)
+        sample_data.flux = sample_data.flux[:3]
+        sample_data.flux_err = sample_data.flux_err[:3] if sample_data.flux_err is not None else None
+        sample_data.meta.update({"BJDREFI": 2457000, "BJDREFF": 0.0, "TIMESYS": "TDB"})
+        cache.put(sample_data)
+
+        retrieved = cache.get(sample_data.ref)
+        assert retrieved is not None
+        np.testing.assert_allclose(retrieved.time, np.array([1.0, 2.0, 3.0], dtype=np.float64))
+
     def test_remove_existing(self, cache: TPFFitsCache, sample_data: TPFFitsData) -> None:
         """remove deletes cached entry and returns True."""
         cache.put(sample_data)

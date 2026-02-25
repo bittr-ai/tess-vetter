@@ -106,6 +106,8 @@ class Ephemeris:
             raise ValueError(f"period_days must be positive, got {self.period_days}")
         if self.duration_hours <= 0:
             raise ValueError(f"duration_hours must be positive, got {self.duration_hours}")
+        if looks_like_absolute_bjd(float(self.t0_btjd)):
+            object.__setattr__(self, "t0_btjd", float(self.t0_btjd) - BJD_TO_BTJD_OFFSET)
 
 
 @dataclass

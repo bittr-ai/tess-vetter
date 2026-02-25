@@ -238,7 +238,7 @@ def resolve_candidate_inputs_with_report_seed(
     manual_inputs = {
         "tic_id": tic_id,
         "period_days": period_days,
-        "t0_btjd": t0_btjd,
+        "t0_btjd": normalize_epoch_to_btjd(t0_btjd) if t0_btjd is not None else None,
         "duration_hours": duration_hours,
         "depth_ppm": depth_ppm,
     }

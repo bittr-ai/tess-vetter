@@ -107,3 +107,23 @@ def test_load_report_seed_normalizes_absolute_bjd_t0(tmp_path) -> None:
     )
     seed = load_report_seed(report_file)
     assert seed.t0_btjd == pytest.approx(2001.5)
+
+
+def test_resolve_candidate_inputs_with_report_seed_normalizes_manual_absolute_bjd_t0() -> None:
+    tic_id, period_days, t0_btjd, duration_hours, depth_ppm, _input_resolution = (
+        resolve_candidate_inputs_with_report_seed(
+            network_ok=False,
+            toi=None,
+            tic_id=123456,
+            period_days=12.3,
+            t0_btjd=2459001.5,
+            duration_hours=2.1,
+            depth_ppm=456.0,
+            report_seed=None,
+        )
+    )
+    assert tic_id == 123456
+    assert period_days == 12.3
+    assert t0_btjd == pytest.approx(2001.5)
+    assert duration_hours == 2.1
+    assert depth_ppm == 456.0

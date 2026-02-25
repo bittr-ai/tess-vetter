@@ -15,6 +15,12 @@ class _FakeTPF:
         self.pipeline_mask = np.ones((3, 3), dtype=bool)
 
 
+class _FakeAbsoluteBjdTPF(_FakeTPF):
+    def __init__(self) -> None:
+        super().__init__()
+        self.time = np.linspace(2459001.0, 2459010.0, 10, dtype=np.float64)
+
+
 class _FakeRow:
     def __init__(self, *, exptime: float, distance: float) -> None:
         self.exptime = exptime
@@ -24,6 +30,12 @@ class _FakeRow:
     def download(self):
         self._downloaded = True
         return _FakeTPF()
+
+
+class _FakeAbsoluteBjdRow(_FakeRow):
+    def download(self):
+        self._downloaded = True
+        return _FakeAbsoluteBjdTPF()
 
 
 class _FakeSearchResult:
@@ -77,3 +89,13 @@ def test_download_tpf_filters_by_requested_exptime(monkeypatch) -> None:
     assert rows[0]._downloaded is True
     assert rows[1]._downloaded is False
 
+
+def test_download_tpf_normalizes_absolute_bjd_time(monkeypatch) -> None:
+    rows = [_FakeAbsoluteBjdRow(exptime=120.0, distance=1.0)]
+    fake_lk = _FakeLightkurve(rows)
+    client = MASTClient()
+    monkeypatch.setattr(client, "_ensure_lightkurve", lambda: fake_lk)
+
+    time, *_rest = client.download_tpf(1, sector=1, exptime=None)
+    assert time[0] == 2001.0
+    assert time[-1] == 2010.0

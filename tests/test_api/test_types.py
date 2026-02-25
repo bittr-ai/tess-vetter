@@ -45,6 +45,10 @@ class TestEphemeris:
         with pytest.raises(ValueError, match="duration_hours must be positive"):
             Ephemeris(period_days=3.5, t0_btjd=1850.0, duration_hours=-1.0)
 
+    def test_ephemeris_normalizes_absolute_bjd_t0_to_btjd(self) -> None:
+        eph = Ephemeris(period_days=3.5, t0_btjd=2459001.5, duration_hours=2.5)
+        assert eph.t0_btjd == pytest.approx(2001.5)
+
 
 class TestLightCurve:
     """Tests for LightCurve dataclass."""

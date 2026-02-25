@@ -29,6 +29,7 @@ import numpy as np
 
 from tess_vetter.api.lightcurve import LightCurveData, LightCurveProvenance
 from tess_vetter.api.target import Target
+from tess_vetter.platform.catalogs.time_conventions import BJD_TO_BTJD_OFFSET, looks_like_absolute_bjd
 
 if TYPE_CHECKING:
     pass
@@ -77,6 +78,18 @@ def _search_lightcurve_with_timeout(lk: Any, **kwargs: Any) -> Any:
     if out["error"] is not None:
         raise out["error"]
     return out["result"]
+
+
+def _normalize_btjd_time_array(time_arr: np.ndarray) -> np.ndarray:
+    """Normalize absolute-BJD arrays to BTJD while leaving BTJD unchanged."""
+    out = np.asarray(time_arr, dtype=np.float64)
+    finite = out[np.isfinite(out)]
+    if finite.size == 0:
+        return out
+    mid_time = float(np.median(finite))
+    if looks_like_absolute_bjd(mid_time):
+        return out - BJD_TO_BTJD_OFFSET
+    return out
 
 
 def _maybe_extract_http_status(exc: BaseException) -> int | None:
@@ -1931,7 +1944,7 @@ class MASTClient:
             time_val = getattr(tpf, "time", None)
             if hasattr(time_val, "value"):
                 time_val = time_val.value
-            time_arr = np.asarray(time_val, dtype=np.float64)
+            time_arr = _normalize_btjd_time_array(np.asarray(time_val, dtype=np.float64))
 
             flux_val = getattr(tpf, "flux", None)
             if hasattr(flux_val, "value"):
@@ -2014,7 +2027,7 @@ class MASTClient:
             raise MASTClientError(f"Failed to read cached TPF FITS: {path}: {e}") from e
 
         # Extract arrays; keep wcs/pipeline_mask when available.
-        time = np.asarray(tpf.time.value, dtype=np.float64)
+        time = _normalize_btjd_time_array(np.asarray(tpf.time.value, dtype=np.float64))
         flux = np.asarray(tpf.flux.value, dtype=np.float64)
         flux_err = (
             np.asarray(tpf.flux_err.value, dtype=np.float64)

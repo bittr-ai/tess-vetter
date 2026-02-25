@@ -47,6 +47,10 @@ from astropy.io import fits
 from astropy.wcs import WCS
 
 from tess_vetter.errors import ErrorType, make_error
+from tess_vetter.platform.catalogs.time_conventions import (
+    BJD_TO_BTJD_OFFSET,
+    looks_like_absolute_bjd,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -367,6 +371,51 @@ def _extract_header_subset(header: fits.Header) -> dict[str, Any]:
     return result
 
 
+def _to_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        result = float(value)
+    except Exception:
+        return None
+    if not np.isfinite(result):
+        return None
+    return result
+
+
+def _normalize_time_to_btjd_from_headers(
+    time: np.ndarray[Any, np.dtype[np.floating[Any]]], *, primary_header: fits.Header, data_header: fits.Header
+) -> np.ndarray[Any, np.dtype[np.floating[Any]]]:
+    """Normalize FITS TIME axis to BTJD using available reference metadata."""
+    out = np.asarray(time, dtype=np.float64)
+    finite = out[np.isfinite(out)]
+    if finite.size == 0:
+        return out
+    median_time = float(np.median(finite))
+
+    def _get(key: str) -> float | None:
+        return _to_float(data_header.get(key, primary_header.get(key)))
+
+    bjd_ref_i = _get("BJDREFI")
+    bjd_ref_f = _get("BJDREFF")
+    if bjd_ref_i is not None or bjd_ref_f is not None:
+        bjd_ref = float((bjd_ref_i or 0.0) + (bjd_ref_f or 0.0))
+        if abs(bjd_ref - BJD_TO_BTJD_OFFSET) < 1e-9:
+            return out
+        if abs(bjd_ref) < 1e-9 and not looks_like_absolute_bjd(median_time):
+            return out
+        return out + (bjd_ref - BJD_TO_BTJD_OFFSET)
+
+    mjd_ref_i = _get("MJDREFI")
+    mjd_ref_f = _get("MJDREFF")
+    if mjd_ref_i is not None or mjd_ref_f is not None:
+        mjd_ref = float((mjd_ref_i or 0.0) + (mjd_ref_f or 0.0))
+        bjd_ref_from_mjd = mjd_ref + 2400000.5
+        return out + (bjd_ref_from_mjd - BJD_TO_BTJD_OFFSET)
+
+    return out
+
+
 class TPFFitsCache:
     """Disk cache for FITS TPFs with sidecar metadata.
 
@@ -472,6 +521,9 @@ class TPFFitsCache:
 
                 # Get time, flux, flux_err
                 time = np.asarray(data["TIME"], dtype=np.float64)
+                time = _normalize_time_to_btjd_from_headers(
+                    time, primary_header=primary_header, data_header=data_hdu.header
+                )
                 flux = np.asarray(data["FLUX"], dtype=np.float64)
                 flux_err = None
                 if "FLUX_ERR" in data.columns.names:
@@ -600,6 +652,10 @@ class TPFFitsCache:
             for key in wcs_header:
                 if key not in ("", "COMMENT", "HISTORY"):
                     table_hdu.header[key] = wcs_header[key]
+            for key in ("TIMESYS", "TIMEUNIT", "BJDREFI", "BJDREFF", "MJDREFI", "MJDREFF", "TIMEDEL"):
+                if key in data.meta:
+                    with contextlib.suppress(ValueError, TypeError):
+                        table_hdu.header[key] = data.meta[key]
 
             # Aperture mask HDU
             aperture_hdu = fits.ImageHDU(data=data.aperture_mask, name="APERTURE")
