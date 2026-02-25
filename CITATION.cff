@@ -2,8 +2,9 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
 title: "tess-vetter"
-version: 0.3.11
-date-released: 2026-02-24
+publisher: "bittr.ai"
+version: 0.3.13
+date-released: 2026-02-25
 identifiers:
   - type: doi
     value: "10.5281/zenodo.18743917"
@@ -20,4 +21,9 @@ keywords:
   - vetting
   - astrophysics
 authors:
-  - name: "tess-vetter contributors"
+  - family-names: "Collier"
+    given-names: "M."
+    affiliation: "bittr.ai"
+  - family-names: "Derfer"
+    given-names: "B."
+    affiliation: "bittr.ai"
