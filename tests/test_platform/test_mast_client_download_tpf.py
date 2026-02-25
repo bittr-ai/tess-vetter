@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 from astropy.io import fits
 import pytest
@@ -92,6 +94,27 @@ class _FakeLightkurve:
         return _FakeSearchResult(self._rows)
 
 
+class _ArrayWithValue:
+    def __init__(self, value: np.ndarray) -> None:
+        self.value = value
+
+
+class _FakeCachedTPF:
+    def __init__(self) -> None:
+        time = np.linspace(0.0, 1.0, 10, dtype=np.float64)
+        self.time = _ArrayWithValue(time)
+        self.flux = _ArrayWithValue(np.ones((10, 3, 3), dtype=np.float64))
+        self.flux_err = _ArrayWithValue(np.ones((10, 3, 3), dtype=np.float64) * 0.1)
+        self.quality = np.zeros(10, dtype=np.int32)
+        self.wcs = None
+        self.pipeline_mask = np.ones((3, 3), dtype=bool)
+
+
+class _FakeLightkurveReader:
+    def read(self, _path: str):
+        return _FakeCachedTPF()
+
+
 def test_download_tpf_prefers_120s_when_exptime_none(monkeypatch) -> None:
     rows = [_FakeRow(exptime=20.0, distance=10.0), _FakeRow(exptime=120.0, distance=5.0)]
     fake_lk = _FakeLightkurve(rows)
@@ -150,9 +173,64 @@ def test_download_tpf_uses_bjdref_when_time_is_relative(monkeypatch) -> None:
 def test_download_tpf_strict_timesys_policy_rejects_non_tdb(monkeypatch) -> None:
     rows = [_FakeUtcTimesysRow(exptime=120.0, distance=1.0)]
     fake_lk = _FakeLightkurve(rows)
-    client = MASTClient()
+    client = MASTClient(tpf_timesys_policy="strict")
     monkeypatch.setattr(client, "_ensure_lightkurve", lambda: fake_lk)
-    monkeypatch.setenv("BTV_TPF_TIMESYS_POLICY", "strict")
 
     with pytest.raises(MASTClientError, match="TIMESYS=UTC"):
         client.download_tpf(1, sector=1, exptime=None)
+
+
+def test_download_tpf_warn_timesys_policy_converts_non_tdb(monkeypatch, caplog) -> None:
+    rows = [_FakeUtcTimesysRow(exptime=120.0, distance=1.0)]
+    fake_lk = _FakeLightkurve(rows)
+    client = MASTClient(tpf_timesys_policy="warn")
+    monkeypatch.setattr(client, "_ensure_lightkurve", lambda: fake_lk)
+
+    time, *_rest = client.download_tpf(1, sector=1, exptime=None)
+    assert "TIMESYS=UTC" in caplog.text
+    assert not np.allclose(time, np.linspace(0.0, 1.0, 10, dtype=np.float64))
+
+
+def test_download_tpf_off_timesys_policy_does_not_warn(monkeypatch, caplog) -> None:
+    rows = [_FakeUtcTimesysRow(exptime=120.0, distance=1.0)]
+    fake_lk = _FakeLightkurve(rows)
+    client = MASTClient(tpf_timesys_policy="off")
+    monkeypatch.setattr(client, "_ensure_lightkurve", lambda: fake_lk)
+
+    _time, *_rest = client.download_tpf(1, sector=1, exptime=None)
+    assert "TIMESYS=UTC" not in caplog.text
+
+
+def _write_cached_tpf_with_timesys(path: Path, *, timesys: str) -> None:
+    time = np.linspace(0.0, 1.0, 10, dtype=np.float64)
+    flux = np.ones((10, 9), dtype=np.float64)
+    qual = np.zeros(10, dtype=np.int32)
+    cols = [
+        fits.Column(name="TIME", format="D", array=time),
+        fits.Column(name="FLUX", format="9D", dim="(3,3)", array=flux),
+        fits.Column(name="QUALITY", format="J", array=qual),
+    ]
+    primary = fits.PrimaryHDU()
+    table = fits.BinTableHDU.from_columns(cols)
+    table.header["TIMESYS"] = timesys
+    table.header["BJDREFI"] = 2457000
+    table.header["BJDREFF"] = 0.0
+    fits.HDUList([primary, table]).writeto(path, overwrite=True)
+
+
+def test_download_tpf_cached_strict_timesys_policy_rejects_non_tdb(
+    monkeypatch, tmp_path: Path
+) -> None:
+    mast_root = tmp_path / "mastDownload" / "TESS"
+    target_dir = mast_root / "tess2018-s0001-0000000000000001-0123-a_tp"
+    target_dir.mkdir(parents=True)
+    fits_path = target_dir / "tess2018-s0001-0000000000000001-0123-a_tp.fits"
+    _write_cached_tpf_with_timesys(fits_path, timesys="UTC")
+
+    client = MASTClient(cache_dir=str(tmp_path), tpf_timesys_policy="strict")
+    client._cache_index_built = False
+    client._cache_dirs_by_tic.clear()
+    monkeypatch.setattr(client, "_ensure_lightkurve", lambda: _FakeLightkurveReader())
+
+    with pytest.raises(MASTClientError, match="TIMESYS=UTC"):
+        client.download_tpf_cached(1, sector=1)

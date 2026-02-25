@@ -19,6 +19,7 @@ import os
 import re
 import threading
 import time as time_module
+import contextlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -53,12 +54,19 @@ def _search_timeout_seconds() -> float:
     return value
 
 
+def _normalize_timesys_policy(raw: str | None) -> str:
+    """Normalize policy for non-TDB TPF time systems: off|warn|strict."""
+    if raw is None:
+        return "warn"
+    value = str(raw).strip().lower()
+    if value in {"off", "warn", "strict"}:
+        return value
+    return "warn"
+
+
 def _tpf_timesys_policy() -> str:
     """Return policy for non-TDB TPF time systems: off|warn|strict."""
-    raw = str(os.getenv("BTV_TPF_TIMESYS_POLICY", "warn")).strip().lower()
-    if raw in {"off", "warn", "strict"}:
-        return raw
-    return "warn"
+    return _normalize_timesys_policy(os.getenv("BTV_TPF_TIMESYS_POLICY", "warn"))
 
 
 def _search_lightcurve_with_timeout(lk: Any, **kwargs: Any) -> Any:
@@ -89,14 +97,53 @@ def _search_lightcurve_with_timeout(lk: Any, **kwargs: Any) -> Any:
     return out["result"]
 
 
+def _absolute_jd_from_epoch(
+    epoch: float, *, bjd_reference: float | None, mjd_reference: float | None
+) -> float:
+    """Infer absolute JD from epoch and optional reference metadata."""
+    if bjd_reference is not None:
+        return float(epoch) + float(bjd_reference)
+    if mjd_reference is not None:
+        return float(epoch) + float(mjd_reference) + 2_400_000.5
+    value = float(epoch)
+    if value >= 2_400_000.0:
+        return value
+    if 50_000.0 <= value < 90_000.0:
+        return value + 2_400_000.5
+    if 7_000.0 <= value < 20_000.0:
+        return value + 2_450_000.0
+    # Treat small values as BTJD-like offset.
+    return value + 2_457_000.0
+
+
 def _normalize_btjd_time_array(
-    time_arr: np.ndarray, *, bjd_reference: float | None = None, mjd_reference: float | None = None
+    time_arr: np.ndarray,
+    *,
+    bjd_reference: float | None = None,
+    mjd_reference: float | None = None,
+    timesys: str | None = None,
 ) -> np.ndarray:
     """Normalize time arrays to BTJD using optional reference metadata."""
     out = np.asarray(time_arr, dtype=np.float64)
     finite = out[np.isfinite(out)]
     if finite.size == 0:
         return out
+    timesys_upper = str(timesys).strip().upper() if timesys is not None else "TDB"
+    if timesys_upper and timesys_upper != "TDB":
+        with contextlib.suppress(Exception):
+            from astropy.time import Time
+
+            absolute = np.asarray(
+                [
+                    _absolute_jd_from_epoch(v, bjd_reference=bjd_reference, mjd_reference=mjd_reference)
+                    for v in finite
+                ],
+                dtype=np.float64,
+            )
+            absolute_tdb = np.asarray(Time(absolute, format="jd", scale=timesys_upper.lower()).tdb.jd)
+            converted = np.array(out, copy=True, dtype=np.float64)
+            converted[np.isfinite(converted)] = absolute_tdb - 2_457_000.0
+            return converted
     normalized = np.array(out, copy=True, dtype=np.float64)
     mask = np.isfinite(normalized)
     normalized[mask] = np.asarray(
@@ -146,13 +193,12 @@ def _extract_tpf_time_references(tpf: Any) -> tuple[float | None, float | None, 
     return None, None, timesys
 
 
-def _enforce_tpf_timesys_policy(*, timesys: str | None, context: str) -> None:
+def _enforce_tpf_timesys_policy(*, timesys: str | None, context: str, policy: str) -> None:
     """Enforce configured policy for non-TDB TPF TIMESYS values."""
     if timesys is None:
         return
     if timesys == "TDB":
         return
-    policy = _tpf_timesys_policy()
     message = f"TPF TIMESYS={timesys} in {context}; expected TDB"
     if policy == "off":
         return
@@ -544,6 +590,7 @@ class MASTClient:
         normalize: bool = True,
         cache_dir: str | None = None,
         mast_timeout_seconds: float | None = None,
+        tpf_timesys_policy: str | None = None,
     ) -> None:
         """Initialize MAST client.
 
@@ -553,12 +600,17 @@ class MASTClient:
             author: Preferred pipeline author (SPOC, QLP, TESS-SPOC, etc.)
                 Set to None to search all authors.
             normalize: Whether to normalize flux to median ~1.0.
+            tpf_timesys_policy: Policy for non-TDB TPF times: "off", "warn", or "strict".
+                If None, uses BTV_TPF_TIMESYS_POLICY (default "warn").
         """
         self.quality_mask = quality_mask
         self.author = author
         self.normalize = normalize
         self.cache_dir = cache_dir
         self.mast_timeout_seconds = mast_timeout_seconds
+        self.tpf_timesys_policy = _normalize_timesys_policy(
+            tpf_timesys_policy if tpf_timesys_policy is not None else _tpf_timesys_policy()
+        )
         self._lk_imported = False
         self._cache_index_built = False
         self._cache_dirs_by_tic: dict[str, list[Path]] = {}
@@ -2014,9 +2066,16 @@ class MASTClient:
             if hasattr(time_val, "value"):
                 time_val = time_val.value
             bjd_ref, mjd_ref, timesys = _extract_tpf_time_references(tpf)
-            _enforce_tpf_timesys_policy(timesys=timesys, context=f"TIC {tic_id} sector {sector} download")
+            _enforce_tpf_timesys_policy(
+                timesys=timesys,
+                context=f"TIC {tic_id} sector {sector} download",
+                policy=self.tpf_timesys_policy,
+            )
             time_arr = _normalize_btjd_time_array(
-                np.asarray(time_val, dtype=np.float64), bjd_reference=bjd_ref, mjd_reference=mjd_ref
+                np.asarray(time_val, dtype=np.float64),
+                bjd_reference=bjd_ref,
+                mjd_reference=mjd_ref,
+                timesys=timesys,
             )
 
             flux_val = getattr(tpf, "flux", None)
@@ -2117,9 +2176,14 @@ class MASTClient:
                 mjd_ref_f = _safe_float(data_header.get("MJDREFF", primary.get("MJDREFF")))
                 if mjd_ref_i is not None or mjd_ref_f is not None:
                     mjd_ref = float((mjd_ref_i or 0.0) + (mjd_ref_f or 0.0))
-        _enforce_tpf_timesys_policy(timesys=timesys, context=f"{path}")
+        _enforce_tpf_timesys_policy(
+            timesys=timesys, context=f"{path}", policy=self.tpf_timesys_policy
+        )
         time = _normalize_btjd_time_array(
-            np.asarray(tpf.time.value, dtype=np.float64), bjd_reference=bjd_ref, mjd_reference=mjd_ref
+            np.asarray(tpf.time.value, dtype=np.float64),
+            bjd_reference=bjd_ref,
+            mjd_reference=mjd_ref,
+            timesys=timesys,
         )
         flux = np.asarray(tpf.flux.value, dtype=np.float64)
         flux_err = (
