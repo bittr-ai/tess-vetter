@@ -53,6 +53,14 @@ def _search_timeout_seconds() -> float:
     return value
 
 
+def _tpf_timesys_policy() -> str:
+    """Return policy for non-TDB TPF time systems: off|warn|strict."""
+    raw = str(os.getenv("BTV_TPF_TIMESYS_POLICY", "warn")).strip().lower()
+    if raw in {"off", "warn", "strict"}:
+        return raw
+    return "warn"
+
+
 def _search_lightcurve_with_timeout(lk: Any, **kwargs: Any) -> Any:
     """Run lightkurve.search_lightcurve with a hard timeout.
 
@@ -113,27 +121,44 @@ def _safe_float(value: object | None) -> float | None:
     return out
 
 
-def _extract_tpf_time_references(tpf: Any) -> tuple[float | None, float | None]:
+def _extract_tpf_time_references(tpf: Any) -> tuple[float | None, float | None, str | None]:
     """Extract BJD/MJD reference zero-points from a Lightkurve TPF object."""
     hdu = getattr(tpf, "hdu", None)
     if hdu is None:
-        return None, None
+        return None, None, None
     try:
         primary = hdu[0].header if len(hdu) > 0 else {}
         data_header = hdu[1].header if len(hdu) > 1 else {}
     except Exception:
-        return None, None
+        return None, None, None
+    timesys_raw = data_header.get("TIMESYS", primary.get("TIMESYS"))
+    timesys = str(timesys_raw).strip().upper() if timesys_raw is not None else None
 
     bjd_ref_i = _safe_float(data_header.get("BJDREFI", primary.get("BJDREFI")))
     bjd_ref_f = _safe_float(data_header.get("BJDREFF", primary.get("BJDREFF")))
     if bjd_ref_i is not None or bjd_ref_f is not None:
-        return float((bjd_ref_i or 0.0) + (bjd_ref_f or 0.0)), None
+        return float((bjd_ref_i or 0.0) + (bjd_ref_f or 0.0)), None, timesys
 
     mjd_ref_i = _safe_float(data_header.get("MJDREFI", primary.get("MJDREFI")))
     mjd_ref_f = _safe_float(data_header.get("MJDREFF", primary.get("MJDREFF")))
     if mjd_ref_i is not None or mjd_ref_f is not None:
-        return None, float((mjd_ref_i or 0.0) + (mjd_ref_f or 0.0))
-    return None, None
+        return None, float((mjd_ref_i or 0.0) + (mjd_ref_f or 0.0)), timesys
+    return None, None, timesys
+
+
+def _enforce_tpf_timesys_policy(*, timesys: str | None, context: str) -> None:
+    """Enforce configured policy for non-TDB TPF TIMESYS values."""
+    if timesys is None:
+        return
+    if timesys == "TDB":
+        return
+    policy = _tpf_timesys_policy()
+    message = f"TPF TIMESYS={timesys} in {context}; expected TDB"
+    if policy == "off":
+        return
+    if policy == "strict":
+        raise MASTClientError(message)
+    logger.warning(message)
 
 
 def _maybe_extract_http_status(exc: BaseException) -> int | None:
@@ -1988,7 +2013,8 @@ class MASTClient:
             time_val = getattr(tpf, "time", None)
             if hasattr(time_val, "value"):
                 time_val = time_val.value
-            bjd_ref, mjd_ref = _extract_tpf_time_references(tpf)
+            bjd_ref, mjd_ref, timesys = _extract_tpf_time_references(tpf)
+            _enforce_tpf_timesys_policy(timesys=timesys, context=f"TIC {tic_id} sector {sector} download")
             time_arr = _normalize_btjd_time_array(
                 np.asarray(time_val, dtype=np.float64), bjd_reference=bjd_ref, mjd_reference=mjd_ref
             )
@@ -2076,9 +2102,12 @@ class MASTClient:
         # Extract arrays; keep wcs/pipeline_mask when available.
         bjd_ref: float | None = None
         mjd_ref: float | None = None
+        timesys: str | None = None
         with fits.open(path) as hdul:
             primary = hdul[0].header if len(hdul) > 0 else {}
             data_header = hdul[1].header if len(hdul) > 1 else {}
+            timesys_raw = data_header.get("TIMESYS", primary.get("TIMESYS"))
+            timesys = str(timesys_raw).strip().upper() if timesys_raw is not None else None
             bjd_ref_i = _safe_float(data_header.get("BJDREFI", primary.get("BJDREFI")))
             bjd_ref_f = _safe_float(data_header.get("BJDREFF", primary.get("BJDREFF")))
             if bjd_ref_i is not None or bjd_ref_f is not None:
@@ -2088,6 +2117,7 @@ class MASTClient:
                 mjd_ref_f = _safe_float(data_header.get("MJDREFF", primary.get("MJDREFF")))
                 if mjd_ref_i is not None or mjd_ref_f is not None:
                     mjd_ref = float((mjd_ref_i or 0.0) + (mjd_ref_f or 0.0))
+        _enforce_tpf_timesys_policy(timesys=timesys, context=f"{path}")
         time = _normalize_btjd_time_array(
             np.asarray(tpf.time.value, dtype=np.float64), bjd_reference=bjd_ref, mjd_reference=mjd_ref
         )

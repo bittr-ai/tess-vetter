@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import numpy as np
 from astropy.io import fits
+import pytest
 
-from tess_vetter.platform.io.mast_client import MASTClient
+from tess_vetter.platform.io.mast_client import MASTClient, MASTClientError
 
 
 class _FakeTPF:
@@ -35,6 +36,14 @@ class _FakeRefOffsetTPF(_FakeTPF):
         self.hdu[1].header["BJDREFF"] = 0.0
 
 
+class _FakeUtcTimesysTPF(_FakeTPF):
+    def __init__(self) -> None:
+        super().__init__()
+        self.hdu[1].header["TIMESYS"] = "UTC"
+        self.hdu[1].header["BJDREFI"] = 2457000
+        self.hdu[1].header["BJDREFF"] = 0.0
+
+
 class _FakeRow:
     def __init__(self, *, exptime: float, distance: float) -> None:
         self.exptime = exptime
@@ -56,6 +65,12 @@ class _FakeRefOffsetRow(_FakeRow):
     def download(self):
         self._downloaded = True
         return _FakeRefOffsetTPF()
+
+
+class _FakeUtcTimesysRow(_FakeRow):
+    def download(self):
+        self._downloaded = True
+        return _FakeUtcTimesysTPF()
 
 
 class _FakeSearchResult:
@@ -130,3 +145,14 @@ def test_download_tpf_uses_bjdref_when_time_is_relative(monkeypatch) -> None:
     time, *_rest = client.download_tpf(1, sector=1, exptime=None)
     assert time[0] == 1001.0
     assert time[-1] == 1010.0
+
+
+def test_download_tpf_strict_timesys_policy_rejects_non_tdb(monkeypatch) -> None:
+    rows = [_FakeUtcTimesysRow(exptime=120.0, distance=1.0)]
+    fake_lk = _FakeLightkurve(rows)
+    client = MASTClient()
+    monkeypatch.setattr(client, "_ensure_lightkurve", lambda: fake_lk)
+    monkeypatch.setenv("BTV_TPF_TIMESYS_POLICY", "strict")
+
+    with pytest.raises(MASTClientError, match="TIMESYS=UTC"):
+        client.download_tpf(1, sector=1, exptime=None)
