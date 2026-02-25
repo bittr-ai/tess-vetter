@@ -19,7 +19,6 @@ import os
 import re
 import threading
 import time as time_module
-import contextlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -122,17 +121,23 @@ def _normalize_btjd_time_array(
     bjd_reference: float | None = None,
     mjd_reference: float | None = None,
     timesys: str | None = None,
+    policy: str = "warn",
 ) -> np.ndarray:
     """Normalize time arrays to BTJD using optional reference metadata."""
     out = np.asarray(time_arr, dtype=np.float64)
     finite = out[np.isfinite(out)]
     if finite.size == 0:
         return out
-    timesys_upper = str(timesys).strip().upper() if timesys is not None else "TDB"
-    if timesys_upper and timesys_upper != "TDB":
-        with contextlib.suppress(Exception):
+    timesys_norm = _normalize_timesys_label(timesys)
+    if timesys_norm in {"UTC", "TT", "TAI"}:
+        try:
             from astropy.time import Time
-
+        except Exception as exc:
+            if policy == "off":
+                logger.warning("Failed to import astropy.time for TIMESYS conversion: %s", exc)
+            else:
+                raise MASTClientError(f"Unable to convert TIMESYS={timesys_norm} to TDB: {exc}") from exc
+        else:
             absolute = np.asarray(
                 [
                     _absolute_jd_from_epoch(v, bjd_reference=bjd_reference, mjd_reference=mjd_reference)
@@ -140,10 +145,19 @@ def _normalize_btjd_time_array(
                 ],
                 dtype=np.float64,
             )
-            absolute_tdb = np.asarray(Time(absolute, format="jd", scale=timesys_upper.lower()).tdb.jd)
-            converted = np.array(out, copy=True, dtype=np.float64)
-            converted[np.isfinite(converted)] = absolute_tdb - 2_457_000.0
-            return converted
+            try:
+                absolute_tdb = np.asarray(Time(absolute, format="jd", scale=timesys_norm.lower()).tdb.jd)
+            except Exception as exc:
+                if policy == "off":
+                    logger.warning("Failed TIMESYS conversion %s->TDB; using fallback normalization: %s", timesys_norm, exc)
+                else:
+                    raise MASTClientError(
+                        f"Failed converting TIMESYS={timesys_norm} to TDB for BTJD normalization: {exc}"
+                    ) from exc
+            else:
+                converted = np.array(out, copy=True, dtype=np.float64)
+                converted[np.isfinite(converted)] = absolute_tdb - 2_457_000.0
+                return converted
     normalized = np.array(out, copy=True, dtype=np.float64)
     mask = np.isfinite(normalized)
     normalized[mask] = np.asarray(
@@ -154,6 +168,23 @@ def _normalize_btjd_time_array(
         dtype=np.float64,
     )
     return normalized
+
+
+def _normalize_timesys_label(timesys: str | None) -> str | None:
+    if timesys is None:
+        return None
+    label = str(timesys).strip().upper()
+    if not label:
+        return None
+    if label in {"TDB", "BJD", "BJD_TDB", "BJD (TDB)", "BTJD"}:
+        return "TDB"
+    if label in {"UTC", "BJD_UTC", "BJD (UTC)"}:
+        return "UTC"
+    if label in {"TT", "BJD_TT", "BJD (TT)"}:
+        return "TT"
+    if label in {"TAI", "BJD_TAI", "BJD (TAI)"}:
+        return "TAI"
+    return "UNKNOWN"
 
 
 def _safe_float(value: object | None) -> float | None:
@@ -195,11 +226,13 @@ def _extract_tpf_time_references(tpf: Any) -> tuple[float | None, float | None, 
 
 def _enforce_tpf_timesys_policy(*, timesys: str | None, context: str, policy: str) -> None:
     """Enforce configured policy for non-TDB TPF TIMESYS values."""
-    if timesys is None:
+    timesys_norm = _normalize_timesys_label(timesys)
+    if timesys_norm is None:
         return
-    if timesys == "TDB":
+    if timesys_norm == "TDB":
         return
-    message = f"TPF TIMESYS={timesys} in {context}; expected TDB"
+    label = str(timesys).strip().upper() if timesys is not None else "UNKNOWN"
+    message = f"TPF TIMESYS={label} in {context}; expected TDB"
     if policy == "off":
         return
     if policy == "strict":
@@ -608,12 +641,19 @@ class MASTClient:
         self.normalize = normalize
         self.cache_dir = cache_dir
         self.mast_timeout_seconds = mast_timeout_seconds
-        self.tpf_timesys_policy = _normalize_timesys_policy(
-            tpf_timesys_policy if tpf_timesys_policy is not None else _tpf_timesys_policy()
+        self._tpf_timesys_policy_override = (
+            _normalize_timesys_policy(tpf_timesys_policy) if tpf_timesys_policy is not None else None
         )
         self._lk_imported = False
         self._cache_index_built = False
         self._cache_dirs_by_tic: dict[str, list[Path]] = {}
+
+    @property
+    def tpf_timesys_policy(self) -> str:
+        """Effective non-TDB TPF policy for this client."""
+        if self._tpf_timesys_policy_override is not None:
+            return self._tpf_timesys_policy_override
+        return _tpf_timesys_policy()
 
     def _ensure_lightkurve(self) -> Any:
         """Lazy import of lightkurve to avoid import-time overhead."""
@@ -2076,6 +2116,7 @@ class MASTClient:
                 bjd_reference=bjd_ref,
                 mjd_reference=mjd_ref,
                 timesys=timesys,
+                policy=self.tpf_timesys_policy,
             )
 
             flux_val = getattr(tpf, "flux", None)
@@ -2184,6 +2225,7 @@ class MASTClient:
             bjd_reference=bjd_ref,
             mjd_reference=mjd_ref,
             timesys=timesys,
+            policy=self.tpf_timesys_policy,
         )
         flux = np.asarray(tpf.flux.value, dtype=np.float64)
         flux_err = (

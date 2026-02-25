@@ -234,3 +234,54 @@ def test_download_tpf_cached_strict_timesys_policy_rejects_non_tdb(
 
     with pytest.raises(MASTClientError, match="TIMESYS=UTC"):
         client.download_tpf_cached(1, sector=1)
+
+
+def test_download_tpf_cached_warn_timesys_policy_logs_and_converts(
+    monkeypatch, tmp_path: Path, caplog
+) -> None:
+    mast_root = tmp_path / "mastDownload" / "TESS"
+    target_dir = mast_root / "tess2018-s0001-0000000000000001-0123-a_tp"
+    target_dir.mkdir(parents=True)
+    fits_path = target_dir / "tess2018-s0001-0000000000000001-0123-a_tp.fits"
+    _write_cached_tpf_with_timesys(fits_path, timesys="UTC")
+
+    client = MASTClient(cache_dir=str(tmp_path), tpf_timesys_policy="warn")
+    client._cache_index_built = False
+    client._cache_dirs_by_tic.clear()
+    monkeypatch.setattr(client, "_ensure_lightkurve", lambda: _FakeLightkurveReader())
+
+    time, *_rest = client.download_tpf_cached(1, sector=1)
+    assert "TIMESYS=UTC" in caplog.text
+    assert not np.allclose(time, np.linspace(0.0, 1.0, 10, dtype=np.float64))
+
+
+def test_download_tpf_cached_off_timesys_policy_no_warning(
+    monkeypatch, tmp_path: Path, caplog
+) -> None:
+    mast_root = tmp_path / "mastDownload" / "TESS"
+    target_dir = mast_root / "tess2018-s0001-0000000000000001-0123-a_tp"
+    target_dir.mkdir(parents=True)
+    fits_path = target_dir / "tess2018-s0001-0000000000000001-0123-a_tp.fits"
+    _write_cached_tpf_with_timesys(fits_path, timesys="UTC")
+
+    client = MASTClient(cache_dir=str(tmp_path), tpf_timesys_policy="off")
+    client._cache_index_built = False
+    client._cache_dirs_by_tic.clear()
+    monkeypatch.setattr(client, "_ensure_lightkurve", lambda: _FakeLightkurveReader())
+
+    _time, *_rest = client.download_tpf_cached(1, sector=1)
+    assert "TIMESYS=UTC" not in caplog.text
+
+
+def test_client_without_override_rereads_timesys_policy_env(monkeypatch) -> None:
+    rows = [_FakeUtcTimesysRow(exptime=120.0, distance=1.0)]
+    fake_lk = _FakeLightkurve(rows)
+    client = MASTClient()
+    monkeypatch.setattr(client, "_ensure_lightkurve", lambda: fake_lk)
+
+    monkeypatch.setenv("BTV_TPF_TIMESYS_POLICY", "off")
+    _time, *_rest = client.download_tpf(1, sector=1, exptime=None)
+
+    monkeypatch.setenv("BTV_TPF_TIMESYS_POLICY", "strict")
+    with pytest.raises(MASTClientError, match="TIMESYS=UTC"):
+        client.download_tpf(1, sector=1, exptime=None)
