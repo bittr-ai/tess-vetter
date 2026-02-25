@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from pathlib import Path
 
 import numpy as np
@@ -273,15 +274,59 @@ def test_download_tpf_cached_off_timesys_policy_no_warning(
     assert "TIMESYS=UTC" not in caplog.text
 
 
-def test_client_without_override_rereads_timesys_policy_env(monkeypatch) -> None:
+def test_client_without_override_keeps_timesys_policy_from_construction(monkeypatch) -> None:
     rows = [_FakeUtcTimesysRow(exptime=120.0, distance=1.0)]
     fake_lk = _FakeLightkurve(rows)
+    monkeypatch.setenv("BTV_TPF_TIMESYS_POLICY", "off")
     client = MASTClient()
     monkeypatch.setattr(client, "_ensure_lightkurve", lambda: fake_lk)
-
-    monkeypatch.setenv("BTV_TPF_TIMESYS_POLICY", "off")
     _time, *_rest = client.download_tpf(1, sector=1, exptime=None)
 
     monkeypatch.setenv("BTV_TPF_TIMESYS_POLICY", "strict")
-    with pytest.raises(MASTClientError, match="TIMESYS=UTC"):
-        client.download_tpf(1, sector=1, exptime=None)
+    # Policy stays pinned for this client instance.
+    _time2, *_rest2 = client.download_tpf(1, sector=1, exptime=None)
+
+
+def test_download_tpf_warn_policy_falls_back_when_astropy_import_fails(monkeypatch) -> None:
+    rows = [_FakeUtcTimesysRow(exptime=120.0, distance=1.0)]
+    fake_lk = _FakeLightkurve(rows)
+    client = MASTClient(tpf_timesys_policy="warn")
+    monkeypatch.setattr(client, "_ensure_lightkurve", lambda: fake_lk)
+
+    real_import = builtins.__import__
+
+    def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):  # type: ignore[no-untyped-def]
+        if name == "astropy.time":
+            raise ImportError("astropy.time unavailable")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    time, *_rest = client.download_tpf(1, sector=1, exptime=None)
+    assert time.shape == (10,)
+
+
+def test_download_tpf_cached_warn_policy_falls_back_when_astropy_import_fails(
+    monkeypatch, tmp_path: Path, caplog
+) -> None:
+    mast_root = tmp_path / "mastDownload" / "TESS"
+    target_dir = mast_root / "tess2018-s0001-0000000000000001-0123-a_tp"
+    target_dir.mkdir(parents=True)
+    fits_path = target_dir / "tess2018-s0001-0000000000000001-0123-a_tp.fits"
+    _write_cached_tpf_with_timesys(fits_path, timesys="UTC")
+
+    client = MASTClient(cache_dir=str(tmp_path), tpf_timesys_policy="warn")
+    client._cache_index_built = False
+    client._cache_dirs_by_tic.clear()
+    monkeypatch.setattr(client, "_ensure_lightkurve", lambda: _FakeLightkurveReader())
+
+    real_import = builtins.__import__
+
+    def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):  # type: ignore[no-untyped-def]
+        if name == "astropy.time":
+            raise ImportError("astropy.time unavailable")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    time, *_rest = client.download_tpf_cached(1, sector=1)
+    assert time.shape == (10,)
+    assert "Failed to import astropy.time" in caplog.text

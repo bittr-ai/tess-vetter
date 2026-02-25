@@ -133,10 +133,10 @@ def _normalize_btjd_time_array(
         try:
             from astropy.time import Time
         except Exception as exc:
-            if policy == "off":
-                logger.warning("Failed to import astropy.time for TIMESYS conversion: %s", exc)
-            else:
+            if policy == "strict":
                 raise MASTClientError(f"Unable to convert TIMESYS={timesys_norm} to TDB: {exc}") from exc
+            if policy == "warn":
+                logger.warning("Failed to import astropy.time for TIMESYS conversion: %s", exc)
         else:
             absolute = np.asarray(
                 [
@@ -148,12 +148,12 @@ def _normalize_btjd_time_array(
             try:
                 absolute_tdb = np.asarray(Time(absolute, format="jd", scale=timesys_norm.lower()).tdb.jd)
             except Exception as exc:
-                if policy == "off":
-                    logger.warning("Failed TIMESYS conversion %s->TDB; using fallback normalization: %s", timesys_norm, exc)
-                else:
+                if policy == "strict":
                     raise MASTClientError(
                         f"Failed converting TIMESYS={timesys_norm} to TDB for BTJD normalization: {exc}"
                     ) from exc
+                if policy == "warn":
+                    logger.warning("Failed TIMESYS conversion %s->TDB; using fallback normalization: %s", timesys_norm, exc)
             else:
                 converted = np.array(out, copy=True, dtype=np.float64)
                 converted[np.isfinite(converted)] = absolute_tdb - 2_457_000.0
@@ -176,8 +176,10 @@ def _normalize_timesys_label(timesys: str | None) -> str | None:
     label = str(timesys).strip().upper()
     if not label:
         return None
-    if label in {"TDB", "BJD", "BJD_TDB", "BJD (TDB)", "BTJD"}:
+    if label in {"TDB", "BJD_TDB", "BJD (TDB)"}:
         return "TDB"
+    if label in {"BJD", "BTJD"}:
+        return "UNKNOWN"
     if label in {"UTC", "BJD_UTC", "BJD (UTC)"}:
         return "UTC"
     if label in {"TT", "BJD_TT", "BJD (TT)"}:
@@ -641,8 +643,8 @@ class MASTClient:
         self.normalize = normalize
         self.cache_dir = cache_dir
         self.mast_timeout_seconds = mast_timeout_seconds
-        self._tpf_timesys_policy_override = (
-            _normalize_timesys_policy(tpf_timesys_policy) if tpf_timesys_policy is not None else None
+        self._tpf_timesys_policy = _normalize_timesys_policy(
+            tpf_timesys_policy if tpf_timesys_policy is not None else _tpf_timesys_policy()
         )
         self._lk_imported = False
         self._cache_index_built = False
@@ -651,9 +653,7 @@ class MASTClient:
     @property
     def tpf_timesys_policy(self) -> str:
         """Effective non-TDB TPF policy for this client."""
-        if self._tpf_timesys_policy_override is not None:
-            return self._tpf_timesys_policy_override
-        return _tpf_timesys_policy()
+        return self._tpf_timesys_policy
 
     def _ensure_lightkurve(self) -> Any:
         """Lazy import of lightkurve to avoid import-time overhead."""
