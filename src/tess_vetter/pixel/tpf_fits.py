@@ -416,6 +416,16 @@ def _normalize_time_to_btjd_from_headers(
     return out
 
 
+def _canonical_btjd_header_values() -> dict[str, Any]:
+    """Canonical time-reference metadata for BTJD time arrays."""
+    return {
+        "TIMESYS": "TDB",
+        "TIMEUNIT": "d",
+        "BJDREFI": int(BJD_TO_BTJD_OFFSET),
+        "BJDREFF": 0.0,
+    }
+
+
 class TPFFitsCache:
     """Disk cache for FITS TPFs with sidecar metadata.
 
@@ -607,6 +617,23 @@ class TPFFitsCache:
         try:
             # Ensure cache directory exists
             self._cache_dir.mkdir(parents=True, exist_ok=True)
+            in_primary = fits.Header()
+            in_data = fits.Header()
+            for key, value in data.meta.items():
+                if not isinstance(key, str) or len(key) > 8:
+                    continue
+                with contextlib.suppress(ValueError, TypeError):
+                    in_primary[key] = value
+                    in_data[key] = value
+            normalized_time = _normalize_time_to_btjd_from_headers(
+                np.asarray(data.time, dtype=np.float64),
+                primary_header=in_primary,
+                data_header=in_data,
+            )
+            normalized_meta = dict(data.meta)
+            normalized_meta.update(_canonical_btjd_header_values())
+            normalized_meta.pop("MJDREFI", None)
+            normalized_meta.pop("MJDREFF", None)
 
             # Build FITS file
             # Primary HDU with metadata
@@ -617,7 +644,7 @@ class TPFFitsCache:
             primary_hdu.header["SECTOR"] = data.ref.sector
             primary_hdu.header["AUTHOR"] = data.ref.author
             # Copy metadata
-            for key, value in data.meta.items():
+            for key, value in normalized_meta.items():
                 if key not in primary_hdu.header and len(key) <= 8:
                     with contextlib.suppress(ValueError, TypeError):
                         primary_hdu.header[key] = value
@@ -625,7 +652,7 @@ class TPFFitsCache:
             # Data table HDU
             # Create columns
             cols = [
-                fits.Column(name="TIME", format="D", array=data.time),
+                fits.Column(name="TIME", format="D", array=normalized_time),
                 fits.Column(
                     name="FLUX",
                     format=f"{data.flux.shape[1] * data.flux.shape[2]}D",
@@ -652,10 +679,10 @@ class TPFFitsCache:
             for key in wcs_header:
                 if key not in ("", "COMMENT", "HISTORY"):
                     table_hdu.header[key] = wcs_header[key]
-            for key in ("TIMESYS", "TIMEUNIT", "BJDREFI", "BJDREFF", "MJDREFI", "MJDREFF", "TIMEDEL"):
-                if key in data.meta:
+            for key in ("TIMESYS", "TIMEUNIT", "BJDREFI", "BJDREFF", "TIMEDEL"):
+                if key in normalized_meta:
                     with contextlib.suppress(ValueError, TypeError):
-                        table_hdu.header[key] = data.meta[key]
+                        table_hdu.header[key] = normalized_meta[key]
 
             # Aperture mask HDU
             aperture_hdu = fits.ImageHDU(data=data.aperture_mask, name="APERTURE")
@@ -684,8 +711,11 @@ class TPFFitsCache:
 
             # Add any additional metadata from the header subset
             sidecar["fits_header_subset"].update(
-                _extract_header_subset(fits.Header([(k, v) for k, v in data.meta.items()]))
+                _extract_header_subset(fits.Header([(k, v) for k, v in normalized_meta.items()]))
             )
+            sidecar["fits_header_subset"].update(_canonical_btjd_header_values())
+            sidecar["fits_header_subset"].pop("MJDREFI", None)
+            sidecar["fits_header_subset"].pop("MJDREFF", None)
 
             # Write sidecar
             with open(tmp_sidecar, "w") as f:

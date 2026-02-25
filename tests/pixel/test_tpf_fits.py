@@ -445,6 +445,25 @@ class TestTPFFitsCache:
         retrieved = cache.get(sample_data.ref)
         assert retrieved is not None
         np.testing.assert_allclose(retrieved.time, np.array([1001.0, 1002.0, 1003.0], dtype=np.float64))
+        sidecar = cache.get_sidecar(sample_data.ref)
+        assert sidecar is not None
+        hdr = sidecar["fits_header_subset"]
+        assert hdr["BJDREFI"] == 2457000
+        assert hdr["BJDREFF"] == 0.0
+
+    def test_get_does_not_double_shift_on_re_read(self, cache: TPFFitsCache, sample_data: TPFFitsData) -> None:
+        sample_data.time = np.array([1.0, 2.0, 3.0], dtype=np.float64)
+        sample_data.quality = np.zeros(3, dtype=np.int32)
+        sample_data.flux = sample_data.flux[:3]
+        sample_data.flux_err = sample_data.flux_err[:3] if sample_data.flux_err is not None else None
+        sample_data.meta.update({"BJDREFI": 2458000, "BJDREFF": 0.0, "TIMESYS": "TDB"})
+        cache.put(sample_data)
+
+        first = cache.get(sample_data.ref)
+        second = cache.get(sample_data.ref)
+        assert first is not None and second is not None
+        np.testing.assert_allclose(first.time, np.array([1001.0, 1002.0, 1003.0], dtype=np.float64))
+        np.testing.assert_allclose(second.time, first.time)
 
     def test_get_keeps_time_when_bjdref_is_btjd_reference(
         self, cache: TPFFitsCache, sample_data: TPFFitsData
@@ -460,6 +479,22 @@ class TestTPFFitsCache:
         retrieved = cache.get(sample_data.ref)
         assert retrieved is not None
         np.testing.assert_allclose(retrieved.time, np.array([1.0, 2.0, 3.0], dtype=np.float64))
+
+    def test_get_normalizes_time_when_only_mjd_reference_present(
+        self, cache: TPFFitsCache, sample_data: TPFFitsData
+    ) -> None:
+        sample_data.time = np.array([1.0, 2.0], dtype=np.float64)
+        sample_data.quality = np.zeros(2, dtype=np.int32)
+        sample_data.flux = sample_data.flux[:2]
+        sample_data.flux_err = sample_data.flux_err[:2] if sample_data.flux_err is not None else None
+        sample_data.meta.update({"MJDREFI": 59000, "MJDREFF": 0.0, "TIMESYS": "TDB"})
+        sample_data.meta.pop("BJDREFI", None)
+        sample_data.meta.pop("BJDREFF", None)
+        cache.put(sample_data)
+
+        retrieved = cache.get(sample_data.ref)
+        assert retrieved is not None
+        np.testing.assert_allclose(retrieved.time, np.array([2001.5, 2002.5], dtype=np.float64))
 
     def test_remove_existing(self, cache: TPFFitsCache, sample_data: TPFFitsData) -> None:
         """remove deletes cached entry and returns True."""

@@ -26,10 +26,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
+from astropy.io import fits
 
 from tess_vetter.api.lightcurve import LightCurveData, LightCurveProvenance
 from tess_vetter.api.target import Target
-from tess_vetter.platform.catalogs.time_conventions import BJD_TO_BTJD_OFFSET, looks_like_absolute_bjd
+from tess_vetter.platform.catalogs.time_conventions import normalize_epoch_to_btjd
 
 if TYPE_CHECKING:
     pass
@@ -80,16 +81,59 @@ def _search_lightcurve_with_timeout(lk: Any, **kwargs: Any) -> Any:
     return out["result"]
 
 
-def _normalize_btjd_time_array(time_arr: np.ndarray) -> np.ndarray:
-    """Normalize absolute-BJD arrays to BTJD while leaving BTJD unchanged."""
+def _normalize_btjd_time_array(
+    time_arr: np.ndarray, *, bjd_reference: float | None = None, mjd_reference: float | None = None
+) -> np.ndarray:
+    """Normalize time arrays to BTJD using optional reference metadata."""
     out = np.asarray(time_arr, dtype=np.float64)
     finite = out[np.isfinite(out)]
     if finite.size == 0:
         return out
-    mid_time = float(np.median(finite))
-    if looks_like_absolute_bjd(mid_time):
-        return out - BJD_TO_BTJD_OFFSET
+    normalized = np.array(out, copy=True, dtype=np.float64)
+    mask = np.isfinite(normalized)
+    normalized[mask] = np.asarray(
+        [
+            normalize_epoch_to_btjd(x, bjd_reference=bjd_reference, mjd_reference=mjd_reference)
+            for x in normalized[mask]
+        ],
+        dtype=np.float64,
+    )
+    return normalized
+
+
+def _safe_float(value: object | None) -> float | None:
+    if value is None:
+        return None
+    try:
+        out = float(value)
+    except Exception:
+        return None
+    if not np.isfinite(out):
+        return None
     return out
+
+
+def _extract_tpf_time_references(tpf: Any) -> tuple[float | None, float | None]:
+    """Extract BJD/MJD reference zero-points from a Lightkurve TPF object."""
+    hdu = getattr(tpf, "hdu", None)
+    if hdu is None:
+        return None, None
+    try:
+        primary = hdu[0].header if len(hdu) > 0 else {}
+        data_header = hdu[1].header if len(hdu) > 1 else {}
+    except Exception:
+        return None, None
+
+    bjd_ref_i = _safe_float(data_header.get("BJDREFI", primary.get("BJDREFI")))
+    bjd_ref_f = _safe_float(data_header.get("BJDREFF", primary.get("BJDREFF")))
+    if bjd_ref_i is not None or bjd_ref_f is not None:
+        return float((bjd_ref_i or 0.0) + (bjd_ref_f or 0.0)), None
+
+    mjd_ref_i = _safe_float(data_header.get("MJDREFI", primary.get("MJDREFI")))
+    mjd_ref_f = _safe_float(data_header.get("MJDREFF", primary.get("MJDREFF")))
+    if mjd_ref_i is not None or mjd_ref_f is not None:
+        return None, float((mjd_ref_i or 0.0) + (mjd_ref_f or 0.0))
+    return None, None
 
 
 def _maybe_extract_http_status(exc: BaseException) -> int | None:
@@ -1944,7 +1988,10 @@ class MASTClient:
             time_val = getattr(tpf, "time", None)
             if hasattr(time_val, "value"):
                 time_val = time_val.value
-            time_arr = _normalize_btjd_time_array(np.asarray(time_val, dtype=np.float64))
+            bjd_ref, mjd_ref = _extract_tpf_time_references(tpf)
+            time_arr = _normalize_btjd_time_array(
+                np.asarray(time_val, dtype=np.float64), bjd_reference=bjd_ref, mjd_reference=mjd_ref
+            )
 
             flux_val = getattr(tpf, "flux", None)
             if hasattr(flux_val, "value"):
@@ -2027,7 +2074,23 @@ class MASTClient:
             raise MASTClientError(f"Failed to read cached TPF FITS: {path}: {e}") from e
 
         # Extract arrays; keep wcs/pipeline_mask when available.
-        time = _normalize_btjd_time_array(np.asarray(tpf.time.value, dtype=np.float64))
+        bjd_ref: float | None = None
+        mjd_ref: float | None = None
+        with fits.open(path) as hdul:
+            primary = hdul[0].header if len(hdul) > 0 else {}
+            data_header = hdul[1].header if len(hdul) > 1 else {}
+            bjd_ref_i = _safe_float(data_header.get("BJDREFI", primary.get("BJDREFI")))
+            bjd_ref_f = _safe_float(data_header.get("BJDREFF", primary.get("BJDREFF")))
+            if bjd_ref_i is not None or bjd_ref_f is not None:
+                bjd_ref = float((bjd_ref_i or 0.0) + (bjd_ref_f or 0.0))
+            else:
+                mjd_ref_i = _safe_float(data_header.get("MJDREFI", primary.get("MJDREFI")))
+                mjd_ref_f = _safe_float(data_header.get("MJDREFF", primary.get("MJDREFF")))
+                if mjd_ref_i is not None or mjd_ref_f is not None:
+                    mjd_ref = float((mjd_ref_i or 0.0) + (mjd_ref_f or 0.0))
+        time = _normalize_btjd_time_array(
+            np.asarray(tpf.time.value, dtype=np.float64), bjd_reference=bjd_ref, mjd_reference=mjd_ref
+        )
         flux = np.asarray(tpf.flux.value, dtype=np.float64)
         flux_err = (
             np.asarray(tpf.flux_err.value, dtype=np.float64)

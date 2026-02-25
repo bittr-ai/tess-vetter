@@ -383,14 +383,12 @@ class ExoplanetArchiveClient:
         period = row.get("pl_orbper")
         t0_bjd = row.get("pl_tranmid")
 
-        if not name or period is None or t0_bjd is None:
+        if not name or period is None:
             return None
 
-        # Convert t0 to BTJD and require a real epoch.
+        # Convert t0 to BTJD when available; preserve row with NaN otherwise.
         t0_converted = self._bjd_to_btjd(t0_bjd)
-        if t0_converted is None:
-            return None
-        t0: float = t0_converted
+        t0: float = float("nan") if t0_converted is None else t0_converted
 
         # Convert transit duration from hours if available
         duration_hours = row.get("pl_trandur")
@@ -427,7 +425,7 @@ class ExoplanetArchiveClient:
         period = row.get("pl_orbper")
         t0_bjd = row.get("pl_tranmid")
 
-        if toi is None or period is None or t0_bjd is None:
+        if toi is None or period is None:
             return None
 
         # Format TOI name
@@ -435,9 +433,7 @@ class ExoplanetArchiveClient:
 
         # Convert t0 to BTJD
         t0_converted = self._bjd_to_btjd(t0_bjd)
-        if t0_converted is None:
-            return None
-        t0: float = t0_converted
+        t0: float = float("nan") if t0_converted is None else t0_converted
 
         # Duration in hours (TOI table uses pl_trandurh)
         duration_hours = row.get("pl_trandurh")
