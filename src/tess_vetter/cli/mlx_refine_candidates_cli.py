@@ -235,10 +235,10 @@ def main(argv: list[str] | None = None) -> int:
             flux_arr = flux_arr[idx]
             ferr_arr = ferr_arr[idx]
 
-        time_mx = mx.array(time_arr.astype(np.float32))
-        flux_mx = mx.array(flux_arr.astype(np.float32))
+        time_mx = mx.array(time_arr.astype(np.float64))
+        flux_mx = mx.array(flux_arr.astype(np.float64))
         use_err = str(args.use_flux_err).lower() in {"1", "true", "yes"}
-        ferr_mx = mx.array(ferr_arr.astype(np.float32)) if use_err else None
+        ferr_mx = mx.array(ferr_arr.astype(np.float64)) if use_err else None
 
         refined: list[dict[str, Any]] = []
         for c in candidates:

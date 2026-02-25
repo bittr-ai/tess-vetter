@@ -118,6 +118,35 @@ def test_resolve_toi_to_tic_ephemeris_depth_falls_back_to_full_table(monkeypatch
     assert "TOI-scoped fetch failed" in result.message
 
 
+def test_resolve_toi_to_tic_ephemeris_depth_preserves_btjd_epoch(monkeypatch: pytest.MonkeyPatch) -> None:
+    table = ExoFOPToiTable(
+        fetched_at_unix=0.0,
+        headers=["toi", "tic_id", "period", "epoch_btjd", "duration", "depth_ppm"],
+        rows=[
+            {
+                "toi": "5807.01",
+                "tic_id": "188646744",
+                "period": "6.1234",
+                "epoch_btjd": "2001.5",
+                "duration": "2.5",
+                "depth_ppm": "430.0",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        "tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table_for_toi",
+        lambda *_args, **_kwargs: table,
+    )
+    monkeypatch.setattr(
+        "tess_vetter.platform.catalogs.toi_resolution.fetch_exofop_toi_table",
+        lambda **_: table,
+    )
+
+    result = resolve_toi_to_tic_ephemeris_depth("TOI-5807.01")
+    assert result.status == LookupStatus.OK
+    assert result.t0_btjd == pytest.approx(2001.5)
+
+
 def test_lookup_tic_coordinates_fallback_to_exofop(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "tess_vetter.platform.catalogs.toi_resolution._lookup_tic_coords_from_mast",

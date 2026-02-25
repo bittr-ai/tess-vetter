@@ -107,3 +107,19 @@ def test_match_known_planet_ephemeris_ambiguous_multi(monkeypatch: pytest.Monkey
     )
     assert match.status == "ambiguous_multi_match"
     assert len(match.matched_planets) == 2
+
+
+def test_bjd_to_btjd_conversion_handles_absolute_and_offset_values() -> None:
+    client = ExoplanetArchiveClient()
+    assert client._bjd_to_btjd(2459001.5) == pytest.approx(2001.5)
+    assert client._bjd_to_btjd(2001.5) == pytest.approx(2001.5)
+
+
+def test_parse_ps_record_requires_transit_epoch() -> None:
+    client = ExoplanetArchiveClient()
+    row = {
+        "pl_name": "TOI-123 b",
+        "pl_orbper": 5.0,
+        "pl_tranmid": None,
+    }
+    assert client._parse_ps_record(row) is None

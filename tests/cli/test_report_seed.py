@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from tess_vetter.cli.common_cli import BtvCliError
-from tess_vetter.cli.report_seed import ReportSeed, resolve_candidate_inputs_with_report_seed
+from tess_vetter.cli.report_seed import (
+    ReportSeed,
+    load_report_seed,
+    resolve_candidate_inputs_with_report_seed,
+)
 
 
 def test_resolve_candidate_inputs_with_report_seed_toi_no_network_requires_resolution_inputs() -> None:
@@ -82,3 +88,22 @@ def test_resolve_candidate_inputs_with_report_seed_uses_report_seed_without_toi_
     assert depth_ppm == 210.0
     assert input_resolution["source"] == "report_file"
     assert input_resolution["resolved_from"] == "report_file"
+
+
+def test_load_report_seed_normalizes_absolute_bjd_t0(tmp_path) -> None:
+    report_file = tmp_path / "seed.json"
+    report_file.write_text(
+        json.dumps(
+            {
+                "report": {
+                    "summary": {
+                        "tic_id": 123,
+                        "ephemeris": {"period_days": 3.0, "t0": 2459001.5, "duration_hours": 2.0},
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    seed = load_report_seed(report_file)
+    assert seed.t0_btjd == pytest.approx(2001.5)

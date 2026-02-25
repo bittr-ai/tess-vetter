@@ -30,14 +30,12 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import requests
+from tess_vetter.platform.catalogs.time_conventions import normalize_epoch_to_btjd
 
 logger = logging.getLogger(__name__)
 
 # NASA Exoplanet Archive TAP endpoint
 TAP_ENDPOINT = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
-
-# BJD to BTJD offset (TESS uses BTJD = BJD - 2457000)
-BJD_TO_BTJD_OFFSET = 2457000.0
 
 
 class ExoplanetArchiveError(Exception):
@@ -369,9 +367,7 @@ class ExoplanetArchiveClient:
         Returns:
             BTJD value, or None if input is None
         """
-        if bjd is None:
-            return None
-        return bjd - BJD_TO_BTJD_OFFSET
+        return normalize_epoch_to_btjd(bjd)
 
     def _parse_ps_record(self, row: dict[str, Any]) -> KnownPlanet | None:
         """Parse a PS table record into a KnownPlanet object.
@@ -387,12 +383,14 @@ class ExoplanetArchiveClient:
         period = row.get("pl_orbper")
         t0_bjd = row.get("pl_tranmid")
 
-        if not name or period is None:
+        if not name or period is None or t0_bjd is None:
             return None
 
-        # Convert t0 to BTJD, default to 0 if not available
+        # Convert t0 to BTJD and require a real epoch.
         t0_converted = self._bjd_to_btjd(t0_bjd)
-        t0: float = t0_converted if t0_converted is not None else 0.0
+        if t0_converted is None:
+            return None
+        t0: float = t0_converted
 
         # Convert transit duration from hours if available
         duration_hours = row.get("pl_trandur")
@@ -429,7 +427,7 @@ class ExoplanetArchiveClient:
         period = row.get("pl_orbper")
         t0_bjd = row.get("pl_tranmid")
 
-        if toi is None or period is None:
+        if toi is None or period is None or t0_bjd is None:
             return None
 
         # Format TOI name
@@ -437,7 +435,9 @@ class ExoplanetArchiveClient:
 
         # Convert t0 to BTJD
         t0_converted = self._bjd_to_btjd(t0_bjd)
-        t0: float = t0_converted if t0_converted is not None else 0.0
+        if t0_converted is None:
+            return None
+        t0: float = t0_converted
 
         # Duration in hours (TOI table uses pl_trandurh)
         duration_hours = row.get("pl_trandurh")

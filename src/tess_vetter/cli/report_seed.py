@@ -19,6 +19,7 @@ from tess_vetter.platform.catalogs.toi_resolution import (
     LookupStatus,
     resolve_toi_to_tic_ephemeris_depth,
 )
+from tess_vetter.platform.catalogs.time_conventions import normalize_epoch_to_btjd
 from tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
 
 
@@ -50,6 +51,13 @@ def _to_optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _to_optional_t0_btjd(value: Any) -> float | None:
+    raw = _to_optional_float(value)
+    if raw is None:
+        return None
+    return normalize_epoch_to_btjd(raw)
 
 
 def _to_optional_toi(value: Any) -> str | None:
@@ -120,7 +128,9 @@ def load_report_seed(path: str | Path) -> ReportSeed:
         period_days=_to_optional_float(
             ephemeris.get("period_days") if ephemeris.get("period_days") is not None else ephemeris.get("period")
         ),
-        t0_btjd=_to_optional_float(ephemeris.get("t0_btjd") if ephemeris.get("t0_btjd") is not None else ephemeris.get("t0")),
+        t0_btjd=_to_optional_t0_btjd(
+            ephemeris.get("t0_btjd") if ephemeris.get("t0_btjd") is not None else ephemeris.get("t0")
+        ),
         duration_hours=_to_optional_float(ephemeris.get("duration_hours")),
         depth_ppm=_to_optional_float(summary.get("input_depth_ppm")),
         sectors_used=_extract_sectors_used(

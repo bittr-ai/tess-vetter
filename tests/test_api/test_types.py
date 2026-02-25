@@ -168,6 +168,13 @@ class TestLightCurve:
         assert internal.sector == 5
         assert internal.cadence_seconds == 20.0
 
+    def test_to_internal_normalizes_absolute_bjd_to_btjd(self) -> None:
+        time_bjd = np.array([2459001.0, 2459002.0, 2459003.0], dtype=np.float64)
+        flux = np.ones_like(time_bjd)
+        lc = LightCurve(time=time_bjd, flux=flux)
+        internal = lc.to_internal()
+        np.testing.assert_allclose(internal.time, np.array([2001.0, 2002.0, 2003.0], dtype=np.float64))
+
     def test_from_internal(self) -> None:
         """Test creating LightCurve from internal LightCurveData."""
         n = 50

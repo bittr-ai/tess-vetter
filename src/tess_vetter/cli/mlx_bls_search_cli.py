@@ -134,15 +134,15 @@ def bls_like_search_mlx(
     if chunk_periods <= 0:
         raise ValueError("chunk_periods must be >= 1")
 
-    time_mx = mx.array(time_btjd.astype(np.float32))
-    flux_mx = mx.array(flux.astype(np.float32))
-    ferr_mx = mx.array(flux_err.astype(np.float32)) if use_flux_err else None
-    t_mid_mx = mx.array(float(np.nanmedian(time_btjd)), dtype=mx.float32)
+    time_mx = mx.array(time_btjd.astype(np.float64))
+    flux_mx = mx.array(flux.astype(np.float64))
+    ferr_mx = mx.array(flux_err.astype(np.float64)) if use_flux_err else None
+    t_mid_mx = mx.array(float(np.nanmedian(time_btjd)), dtype=mx.float64)
 
     durations = [float(d) for d in duration_hours_grid]
     scan_phases = np.linspace(
         -local_refine_width_phase, local_refine_width_phase, local_refine_steps
-    ).astype(np.float32)
+    ).astype(np.float64)
     scan_phases_mx = mx.array(scan_phases)
 
     if top_k <= 0:
@@ -155,7 +155,7 @@ def bls_like_search_mlx(
 
     top: list[MlxBlsLikeCandidate] = []
 
-    periods = period_grid.astype(np.float32)
+    periods = period_grid.astype(np.float64)
     n_periods = int(periods.size)
     for i0 in range(0, n_periods, int(chunk_periods)):
         chunk = periods[i0 : i0 + int(chunk_periods)]

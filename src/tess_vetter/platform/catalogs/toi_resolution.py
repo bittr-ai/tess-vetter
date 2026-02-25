@@ -12,6 +12,7 @@ from tess_vetter.platform.catalogs.exofop_toi_table import (
     fetch_exofop_toi_table_for_toi,
 )
 from tess_vetter.platform.catalogs.models import SourceRecord
+from tess_vetter.platform.catalogs.time_conventions import normalize_epoch_to_btjd
 
 
 class LookupStatus(str, Enum):
@@ -111,12 +112,7 @@ def _parse_toi_number(toi: str | float) -> float | None:
 
 
 def _to_btjd(epoch: float | None) -> float | None:
-    if epoch is None:
-        return None
-    # ExoFOP exports commonly use BJD (absolute) or BTJD/BJD-2457000.
-    if epoch > 2_400_000:
-        return float(epoch - 2_457_000.0)
-    return float(epoch)
+    return normalize_epoch_to_btjd(epoch)
 
 
 def _first_matching_toi_row(rows: list[dict[str, str]], toi_query: str | float) -> dict[str, str] | None:

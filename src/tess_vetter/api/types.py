@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from tess_vetter.platform.catalogs.time_conventions import BJD_TO_BTJD_OFFSET, looks_like_absolute_bjd
 
 # v3 type re-exports from internal modules
 from tess_vetter.activity.result import ActivityResult, Flare
@@ -162,6 +163,13 @@ class LightCurve:
             )
 
         n = len(time_arr)
+
+        # Compatibility guard: normalize absolute BJD inputs into BTJD.
+        finite_time = time_arr[np.isfinite(time_arr)]
+        if finite_time.size > 0:
+            mid_time = float(np.median(finite_time))
+            if looks_like_absolute_bjd(mid_time):
+                time_arr = time_arr - BJD_TO_BTJD_OFFSET
 
         # Normalize flux_err to float64, default to zeros
         if self.flux_err is not None:
@@ -325,4 +333,3 @@ class TPFStamp:
     def stamp_shape(self) -> tuple[int, int]:
         """Return (n_rows, n_cols)."""
         return (self.flux.shape[1], self.flux.shape[2])
-
