@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import requests
+
 from tess_vetter.platform.catalogs.time_conventions import normalize_epoch_to_btjd
 
 logger = logging.getLogger(__name__)

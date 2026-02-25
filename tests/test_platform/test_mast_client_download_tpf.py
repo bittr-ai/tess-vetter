@@ -4,8 +4,8 @@ import builtins
 from pathlib import Path
 
 import numpy as np
-from astropy.io import fits
 import pytest
+from astropy.io import fits
 
 from tess_vetter.platform.io.mast_client import MASTClient, MASTClientError
 

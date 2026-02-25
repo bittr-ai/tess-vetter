@@ -530,9 +530,10 @@ class TPFFitsCache:
                 data = data_hdu.data
 
                 # Get time, flux, flux_err
-                time = np.asarray(data["TIME"], dtype=np.float64)
                 time = _normalize_time_to_btjd_from_headers(
-                    time, primary_header=primary_header, data_header=data_hdu.header
+                    np.asarray(data["TIME"], dtype=np.float64),
+                    primary_header=primary_header,
+                    data_header=data_hdu.header,
                 )
                 flux = np.asarray(data["FLUX"], dtype=np.float64)
                 flux_err = None
@@ -711,7 +712,7 @@ class TPFFitsCache:
 
             # Add any additional metadata from the header subset
             sidecar["fits_header_subset"].update(
-                _extract_header_subset(fits.Header([(k, v) for k, v in normalized_meta.items()]))
+                _extract_header_subset(fits.Header(list(normalized_meta.items())))
             )
             sidecar["fits_header_subset"].update(_canonical_btjd_header_values())
             sidecar["fits_header_subset"].pop("MJDREFI", None)

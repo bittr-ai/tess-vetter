@@ -27,12 +27,15 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from tess_vetter.platform.catalogs.time_conventions import BJD_TO_BTJD_OFFSET, looks_like_absolute_bjd
 
 # v3 type re-exports from internal modules
 from tess_vetter.activity.result import ActivityResult, Flare
 from tess_vetter.domain.lightcurve import LightCurveData
 from tess_vetter.domain.target import StellarParameters
+from tess_vetter.platform.catalogs.time_conventions import (
+    BJD_TO_BTJD_OFFSET,
+    looks_like_absolute_bjd,
+)
 from tess_vetter.recovery.result import StackedTransit, TrapezoidFit
 from tess_vetter.transit.result import (
     OddEvenResult,

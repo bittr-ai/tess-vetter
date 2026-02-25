@@ -15,11 +15,11 @@ from tess_vetter.cli.common_cli import (
     BtvCliError,
     load_json_file,
 )
+from tess_vetter.platform.catalogs.time_conventions import normalize_epoch_to_btjd
 from tess_vetter.platform.catalogs.toi_resolution import (
     LookupStatus,
     resolve_toi_to_tic_ephemeris_depth,
 )
-from tess_vetter.platform.catalogs.time_conventions import normalize_epoch_to_btjd
 from tess_vetter.platform.io.mast_client import LightCurveNotFoundError, MASTClient
 
 
