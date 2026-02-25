@@ -133,10 +133,9 @@ def _normalize_btjd_time_array(
         try:
             from astropy.time import Time
         except Exception as exc:
-            if policy == "strict":
+            if policy != "off":
                 raise MASTClientError(f"Unable to convert TIMESYS={timesys_norm} to TDB: {exc}") from exc
-            if policy == "warn":
-                logger.warning("Failed to import astropy.time for TIMESYS conversion: %s", exc)
+            logger.warning("Failed to import astropy.time for TIMESYS conversion: %s", exc)
         else:
             absolute = np.asarray(
                 [
@@ -148,12 +147,11 @@ def _normalize_btjd_time_array(
             try:
                 absolute_tdb = np.asarray(Time(absolute, format="jd", scale=timesys_norm.lower()).tdb.jd)
             except Exception as exc:
-                if policy == "strict":
+                if policy != "off":
                     raise MASTClientError(
                         f"Failed converting TIMESYS={timesys_norm} to TDB for BTJD normalization: {exc}"
                     ) from exc
-                if policy == "warn":
-                    logger.warning("Failed TIMESYS conversion %s->TDB; using fallback normalization: %s", timesys_norm, exc)
+                logger.warning("Failed TIMESYS conversion %s->TDB; using fallback normalization: %s", timesys_norm, exc)
             else:
                 converted = np.array(out, copy=True, dtype=np.float64)
                 converted[np.isfinite(converted)] = absolute_tdb - 2_457_000.0

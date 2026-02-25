@@ -287,7 +287,7 @@ def test_client_without_override_keeps_timesys_policy_from_construction(monkeypa
     _time2, *_rest2 = client.download_tpf(1, sector=1, exptime=None)
 
 
-def test_download_tpf_warn_policy_falls_back_when_astropy_import_fails(monkeypatch) -> None:
+def test_download_tpf_warn_policy_raises_when_astropy_import_fails(monkeypatch) -> None:
     rows = [_FakeUtcTimesysRow(exptime=120.0, distance=1.0)]
     fake_lk = _FakeLightkurve(rows)
     client = MASTClient(tpf_timesys_policy="warn")
@@ -301,12 +301,12 @@ def test_download_tpf_warn_policy_falls_back_when_astropy_import_fails(monkeypat
         return real_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", _fake_import)
-    time, *_rest = client.download_tpf(1, sector=1, exptime=None)
-    assert time.shape == (10,)
+    with pytest.raises(MASTClientError, match="Unable to convert TIMESYS=UTC"):
+        client.download_tpf(1, sector=1, exptime=None)
 
 
-def test_download_tpf_cached_warn_policy_falls_back_when_astropy_import_fails(
-    monkeypatch, tmp_path: Path, caplog
+def test_download_tpf_cached_warn_policy_raises_when_astropy_import_fails(
+    monkeypatch, tmp_path: Path
 ) -> None:
     mast_root = tmp_path / "mastDownload" / "TESS"
     target_dir = mast_root / "tess2018-s0001-0000000000000001-0123-a_tp"
@@ -327,6 +327,85 @@ def test_download_tpf_cached_warn_policy_falls_back_when_astropy_import_fails(
         return real_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", _fake_import)
-    time, *_rest = client.download_tpf_cached(1, sector=1)
+    with pytest.raises(MASTClientError, match="Unable to convert TIMESYS=UTC"):
+        client.download_tpf_cached(1, sector=1)
+
+
+def test_download_tpf_warn_policy_raises_when_time_conversion_fails(monkeypatch) -> None:
+    rows = [_FakeUtcTimesysRow(exptime=120.0, distance=1.0)]
+    fake_lk = _FakeLightkurve(rows)
+    client = MASTClient(tpf_timesys_policy="warn")
+    monkeypatch.setattr(client, "_ensure_lightkurve", lambda: fake_lk)
+
+    import astropy.time as at
+
+    real_time = at.Time
+
+    class _BadTime:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        @property
+        def tdb(self):
+            raise RuntimeError("tdb conversion failed")
+
+    monkeypatch.setattr(at, "Time", _BadTime)
+    with pytest.raises(MASTClientError, match="Failed converting TIMESYS=UTC to TDB"):
+        client.download_tpf(1, sector=1, exptime=None)
+    monkeypatch.setattr(at, "Time", real_time)
+
+
+def test_download_tpf_off_policy_falls_back_when_time_conversion_fails(monkeypatch) -> None:
+    rows = [_FakeUtcTimesysRow(exptime=120.0, distance=1.0)]
+    fake_lk = _FakeLightkurve(rows)
+    client = MASTClient(tpf_timesys_policy="off")
+    monkeypatch.setattr(client, "_ensure_lightkurve", lambda: fake_lk)
+
+    import astropy.time as at
+
+    real_time = at.Time
+
+    class _BadTime:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        @property
+        def tdb(self):
+            raise RuntimeError("tdb conversion failed")
+
+    monkeypatch.setattr(at, "Time", _BadTime)
+    time, *_rest = client.download_tpf(1, sector=1, exptime=None)
     assert time.shape == (10,)
-    assert "Failed to import astropy.time" in caplog.text
+    monkeypatch.setattr(at, "Time", real_time)
+
+
+def test_download_tpf_cached_warn_policy_raises_when_time_conversion_fails(
+    monkeypatch, tmp_path: Path
+) -> None:
+    mast_root = tmp_path / "mastDownload" / "TESS"
+    target_dir = mast_root / "tess2018-s0001-0000000000000001-0123-a_tp"
+    target_dir.mkdir(parents=True)
+    fits_path = target_dir / "tess2018-s0001-0000000000000001-0123-a_tp.fits"
+    _write_cached_tpf_with_timesys(fits_path, timesys="UTC")
+
+    client = MASTClient(cache_dir=str(tmp_path), tpf_timesys_policy="warn")
+    client._cache_index_built = False
+    client._cache_dirs_by_tic.clear()
+    monkeypatch.setattr(client, "_ensure_lightkurve", lambda: _FakeLightkurveReader())
+
+    import astropy.time as at
+
+    real_time = at.Time
+
+    class _BadTime:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        @property
+        def tdb(self):
+            raise RuntimeError("tdb conversion failed")
+
+    monkeypatch.setattr(at, "Time", _BadTime)
+    with pytest.raises(MASTClientError, match="Failed converting TIMESYS=UTC to TDB"):
+        client.download_tpf_cached(1, sector=1)
+    monkeypatch.setattr(at, "Time", real_time)
