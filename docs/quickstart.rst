@@ -128,7 +128,7 @@ Use the canonical fields for new integrations.
 Recent contract additions (machine consumers)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- ``btv fpp`` now emits ``schema_version=cli.fpp.v3`` and
+- ``btv fpp`` now emits ``schema_version=cli.fpp.v4`` and
   ``provenance.runtime.degenerate_guard`` (max-points quality-guard attempts/provenance).
 - Pipeline evidence output now emits ``schema_version=pipeline.evidence_table.v5`` and
   ``detrend_invariance_policy_*`` fields in each row.

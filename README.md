@@ -208,9 +208,9 @@ Catalog-backed checks are always opt-in. You must pass `network=True` (and provi
 
 For repeatable FPP runs, use the v3 group flow:
 
-1. `btv fpp plan` to stage light curves/runtime artifacts and emit a plan.
-2. `btv fpp run` to compute a scenario from that plan.
-3. optional `btv fpp sweep` for scenario matrices.
+1. `btv fpp plan` to stage inputs/runtime artifacts and emit a plan.
+2. `btv fpp run` to execute one FPP run from that plan.
+3. optional `btv fpp sweep` to execute a matrix from that plan + sweep config.
 
 Example:
 
@@ -222,6 +222,7 @@ btv fpp run --plan outputs/fpp/toi_5807.plan.json --mode balanced --no-network -
 Notes:
 - `btv fpp plan` is idempotent by default and reuses staged artifacts when inputs are unchanged.
 - use `--force-restage` on `btv fpp plan` to force full re-staging.
+- `btv fpp plan` does not store runtime policy (mode/replicates/draws). Runtime policy is supplied at `run`/`sweep` time.
 - policy resolution is explicit in run output (`requested_runtime_policy`, `effective_runtime_policy`, `resolution_trace`).
 
 ## Citations

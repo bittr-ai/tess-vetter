@@ -6,6 +6,23 @@ This project follows semantic versioning (SemVer).
 
 - No unreleased changes.
 
+## 0.3.15 (2026-02-26)
+
+- Simplified FPP v3 contract: `btv fpp plan` now stages inputs/artifacts only;
+  runtime policy is supplied by `btv fpp run` / `btv fpp sweep`.
+- Clarified FPP CLI help text across `plan`, `run`, `sweep`, `summary`, and
+  `explain` with explicit option semantics for agent workflows.
+- Fixed sweep scenario provenance so per-scenario outputs preserve the matrix
+  scenario identifier (`provenance.runtime.scenario_id`).
+- Added auto-scaled timeout behavior for FPP runs when `--timeout-seconds` is
+  omitted, based on effective runtime policy complexity and replicate count.
+- Enforced timeout as a single total budget across fallback attempts instead of
+  resetting a full timeout per attempt.
+- Bumped plan schema to `cli.fpp.plan.v2` to reflect the staging-only plan
+  contract and avoid silent policy interpretation drift.
+- Expanded CLI contract tests for timeout provenance, sweep scenario-id
+  propagation, and total-budget timeout retry behavior.
+
 ## 0.3.14 (2026-02-26)
 
 - Replaced legacy FPP command flow with a v3 command group:
