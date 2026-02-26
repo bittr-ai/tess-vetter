@@ -3,7 +3,7 @@ message: "If you use this software, please cite it as below."
 type: software
 title: "tess-vetter"
 publisher: "bittr.ai"
-version: 0.3.15
+version: 0.3.14
 date-released: 2026-02-26
 identifiers:
   - type: doi

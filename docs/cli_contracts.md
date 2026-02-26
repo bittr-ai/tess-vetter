@@ -49,7 +49,7 @@ Backward compatibility note:
 ### Core diagnostics and reports
 - `btv vet`: `cli.vet.v2`
 - `btv vet --split-plot-data`: `cli.vet.plot_data.v1` (writes `<out>.plot_data.json` sidecar; default on)
-- `btv fpp plan`: `cli.fpp.plan.v2`
+- `btv fpp plan`: `cli.fpp.plan.v1`
 - `btv fpp run`: `cli.fpp.v4`
 - `btv fpp summary`: `cli.fpp.summary.v1`
 - `btv fpp explain`: `cli.fpp.explain.v1`
@@ -137,8 +137,6 @@ For `btv pipeline run`, contract consumers should treat these behaviors as stabl
 ## FPP v3 UX Contract
 
 - `btv fpp` is a command group with required subcommands: `plan`, `run`, `sweep`, `summary`, `explain`.
-- `btv fpp plan` stages candidate inputs/runtime artifacts only; it does not persist runtime policy defaults.
-- `btv fpp run` and `btv fpp sweep` are the policy entrypoints (`mode`, `replicates`, profiles, numeric overrides).
 - Runtime policy resolution is emitted under:
 - `provenance.runtime.policy_resolution.requested_runtime_policy`
 - `provenance.runtime.policy_resolution.effective_runtime_policy`

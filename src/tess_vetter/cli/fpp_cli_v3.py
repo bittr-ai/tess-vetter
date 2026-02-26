@@ -5,7 +5,6 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
-import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from itertools import product
@@ -52,7 +51,7 @@ try:
 except Exception:  # pragma: no cover
     yaml = None
 
-_PLAN_SCHEMA = "cli.fpp.plan.v2"
+_PLAN_SCHEMA = "cli.fpp.plan.v1"
 _RUN_SCHEMA = "cli.fpp.v4"
 
 _MODE_CHOICES = ("quick", "balanced", "strict")
@@ -85,8 +84,6 @@ _MODE_DEFAULTS: dict[str, dict[str, Any]] = {
 _SAMPLER_TO_MC_DRAWS = {"low": 50_000, "medium": 100_000, "high": 200_000}
 _POINT_TO_MAX_POINTS = {"windowed": 1500, "expanded": 2000}
 _MODE_TO_PRESET = {"quick": "fast", "balanced": "standard", "strict": "tutorial"}
-_DEFAULT_TOTAL_TIMEOUT_SECONDS = 120.0
-_MAX_TOTAL_TIMEOUT_SECONDS = 900.0
 
 
 @dataclass
@@ -367,7 +364,6 @@ def _execute_with_policy_retry(
     *,
     resolved: _ResolvedPolicy,
     run_attempt,
-    total_timeout_seconds: float | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     attempts: list[dict[str, Any]] = []
     result: dict[str, Any] | None = None
@@ -387,24 +383,8 @@ def _execute_with_policy_retry(
                 new_overrides["max_points"] = alt
                 attempted_overrides.append(new_overrides)
 
-    timeout_deadline = (
-        datetime.now(UTC).timestamp() + float(total_timeout_seconds)
-        if total_timeout_seconds is not None and float(total_timeout_seconds) > 0
-        else None
-    )
-
     for idx, attempt_overrides in enumerate(attempted_overrides, start=1):
-        attempt_timeout = total_timeout_seconds
-        if timeout_deadline is not None:
-            remaining = float(timeout_deadline - datetime.now(UTC).timestamp())
-            if remaining <= 0:
-                raise BtvCliError(
-                    "FPP execution timed out before fallback retries completed. Increase --timeout-seconds.",
-                    exit_code=EXIT_REMOTE_TIMEOUT,
-                )
-            attempt_timeout = remaining
-
-        result = run_attempt(attempt_overrides, attempt_timeout)
+        result = run_attempt(attempt_overrides)
         degenerate = _is_degenerate_fpp_result(result)
         attempts.append(
             {
@@ -495,8 +475,9 @@ def _run_from_plan(
     contrast_curve_filter: str | None,
     command_label: str,
 ) -> dict[str, Any]:
-    scenario_policy: dict[str, Any] = {}
-    plan_policy: dict[str, Any] = {}
+    scenario = _get_scenario(plan, scenario_id)
+    scenario_policy = scenario.get("runtime_policy") if isinstance(scenario.get("runtime_policy"), dict) else {}
+    plan_policy = plan.get("runtime_policy_defaults") if isinstance(plan.get("runtime_policy_defaults"), dict) else {}
 
     resolved = _resolve_policy(cli_policy=cli_policy, scenario_policy=scenario_policy, plan_policy=plan_policy)
     effective_mode = str(resolved.effective_runtime_policy.get("mode", "balanced")).lower()
@@ -530,28 +511,9 @@ def _run_from_plan(
         mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
         raise BtvCliError(str(exc), exit_code=mapped) from exc
 
-    effective_timeout_seconds: float
-    timeout_policy: str
-    if timeout_seconds is not None:
-        effective_timeout_seconds = float(timeout_seconds)
-        timeout_policy = "explicit"
-    else:
-        # Auto-scale total timeout by effective runtime complexity and replicate count.
-        # This avoids structurally undersized early-replicate budgets under progressive scheduling.
-        draws = float(int(resolved.effective_runtime_policy["mc_draws"]))
-        points = float(int(resolved.effective_runtime_policy["max_points"]))
-        reps = float(int(resolved.effective_runtime_policy["replicates"]))
-        complexity = math.sqrt(max(1.0, draws / 100_000.0)) * max(1.0, points / 1500.0)
-        scaled_total = _DEFAULT_TOTAL_TIMEOUT_SECONDS * complexity * (reps / 3.0)
-        effective_timeout_seconds = float(
-            min(_MAX_TOTAL_TIMEOUT_SECONDS, max(_DEFAULT_TOTAL_TIMEOUT_SECONDS, scaled_total))
-        )
-        timeout_policy = "auto_scaled"
-
     result, attempts = _execute_with_policy_retry(
         resolved=resolved,
-        total_timeout_seconds=effective_timeout_seconds,
-        run_attempt=lambda attempt_overrides, attempt_timeout_seconds: calculate_fpp(
+        run_attempt=lambda attempt_overrides: calculate_fpp(
             cache=cache,
             tic_id=int(plan["tic_id"]),
             period=float(plan["period_days"]),
@@ -562,7 +524,7 @@ def _run_from_plan(
             stellar_radius=resolved_stellar.get("radius"),
             stellar_mass=resolved_stellar.get("mass"),
             tmag=resolved_stellar.get("tmag"),
-            timeout_seconds=attempt_timeout_seconds,
+            timeout_seconds=timeout_seconds,
             preset=resolved.preset,
             replicates=int(resolved.effective_runtime_policy["replicates"]),
             seed=seed,
@@ -614,13 +576,10 @@ def _run_from_plan(
             },
             "runtime": {
                 "scenario_id": str(scenario_id),
-                "mode": resolved.effective_runtime_policy.get("mode"),
+                "preset": resolved.preset,
                 "seed_requested": seed,
                 "seed_effective": result.get("base_seed", seed),
-                "timeout_seconds_requested": timeout_seconds,
-                "timeout_seconds_effective": effective_timeout_seconds,
-                "timeout_policy": timeout_policy,
-                "timeout_seconds": effective_timeout_seconds,
+                "timeout_seconds": timeout_seconds,
                 "policy_resolution": {
                     "requested_runtime_policy": resolved.requested_runtime_policy,
                     "effective_runtime_policy": resolved.effective_runtime_policy,
@@ -646,7 +605,7 @@ def _run_from_plan(
 
 @click.group("fpp")
 def fpp_group() -> None:
-    """FPP commands: stage inputs (`plan`), execute one run (`run`), or run a matrix (`sweep`)."""
+    """FPP CLI (v3): plan, run, sweep, summary, explain."""
 
 
 @click.command("fpp-prepare")
@@ -674,18 +633,25 @@ def fpp_run_removed_command() -> None:
     default=None,
     help="Optional prior CLI report/vet JSON to seed candidate inputs and sectors_used.",
 )
-@click.option("--detrend", type=str, default=None, help="Optional detrend method for depth estimation while staging.")
+@click.option("--detrend", type=str, default=None, help="Optional detrend method.")
 @click.option("--detrend-bin-hours", type=float, default=6.0, show_default=True)
 @click.option("--detrend-buffer", type=float, default=2.0, show_default=True)
 @click.option("--detrend-sigma-clip", type=float, default=5.0, show_default=True)
 @click.option("--detrend-cache/--no-detrend-cache", default=False, show_default=True)
-@click.option("--sectors", multiple=True, type=int, help="Optional explicit sector list to stage.")
-@click.option("--cache-only-sectors/--allow-sector-download", default=False, show_default=True, help="Require requested sectors from cache only.")
-@click.option("--network-ok/--no-network", default=True, show_default=True, help="Allow network fetches during staging.")
-@click.option("--cache-dir", type=click.Path(file_okay=False, path_type=Path), default=None, help="Cache directory for staged artifacts.")
-@click.option("--timeout-seconds", type=float, default=None, help="Optional timeout for remote staging calls.")
-@click.option("--force-restage", is_flag=True, default=False, help="Ignore reusable artifacts and stage again.")
-@click.option("-o", "--out", "output_plan_path", required=True, type=click.Path(dir_okay=False, path_type=Path), help="Output plan JSON path.")
+@click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
+@click.option("--cache-only-sectors/--allow-sector-download", default=False, show_default=True)
+@click.option("--network-ok/--no-network", default=True, show_default=True)
+@click.option("--cache-dir", type=click.Path(file_okay=False, path_type=Path), default=None)
+@click.option("--timeout-seconds", type=float, default=None)
+@click.option("--force-restage", is_flag=True, default=False, help="Always re-run staging.")
+@click.option("--mode", type=click.Choice(_MODE_CHOICES, case_sensitive=False), default="balanced", show_default=True)
+@click.option("--replicates", type=int, default=3, show_default=True)
+@click.option("--sampler-profile", type=click.Choice(_PROFILE_CHOICES, case_sensitive=False), default="medium", show_default=True)
+@click.option("--point-profile", type=click.Choice(_POINT_CHOICES, case_sensitive=False), default="windowed", show_default=True)
+@click.option("--mc-draws", type=int, default=None)
+@click.option("--max-points", type=int, default=None)
+@click.option("--fallback-step", "fallback_steps", multiple=True, type=str)
+@click.option("-o", "--out", "output_plan_path", required=True, type=click.Path(dir_okay=False, path_type=Path))
 def fpp_plan_command(
     tic_id: int | None,
     period_days: float | None,
@@ -705,9 +671,16 @@ def fpp_plan_command(
     cache_dir: Path | None,
     timeout_seconds: float | None,
     force_restage: bool,
+    mode: str,
+    replicates: int,
+    sampler_profile: str,
+    point_profile: str,
+    mc_draws: int | None,
+    max_points: int | None,
+    fallback_steps: tuple[str, ...],
     output_plan_path: Path,
 ) -> None:
-    """Stage reusable artifacts and candidate inputs only; runtime policy is provided at `run`/`sweep` time."""
+    """Resolve candidate inputs and stage artifacts into a reusable FPP plan."""
     report_candidate: dict[str, Any] = {}
     report_sectors_used: list[int] | None = None
     if report_file is not None:
@@ -854,6 +827,17 @@ def fpp_plan_command(
             }
         )
 
+    fallback_policy = list(fallback_steps) if fallback_steps else list(_DEFAULT_FALLBACK)
+    runtime_policy_defaults = {
+        "mode": str(mode).lower(),
+        "replicates": int(replicates),
+        "sampler_profile": str(sampler_profile).lower(),
+        "point_profile": str(point_profile).lower(),
+        "fallback_policy": [str(x).lower() for x in fallback_policy],
+        "mc_draws": int(mc_draws) if mc_draws is not None else None,
+        "max_points": int(max_points) if max_points is not None else None,
+    }
+
     plan_signature = _plan_cache_signature(
         tic_id=int(resolved_tic_id),
         period_days=float(resolved_period_days),
@@ -875,6 +859,8 @@ def fpp_plan_command(
         "sectors_loaded": [int(s) for s in sectors_loaded],
         "cache_dir": str(cache.cache_dir),
         "runtime_artifacts": runtime_artifacts,
+        "runtime_policy_defaults": runtime_policy_defaults,
+        "scenarios": [{"id": "default", "runtime_policy": {}}],
         "inputs": {
             "depth_ppm_catalog": resolved_depth_ppm,
             "resolved_source": input_resolution.get("source"),
@@ -898,35 +884,37 @@ def fpp_plan_command(
 
 
 @fpp_group.command("run")
-@click.option("--plan", "plan_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path), help="Plan JSON from `btv fpp plan`.")
-@click.option("--mode", type=click.Choice(_MODE_CHOICES, case_sensitive=False), default=None, help="Runtime mode. Defaults to balanced when omitted.")
-@click.option("--replicates", type=int, default=None, help="Replicate count. Overrides mode default.")
-@click.option("--sampler-profile", type=click.Choice(_PROFILE_CHOICES, case_sensitive=False), default=None, help="Sampler profile (low/medium/high).")
-@click.option("--point-profile", type=click.Choice(_POINT_CHOICES, case_sensitive=False), default=None, help="Point profile (windowed/expanded).")
-@click.option("--mc-draws", type=int, default=None, help="Explicit MC draws.")
-@click.option("--max-points", type=int, default=None, help="Explicit max points.")
-@click.option("--fallback-step", "fallback_steps", multiple=True, type=str, help="Degenerate fallback steps (repeat option for sequence).")
-@click.option("--seed", type=int, default=None, help="Base RNG seed. Replicates increment sequentially.")
-@click.option("--timeout-seconds", type=float, default=None, help="Optional total timeout budget. If omitted, timeout auto-scales by mode/profiles/replicates.")
+@click.option("--plan", "plan_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--scenario-id", type=str, default="default", show_default=True)
+@click.option("--mode", type=click.Choice(_MODE_CHOICES, case_sensitive=False), default=None)
+@click.option("--replicates", type=int, default=None)
+@click.option("--sampler-profile", type=click.Choice(_PROFILE_CHOICES, case_sensitive=False), default=None)
+@click.option("--point-profile", type=click.Choice(_POINT_CHOICES, case_sensitive=False), default=None)
+@click.option("--mc-draws", type=int, default=None)
+@click.option("--max-points", type=int, default=None)
+@click.option("--fallback-step", "fallback_steps", multiple=True, type=str)
+@click.option("--seed", type=int, default=None)
+@click.option("--timeout-seconds", type=float, default=None)
 @click.option(
     "--replicate-detail",
     type=click.Choice(["full", "compact"], case_sensitive=False),
     default="full",
     show_default=True,
 )
-@click.option("--replicate-errors-limit", type=int, default=0, show_default=True, help="Max replicate errors retained in compact output.")
-@click.option("--stellar-radius", type=float, default=None, help="Explicit stellar radius (Rsun).")
-@click.option("--stellar-mass", type=float, default=None, help="Explicit stellar mass (Msun).")
-@click.option("--stellar-tmag", type=float, default=None, help="Explicit stellar Tmag.")
-@click.option("--stellar-file", type=str, default=None, help="Path to stellar input JSON/YAML file.")
-@click.option("--use-stellar-auto/--no-use-stellar-auto", default=True, show_default=True, help="Resolve stellar values automatically when missing.")
-@click.option("--require-stellar/--no-require-stellar", default=True, show_default=True, help="Require stellar values to proceed.")
-@click.option("--network-ok/--no-network", default=True, show_default=True, help="Allow network-backed lookups during run.")
-@click.option("--contrast-curve", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None, help="Optional contrast-curve file.")
-@click.option("--contrast-curve-filter", type=str, default=None, help="Optional contrast-curve filter override.")
-@click.option("-o", "--out", "output_path_arg", type=str, default="-", show_default=True, help="Output path or '-' for stdout.")
+@click.option("--replicate-errors-limit", type=int, default=0, show_default=True)
+@click.option("--stellar-radius", type=float, default=None)
+@click.option("--stellar-mass", type=float, default=None)
+@click.option("--stellar-tmag", type=float, default=None)
+@click.option("--stellar-file", type=str, default=None)
+@click.option("--use-stellar-auto/--no-use-stellar-auto", default=True, show_default=True)
+@click.option("--require-stellar/--no-require-stellar", default=True, show_default=True)
+@click.option("--network-ok/--no-network", default=True, show_default=True)
+@click.option("--contrast-curve", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None)
+@click.option("--contrast-curve-filter", type=str, default=None)
+@click.option("-o", "--out", "output_path_arg", type=str, default="-", show_default=True)
 def fpp_run_command_v3(
     plan_path: Path,
+    scenario_id: str,
     mode: str | None,
     replicates: int | None,
     sampler_profile: str | None,
@@ -949,7 +937,7 @@ def fpp_run_command_v3(
     contrast_curve_filter: str | None,
     output_path_arg: str,
 ) -> None:
-    """Run a single FPP execution from a plan using runtime policy supplied on this command."""
+    """Run one FPP scenario from a v3 plan artifact."""
     out_path = resolve_optional_output_path(output_path_arg)
     plan = _load_plan(plan_path)
 
@@ -965,7 +953,7 @@ def fpp_run_command_v3(
 
     payload = _run_from_plan(
         plan=plan,
-        scenario_id="default",
+        scenario_id=str(scenario_id),
         cli_policy=cli_policy,
         seed=seed,
         timeout_seconds=timeout_seconds,
@@ -986,10 +974,10 @@ def fpp_run_command_v3(
 
 
 @fpp_group.command("summary")
-@click.option("--from", "input_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path), help="Run result JSON.")
-@click.option("-o", "--out", "output_path_arg", type=str, default="-", show_default=True, help="Output path or '-' for stdout.")
+@click.option("--from", "input_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("-o", "--out", "output_path_arg", type=str, default="-", show_default=True)
 def fpp_summary_command(input_path: Path, output_path_arg: str) -> None:
-    """Emit a compact machine-readable summary from an FPP run result."""
+    """Render concise outcome summary from an FPP run payload."""
     payload = load_json_file(input_path, label="fpp-result")
     fpp_result = payload.get("fpp_result") if isinstance(payload, dict) else None
     if not isinstance(fpp_result, dict):
@@ -1012,8 +1000,8 @@ def fpp_summary_command(input_path: Path, output_path_arg: str) -> None:
 
 
 @fpp_group.command("explain")
-@click.option("--from", "input_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path), help="Run result JSON.")
-@click.option("-o", "--out", "output_path_arg", type=str, default="-", show_default=True, help="Output path or '-' for stdout.")
+@click.option("--from", "input_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("-o", "--out", "output_path_arg", type=str, default="-", show_default=True)
 def fpp_explain_command(input_path: Path, output_path_arg: str) -> None:
     """Explain policy resolution and fallback behavior for an FPP run payload."""
     payload = load_json_file(input_path, label="fpp-result")
@@ -1036,17 +1024,17 @@ def fpp_explain_command(input_path: Path, output_path_arg: str) -> None:
 
 
 @fpp_group.command("sweep")
-@click.option("--plan", "plan_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path), help="Plan JSON from `btv fpp plan`.")
-@click.option("--config", "config_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path), help="Sweep matrix config (YAML or JSON).")
-@click.option("--out-dir", "out_dir", required=True, type=click.Path(file_okay=False, path_type=Path), help="Output directory for sweep artifacts.")
-@click.option("--timeout-seconds", type=float, default=None, help="Optional total timeout budget per scenario. If omitted, timeout auto-scales by policy.")
-@click.option("--network-ok/--no-network", default=True, show_default=True, help="Allow network-backed lookups during runs.")
-@click.option("--stellar-radius", type=float, default=None, help="Explicit stellar radius (Rsun).")
-@click.option("--stellar-mass", type=float, default=None, help="Explicit stellar mass (Msun).")
-@click.option("--stellar-tmag", type=float, default=None, help="Explicit stellar Tmag.")
-@click.option("--stellar-file", type=str, default=None, help="Path to stellar input JSON/YAML file.")
-@click.option("--use-stellar-auto/--no-use-stellar-auto", default=True, show_default=True, help="Resolve stellar values automatically when missing.")
-@click.option("--require-stellar/--no-require-stellar", default=True, show_default=True, help="Require stellar values to proceed.")
+@click.option("--plan", "plan_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--config", "config_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--out-dir", "out_dir", required=True, type=click.Path(file_okay=False, path_type=Path))
+@click.option("--timeout-seconds", type=float, default=None)
+@click.option("--network-ok/--no-network", default=True, show_default=True)
+@click.option("--stellar-radius", type=float, default=None)
+@click.option("--stellar-mass", type=float, default=None)
+@click.option("--stellar-tmag", type=float, default=None)
+@click.option("--stellar-file", type=str, default=None)
+@click.option("--use-stellar-auto/--no-use-stellar-auto", default=True, show_default=True)
+@click.option("--require-stellar/--no-require-stellar", default=True, show_default=True)
 def fpp_sweep_command(
     plan_path: Path,
     config_path: Path,
@@ -1060,7 +1048,7 @@ def fpp_sweep_command(
     use_stellar_auto: bool,
     require_stellar: bool,
 ) -> None:
-    """Run a scenario matrix where runtime policy is defined in sweep config, not the plan."""
+    """Run a declarative FPP scenario matrix from a plan artifact."""
     plan = _load_plan(plan_path)
     config = _read_yaml_or_json(config_path)
 
@@ -1120,7 +1108,7 @@ def fpp_sweep_command(
 
         run_payload = _run_from_plan(
             plan=plan,
-            scenario_id=scenario_id,
+            scenario_id="default",
             cli_policy={
                 "mode": cli_policy.get("mode"),
                 "replicates": cli_policy.get("replicates"),
