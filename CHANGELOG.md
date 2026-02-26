@@ -6,6 +6,14 @@ This project follows semantic versioning (SemVer).
 
 - No unreleased changes.
 
+## 0.3.16 (2026-02-26)
+
+- Reverted FPP CLI/runtime-policy changes introduced after `0.3.13` to restore
+  the previously stable behavior baseline.
+- Reverted release metadata/docs updates tied to the reverted FPP workflow.
+- This release is a stability rollback release intended to supersede `0.3.14`
+  and `0.3.15`.
+
 ## 0.3.11 (2026-02-24)
 
 - Fixed NumPy 2.x scalar-coercion regressions in vendored TRICERATOPS+
