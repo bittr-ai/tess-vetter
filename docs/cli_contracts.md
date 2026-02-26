@@ -51,7 +51,7 @@ Backward compatibility note:
 - `btv vet --split-plot-data`: `cli.vet.plot_data.v1` (writes `<out>.plot_data.json` sidecar; default on)
 - `btv fpp`: `cli.fpp.v3`
 - `btv fpp --prepare-manifest <manifest.json>`: `cli.fpp.v3` (prepared-manifest compute mode; same runtime path as `btv fpp-run`)
-- `btv fpp-prepare`: `cli.fpp.prepare.v1`
+- `btv fpp-prepare`: `cli.fpp.prepare.v2` (loader accepts `cli.fpp.prepare.v1` and `cli.fpp.prepare.v2`)
 - `btv report`: `cli.report.v3`
 - `btv measure-sectors`: `cli.measure_sectors.v1`
 - `btv detrend-grid`: `cli.detrend_grid.v1`
@@ -128,3 +128,17 @@ For `btv pipeline run`, contract consumers should treat these behaviors as stabl
 - Route by exact `schema_version` string first.
 - For verdict-bearing payloads, read canonical fields first and use legacy fields only as fallback.
 - For `reference_sources.v1`, see the dedicated schema page: `reference_sources`.
+
+## FPP Prepare Manifest Compatibility
+
+- Writer: `btv fpp-prepare` emits `schema_version: "cli.fpp.prepare.v2"`.
+- Loader compatibility: `btv fpp-run` and `btv fpp --prepare-manifest` accept both:
+- `cli.fpp.prepare.v1`
+- `cli.fpp.prepare.v2`
+- `cli.fpp.prepare.v2` can include optional `compute_insights` guidance. This guidance is advisory and non-binding.
+- `--apply-compute-guidance` only fills unset runtime knobs (`preset`, `replicates`, `timeout_seconds`); explicit CLI values always win.
+- Runtime provenance (`cli.fpp.v3`) includes additive effective-setting fields under `provenance.runtime`, including:
+- `compute_guidance_available`, `compute_guidance_applied`, `compute_guidance_source`
+- `requested_runtime_knobs`
+- `effective_runtime_knobs`
+- `replicate_detail`, `replicate_errors_limit`

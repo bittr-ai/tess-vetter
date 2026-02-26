@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import contextlib
 import errno
+import hashlib
 import json
 import logging
 import math
@@ -1272,6 +1273,90 @@ def _aggregate_replicate_results(
     return out
 
 
+def _build_effective_config_hash(
+    *,
+    tic_id: int,
+    period: float,
+    t0: float,
+    depth_ppm: float,
+    duration_hours: float | None,
+    run_seed: int | None,
+    effective_config: dict[str, Any],
+) -> str:
+    payload = {
+        "tic_id": int(tic_id),
+        "period": float(period),
+        "t0": float(t0),
+        "depth_ppm": float(depth_ppm),
+        "duration_hours": float(duration_hours) if duration_hours is not None else None,
+        "run_seed": int(run_seed) if run_seed is not None else None,
+        "effective_config": effective_config,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _build_replicate_analysis(
+    *,
+    requested_replicates: int,
+    run_records: list[dict[str, Any]],
+    replicate_errors: list[dict[str, Any]],
+) -> dict[str, Any]:
+    successful_runs = [r for r in run_records if str(r.get("status")) == "ok"]
+    failed_runs = [r for r in run_records if str(r.get("status")) != "ok"]
+    attempted = len(run_records)
+    success_count = len(successful_runs)
+    fail_count = len(failed_runs)
+    total = max(1, attempted)
+    success_rate = round(float(success_count) / float(total), 6)
+
+    fpp_values = [float(r["fpp"]) for r in successful_runs if r.get("fpp") is not None]
+    nfpp_values = [float(r["nfpp"]) for r in successful_runs if r.get("nfpp") is not None]
+    fpp_summary = None
+    nfpp_summary = None
+    if fpp_values:
+        fpp_summary = {
+            "median": round(float(np.median(fpp_values)), 6),
+            "p16": round(float(np.percentile(fpp_values, 16)), 6),
+            "p84": round(float(np.percentile(fpp_values, 84)), 6),
+            "values": [round(v, 6) for v in fpp_values],
+        }
+    if nfpp_values:
+        nfpp_summary = {
+            "median": round(float(np.median(nfpp_values)), 6),
+            "p16": round(float(np.percentile(nfpp_values, 16)), 6),
+            "p84": round(float(np.percentile(nfpp_values, 84)), 6),
+            "values": [round(v, 6) for v in nfpp_values],
+        }
+
+    errors = [
+        {
+            "replicate_index": int(err.get("replicate", 0) or 0),
+            "seed": int(err["seed"]) if err.get("seed") is not None else None,
+            "error_type": str(err.get("error_type") or "error"),
+            "error": str(err.get("error") or "unknown"),
+            "runtime_seconds": (
+                float(err["runtime_seconds"]) if err.get("runtime_seconds") is not None else None
+            ),
+        }
+        for err in replicate_errors
+    ]
+
+    return {
+        "summary": {
+            "requested_replicates": int(requested_replicates),
+            "attempted_replicates": int(attempted),
+            "successful_replicates": int(success_count),
+            "failed_replicates": int(fail_count),
+            "replicate_success_rate": success_rate,
+            "fpp_summary": fpp_summary,
+            "nfpp_summary": nfpp_summary,
+        },
+        "runs": run_records,
+        "errors": errors,
+    }
+
+
 def _extract_single_run_result(
     target: Any,
     *,
@@ -1295,6 +1380,9 @@ def _extract_single_run_result(
     drop_scenario_used: list[str],
     run_seed: int | None,
     run_start_time: float,
+    requested_config: dict[str, Any],
+    effective_config: dict[str, Any],
+    effective_config_hash: str,
 ) -> dict[str, Any]:
     """Extract FPP result from a single calc_probs run.
 
@@ -1406,6 +1494,13 @@ def _extract_single_run_result(
     out["posterior_prob_nan_count"] = posterior_prob_nan_count
     out["scenario_prob_top"] = scenario_prob_top
     out["run_seed"] = run_seed
+    out["replicate_index"] = None
+    out["seed"] = run_seed
+    out["status"] = "ok"
+    out["requested_config"] = requested_config
+    out["effective_config"] = effective_config
+    out["effective_config_hash"] = effective_config_hash
+    out["fallback_trace"] = []
     out["triceratops_runtime"] = {
         "n_points_raw": int(n_points_raw),
         "n_points_windowed": int(n_points_windowed),
@@ -1441,6 +1536,16 @@ def _extract_single_run_result(
     if out.get("prob_planet", 0.0) == 0.0 and out.get("prob_eb", 0.0) == 0.0 and scenario_prob_sums:
         degenerate.append("scenario_probs_missing_expected_keys")
     out["degenerate_reason"] = ",".join(degenerate) if degenerate else None
+    if out["degenerate_reason"]:
+        out["status"] = "degenerate"
+    out["fallback_trace"] = [
+        {
+            "attempt": 1,
+            "max_points": effective_config.get("max_points"),
+            "degenerate": bool(out["status"] == "degenerate"),
+            "reason": out["degenerate_reason"],
+        }
+    ]
 
     return out
 
@@ -1935,6 +2040,7 @@ def calculate_fpp_handler(
             tempfile.TemporaryDirectory() if (external_lightcurves or contrast_curve) else None
         )
         replicate_results: list[dict[str, Any]] = []
+        replicate_run_records: list[dict[str, Any]] = []
         replicate_errors: list[dict[str, Any]] = []
         contrast_curve_file: str | None = None
         contrast_curve_filter: str | None = None
@@ -2018,6 +2124,33 @@ def calculate_fpp_handler(
                         if rem is None
                         else float(rem / max(1, n_replicates - rep_idx))
                     )
+                    requested_config = {
+                        "max_points": int(max_points) if max_points is not None else None,
+                        "mc_draws": int(mc_draws) if mc_draws is not None else None,
+                        "window_duration_mult": (
+                            float(window_duration_mult) if window_duration_mult is not None else None
+                        ),
+                        "timeout_seconds": (
+                            float(timeout_seconds) if timeout_seconds is not None else None
+                        ),
+                    }
+                    effective_config = {
+                        "max_points": int(max_points) if max_points is not None else None,
+                        "mc_draws": int(draws),
+                        "window_duration_mult": (
+                            float(window_duration_mult) if window_duration_mult is not None else None
+                        ),
+                        "timeout_seconds": float(rep_timeout),
+                    }
+                    effective_config_hash = _build_effective_config_hash(
+                        tic_id=tic_id,
+                        period=period,
+                        t0=t0,
+                        depth_ppm=depth_ppm,
+                        duration_hours=duration_hours,
+                        run_seed=run_seed,
+                        effective_config=effective_config,
+                    )
 
                     with network_timeout(
                         float(rep_timeout),
@@ -2069,7 +2202,12 @@ def calculate_fpp_handler(
                         drop_scenario_used=drop_scenario_effective,
                         run_seed=run_seed,
                         run_start_time=run_start_time,
+                        requested_config=requested_config,
+                        effective_config=effective_config,
+                        effective_config_hash=effective_config_hash,
                     )
+                    run_result["replicate_index"] = int(rep_idx + 1)
+                    run_result["seed"] = int(run_seed)
                     if contrast_curve_file is not None:
                         run_result["contrast_curve"] = {
                             "filter": contrast_curve_filter or "Vis",
@@ -2079,6 +2217,7 @@ def calculate_fpp_handler(
                             "file": os.path.basename(contrast_curve_file),
                         }
                     replicate_results.append(run_result)
+                    replicate_run_records.append(run_result)
                     with contextlib.suppress(Exception):
                         if progress_hook is not None:
                             progress_hook(
@@ -2094,12 +2233,37 @@ def calculate_fpp_handler(
                             )
 
                 except NetworkTimeoutError as e:
+                    run_runtime = float(time.time() - run_start_time)
                     replicate_errors.append(
                         {
                             "replicate": rep_idx + 1,
                             "seed": run_seed,
                             "error": str(e),
                             "error_type": "timeout",
+                            "runtime_seconds": run_runtime,
+                        }
+                    )
+                    replicate_run_records.append(
+                        {
+                            "replicate_index": int(rep_idx + 1),
+                            "seed": int(run_seed),
+                            "status": "timeout",
+                            "requested_config": requested_config,
+                            "effective_config": effective_config,
+                            "effective_config_hash": effective_config_hash,
+                            "fpp": None,
+                            "nfpp": None,
+                            "degenerate_reason": None,
+                            "runtime_seconds": run_runtime,
+                            "triceratops_runtime": None,
+                            "fallback_trace": [
+                                {
+                                    "attempt": 1,
+                                    "max_points": effective_config.get("max_points"),
+                                    "degenerate": False,
+                                    "reason": str(e),
+                                }
+                            ],
                         }
                     )
                     with contextlib.suppress(Exception):
@@ -2116,12 +2280,37 @@ def calculate_fpp_handler(
                                 }
                             )
                 except Exception as e:
+                    run_runtime = float(time.time() - run_start_time)
                     replicate_errors.append(
                         {
                             "replicate": rep_idx + 1,
                             "seed": run_seed,
                             "error": str(e),
                             "error_type": "internal_error",
+                            "runtime_seconds": run_runtime,
+                        }
+                    )
+                    replicate_run_records.append(
+                        {
+                            "replicate_index": int(rep_idx + 1),
+                            "seed": int(run_seed),
+                            "status": "error",
+                            "requested_config": requested_config,
+                            "effective_config": effective_config,
+                            "effective_config_hash": effective_config_hash,
+                            "fpp": None,
+                            "nfpp": None,
+                            "degenerate_reason": None,
+                            "runtime_seconds": run_runtime,
+                            "triceratops_runtime": None,
+                            "fallback_trace": [
+                                {
+                                    "attempt": 1,
+                                    "max_points": effective_config.get("max_points"),
+                                    "degenerate": False,
+                                    "reason": str(e),
+                                }
+                            ],
                         }
                     )
                     with contextlib.suppress(Exception):
@@ -2182,6 +2371,11 @@ def calculate_fpp_handler(
     n_fail = len(replicate_results) - n_success + len(replicate_errors)
     total_attempts = max(1, n_success + n_fail)
     replicate_success_rate = round(float(n_success) / float(total_attempts), 6)
+    replicate_analysis = _build_replicate_analysis(
+        requested_replicates=n_replicates,
+        run_records=replicate_run_records,
+        replicate_errors=replicate_errors,
+    )
     high_failure_warning = (
         f"High replicate failure rate ({n_fail}/{total_attempts}); review replicate_errors/degenerate_reasons."
         if replicate_success_rate < REPLICATE_SUCCESS_RATE_WARN_THRESHOLD
@@ -2211,6 +2405,7 @@ def calculate_fpp_handler(
                 "replicate_success_rate": replicate_success_rate,
                 "base_seed": base_seed,
                 "replicate_errors": replicate_errors[:5],
+                "replicate_analysis": replicate_analysis,
                 "warning_note": high_failure_warning,
                 "actionable_guidance": [
                     "Increase timeout_seconds to allow TRICERATOPS calc_probs to finish.",
@@ -2242,6 +2437,7 @@ def calculate_fpp_handler(
             "base_seed": base_seed,
             "degenerate_reasons": degenerate_reasons[:10],  # Limit to first 10
             "replicate_errors": replicate_errors[:5],  # Limit to first 5
+            "replicate_analysis": replicate_analysis,
             "warning_note": high_failure_warning,
         }
 
@@ -2254,8 +2450,14 @@ def calculate_fpp_handler(
             sectors_used=sectors_used,
             total_runtime=total_runtime,
         )
+        # Ensure top-level replicate counters reflect all attempts, including
+        # timeout/internal-error entries captured in `replicate_errors`.
+        out["replicates"] = n_replicates
+        out["n_success"] = n_success
+        out["n_fail"] = n_fail
         out["base_seed"] = base_seed
         out["replicate_success_rate"] = replicate_success_rate
+        out["replicate_analysis"] = replicate_analysis
         if high_failure_warning is not None:
             out["warning_note"] = high_failure_warning
         if replicate_errors:
@@ -2269,6 +2471,7 @@ def calculate_fpp_handler(
         out["n_fail"] = n_fail
         out["replicate_success_rate"] = replicate_success_rate
         out["base_seed"] = base_seed
+        out["replicate_analysis"] = replicate_analysis
         out["runtime_seconds"] = round(total_runtime, 1)
         if high_failure_warning is not None:
             out["warning_note"] = high_failure_warning

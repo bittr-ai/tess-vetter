@@ -16,6 +16,7 @@ import pytest
 from tess_vetter.platform.network.timeout import NetworkTimeoutError
 from tess_vetter.validation.triceratops_fpp import (
     _aggregate_replicate_results,
+    _build_effective_config_hash,
     _is_result_degenerate,
 )
 
@@ -220,6 +221,47 @@ class TestAggregateReplicateResults:
 
         assert out["replicate_success_rate"] == 0.25
         assert "warning_note" in out
+
+
+def test_effective_config_hash_supports_duplicate_run_detectability() -> None:
+    effective_config = {
+        "max_points": 3000,
+        "mc_draws": 200000,
+        "window_duration_mult": 2.0,
+        "timeout_seconds": 120.0,
+    }
+
+    hash_a = _build_effective_config_hash(
+        tic_id=12345,
+        period=10.0,
+        t0=1500.0,
+        depth_ppm=500.0,
+        duration_hours=3.0,
+        run_seed=77,
+        effective_config=effective_config,
+    )
+    hash_b = _build_effective_config_hash(
+        tic_id=12345,
+        period=10.0,
+        t0=1500.0,
+        depth_ppm=500.0,
+        duration_hours=3.0,
+        run_seed=77,
+        effective_config=effective_config,
+    )
+    hash_c = _build_effective_config_hash(
+        tic_id=12345,
+        period=10.0,
+        t0=1500.0,
+        depth_ppm=500.0,
+        duration_hours=3.0,
+        run_seed=78,
+        effective_config=effective_config,
+    )
+
+    assert hash_a == hash_b
+    assert hash_a != hash_c
+    assert len(hash_a) == 64
 
 
 # =============================================================================
@@ -481,6 +523,46 @@ class TestCalculateFppHandlerReplicates:
         assert result["n_success"] >= 1
         assert "replicate_success_rate" in result
         assert "fpp_summary" in result or result["n_success"] == 1
+
+    @patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+    def test_aggregate_counts_include_timeout_errors(self, mock_save, mock_load, mock_cache):
+        """Top-level counts should include timeout/error attempts in aggregate mode."""
+        from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+
+        target = make_valid_target(fpp=0.02, seed=1)
+        call_count = {"n": 0}
+
+        def _calc_probs_with_one_timeout(**kwargs: Any) -> None:  # noqa: ARG001
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise NetworkTimeoutError("replicate timed out", 1.0)
+            target.FPP = 0.02
+            target.NFPP = 0.002
+            target.probs = MockProbsDataFrame(
+                scenarios=["TP", "EB", "BEB", "NEB", "NTP"],
+                probs=[0.98, 0.006, 0.006, 0.004, 0.004],
+            )
+
+        target.calc_probs = _calc_probs_with_one_timeout  # type: ignore[method-assign]
+        mock_load.return_value = target
+
+        result = calculate_fpp_handler(
+            cache=mock_cache,
+            tic_id=12345,
+            period=10.0,
+            t0=1500.0,
+            depth_ppm=500,
+            duration_hours=3.0,
+            replicates=2,
+            seed=42,
+        )
+
+        assert "error" not in result
+        assert result["replicates"] == 2
+        assert result["n_success"] == 1
+        assert result["n_fail"] == 1
+        assert result["replicate_success_rate"] == 0.5
 
     @patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
     @patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")

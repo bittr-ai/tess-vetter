@@ -53,6 +53,15 @@ class FppProgressPayload(TypedDict, total=False):
     elapsed_seconds: float
     details: NotRequired[dict[str, object]]
 
+
+class FppPresetMetadata(TypedDict):
+    """Preset metadata used by CLI/runtime guidance."""
+
+    intent: str
+    defaults: FppPresetOverrides
+    guidance_defaults: dict[str, int | float | None]
+
+
 # Valid photometric filter designations for external light curves
 ExternalLCFilter = Literal["g", "r", "i", "z", "J", "H", "K"]
 
@@ -141,6 +150,40 @@ TUTORIAL_PRESET_OVERRIDES: FppPresetOverrides = {
     "min_flux_err": 5e-5,
     "use_empirical_noise_floor": True,
 }
+
+
+def _preset_defaults(preset: TriceratopsFppPreset) -> FppPresetOverrides:
+    return {
+        "mc_draws": preset.mc_draws,
+        "window_duration_mult": preset.window_duration_mult,
+        "max_points": preset.max_points,
+        "min_flux_err": preset.min_flux_err,
+        "use_empirical_noise_floor": preset.use_empirical_noise_floor,
+    }
+
+
+def get_fpp_preset_metadata() -> dict[str, FppPresetMetadata]:
+    """Single source for preset intent and default knobs."""
+    fast_defaults = _preset_defaults(FAST_PRESET)
+    standard_defaults = _preset_defaults(STANDARD_PRESET)
+    tutorial_defaults: FppPresetOverrides = {**standard_defaults, **dict(TUTORIAL_PRESET_OVERRIDES)}
+    return {
+        "fast": {
+            "intent": "Bounded-runtime interactive compute.",
+            "defaults": fast_defaults,
+            "guidance_defaults": {"replicates": 1, "timeout_seconds": None},
+        },
+        "standard": {
+            "intent": "Higher-fidelity compute with longer runtime budgets.",
+            "defaults": standard_defaults,
+            "guidance_defaults": {"replicates": 3, "timeout_seconds": 900.0},
+        },
+        "tutorial": {
+            "intent": "Stability fallback when standard outputs are degenerate.",
+            "defaults": tutorial_defaults,
+            "guidance_defaults": {"replicates": 1, "timeout_seconds": None},
+        },
+    }
 
 
 @cites(

@@ -1953,7 +1953,308 @@ def test_btv_fpp_prepare_supports_short_o(monkeypatch, tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     payload = json.loads(out_path.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == "cli.fpp.prepare.v1"
+    assert payload["schema_version"] == "cli.fpp.prepare.v2"
+    assert "compute_insights" in payload
+    assert payload["compute_insights"]["non_binding"] is True
+
+
+def test_btv_fpp_prepare_compute_guidance_opt_out(monkeypatch, tmp_path: Path) -> None:
+    from tess_vetter.platform.io import PersistentCache
+
+    def _fake_resolve_candidate_inputs(**_kwargs: Any):
+        return (123, 7.5, 2500.25, 3.0, 900.0, {"source": "cli", "resolved_from": "cli"})
+
+    def _fake_build_cache_for_fpp(**_kwargs: Any):
+        cache = PersistentCache(cache_dir=tmp_path / "cache")
+        return cache, [14, 15]
+
+    monkeypatch.setattr(
+        "tess_vetter.cli.fpp_cli._resolve_candidate_inputs",
+        _fake_resolve_candidate_inputs,
+    )
+    monkeypatch.setattr(
+        "tess_vetter.cli.fpp_cli._build_cache_for_fpp",
+        _fake_build_cache_for_fpp,
+    )
+
+    out_path = tmp_path / "prepare_no_guidance_manifest.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp-prepare",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--no-network",
+            "--no-compute-guidance",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "cli.fpp.prepare.v2"
+    assert "compute_insights" not in payload
+
+
+@pytest.mark.parametrize("schema_version", ["cli.fpp.prepare.v1", "cli.fpp.prepare.v2"])
+def test_btv_fpp_run_prepare_manifest_loader_accepts_v1_and_v2(
+    monkeypatch, tmp_path: Path, schema_version: str
+) -> None:
+    manifest = {
+        "schema_version": schema_version,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "tic_id": 123,
+        "period_days": 3.0,
+        "t0_btjd": 1500.0,
+        "duration_hours": 2.0,
+        "depth_ppm_used": 500.0,
+        "sectors_loaded": [10],
+        "cache_dir": str(tmp_path / "cache"),
+        "detrend": {},
+    }
+    manifest_path = tmp_path / f"manifest_{schema_version.split('.')[-1]}.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    monkeypatch.setattr(
+        "tess_vetter.cli.fpp_cli.resolve_stellar_inputs",
+        lambda **_kwargs: ({}, {"source": "cli", "resolved_from": "cli"}),
+    )
+    monkeypatch.setattr(
+        "tess_vetter.cli.fpp_cli.calculate_fpp",
+        lambda **_kwargs: {"fpp": 0.01, "nfpp": 0.001, "base_seed": 101},
+    )
+
+    out_path = tmp_path / f"fpp_run_{schema_version.split('.')[-1]}.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp-run",
+            "--prepare-manifest",
+            str(manifest_path),
+            "--allow-missing-prepared",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["prepare_manifest"]["schema_version"] == schema_version
+
+
+def test_btv_fpp_manifest_mode_apply_guidance_keeps_explicit_runtime_knobs(
+    monkeypatch, tmp_path: Path
+) -> None:
+    seen: dict[str, Any] = {}
+    manifest = {
+        "schema_version": "cli.fpp.prepare.v2",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "tic_id": 123,
+        "period_days": 3.0,
+        "t0_btjd": 1500.0,
+        "duration_hours": 2.0,
+        "depth_ppm_used": 500.0,
+        "sectors_loaded": [10],
+        "cache_dir": str(tmp_path / "cache"),
+        "detrend": {},
+        "compute_insights": {
+            "recommendation": {
+                "preset": "standard",
+                "replicates": 7,
+                "timeout_seconds": 999,
+            }
+        },
+    }
+    manifest_path = tmp_path / "manifest_guidance_explicit.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    monkeypatch.setattr(
+        "tess_vetter.cli.fpp_cli.resolve_stellar_inputs",
+        lambda **_kwargs: ({}, {"source": "cli", "resolved_from": "cli"}),
+    )
+
+    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"fpp": 0.01, "nfpp": 0.001, "base_seed": 777}
+
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_from_manifest_guidance_explicit.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--prepare-manifest",
+            str(manifest_path),
+            "--allow-missing-prepared",
+            "--apply-compute-guidance",
+            "--preset",
+            "tutorial",
+            "--replicates",
+            "2",
+            "--timeout-seconds",
+            "123",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen["preset"] == "tutorial"
+    assert seen["replicates"] == 2
+    assert seen["timeout_seconds"] == 123.0
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    runtime = payload["provenance"]["runtime"]
+    assert runtime["compute_guidance_available"] is True
+    assert runtime["compute_guidance_applied"] is False
+    assert runtime["compute_guidance_source"] == "prepare_manifest"
+    assert runtime["effective_runtime_knobs"]["preset"] == "tutorial"
+    assert runtime["effective_runtime_knobs"]["replicates"] == 2
+    assert runtime["effective_runtime_knobs"]["timeout_seconds"] == 123.0
+
+
+def test_btv_fpp_replicate_detail_compact_shapes_runs_payload(monkeypatch, tmp_path: Path) -> None:
+    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
+        return object(), [14, 15]
+
+    def _fake_calculate_fpp(**_kwargs: Any) -> dict[str, Any]:
+        return {
+            "fpp": 0.02,
+            "nfpp": 0.002,
+            "base_seed": 77,
+            "replicates": 2,
+            "n_success": 1,
+            "n_fail": 1,
+            "replicate_success_rate": 0.5,
+            "replicate_analysis": {
+                "summary": {
+                    "requested_replicates": 2,
+                    "attempted_replicates": 2,
+                    "successful_replicates": 1,
+                    "failed_replicates": 1,
+                    "replicate_success_rate": 0.5,
+                    "fpp_summary": None,
+                    "nfpp_summary": None,
+                },
+                "runs": [
+                    {"replicate_index": 1, "status": "ok", "effective_config_hash": "a" * 64},
+                    {"replicate_index": 2, "status": "error", "effective_config_hash": "b" * 64},
+                ],
+                "errors": [{"replicate_index": 2, "error_type": "internal_error", "error": "boom"}],
+            },
+        }
+
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_replicate_compact.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--replicate-detail",
+            "compact",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    analysis = payload["fpp_result"]["replicate_analysis"]
+    assert analysis["runs_count"] == 2
+    assert "runs" not in analysis
+    assert len(analysis["errors"]) == 1
+    assert payload["provenance"]["runtime"]["replicate_detail"] == "compact"
+
+
+def test_btv_fpp_replicate_errors_limit_truncates_nonzero_limit(
+    monkeypatch, tmp_path: Path
+) -> None:
+    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
+        return object(), [14]
+
+    def _fake_calculate_fpp(**_kwargs: Any) -> dict[str, Any]:
+        return {
+            "fpp": 0.12,
+            "nfpp": 0.01,
+            "base_seed": 9,
+            "replicate_analysis": {
+                "summary": {
+                    "requested_replicates": 4,
+                    "attempted_replicates": 4,
+                    "successful_replicates": 1,
+                    "failed_replicates": 3,
+                    "replicate_success_rate": 0.25,
+                    "fpp_summary": None,
+                    "nfpp_summary": None,
+                },
+                "runs": [{"replicate_index": 1, "status": "ok", "effective_config_hash": "c" * 64}],
+                "errors": [
+                    {"replicate_index": 2, "error_type": "timeout", "error": "t1"},
+                    {"replicate_index": 3, "error_type": "timeout", "error": "t2"},
+                    {"replicate_index": 4, "error_type": "internal_error", "error": "boom"},
+                ],
+            },
+        }
+
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_replicate_errors_limited.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--replicate-errors-limit",
+            "1",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    analysis = payload["fpp_result"]["replicate_analysis"]
+    assert len(analysis["errors"]) == 1
+    assert analysis["errors"][0]["replicate_index"] == 2
+    assert analysis["errors_truncated"] == 2
+    assert "runs" in analysis
+    assert payload["provenance"]["runtime"]["replicate_errors_limit"] == 1
 
 
 def test_btv_fpp_prepare_retries_after_transient_failure_with_failed_state_file_present(
