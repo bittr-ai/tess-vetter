@@ -12,6 +12,7 @@ from typing import Any
 
 import click
 import numpy as np
+from click.core import ParameterSource
 
 from tess_vetter.api.fpp import TUTORIAL_PRESET_OVERRIDES, calculate_fpp
 from tess_vetter.api.stitch import stitch_lightcurve_data
@@ -38,6 +39,10 @@ from tess_vetter.cli.common_cli import (
     resolve_optional_output_path,
 )
 from tess_vetter.cli.diagnostics_report_inputs import resolve_inputs_from_report_file
+from tess_vetter.cli.fpp_compute_guidance import (
+    apply_compute_guidance_to_runtime_knobs,
+    build_prepare_compute_guidance,
+)
 from tess_vetter.cli.stellar_inputs import load_auto_stellar_with_fallback, resolve_stellar_inputs
 from tess_vetter.cli.vet_cli import (
     _detrend_lightcurve_for_vetting,
@@ -64,7 +69,8 @@ _MAX_POINTS_RETRY_VALUES = (3000, 2000, 1500, 1000, 750, 500, 300)
 _MAX_POINTS_RETRY_LIMIT = 3
 _VERDICT_TOKEN_PATTERN = re.compile(r"[^A-Z0-9]+")
 _LC_KEY_PATTERN = re.compile(r"^lc:(?P<tic>\d+):(?P<sector>\d+):(?P<flux>[a-z0-9_]+)$")
-_FPP_PREPARE_SCHEMA_VERSION = "cli.fpp.prepare.v1"
+_FPP_PREPARE_SCHEMA_VERSION = "cli.fpp.prepare.v2"
+_FPP_PREPARE_SCHEMA_VERSION_COMPAT = frozenset({"cli.fpp.prepare.v1", "cli.fpp.prepare.v2"})
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +207,35 @@ def _build_retry_guidance(result: dict[str, Any], preset_name: str) -> dict[str,
             "posterior_prob_nan_count_positive": posterior_prob_nan_count_positive,
         },
     }
+
+
+def _apply_replicate_output_controls(
+    result: dict[str, Any],
+    *,
+    replicate_detail: str,
+    replicate_errors_limit: int,
+) -> dict[str, Any]:
+    shaped = dict(result)
+    analysis = shaped.get("replicate_analysis")
+    if isinstance(analysis, dict):
+        updated_analysis = dict(analysis)
+        updated_analysis["detail_level"] = str(replicate_detail).lower()
+        runs = updated_analysis.get("runs")
+        if isinstance(runs, list):
+            updated_analysis["runs_count"] = int(len(runs))
+        if str(replicate_detail).lower() == "compact" and isinstance(runs, list):
+            updated_analysis.pop("runs", None)
+
+        errors = updated_analysis.get("errors")
+        if (
+            isinstance(errors, list)
+            and int(replicate_errors_limit) > 0
+            and len(errors) > int(replicate_errors_limit)
+        ):
+            updated_analysis["errors"] = list(errors[: int(replicate_errors_limit)])
+            updated_analysis["errors_truncated"] = int(len(errors) - int(replicate_errors_limit))
+        shaped["replicate_analysis"] = updated_analysis
+    return shaped
 
 
 def _coerce_positive_int(value: Any) -> int | None:
@@ -771,11 +806,11 @@ def _coerce_manifest_number(payload: dict[str, Any], field: str) -> float:
 def _load_prepare_manifest(path: Path) -> dict[str, Any]:
     payload = load_json_file(path, label="prepare-manifest")
     schema = payload.get("schema_version")
-    if schema != _FPP_PREPARE_SCHEMA_VERSION:
+    if schema not in _FPP_PREPARE_SCHEMA_VERSION_COMPAT:
         raise BtvCliError(
             (
                 f"Unsupported prepare-manifest schema_version '{schema}'. "
-                f"Expected '{_FPP_PREPARE_SCHEMA_VERSION}'."
+                f"Expected one of {sorted(_FPP_PREPARE_SCHEMA_VERSION_COMPAT)}."
             ),
             exit_code=EXIT_INPUT_ERROR,
         )
@@ -811,6 +846,9 @@ def _load_prepare_manifest(path: Path) -> dict[str, Any]:
     runtime_artifacts = payload.get("runtime_artifacts")
     if runtime_artifacts is not None and not isinstance(runtime_artifacts, dict):
         raise BtvCliError("Invalid prepare manifest field 'runtime_artifacts'", exit_code=EXIT_INPUT_ERROR)
+    compute_insights = payload.get("compute_insights")
+    if compute_insights is not None and not isinstance(compute_insights, dict):
+        raise BtvCliError("Invalid prepare manifest field 'compute_insights'", exit_code=EXIT_INPUT_ERROR)
 
     return {
         "schema_version": schema,
@@ -824,6 +862,7 @@ def _load_prepare_manifest(path: Path) -> dict[str, Any]:
         "cache_dir": cache_dir,
         "detrend": detrend_payload if isinstance(detrend_payload, dict) else {},
         "runtime_artifacts": runtime_artifacts if isinstance(runtime_artifacts, dict) else {},
+        "compute_insights": compute_insights if isinstance(compute_insights, dict) else None,
     }
 
 
@@ -950,6 +989,12 @@ def _runtime_artifacts_ready(
     ),
 )
 @click.option(
+    "--compute-guidance/--no-compute-guidance",
+    default=True,
+    show_default=True,
+    help="Include optional non-binding compute guidance in the prepared manifest.",
+)
+@click.option(
     "-o",
     "--out",
     "output_manifest_path",
@@ -975,6 +1020,7 @@ def fpp_prepare_command(
     network_ok: bool,
     cache_dir: Path | None,
     timeout_seconds: float | None,
+    compute_guidance: bool,
     output_manifest_path: Path,
 ) -> None:
     """Resolve candidate inputs and stage cache artifacts for FPP compute."""
@@ -1197,6 +1243,11 @@ def fpp_prepare_command(
             "requested_sectors": effective_sectors,
         },
     }
+    if compute_guidance:
+        manifest["compute_insights"] = build_prepare_compute_guidance(
+            sectors_loaded=[int(s) for s in sectors_loaded],
+            runtime_artifacts=runtime_artifacts,
+        )
     click.echo(f"[fpp-prepare] Writing manifest: {output_manifest_path}")
     dump_json_output(manifest, output_manifest_path)
 
@@ -1206,9 +1257,15 @@ def _run_fpp_from_prepare_manifest(
     require_prepared: bool,
     preset: str,
     replicates: int | None,
+    apply_compute_guidance: bool,
+    preset_was_explicit: bool,
+    replicates_was_explicit: bool,
+    timeout_was_explicit: bool,
     seed: int | None,
     overrides: tuple[str, ...],
     timeout_seconds: float | None,
+    replicate_detail: str,
+    replicate_errors_limit: int,
     contrast_curve: Path | None,
     contrast_curve_filter: str | None,
     stellar_radius: float | None,
@@ -1219,13 +1276,14 @@ def _run_fpp_from_prepare_manifest(
     require_stellar: bool,
     network_ok: bool,
     output_path_arg: str,
+    command_label: str = "fpp-run",
 ) -> None:
     out_path = resolve_optional_output_path(output_path_arg)
-    click.echo(f"[fpp-run] Loading prepare manifest: {prepare_manifest}")
+    click.echo(f"[{command_label}] Loading prepare manifest: {prepare_manifest}")
     prepared = _load_prepare_manifest(prepare_manifest)
     cache = PersistentCache(cache_dir=prepared["cache_dir"])
     if require_prepared:
-        click.echo("[fpp-run] Verifying prepared cache artifacts...")
+        click.echo(f"[{command_label}] Verifying prepared cache artifacts...")
         missing_sectors = _cache_missing_sectors(
             cache=cache,
             tic_id=int(prepared["tic_id"]),
@@ -1263,20 +1321,38 @@ def _run_fpp_from_prepare_manifest(
 
     if replicates is not None and replicates < 1:
         raise BtvCliError("--replicates must be >= 1", exit_code=EXIT_INPUT_ERROR)
+    if replicate_errors_limit < 0:
+        raise BtvCliError("--replicate-errors-limit must be >= 0", exit_code=EXIT_INPUT_ERROR)
     if use_stellar_auto and not network_ok:
         raise BtvCliError("--use-stellar-auto requires --network-ok", exit_code=EXIT_DATA_UNAVAILABLE)
     if timeout_seconds is not None and float(timeout_seconds) <= 0.0:
         raise BtvCliError("--timeout-seconds must be > 0", exit_code=EXIT_INPUT_ERROR)
 
-    preset_name = str(preset).lower()
+    (
+        preset_name,
+        effective_replicates,
+        effective_timeout_requested,
+        compute_guidance_available,
+        compute_guidance_applied,
+        compute_guidance_source,
+    ) = apply_compute_guidance_to_runtime_knobs(
+        prepared=prepared,
+        apply_compute_guidance=bool(apply_compute_guidance),
+        preset=preset,
+        replicates=replicates,
+        timeout_seconds=timeout_seconds,
+        preset_was_explicit=bool(preset_was_explicit),
+        replicates_was_explicit=bool(replicates_was_explicit),
+        timeout_was_explicit=bool(timeout_was_explicit),
+    )
     parsed_overrides = parse_extra_params(overrides)
     _resolve_drop_scenario_override(parsed_overrides=parsed_overrides)
     effective_timeout_seconds = (
-        float(timeout_seconds)
-        if timeout_seconds is not None
+        float(effective_timeout_requested)
+        if effective_timeout_requested is not None
         else (_STANDARD_PRESET_TIMEOUT_SECONDS if preset_name == "standard" else None)
     )
-    if timeout_seconds is None and preset_name == "standard":
+    if effective_timeout_requested is None and preset_name == "standard":
         click.echo(
             "Using default timeout_seconds=900 for --preset standard.",
             err=True,
@@ -1306,7 +1382,7 @@ def _run_fpp_from_prepare_manifest(
         mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
         raise BtvCliError(str(exc), exit_code=mapped) from exc
 
-    click.echo("[fpp-run] Running FPP compute using prepared cache...")
+    click.echo(f"[{command_label}] Running FPP compute using prepared cache...")
     try:
         result, selected_sectors, retry_meta = _execute_fpp_with_retry(
             preset_name=preset_name,
@@ -1325,7 +1401,7 @@ def _run_fpp_from_prepare_manifest(
                     tmag=resolved_stellar.get("tmag"),
                     timeout_seconds=effective_timeout_seconds,
                     preset=preset_name,
-                    replicates=replicates,
+                    replicates=effective_replicates,
                     seed=seed,
                     contrast_curve=parsed_contrast_curve,
                     overrides=attempt_overrides,
@@ -1341,6 +1417,11 @@ def _run_fpp_from_prepare_manifest(
         mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
         raise BtvCliError(str(exc), exit_code=mapped) from exc
 
+    result = _apply_replicate_output_controls(
+        result,
+        replicate_detail=replicate_detail,
+        replicate_errors_limit=int(replicate_errors_limit),
+    )
     verdict, verdict_source = _derive_fpp_verdict(result)
     payload: dict[str, Any] = {
         "schema_version": "cli.fpp.v3",
@@ -1381,7 +1462,7 @@ def _run_fpp_from_prepare_manifest(
             },
             "runtime": {
                 "preset": preset_name,
-                "replicates": replicates,
+                "replicates": effective_replicates,
                 "overrides": parsed_overrides,
                 "detrend_cache": bool(prepared["detrend"].get("cache_applied", False)),
                 "detrend_cache_requested": bool(prepared["detrend"].get("cache_requested", False)),
@@ -1389,6 +1470,23 @@ def _run_fpp_from_prepare_manifest(
                 "seed_effective": result.get("base_seed", seed),
                 "timeout_seconds_requested": timeout_seconds,
                 "timeout_seconds": effective_timeout_seconds,
+                "compute_guidance_available": bool(compute_guidance_available),
+                "compute_guidance_applied": bool(compute_guidance_applied),
+                "compute_guidance_source": compute_guidance_source,
+                "requested_runtime_knobs": {
+                    "preset": str(preset).lower(),
+                    "replicates": replicates,
+                    "timeout_seconds": timeout_seconds,
+                    "overrides": parse_extra_params(overrides),
+                },
+                "effective_runtime_knobs": {
+                    "preset": preset_name,
+                    "replicates": effective_replicates,
+                    "timeout_seconds": effective_timeout_seconds,
+                    "overrides": parsed_overrides,
+                },
+                "replicate_detail": str(replicate_detail).lower(),
+                "replicate_errors_limit": int(replicate_errors_limit),
                 "network_ok": bool(network_ok),
                 "require_prepared": bool(require_prepared),
                 "degenerate_guard": {
@@ -1406,7 +1504,15 @@ def _run_fpp_from_prepare_manifest(
     retry_guidance = _build_retry_guidance(result=result, preset_name=preset_name)
     if retry_guidance is not None:
         payload["provenance"]["retry_guidance"] = retry_guidance
-    click.echo("[fpp-run] Writing FPP output...")
+    if result.get("error") is not None:
+        click.echo(
+            (
+                f"[{command_label}] Warning: FPP returned error payload "
+                f"(stage={result.get('stage')}, error_type={result.get('error_type')})."
+            ),
+            err=True,
+        )
+    click.echo(f"[{command_label}] Writing FPP output...")
     dump_json_output(payload, out_path)
 
 
@@ -1431,6 +1537,12 @@ def _run_fpp_from_prepare_manifest(
     help="TRICERATOPS runtime preset (standard typically expects a longer timeout budget).",
 )
 @click.option("--replicates", type=int, default=None, help="Replicate count for FPP aggregation.")
+@click.option(
+    "--apply-compute-guidance/--no-apply-compute-guidance",
+    default=False,
+    show_default=True,
+    help="Apply optional prepare-manifest compute guidance only to unset runtime knobs.",
+)
 @click.option("--seed", type=int, default=None, help="Base RNG seed.")
 @click.option("--override", "overrides", multiple=True, help="Repeat KEY=VALUE TRICERATOPS override entries.")
 @click.option(
@@ -1450,6 +1562,20 @@ def _run_fpp_from_prepare_manifest(
     type=str,
     default=None,
     help="Optional band label override for --contrast-curve (for example Kcont, Ks, r).",
+)
+@click.option(
+    "--replicate-detail",
+    type=click.Choice(["full", "compact"], case_sensitive=False),
+    default="full",
+    show_default=True,
+    help="Replicate payload detail level in output JSON.",
+)
+@click.option(
+    "--replicate-errors-limit",
+    type=int,
+    default=0,
+    show_default=True,
+    help="Maximum replicate error records retained in output (0 keeps all).",
 )
 @click.option("--stellar-radius", type=float, default=None, help="Stellar radius (Rsun).")
 @click.option("--stellar-mass", type=float, default=None, help="Stellar mass (Msun).")
@@ -1487,11 +1613,14 @@ def fpp_run_command(
     require_prepared: bool,
     preset: str,
     replicates: int | None,
+    apply_compute_guidance: bool,
     seed: int | None,
     overrides: tuple[str, ...],
     timeout_seconds: float | None,
     contrast_curve: Path | None,
     contrast_curve_filter: str | None,
+    replicate_detail: str,
+    replicate_errors_limit: int,
     stellar_radius: float | None,
     stellar_mass: float | None,
     stellar_tmag: float | None,
@@ -1502,14 +1631,21 @@ def fpp_run_command(
     output_path_arg: str,
 ) -> None:
     """Run FPP compute from a prepared staging manifest."""
+    ctx = click.get_current_context()
     _run_fpp_from_prepare_manifest(
         prepare_manifest=prepare_manifest,
         require_prepared=require_prepared,
         preset=preset,
         replicates=replicates,
+        apply_compute_guidance=bool(apply_compute_guidance),
+        preset_was_explicit=ctx.get_parameter_source("preset") is not ParameterSource.DEFAULT,
+        replicates_was_explicit=ctx.get_parameter_source("replicates") is not ParameterSource.DEFAULT,
+        timeout_was_explicit=ctx.get_parameter_source("timeout_seconds") is not ParameterSource.DEFAULT,
         seed=seed,
         overrides=overrides,
         timeout_seconds=timeout_seconds,
+        replicate_detail=str(replicate_detail).lower(),
+        replicate_errors_limit=int(replicate_errors_limit),
         contrast_curve=contrast_curve,
         contrast_curve_filter=contrast_curve_filter,
         stellar_radius=stellar_radius,
@@ -1520,6 +1656,7 @@ def fpp_run_command(
         require_stellar=require_stellar,
         network_ok=network_ok,
         output_path_arg=output_path_arg,
+        command_label="fpp-run",
     )
 
 
@@ -1582,6 +1719,12 @@ def fpp_run_command(
     help="TRICERATOPS runtime preset (standard typically expects a longer timeout budget).",
 )
 @click.option("--replicates", type=int, default=None, help="Replicate count for FPP aggregation.")
+@click.option(
+    "--apply-compute-guidance/--no-apply-compute-guidance",
+    default=False,
+    show_default=True,
+    help="Only used with --prepare-manifest. Apply optional guidance to unset runtime knobs.",
+)
 @click.option("--seed", type=int, default=None, help="Base RNG seed.")
 @click.option("--override", "overrides", multiple=True, help="Repeat KEY=VALUE TRICERATOPS override entries.")
 @click.option(
@@ -1618,6 +1761,20 @@ def fpp_run_command(
     type=str,
     default=None,
     help="Optional band label override for --contrast-curve (for example Kcont, Ks, r).",
+)
+@click.option(
+    "--replicate-detail",
+    type=click.Choice(["full", "compact"], case_sensitive=False),
+    default="full",
+    show_default=True,
+    help="Replicate payload detail level in output JSON.",
+)
+@click.option(
+    "--replicate-errors-limit",
+    type=int,
+    default=0,
+    show_default=True,
+    help="Maximum replicate error records retained in output (0 keeps all).",
 )
 @click.option(
     "--network-ok/--no-network",
@@ -1674,6 +1831,7 @@ def fpp_command(
     detrend_cache: bool,
     preset: str,
     replicates: int | None,
+    apply_compute_guidance: bool,
     seed: int | None,
     overrides: tuple[str, ...],
     drop_scenarios: tuple[str, ...],
@@ -1682,6 +1840,8 @@ def fpp_command(
     timeout_seconds: float | None,
     contrast_curve: Path | None,
     contrast_curve_filter: str | None,
+    replicate_detail: str,
+    replicate_errors_limit: int,
     network_ok: bool,
     cache_dir: Path | None,
     stellar_radius: float | None,
@@ -1693,6 +1853,7 @@ def fpp_command(
     output_path_arg: str,
 ) -> None:
     """Calculate candidate FPP and emit schema-stable JSON."""
+    ctx = click.get_current_context()
     out_path = resolve_optional_output_path(output_path_arg)
     if prepare_manifest is not None:
         conflicting_fields: list[str] = []
@@ -1740,9 +1901,15 @@ def fpp_command(
             require_prepared=bool(require_prepared),
             preset=preset,
             replicates=replicates,
+            apply_compute_guidance=bool(apply_compute_guidance),
+            preset_was_explicit=ctx.get_parameter_source("preset") is not ParameterSource.DEFAULT,
+            replicates_was_explicit=ctx.get_parameter_source("replicates") is not ParameterSource.DEFAULT,
+            timeout_was_explicit=ctx.get_parameter_source("timeout_seconds") is not ParameterSource.DEFAULT,
             seed=seed,
             overrides=overrides,
             timeout_seconds=timeout_seconds,
+            replicate_detail=str(replicate_detail).lower(),
+            replicate_errors_limit=int(replicate_errors_limit),
             contrast_curve=contrast_curve,
             contrast_curve_filter=contrast_curve_filter,
             stellar_radius=stellar_radius,
@@ -1753,6 +1920,7 @@ def fpp_command(
             require_stellar=require_stellar,
             network_ok=network_ok,
             output_path_arg=output_path_arg,
+            command_label="fpp",
         )
 
     if (
@@ -1837,6 +2005,8 @@ def fpp_command(
     detrend_cache_effective = detrend_cache_requested or (detrend_method is not None)
     if replicates is not None and replicates < 1:
         raise BtvCliError("--replicates must be >= 1", exit_code=EXIT_INPUT_ERROR)
+    if replicate_errors_limit < 0:
+        raise BtvCliError("--replicate-errors-limit must be >= 0", exit_code=EXIT_INPUT_ERROR)
     if use_stellar_auto and not network_ok:
         raise BtvCliError("--use-stellar-auto requires --network-ok", exit_code=EXIT_DATA_UNAVAILABLE)
     if timeout_seconds is not None and float(timeout_seconds) <= 0.0:
@@ -1974,6 +2144,11 @@ def fpp_command(
         mapped = EXIT_REMOTE_TIMEOUT if _looks_like_timeout(exc) else EXIT_RUNTIME_ERROR
         raise BtvCliError(str(exc), exit_code=mapped) from exc
 
+    result = _apply_replicate_output_controls(
+        result,
+        replicate_detail=str(replicate_detail).lower(),
+        replicate_errors_limit=int(replicate_errors_limit),
+    )
     verdict, verdict_source = _derive_fpp_verdict(result)
     payload: dict[str, Any] = {
         "schema_version": "cli.fpp.v3",
@@ -2017,6 +2192,23 @@ def fpp_command(
                 "seed_effective": result.get("base_seed", seed),
                 "timeout_seconds_requested": timeout_seconds,
                 "timeout_seconds": effective_timeout_seconds,
+                "compute_guidance_available": False,
+                "compute_guidance_applied": False,
+                "compute_guidance_source": None,
+                "requested_runtime_knobs": {
+                    "preset": str(preset).lower(),
+                    "replicates": replicates,
+                    "timeout_seconds": timeout_seconds,
+                    "overrides": parse_extra_params(overrides),
+                },
+                "effective_runtime_knobs": {
+                    "preset": preset_name,
+                    "replicates": replicates,
+                    "timeout_seconds": effective_timeout_seconds,
+                    "overrides": parsed_overrides,
+                },
+                "replicate_detail": str(replicate_detail).lower(),
+                "replicate_errors_limit": int(replicate_errors_limit),
                 "network_ok": bool(network_ok),
                 "degenerate_guard": {
                     "guard_triggered": bool(retry_meta["attempts"] and retry_meta["attempts"][0]["degenerate"]),
@@ -2033,6 +2225,14 @@ def fpp_command(
     retry_guidance = _build_retry_guidance(result=result, preset_name=preset_name)
     if retry_guidance is not None:
         payload["provenance"]["retry_guidance"] = retry_guidance
+    if result.get("error") is not None:
+        click.echo(
+            (
+                "Warning: FPP returned error payload "
+                f"(stage={result.get('stage')}, error_type={result.get('error_type')})."
+            ),
+            err=True,
+        )
     dump_json_output(payload, out_path)
 
 

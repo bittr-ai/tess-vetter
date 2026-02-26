@@ -49,9 +49,14 @@ Backward compatibility note:
 ### Core diagnostics and reports
 - `btv vet`: `cli.vet.v2`
 - `btv vet --split-plot-data`: `cli.vet.plot_data.v1` (writes `<out>.plot_data.json` sidecar; default on)
-- `btv fpp`: `cli.fpp.v3`
-- `btv fpp --prepare-manifest <manifest.json>`: `cli.fpp.v3` (prepared-manifest compute mode; same runtime path as `btv fpp-run`)
-- `btv fpp-prepare`: `cli.fpp.prepare.v1`
+- `btv fpp plan`: `cli.fpp.plan.v1`
+- `btv fpp run`: `cli.fpp.v4`
+- `btv fpp summary`: `cli.fpp.summary.v1`
+- `btv fpp explain`: `cli.fpp.explain.v1`
+- `btv fpp sweep` artifacts:
+- `matrix_summary.json`: `cli.fpp.matrix_summary.v1`
+- `sweep_explain.json`: `cli.fpp.sweep_explain.v1`
+- `matrix_redundancy.json`: `cli.fpp.matrix_redundancy.v1`
 - `btv report`: `cli.report.v3`
 - `btv measure-sectors`: `cli.measure_sectors.v1`
 - `btv detrend-grid`: `cli.detrend_grid.v1`
@@ -128,3 +133,18 @@ For `btv pipeline run`, contract consumers should treat these behaviors as stabl
 - Route by exact `schema_version` string first.
 - For verdict-bearing payloads, read canonical fields first and use legacy fields only as fallback.
 - For `reference_sources.v1`, see the dedicated schema page: `reference_sources`.
+
+## FPP v3 UX Contract
+
+- `btv fpp` is a command group with required subcommands: `plan`, `run`, `sweep`, `summary`, `explain`.
+- Runtime policy resolution is emitted under:
+- `provenance.runtime.policy_resolution.requested_runtime_policy`
+- `provenance.runtime.policy_resolution.effective_runtime_policy`
+- `provenance.runtime.policy_resolution.resolution_trace[]`
+- Replicate payload contract:
+- `fpp_result.replicate_analysis.runs[]` always present
+- `fpp_result.replicate_analysis.summary` always present
+- `fpp_result.replicate_analysis.errors[]` always present
+- Sweep redundancy reporting:
+- each matrix row includes `effective_config_hash` and nullable `redundancy_group_id`
+- redundancy groups are written to `matrix_redundancy.json`

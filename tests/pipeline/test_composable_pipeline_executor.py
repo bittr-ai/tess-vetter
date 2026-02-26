@@ -358,5 +358,7 @@ def test_build_cli_args_supports_staged_fpp_commands(tmp_path: Path) -> None:
         network_ok=False,
     )
 
-    assert "fpp-prepare" in prepare_args
-    assert "fpp-run" in run_args
+    assert "fpp" in prepare_args
+    assert "plan" in prepare_args
+    assert "fpp" in run_args
+    assert "run" in run_args
