@@ -166,7 +166,7 @@ def get_fpp_preset_metadata() -> dict[str, FppPresetMetadata]:
     """Single source for preset intent and default knobs."""
     fast_defaults = _preset_defaults(FAST_PRESET)
     standard_defaults = _preset_defaults(STANDARD_PRESET)
-    tutorial_defaults: FppPresetOverrides = {**standard_defaults, **dict(TUTORIAL_PRESET_OVERRIDES)}
+    tutorial_defaults: FppPresetOverrides = {**standard_defaults, **TUTORIAL_PRESET_OVERRIDES}
     return {
         "fast": {
             "intent": "Bounded-runtime interactive compute.",
