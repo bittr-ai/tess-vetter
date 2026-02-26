@@ -38,11 +38,7 @@ from tess_vetter.cli.doctor_cli import doctor_command
 from tess_vetter.cli.ephemeris_reliability_cli import ephemeris_reliability_command
 from tess_vetter.cli.fetch_cli import cache_sectors_command, fetch_command
 from tess_vetter.cli.followup_cli import followup_command
-from tess_vetter.cli.fpp_cli_v3 import (
-    fpp_group,
-    fpp_prepare_removed_command,
-    fpp_run_removed_command,
-)
+from tess_vetter.cli.fpp_cli import fpp_command, fpp_prepare_command, fpp_run_command
 from tess_vetter.cli.localize_cli import localize_command
 from tess_vetter.cli.localize_host_cli import localize_host_command
 from tess_vetter.cli.measure_sectors_cli import measure_sectors_command
@@ -101,9 +97,9 @@ def cli() -> None:
 
 
 cli.add_command(vet_command)
-cli.add_command(fpp_group)
-cli.add_command(fpp_prepare_removed_command)
-cli.add_command(fpp_run_removed_command)
+cli.add_command(fpp_command)
+cli.add_command(fpp_prepare_command)
+cli.add_command(fpp_run_command)
 cli.add_command(fetch_command)
 cli.add_command(cache_sectors_command)
 cli.add_command(report_command)

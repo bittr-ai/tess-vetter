@@ -39,9 +39,9 @@ _OP_TO_COMMAND = {
     "detrend_grid": "detrend-grid",
     "contrast_curves": "contrast-curves",
     "contrast_curve_summary": "contrast-curve-summary",
-    "fpp": ["fpp", "run"],
-    "fpp_prepare": ["fpp", "plan"],
-    "fpp_run": ["fpp", "run"],
+    "fpp": "fpp",
+    "fpp_prepare": "fpp-prepare",
+    "fpp_run": "fpp-run",
 }
 
 _RETRYABLE_TOKENS = ("429", "timeout", "timed out", "temporarily unavailable", "connection reset")
@@ -138,12 +138,8 @@ def _build_cli_args(
             exit_code=EXIT_RUNTIME_ERROR,
         )
 
-    command_spec = _OP_TO_COMMAND[step.op]
-    if isinstance(command_spec, str):
-        command_tokens = [command_spec]
-    else:
-        command_tokens = [str(token) for token in command_spec]
-    args = [sys.executable, "-m", "tess_vetter.cli.enrich_cli", *command_tokens]
+    command = _OP_TO_COMMAND[step.op]
+    args = [sys.executable, "-m", "tess_vetter.cli.enrich_cli", command]
 
     args.extend(["--toi", str(toi)])
     args.append("--network-ok" if network_ok else "--no-network")

@@ -206,23 +206,23 @@ Catalog-backed checks are always opt-in. You must pass `network=True` (and provi
 
 ## CLI FPP workflow (agent-safe)
 
-For repeatable FPP runs, use the v3 group flow:
+For repeatable FPP runs, use a two-step flow:
 
-1. `btv fpp plan` to stage light curves/runtime artifacts and emit a plan.
-2. `btv fpp run` to compute a scenario from that plan.
-3. optional `btv fpp sweep` for scenario matrices.
+1. `btv fpp-prepare` to stage light curves/runtime artifacts and emit a manifest.
+2. `btv fpp --prepare-manifest ...` (or `btv fpp-run --prepare-manifest ...`) to compute from the staged manifest.
 
 Example:
 
 ```bash
-btv fpp plan --toi "TOI-5807.01" --network-ok --cache-dir outputs/cache -o outputs/fpp/toi_5807.plan.json
-btv fpp run --plan outputs/fpp/toi_5807.plan.json --mode balanced --no-network -o outputs/fpp/toi_5807.run.json
+btv fpp-prepare --toi "TOI-5807.01" --network-ok --cache-dir outputs/cache -o outputs/fpp/toi_5807.prepare.json
+btv fpp --prepare-manifest outputs/fpp/toi_5807.prepare.json --no-network -o outputs/fpp/toi_5807.fast.json
 ```
 
 Notes:
-- `btv fpp plan` is idempotent by default and reuses staged artifacts when inputs are unchanged.
-- use `--force-restage` on `btv fpp plan` to force full re-staging.
-- policy resolution is explicit in run output (`requested_runtime_policy`, `effective_runtime_policy`, `resolution_trace`).
+- `--prepare-manifest` on `btv fpp` uses the same prepared-manifest compute path as `btv fpp-run`.
+- prepared-manifest mode now fails fast on missing staged artifacts by default (`--require-prepared`).
+- use `--allow-missing-prepared` only for debugging/recovery workflows.
+- In prepared mode, do not mix direct candidate/staging flags (for example `--tic-id`, `--period-days`, `--cache-dir`) with `--prepare-manifest`.
 
 ## Citations
 

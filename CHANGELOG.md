@@ -6,22 +6,6 @@ This project follows semantic versioning (SemVer).
 
 - No unreleased changes.
 
-## 0.3.14 (2026-02-26)
-
-- Replaced legacy FPP command flow with a v3 command group:
-  `btv fpp plan`, `btv fpp run`, `btv fpp sweep`, `btv fpp summary`,
-  and `btv fpp explain`.
-- Removed `btv fpp-prepare` and `btv fpp-run` in favor of explicit v3
-  subcommands with clear error messaging.
-- Added richer run provenance and first-class replicate reporting so run-level
-  seed/config/outcome details are always available in output payloads.
-- Updated default FPP behavior toward decision-grade execution by defaulting to
-  network-enabled + stellar-auto resolution and enforcing stellar requirements
-  for balanced/strict modes.
-- Updated pipeline composition command token mapping to use `fpp plan`/`fpp run`
-  and aligned CLI contract/pipeline tests with the new workflow.
-- Refreshed CLI documentation for the v3 FPP contract and command semantics.
-
 ## 0.3.11 (2026-02-24)
 
 - Fixed NumPy 2.x scalar-coercion regressions in vendored TRICERATOPS+
