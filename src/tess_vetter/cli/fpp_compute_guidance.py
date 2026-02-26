@@ -40,14 +40,20 @@ def build_prepare_compute_guidance(
     runtime_ready = bool(runtime_artifacts.get("target_cached")) and bool(
         runtime_artifacts.get("trilegal_cached")
     )
-    recommended_preset = "standard" if runtime_ready else "fast"
+    # Phase 1 policy: keep guidance usability-safe and non-disruptive.
+    # Avoid automatic promotion to long-running profiles from prepare output.
+    recommended_preset = "fast"
     recommendation_defaults = preset_metadata[recommended_preset]["guidance_defaults"]
 
     return serialize_compute_guidance_payload(
         {
             "model_version": "fpp_compute_guidance.v2",
             "non_binding": True,
-            "reason_codes": ["preset_tradeoff_known", "cache_state_observed"],
+            "reason_codes": [
+                "preset_tradeoff_known",
+                "cache_state_observed",
+                "phase1_usability_safe_default",
+            ],
             "recommendation": {
                 "preset": recommended_preset,
                 "replicates": recommendation_defaults.get("replicates"),

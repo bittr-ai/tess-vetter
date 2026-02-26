@@ -2217,7 +2217,9 @@ def calculate_fpp_handler(
                             "file": os.path.basename(contrast_curve_file),
                         }
                     replicate_results.append(run_result)
-                    replicate_run_records.append(run_result)
+                    # Keep replicate-analysis run records as detached copies so
+                    # top-level aggregation objects cannot self-reference.
+                    replicate_run_records.append(dict(run_result))
                     with contextlib.suppress(Exception):
                         if progress_hook is not None:
                             progress_hook(

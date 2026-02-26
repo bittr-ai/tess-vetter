@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -208,3 +209,47 @@ def test_aggregate_counts_include_timeout_errors_in_top_level_fields() -> None:
     assert out["n_success"] == 1
     assert out["n_fail"] == 1
     assert out["replicate_success_rate"] == 0.5
+
+
+def test_replicate_output_is_json_serializable_without_cycles() -> None:
+    cache = SimpleNamespace(cache_dir="/tmp/test_cache")
+
+    time = np.linspace(0.0, 27.0, 1200, dtype=np.float64)
+    lc = SimpleNamespace(
+        time=time,
+        flux=np.ones_like(time, dtype=np.float64),
+        flux_err=np.full_like(time, 1e-3, dtype=np.float64),
+        valid_mask=np.ones(time.shape, dtype=bool),
+    )
+
+    cache.keys = lambda: ["lc:12345:1:pdcsap"]
+    cache.get = lambda key: lc if str(key).startswith("lc:12345") else None
+
+    target = _MockTarget()
+    fake_vendor_module = SimpleNamespace(triceratops=SimpleNamespace(target=lambda **_: target))
+    with patch.dict(
+        sys.modules,
+        {"tess_vetter.ext.triceratops_plus_vendor.triceratops": fake_vendor_module},
+    ), patch(
+        "tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target",
+        return_value=target,
+    ), patch(
+        "tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target",
+        return_value=None,
+    ):
+        out = calculate_fpp_handler(
+            cache=cache,
+            tic_id=12345,
+            period=10.0,
+            t0=1500.0,
+            depth_ppm=500.0,
+            duration_hours=3.0,
+            replicates=2,
+            seed=77,
+            max_points=8000,
+            mc_draws=250000,
+        )
+
+    assert "error" not in out
+    encoded = json.dumps(out)
+    assert "replicate_analysis" in encoded

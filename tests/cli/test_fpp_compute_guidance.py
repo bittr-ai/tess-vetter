@@ -25,9 +25,9 @@ def test_build_prepare_compute_guidance_is_deterministic_and_non_binding() -> No
     assert first == second
     assert first["non_binding"] is True
     assert first["recommendation"] == {
-        "preset": "standard",
-        "replicates": 3,
-        "timeout_seconds": 900.0,
+        "preset": "fast",
+        "replicates": 1,
+        "timeout_seconds": None,
     }
     assert first["evidence"] == {
         "sectors_loaded": 2,
