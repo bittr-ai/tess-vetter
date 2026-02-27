@@ -305,13 +305,11 @@ def test_btv_fpp_standard_degenerate_emits_retry_guidance(monkeypatch, tmp_path:
     guidance = payload["provenance"]["retry_guidance"]
     assert guidance["strategy"] == "knobs_default_retry"
     assert guidance["overrides"]["mc_draws"] == 50000
-    assert guidance["overrides"]["target_points"] == 1500
+    assert guidance["overrides"]["target_points"] == 100
     assert guidance["overrides"]["window_duration_mult"] == 2.0
-    assert guidance["overrides"]["min_flux_err"] == 5e-5
-    assert guidance["overrides"]["use_empirical_noise_floor"] is True
-    assert guidance["overrides"]["point_reduction"] == "downsample"
-    assert guidance["overrides"]["bin_stat"] == "mean"
-    assert guidance["overrides"]["bin_err"] == "propagate"
+    assert guidance["overrides"]["min_flux_err"] == 0.0
+    assert guidance["overrides"]["use_empirical_noise_floor"] is False
+    assert guidance["overrides"]["point_reduction"] == "bin"
     assert guidance["reason"] == "fpp_not_finite,posterior_sum_not_finite,posterior_prob_nan_count=30"
 
 
@@ -358,7 +356,7 @@ def test_btv_fpp_standard_non_degenerate_omits_retry_guidance(monkeypatch, tmp_p
     assert "retry_guidance" not in payload["provenance"]
 
 
-def test_btv_fpp_degenerate_guard_succeeds_on_retry_with_reduced_target_points(
+def test_btv_fpp_degenerate_guard_does_not_retry_with_reduced_target_points(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("BTV_FPP_DEGENERATE_FALLBACK", "1")
@@ -369,22 +367,13 @@ def test_btv_fpp_degenerate_guard_succeeds_on_retry_with_reduced_target_points(
 
     def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
         seen_overrides.append(dict(kwargs["overrides"]))
-        if len(seen_overrides) == 1:
-            return {
-                "fpp": float("nan"),
-                "nfpp": 0.1,
-                "base_seed": 7,
-                "degenerate_reason": "fpp_not_finite,posterior_prob_nan_count=12",
-                "posterior_sum_total": 1.0,
-                "posterior_prob_nan_count": 12,
-            }
         return {
-            "fpp": 0.0123,
-            "nfpp": 0.0012,
+            "fpp": float("nan"),
+            "nfpp": 0.1,
             "base_seed": 7,
-            "degenerate_reason": None,
+            "degenerate_reason": "fpp_not_finite,posterior_prob_nan_count=12",
             "posterior_sum_total": 1.0,
-            "posterior_prob_nan_count": 0,
+            "posterior_prob_nan_count": 12,
         }
 
     monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
@@ -408,37 +397,28 @@ def test_btv_fpp_degenerate_guard_succeeds_on_retry_with_reduced_target_points(
             "900.0",
             "--override",
             "target_points=8000",
-            "--override",
-            "max_points=8000",
             "--out",
             str(out_path),
         ],
     )
 
     assert result.exit_code == 0, result.output
+    assert len(seen_overrides) == 1
     assert seen_overrides[0]["target_points"] == 8000
-    assert seen_overrides[0]["max_points"] == 8000
-    assert seen_overrides[1]["max_points"] == 3000
 
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     runtime = payload["provenance"]["runtime"]
     assert runtime["overrides"]["target_points"] == 8000
-    assert runtime["overrides"]["max_points"] == 8000
     guard = runtime["degenerate_guard"]
     assert guard["guard_triggered"] is True
-    assert guard["explicit_max_points_override"] is True
-    assert guard["initial_max_points"] == 8000
-    assert guard["final_selected_attempt"] == 2
-    assert guard["fallback_succeeded"] is True
-    assert guard["attempts"][0]["max_points"] == 8000
-    assert guard["attempts"][1]["max_points"] == 3000
+    assert guard["final_selected_attempt"] == 1
+    assert guard["fallback_succeeded"] is False
     assert guard["attempts"][0]["target_points"] == 8000
     assert guard["attempts"][0]["degenerate"] is True
-    assert guard["attempts"][1]["degenerate"] is False
-    assert "retry_guidance" not in payload["provenance"]
+    assert len(guard["attempts"]) == 1
 
 
-def test_btv_fpp_degenerate_guard_failure_after_bounded_retries(monkeypatch, tmp_path: Path) -> None:
+def test_btv_fpp_degenerate_guard_failure_after_single_attempt(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("BTV_FPP_DEGENERATE_FALLBACK", "1")
     seen_overrides: list[dict[str, Any]] = []
 
@@ -480,40 +460,24 @@ def test_btv_fpp_degenerate_guard_failure_after_bounded_retries(monkeypatch, tmp
             "--depth-ppm",
             "900.0",
             "--override",
-            "max_points=4000",
+            "target_points=4000",
             "--out",
             str(out_path),
         ],
     )
 
     assert result.exit_code == 0, result.output
-    assert [entry.get("max_points") for entry in seen_overrides] == [4000, 3000, 2000, 1500]
+    assert [entry.get("target_points") for entry in seen_overrides] == [4000]
 
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     guard = payload["provenance"]["runtime"]["degenerate_guard"]
     assert guard["guard_triggered"] is True
     assert guard["fallback_succeeded"] is False
-    assert guard["final_selected_attempt"] == 4
-    assert [attempt["max_points"] for attempt in guard["attempts"]] == [4000, 3000, 2000, 1500]
-    assert payload["provenance"]["retry_guidance"]["strategy"] == "knobs_default_retry"
+    assert guard["final_selected_attempt"] == 1
+    assert [attempt["target_points"] for attempt in guard["attempts"]] == [4000]
 
 
-def test_btv_fpp_target_points_and_max_points_equal_accepts_and_warns(
-    monkeypatch, tmp_path: Path
-) -> None:
-    seen: dict[str, Any] = {}
-
-    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
-        return object(), [14]
-
-    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
-        seen.update(kwargs)
-        return {"fpp": 0.02, "nfpp": 0.002, "base_seed": 11}
-
-    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
-
-    out_path = tmp_path / "fpp_target_max_equal.json"
+def test_btv_fpp_max_points_option_not_supported(tmp_path: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(
         enrich_cli.cli,
@@ -529,66 +493,19 @@ def test_btv_fpp_target_points_and_max_points_equal_accepts_and_warns(
             "3.0",
             "--depth-ppm",
             "900.0",
-            "--target-points",
-            "400",
             "--max-points",
             "400",
             "--out",
-            str(out_path),
+            str(tmp_path / "fpp_max_points_unsupported.json"),
         ],
     )
 
-    assert result.exit_code == 0, result.output
-    assert seen["overrides"]["target_points"] == 400
-    assert "legacy alias" in result.output.lower()
+    assert result.exit_code == 2
     assert "--max-points" in result.output
+    assert "no such option" in result.output.lower()
 
 
-def test_btv_fpp_target_points_and_max_points_mismatch_fails(tmp_path: Path) -> None:
-    runner = CliRunner()
-    result = runner.invoke(
-        enrich_cli.cli,
-        [
-            "fpp",
-            "--tic-id",
-            "123",
-            "--period-days",
-            "7.5",
-            "--t0-btjd",
-            "2500.25",
-            "--duration-hours",
-            "3.0",
-            "--depth-ppm",
-            "900.0",
-            "--target-points",
-            "400",
-            "--max-points",
-            "401",
-            "--out",
-            str(tmp_path / "fpp_target_max_mismatch.json"),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "--target-points" in result.output
-    assert "--max-points" in result.output
-    assert "source of truth" in result.output.lower()
-
-
-def test_btv_fpp_none_mode_warns_and_ignores_target_points(monkeypatch, tmp_path: Path) -> None:
-    seen: dict[str, Any] = {}
-
-    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
-        return object(), [14]
-
-    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
-        seen.update(kwargs)
-        return {"fpp": 0.03, "nfpp": 0.003, "base_seed": 12}
-
-    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
-
-    out_path = tmp_path / "fpp_none_ignore_target_points.json"
+def test_btv_fpp_point_reduction_option_not_supported(tmp_path: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(
         enrich_cli.cli,
@@ -606,63 +523,14 @@ def test_btv_fpp_none_mode_warns_and_ignores_target_points(monkeypatch, tmp_path
             "900.0",
             "--point-reduction",
             "none",
-            "--target-points",
-            "400",
             "--out",
-            str(out_path),
+            str(tmp_path / "fpp_point_reduction_unsupported.json"),
         ],
     )
 
-    assert result.exit_code == 0, result.output
-    assert seen["overrides"]["point_reduction"] == "none"
-    assert seen["overrides"]["target_points"] == 400
-    assert "ignores" in result.output.lower()
-    assert "--target-points" in result.output
-
-
-def test_btv_fpp_none_mode_warns_and_ignores_max_points_alias(monkeypatch, tmp_path: Path) -> None:
-    seen: dict[str, Any] = {}
-
-    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
-        return object(), [14]
-
-    def _fake_calculate_fpp(**kwargs: Any) -> dict[str, Any]:
-        seen.update(kwargs)
-        return {"fpp": 0.03, "nfpp": 0.003, "base_seed": 12}
-
-    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
-    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
-
-    out_path = tmp_path / "fpp_none_ignore_max_points.json"
-    runner = CliRunner()
-    result = runner.invoke(
-        enrich_cli.cli,
-        [
-            "fpp",
-            "--tic-id",
-            "123",
-            "--period-days",
-            "7.5",
-            "--t0-btjd",
-            "2500.25",
-            "--duration-hours",
-            "3.0",
-            "--depth-ppm",
-            "900.0",
-            "--point-reduction",
-            "none",
-            "--max-points",
-            "400",
-            "--out",
-            str(out_path),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert seen["overrides"]["point_reduction"] == "none"
-    assert seen["overrides"]["target_points"] == 400
-    assert "ignores" in result.output.lower()
-    assert "--max-points" in result.output
+    assert result.exit_code == 2
+    assert "--point-reduction" in result.output
+    assert "no such option" in result.output.lower()
 
 
 def test_btv_fpp_contrast_curve_tbl_parsed_and_passed(monkeypatch, tmp_path: Path) -> None:
@@ -820,7 +688,7 @@ def test_btv_fpp_overrides_are_forwarded(monkeypatch, tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert seen["overrides"]["mc_draws"] == 200000
     assert seen["overrides"]["use_empirical_noise_floor"] is True
-    assert seen["overrides"]["point_reduction"] == "downsample"
+    assert seen["overrides"]["point_reduction"] == "bin"
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["provenance"]["runtime"]["overrides"]["mc_draws"] == 200000
     assert payload["provenance"]["runtime"]["overrides"]["use_empirical_noise_floor"] is True
@@ -867,18 +735,8 @@ def test_btv_fpp_overrides_bin_settings_and_target_points_trace(monkeypatch, tmp
             str(out_path),
         ],
     )
-    assert result.exit_code == 0, result.output
-    assert seen["overrides"]["point_reduction"] == "bin"
-    assert seen["overrides"]["target_points"] == 250
-    assert seen["overrides"]["bin_stat"] == "median"
-    assert seen["overrides"]["bin_err"] == "robust"
-    assert seen["overrides"]["resolution_trace"]["target_points"]["source"] == "target_points"
-
-    payload = json.loads(out_path.read_text(encoding="utf-8"))
-    runtime_overrides = payload["provenance"]["runtime"]["overrides"]
-    assert runtime_overrides["bin_stat"] == "median"
-    assert runtime_overrides["bin_err"] == "robust"
-    assert runtime_overrides["resolution_trace"]["target_points"]["source"] == "target_points"
+    assert result.exit_code == 1
+    assert "unsupported fpp override keys" in result.output.lower()
 
 
 def test_btv_fpp_drop_scenario_forwarded(monkeypatch, tmp_path: Path) -> None:
