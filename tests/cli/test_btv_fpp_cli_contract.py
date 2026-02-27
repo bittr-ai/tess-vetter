@@ -1526,6 +1526,136 @@ def test_btv_fpp_explicit_sectors_use_network_download_by_default(monkeypatch, t
     assert seen["cached_calls"] == 0
 
 
+def test_btv_fpp_allow_ffi_enables_ffi_sector_loading(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {"downloads": []}
+
+    class _Row:
+        def __init__(self, sector: int, exptime: float) -> None:
+            self.sector = sector
+            self.exptime = exptime
+
+    class _FakeMASTClient:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:  # noqa: ARG002
+            pass
+
+        def search_lightcurve(self, tic_id: int, sector: int | None = None, author: str | None = None):
+            assert tic_id == 123
+            assert sector is None
+            if author == "SPOC":
+                return [_Row(4, 120.0)]
+            if author == "TESS-SPOC":
+                return [_Row(29, 600.0)]
+            return []
+
+        def download_lightcurve(
+            self,
+            tic_id: int,
+            sector: int,
+            flux_type: str = "pdcsap",
+            quality_mask: int | None = None,  # noqa: ARG002
+            exptime: float | None = None,
+            author: str | None = None,
+            progress_callback: Any | None = None,  # noqa: ARG002
+            presearched_rows: list[Any] | None = None,  # noqa: ARG002
+        ):
+            assert tic_id == 123
+            assert flux_type == "pdcsap"
+            seen["downloads"].append((int(sector), int(round(float(exptime or 0.0))), author))
+            return _make_lc(tic_id=123, sector=int(sector), start=2000.0 + float(sector))
+
+    def _fake_calculate_fpp(**_kwargs: Any) -> dict[str, Any]:
+        return {"fpp": 0.12, "nfpp": 0.01, "base_seed": 7}
+
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.MASTClient", _FakeMASTClient)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_allow_ffi.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--allow-ffi",
+            "--cache-dir",
+            str(tmp_path / "cache"),
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["provenance"]["inputs"]["sectors_loaded"] == [4, 29]
+    assert payload["provenance"]["inputs"]["allow_ffi"] is True
+    assert (29, 600, "TESS-SPOC") in seen["downloads"]
+
+
+def test_load_lightcurves_for_fpp_auto_mode_backfills_missing_selected_sectors(monkeypatch, tmp_path: Path) -> None:
+    from tess_vetter.cli import fpp_cli
+    from tess_vetter.platform.io import PersistentCache
+
+    class _Row:
+        def __init__(self, sector: int, exptime: float) -> None:
+            self.sector = sector
+            self.exptime = exptime
+
+    class _FakeMASTClient:
+        def search_lightcurve(self, tic_id: int, sector: int | None = None, author: str | None = None):
+            assert tic_id == 123
+            assert sector is None
+            if author == "SPOC":
+                return [_Row(4, 120.0)]
+            if author == "TESS-SPOC":
+                return [_Row(29, 600.0)]
+            return []
+
+        def download_lightcurve(
+            self,
+            tic_id: int,
+            sector: int,
+            flux_type: str = "pdcsap",
+            quality_mask: int | None = None,  # noqa: ARG002
+            exptime: float | None = None,  # noqa: ARG002
+            author: str | None = None,  # noqa: ARG002
+            progress_callback: Any | None = None,  # noqa: ARG002
+            presearched_rows: list[Any] | None = None,  # noqa: ARG002
+        ):
+            assert tic_id == 123
+            assert flux_type == "pdcsap"
+            if int(sector) == 29:
+                raise RuntimeError("simulate targeted fetch failure")
+            return _make_lc(tic_id=123, sector=int(sector), start=2000.0 + float(sector))
+
+        def download_all_sectors(self, tic_id: int, *, flux_type: str, sectors: list[int] | None = None):
+            assert tic_id == 123
+            assert flux_type == "pdcsap"
+            assert sectors == [29]
+            return [_make_lc(tic_id=123, sector=29, start=2029.0)]
+
+    cache = PersistentCache(cache_dir=tmp_path / "cache")
+    lightcurves, load_path = fpp_cli._load_lightcurves_for_fpp(
+        tic_id=123,
+        sectors=None,
+        cache=cache,
+        client=_FakeMASTClient(),
+        cache_only_sectors=False,
+        allow_ffi=True,
+    )
+
+    assert sorted(int(lc.sector) for lc in lightcurves) == [4, 29]
+    assert load_path == "mast_search_priority_fallback"
+
+
 def test_btv_fpp_explicit_sectors_cache_only_when_requested(monkeypatch, tmp_path: Path) -> None:
     seen: dict[str, Any] = {"cached_calls": 0, "network_calls": 0}
 
@@ -2373,3 +2503,45 @@ def test_btv_fpp_prepare_manifest_rejects_conflicting_candidate_options(tmp_path
 
     assert result.exit_code != 0
     assert "--prepare-manifest cannot be combined" in result.output
+
+
+def test_btv_fpp_prepare_manifest_rejects_new_cadence_flags(tmp_path: Path) -> None:
+    manifest = {
+        "schema_version": "cli.fpp.prepare.v1",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "tic_id": 123,
+        "period_days": 3.0,
+        "t0_btjd": 1500.0,
+        "duration_hours": 2.0,
+        "depth_ppm_used": 500.0,
+        "sectors_loaded": [10],
+        "cache_dir": str(tmp_path / "cache"),
+        "detrend": {},
+    }
+    manifest_path = tmp_path / "manifest_conflict_cadence_flags.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    runner = CliRunner()
+    ffi_result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--prepare-manifest",
+            str(manifest_path),
+            "--allow-ffi",
+        ],
+    )
+    no_20s_result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--prepare-manifest",
+            str(manifest_path),
+            "--no-allow-20s",
+        ],
+    )
+
+    assert ffi_result.exit_code != 0
+    assert "--prepare-manifest cannot be combined" in ffi_result.output
+    assert no_20s_result.exit_code != 0
+    assert "--prepare-manifest cannot be combined" in no_20s_result.output

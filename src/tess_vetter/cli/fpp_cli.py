@@ -68,8 +68,95 @@ _DEFAULT_USE_EMPIRICAL_NOISE_FLOOR = False
 _VERDICT_TOKEN_PATTERN = re.compile(r"[^A-Z0-9]+")
 _LC_KEY_PATTERN = re.compile(r"^lc:(?P<tic>\d+):(?P<sector>\d+):(?P<flux>[a-z0-9_]+)$")
 _FPP_PREPARE_SCHEMA_VERSION = "cli.fpp.prepare.v1"
+_DEFAULT_CADENCE_FALLBACK_CHAIN: tuple[int, ...] = (120, 20, 200, 600, 1800)
+_DEFAULT_AUTHOR_FALLBACK_CHAIN: tuple[str, ...] = ("SPOC", "TESS-SPOC", "QLP")
 
 logger = logging.getLogger(__name__)
+
+
+def _effective_cadence_chain(
+    *,
+    allow_20s: bool,
+    allow_ffi: bool,
+    cadence_fallback_chain: tuple[int, ...] = _DEFAULT_CADENCE_FALLBACK_CHAIN,
+) -> tuple[int, ...]:
+    chain = tuple(int(c) for c in cadence_fallback_chain)
+    if not bool(allow_20s):
+        chain = tuple(c for c in chain if c != 20)
+    if not bool(allow_ffi):
+        chain = tuple(c for c in chain if c not in (200, 600, 1800))
+    if not chain:
+        return (120,)
+    return chain
+
+
+def _effective_author_chain(
+    author_fallback_chain: tuple[str, ...] = _DEFAULT_AUTHOR_FALLBACK_CHAIN,
+) -> tuple[str | None, ...]:
+    cleaned = tuple(str(a).strip() for a in author_fallback_chain if str(a).strip())
+    return (*cleaned, None)
+
+
+def _search_lightcurves(
+    *,
+    client: MASTClient,
+    tic_id: int,
+    author: str | None,
+) -> list[Any]:
+    try:
+        return list(client.search_lightcurve(int(tic_id), author=author))
+    except TypeError:
+        if author is not None:
+            return []
+        return list(client.search_lightcurve(int(tic_id)))
+
+
+def _download_lightcurve(
+    *,
+    client: MASTClient,
+    tic_id: int,
+    sector: int,
+    flux_type: str,
+    exptime: float | None,
+    author: str | None,
+) -> Any:
+    kwargs: dict[str, Any] = {
+        "tic_id": int(tic_id),
+        "sector": int(sector),
+        "flux_type": str(flux_type).lower(),
+        "exptime": (float(exptime) if exptime is not None else None),
+        "author": author,
+    }
+    try:
+        return client.download_lightcurve(**kwargs)
+    except TypeError:
+        kwargs.pop("author", None)
+        try:
+            return client.download_lightcurve(**kwargs)
+        except TypeError:
+            kwargs.pop("exptime", None)
+            return client.download_lightcurve(**kwargs)
+
+
+def _download_lightcurve_cached(
+    *,
+    client: MASTClient,
+    tic_id: int,
+    sector: int,
+    flux_type: str,
+    exptime: float | None,
+) -> Any:
+    kwargs: dict[str, Any] = {
+        "tic_id": int(tic_id),
+        "sector": int(sector),
+        "flux_type": str(flux_type).lower(),
+        "exptime": (float(exptime) if exptime is not None else None),
+    }
+    try:
+        return client.download_lightcurve_cached(**kwargs)
+    except TypeError:
+        kwargs.pop("exptime", None)
+        return client.download_lightcurve_cached(**kwargs)
 
 
 def _emit_fpp_replicate_progress(command: str, payload: dict[str, Any]) -> None:
@@ -381,6 +468,8 @@ def _load_lightcurves_for_fpp(
     client: MASTClient,
     cache_only_sectors: bool,
     flux_type: str = "pdcsap",
+    allow_20s: bool = True,
+    allow_ffi: bool = False,
 ) -> tuple[list[Any], str]:
     requested = sorted({int(s) for s in sectors}) if sectors is not None else None
     cached_sectors = requested if requested is not None else _cached_sectors_for_tic(
@@ -400,14 +489,61 @@ def _load_lightcurves_for_fpp(
         lightcurves.append(cached_item)
         loaded_sectors.add(int(sector))
 
+    cadence_chain = _effective_cadence_chain(allow_20s=bool(allow_20s), allow_ffi=bool(allow_ffi))
+    author_chain = _effective_author_chain()
+
     if requested is None:
         if lightcurves:
             return lightcurves, "persistent_cache_only"
-        fetched = client.download_all_sectors(
-            int(tic_id),
-            flux_type=str(flux_type).lower(),
-            sectors=None,
-        )
+        selected: dict[int, tuple[int, str | None]] = {}
+        for author in author_chain:
+            for row in _search_lightcurves(client=client, tic_id=int(tic_id), author=author):
+                try:
+                    sector = int(row.sector)
+                    exptime = int(round(float(row.exptime)))
+                except Exception:
+                    continue
+                if exptime not in cadence_chain:
+                    continue
+                rank = (cadence_chain.index(exptime), author_chain.index(author))
+                prior = selected.get(sector)
+                if prior is None or rank < prior:
+                    selected[sector] = rank
+
+        if selected:
+            downloaded_sectors: set[int] = set()
+            for sector in sorted(selected):
+                cadence_seconds = cadence_chain[selected[sector][0]]
+                author = author_chain[selected[sector][1]]
+                try:
+                    lc = _download_lightcurve(
+                        client=client,
+                        tic_id=int(tic_id),
+                        sector=int(sector),
+                        flux_type=str(flux_type).lower(),
+                        exptime=float(cadence_seconds),
+                        author=author,
+                    )
+                except Exception:
+                    continue
+                lightcurves.append(lc)
+                downloaded_sectors.add(int(sector))
+            missing_selected = [int(s) for s in sorted(selected) if int(s) not in downloaded_sectors]
+            if missing_selected:
+                try:
+                    fetched_missing = client.download_all_sectors(
+                        int(tic_id),
+                        flux_type=str(flux_type).lower(),
+                        sectors=missing_selected,
+                    )
+                except Exception:
+                    fetched_missing = []
+                for lc in list(fetched_missing):
+                    lightcurves.append(lc)
+            if lightcurves:
+                return lightcurves, "mast_search_priority_fallback"
+
+        fetched = client.download_all_sectors(int(tic_id), flux_type=str(flux_type).lower(), sectors=None)
         return list(fetched), "mast_all_sectors"
 
     missing = [int(s) for s in requested if int(s) not in loaded_sectors]
@@ -417,17 +553,21 @@ def _load_lightcurves_for_fpp(
     cached_loaded = 0
     if bool(cache_only_sectors):
         for sector in missing:
-            try:
-                lc = client.download_lightcurve_cached(
-                    tic_id=int(tic_id),
-                    sector=int(sector),
-                    flux_type=str(flux_type).lower(),
-                )
-            except Exception:
-                continue
-            lightcurves.append(lc)
-            loaded_sectors.add(int(sector))
-            cached_loaded += 1
+            for cadence_seconds in cadence_chain:
+                try:
+                    lc = _download_lightcurve_cached(
+                        client=client,
+                        tic_id=int(tic_id),
+                        sector=int(sector),
+                        flux_type=str(flux_type).lower(),
+                        exptime=float(cadence_seconds),
+                    )
+                except Exception:
+                    continue
+                lightcurves.append(lc)
+                loaded_sectors.add(int(sector))
+                cached_loaded += 1
+                break
         if lightcurves:
             return lightcurves, (
                 "persistent_plus_lightkurve_cache_requested_sectors"
@@ -438,12 +578,43 @@ def _load_lightcurves_for_fpp(
 
     remaining = [int(s) for s in requested if int(s) not in loaded_sectors]
     if remaining:
-        fetched = client.download_all_sectors(
-            int(tic_id),
-            flux_type=str(flux_type).lower(),
-            sectors=remaining,
-        )
-        lightcurves.extend(list(fetched))
+        for sector in remaining:
+            for cadence_seconds in cadence_chain:
+                fetched = False
+                for author in author_chain:
+                    try:
+                        lc = _download_lightcurve(
+                            client=client,
+                            tic_id=int(tic_id),
+                            sector=int(sector),
+                            flux_type=str(flux_type).lower(),
+                            exptime=float(cadence_seconds),
+                            author=author,
+                        )
+                    except Exception:
+                        continue
+                    lightcurves.append(lc)
+                    loaded_sectors.add(int(sector))
+                    fetched = True
+                    break
+                if fetched:
+                    break
+        still_missing = [int(s) for s in requested if int(s) not in loaded_sectors]
+        if still_missing:
+            try:
+                fetched = client.download_all_sectors(
+                    int(tic_id),
+                    flux_type=str(flux_type).lower(),
+                    sectors=still_missing,
+                )
+            except Exception:
+                fetched = []
+            for lc in list(fetched):
+                lightcurves.append(lc)
+                try:
+                    loaded_sectors.add(int(lc.sector))
+                except Exception:
+                    continue
     return lightcurves, "persistent_plus_mast_requested_sectors"
 
 
@@ -462,6 +633,8 @@ def _build_cache_for_fpp(
     detrend_buffer: float = 2.0,
     detrend_sigma_clip: float = 5.0,
     cache_only_sectors: bool = False,
+    allow_20s: bool = True,
+    allow_ffi: bool = False,
 ) -> tuple[PersistentCache, list[int]]:
     cache = PersistentCache(cache_dir=cache_dir)
     client = _new_mast_client(cache_dir=cache_dir)
@@ -479,6 +652,8 @@ def _build_cache_for_fpp(
         client=client,
         cache_only_sectors=bool(cache_only_sectors),
         flux_type="pdcsap",
+        allow_20s=bool(allow_20s),
+        allow_ffi=bool(allow_ffi),
     )
     if not lightcurves:
         raise LightCurveNotFoundError(
@@ -557,6 +732,8 @@ def _execute_fpp(
     detrend_buffer: float,
     detrend_sigma_clip: float,
     cache_only_sectors: bool = False,
+    allow_20s: bool = True,
+    allow_ffi: bool = False,
     allow_network: bool = True,
     progress_hook: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[dict[str, Any], list[int]]:
@@ -574,6 +751,8 @@ def _execute_fpp(
         detrend_buffer=float(detrend_buffer),
         detrend_sigma_clip=float(detrend_sigma_clip),
         cache_only_sectors=bool(cache_only_sectors),
+        allow_20s=bool(allow_20s),
+        allow_ffi=bool(allow_ffi),
     )
     result = calculate_fpp(
         cache=cache,
@@ -611,6 +790,8 @@ def _estimate_detrended_depth_ppm(
     detrend_sigma_clip: float,
     cache_dir: Path | None = None,
     cache_only_sectors: bool = False,
+    allow_20s: bool = True,
+    allow_ffi: bool = False,
 ) -> tuple[float | None, dict[str, Any]]:
     cache = PersistentCache(cache_dir=cache_dir)
     client = _new_mast_client(cache_dir=cache_dir)
@@ -621,6 +802,8 @@ def _estimate_detrended_depth_ppm(
         client=client,
         cache_only_sectors=bool(cache_only_sectors),
         flux_type="pdcsap",
+        allow_20s=bool(allow_20s),
+        allow_ffi=bool(allow_ffi),
     )
     if not lightcurves:
         raise LightCurveNotFoundError(
@@ -947,6 +1130,18 @@ def _runtime_artifacts_ready(
 )
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
+    "--allow-20s/--no-allow-20s",
+    default=True,
+    show_default=True,
+    help="Allow 20s cadence when selecting/fetching sectors for FPP staging.",
+)
+@click.option(
+    "--allow-ffi/--no-allow-ffi",
+    default=False,
+    show_default=True,
+    help="Allow 200/600/1800s cadence sectors (FFI-like products) during FPP staging.",
+)
+@click.option(
     "--cache-only-sectors/--allow-sector-download",
     default=False,
     show_default=True,
@@ -995,6 +1190,8 @@ def fpp_prepare_command(
     detrend_sigma_clip: float,
     detrend_cache: bool,
     sectors: tuple[int, ...],
+    allow_20s: bool,
+    allow_ffi: bool,
     cache_only_sectors: bool,
     network_ok: bool,
     cache_dir: Path | None,
@@ -1095,6 +1292,8 @@ def fpp_prepare_command(
                 detrend_sigma_clip=float(detrend_sigma_clip),
                 cache_dir=cache_dir,
                 cache_only_sectors=cache_only_sector_load,
+                allow_20s=bool(allow_20s),
+                allow_ffi=bool(allow_ffi),
             )
             if detrended_depth is not None:
                 depth_ppm_used = float(detrended_depth)
@@ -1134,6 +1333,8 @@ def fpp_prepare_command(
             detrend_buffer=float(detrend_buffer),
             detrend_sigma_clip=float(detrend_sigma_clip),
             cache_only_sectors=cache_only_sector_load,
+            allow_20s=bool(allow_20s),
+            allow_ffi=bool(allow_ffi),
         )
     except BtvCliError:
         raise
@@ -1219,6 +1420,8 @@ def fpp_prepare_command(
             "resolved_source": input_resolution.get("source"),
             "resolved_from": input_resolution.get("resolved_from"),
             "requested_sectors": effective_sectors,
+            "allow_20s": bool(allow_20s),
+            "allow_ffi": bool(allow_ffi),
         },
     }
     click.echo(f"[fpp-prepare] Writing manifest: {output_manifest_path}")
@@ -1683,6 +1886,18 @@ def fpp_run_command(
 )
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
+    "--allow-20s/--no-allow-20s",
+    default=True,
+    show_default=True,
+    help="Allow 20s cadence when selecting/fetching sectors for FPP staging.",
+)
+@click.option(
+    "--allow-ffi/--no-allow-ffi",
+    default=False,
+    show_default=True,
+    help="Allow 200/600/1800s cadence sectors (FFI-like products) for FPP staging.",
+)
+@click.option(
     "--cache-only-sectors/--allow-sector-download",
     default=False,
     show_default=True,
@@ -1770,6 +1985,8 @@ def fpp_command(
     min_flux_err: float | None,
     use_empirical_noise_floor: bool | None,
     sectors: tuple[int, ...],
+    allow_20s: bool,
+    allow_ffi: bool,
     cache_only_sectors: bool,
     timeout_seconds: float | None,
     contrast_curve: Path | None,
@@ -1818,6 +2035,10 @@ def fpp_command(
             conflicting_fields.append("--sectors")
         if bool(cache_only_sectors):
             conflicting_fields.append("--cache-only-sectors")
+        if not bool(allow_20s):
+            conflicting_fields.append("--no-allow-20s")
+        if bool(allow_ffi):
+            conflicting_fields.append("--allow-ffi")
         if cache_dir is not None:
             conflicting_fields.append("--cache-dir")
         if bool(drop_scenarios):
@@ -2018,6 +2239,8 @@ def fpp_command(
                 detrend_sigma_clip=float(detrend_sigma_clip),
                 cache_dir=cache_dir,
                 cache_only_sectors=cache_only_sector_load,
+                allow_20s=bool(allow_20s),
+                allow_ffi=bool(allow_ffi),
             )
             if detrended_depth is not None:
                 depth_ppm_used = float(detrended_depth)
@@ -2066,6 +2289,8 @@ def fpp_command(
                 detrend_buffer=float(detrend_buffer),
                 detrend_sigma_clip=float(detrend_sigma_clip),
                 cache_only_sectors=cache_only_sector_load,
+                allow_20s=bool(allow_20s),
+                allow_ffi=bool(allow_ffi),
                 allow_network=bool(network_ok),
                 progress_hook=lambda payload: _emit_fpp_replicate_progress("fpp", payload),
             ),
@@ -2101,6 +2326,8 @@ def fpp_command(
                 "depth_ppm_catalog": resolved_depth_ppm,
                 "sectors": effective_sectors,
                 "sectors_loaded": sectors_loaded,
+                "allow_20s": bool(allow_20s),
+                "allow_ffi": bool(allow_ffi),
             },
             "resolved_source": input_resolution.get("source"),
             "resolved_from": input_resolution.get("resolved_from"),
