@@ -79,9 +79,9 @@ _VALID_DROP_SCENARIO_LABELS: tuple[str, ...] = (
     "BEB",
     "BEBx2P",
 )
-_POINT_REDUCTION_MODES: tuple[str, ...] = ("downsample", "bin", "none")
-_BIN_STAT_MODES: tuple[str, ...] = ("mean", "median")
-_BIN_ERR_MODES: tuple[str, ...] = ("propagate", "robust")
+_POINT_REDUCTION_MODES: tuple[str, ...] = ("bin", "none")
+_FIXED_BIN_STAT = "median"
+_FIXED_BIN_ERR = "propagate"
 
 
 def _triceratops_sectors_key(sectors_used: list[int]) -> str:
@@ -1279,82 +1279,46 @@ def _resolve_point_reduction_config(
     *,
     point_reduction: str | None,
     target_points: int | None,
-    max_points: int | None,
 ) -> tuple[dict[str, Any], dict[str, Any], list[str] | None]:
-    """Resolve canonical point-reduction knobs and legacy max_points alias."""
+    """Resolve point-reduction config for tutorial binning or explicit full-points."""
     warnings: list[str] = []
-    legacy_alias_matched = False
-    legacy_alias_value = int(max_points) if max_points is not None else None
     target_source = "preset_default"
-
     if point_reduction is None:
-        if target_points is not None or max_points is not None:
-            effective_mode: Literal["downsample", "bin", "none"] = "downsample"
-        else:
-            effective_mode = "none"
+        effective_mode: Literal["bin", "none"] = "bin"
     else:
         if point_reduction not in _POINT_REDUCTION_MODES:
             return {}, {}, [f"point_reduction must be one of {', '.join(_POINT_REDUCTION_MODES)}"]
-        effective_mode = cast(Literal["downsample", "bin", "none"], point_reduction)
+        effective_mode = cast(Literal["bin", "none"], point_reduction)
 
     if target_points is not None and isinstance(target_points, bool):
         return {}, {}, ["target_points must be an integer or null."]
-    if max_points is not None and isinstance(max_points, bool):
-        return {}, {}, ["max_points must be an integer or null."]
-
-    if target_points is not None and max_points is not None:
-        if int(target_points) != int(max_points):
-            return (
-                {},
-                {},
-                [
-                    "max_points and target_points differ; provide one source of truth "
-                    "(or equal values during migration)."
-                ],
-            )
-        legacy_alias_matched = True
-        warnings.append("max_points is deprecated; use target_points.")
+    if target_points is not None:
         target_source = "target_points"
         requested_target_points = int(target_points)
-    elif target_points is not None:
-        target_source = "target_points"
-        requested_target_points = int(target_points)
-    elif max_points is not None:
-        target_source = "legacy_max_points_alias"
-        requested_target_points = int(max_points)
-        warnings.append("max_points is deprecated; use target_points.")
     else:
         requested_target_points = None
 
-    if effective_mode in ("downsample", "bin"):
+    if effective_mode == "bin":
         if requested_target_points is None:
-            return {}, {}, ["target_points is required when point_reduction is downsample or bin."]
+            return {}, {}, ["target_points is required for tutorial binning."]
         if int(requested_target_points) < 20:
-            return {}, {}, ["target_points must be >= 20 when point_reduction is downsample or bin."]
-    else:
-        if requested_target_points is not None:
-            if target_source == "legacy_max_points_alias":
-                target_source = "legacy_max_points_alias_ignored_for_none"
-            elif target_source == "target_points":
-                target_source = "target_points_ignored_for_none"
-            warnings.append("target_points/max_points ignored because point_reduction=none.")
+            return {}, {}, ["target_points must be >= 20 for tutorial binning."]
+    elif requested_target_points is not None:
+        warnings.append("target_points ignored because point_reduction=none.")
+        target_source = "target_points_ignored_for_none"
 
     resolution_trace = {
         "point_reduction": {
-            "source": "point_reduction" if point_reduction is not None else "preset_default"
+            "source": "point_reduction" if point_reduction is not None else "preset_default",
+            "value": str(effective_mode),
         },
         "target_points": {
             "source": target_source,
-            "legacy_alias_matched": bool(legacy_alias_matched),
-            "legacy_alias_value": legacy_alias_value,
         },
     }
     requested_config = {
         "point_reduction": str(effective_mode),
         "target_points": int(requested_target_points) if requested_target_points is not None else None,
-        "bin_stat": None,
-        "bin_err": None,
-        "max_points": int(max_points) if max_points is not None else None,
     }
     return requested_config, resolution_trace, (warnings or None)
 
@@ -1364,33 +1328,23 @@ def _apply_point_reduction(
     time_folded: np.ndarray,
     flux_arr: np.ndarray,
     flux_err_arr: np.ndarray,
-    mode: Literal["downsample", "bin", "none"],
     effective_target_points: int | None,
-    bin_stat: Literal["mean", "median"],
-    bin_err: Literal["propagate", "robust"],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
-    """Apply deterministic point reduction in folded-time space."""
-    robust_fallback_bins = 0
-    if mode == "none" or effective_target_points is None:
-        return time_folded, flux_arr, flux_err_arr, robust_fallback_bins
-
-    if mode == "downsample":
-        if len(time_folded) <= effective_target_points:
-            return time_folded, flux_arr, flux_err_arr, robust_fallback_bins
-        keep = np.unique(np.linspace(0, len(time_folded) - 1, effective_target_points).astype(int))
-        return time_folded[keep], flux_arr[keep], flux_err_arr[keep], robust_fallback_bins
-
-    # mode == "bin"
+    """Apply tutorial-style binning in folded-time space."""
+    if effective_target_points is None:
+        return time_folded, flux_arr, flux_err_arr, 0
     t_min = float(np.min(time_folded))
     t_max = float(np.max(time_folded))
     if not np.isfinite(t_min) or not np.isfinite(t_max):
-        return time_folded, flux_arr, flux_err_arr, robust_fallback_bins
+        return time_folded, flux_arr, flux_err_arr, 0
     if t_max <= t_min:
+        n = int(np.count_nonzero(np.isfinite(flux_err_arr)))
+        propagated = float(np.nanmean(flux_err_arr) / np.sqrt(max(1, n)))
         return (
             np.array([0.5 * (t_min + t_max)], dtype=float),
-            np.array([np.nanmean(flux_arr)], dtype=float),
-            np.array([float(np.sqrt(np.nansum(np.square(flux_err_arr))) / max(1, len(flux_err_arr)))], dtype=float),
-            robust_fallback_bins,
+            np.array([np.nanmedian(flux_arr)], dtype=float),
+            np.array([propagated], dtype=float),
+            0,
         )
 
     edges = np.linspace(t_min, t_max, int(effective_target_points) + 1, dtype=float)
@@ -1404,31 +1358,19 @@ def _apply_point_reduction(
         mask = bin_idx == i
         if not np.any(mask):
             continue
-        left = float(edges[i])
-        right = float(edges[i + 1])
-        t_used.append(0.5 * (left + right))
+        t_used.append(float(np.nanmean(time_folded[mask])))
         flux_bin = flux_arr[mask]
         err_bin = flux_err_arr[mask]
-        if bin_stat == "median":
-            flux_val = float(np.nanmedian(flux_bin))
-        else:
-            flux_val = float(np.nanmean(flux_bin))
+        flux_val = float(np.nanmedian(flux_bin))
         n_bin = int(np.count_nonzero(np.isfinite(flux_bin)))
-        if bin_err == "robust" and n_bin >= 2:
-            med = float(np.nanmedian(flux_bin))
-            mad = float(np.nanmedian(np.abs(flux_bin - med)))
-            sigma = float(1.4826 * mad)
-        else:
-            if bin_err == "robust" and n_bin < 2:
-                robust_fallback_bins += 1
-            sigma = float(np.sqrt(np.nansum(np.square(err_bin))) / max(1, n_bin))
+        sigma = float(np.nanmean(err_bin) / np.sqrt(max(1, n_bin)))
         f_used.append(flux_val)
         ferr_used.append(sigma)
     return (
         np.asarray(t_used, dtype=float),
         np.asarray(f_used, dtype=float),
         np.asarray(ferr_used, dtype=float),
-        robust_fallback_bins,
+        0,
     )
 
 
@@ -1443,18 +1385,14 @@ def _extract_single_run_result(
     n_points_used: int,
     half_window_days: float,
     window_duration_mult: float | None,
-    point_reduction: Literal["downsample", "bin", "none"],
+    point_reduction: Literal["bin", "none"],
     target_points_requested: int | None,
     target_points_effective: int | None,
     target_points_clamped: bool,
-    bin_stat: Literal["mean", "median"],
-    bin_err: Literal["propagate", "robust"],
-    max_points: int | None,
     resolution_trace: dict[str, Any],
     config_warnings: list[str],
     low_window_point_count: bool,
     windowed_points_empty: bool,
-    bin_err_robust_fallback_bins: int,
     draws: int,
     exptime_days: float,
     flux_err_scalar: float,
@@ -1580,11 +1518,9 @@ def _extract_single_run_result(
     requested_config_payload: dict[str, Any] = {
         "point_reduction": str(point_reduction),
         "target_points": int(target_points_requested) if target_points_requested is not None else None,
-        "bin_stat": str(bin_stat),
-        "bin_err": str(bin_err),
+        "bin_stat": _FIXED_BIN_STAT,
+        "bin_err": _FIXED_BIN_ERR,
     }
-    if max_points is not None:
-        requested_config_payload["max_points"] = int(max_points)
     out["requested_config"] = requested_config_payload
     out["effective_config"] = {
         "point_reduction": str(point_reduction),
@@ -1593,8 +1529,8 @@ def _extract_single_run_result(
             if target_points_effective is not None
             else None
         ),
-        "bin_stat": str(bin_stat),
-        "bin_err": str(bin_err),
+        "bin_stat": _FIXED_BIN_STAT,
+        "bin_err": _FIXED_BIN_ERR,
         "target_points_clamped": bool(target_points_clamped) if point_reduction != "none" else False,
     }
     out["runtime_metrics"] = {
@@ -1604,7 +1540,7 @@ def _extract_single_run_result(
         "flux_err_0": float(flux_err_scalar),
         "flux_err_0_method": "nanmean_reduced_flux_err",
         "flux_err_0_source_count": int(n_points_used),
-        "bin_err_robust_fallback_bins": int(bin_err_robust_fallback_bins),
+        "bin_err_robust_fallback_bins": 0,
         "low_window_point_count": bool(low_window_point_count),
         "windowed_points_empty": bool(windowed_points_empty),
     }
@@ -1627,10 +1563,9 @@ def _extract_single_run_result(
             int(target_points_effective) if target_points_effective is not None else None
         ),
         "target_points_clamped": bool(target_points_clamped),
-        "bin_stat": str(bin_stat),
-        "bin_err": str(bin_err),
-        "bin_err_robust_fallback_bins": int(bin_err_robust_fallback_bins),
-        "max_points": int(max_points) if max_points is not None else None,
+        "bin_stat": _FIXED_BIN_STAT,
+        "bin_err": _FIXED_BIN_ERR,
+        "bin_err_robust_fallback_bins": 0,
         "mc_draws": int(draws),
         "exptime_days": float(exptime_days),
         "flux_err_scalar_used": float(flux_err_scalar),
@@ -1680,14 +1615,11 @@ def calculate_fpp_handler(
     tmag: float | None = None,
     timeout_seconds: float | None = None,
     mc_draws: int | None = None,
-    window_duration_mult: float | None = 3.0,
-    point_reduction: Literal["downsample", "bin", "none"] | None = None,
-    target_points: int | None = None,
-    bin_stat: Literal["mean", "median"] = "mean",
-    bin_err: Literal["propagate", "robust"] = "propagate",
-    max_points: int | None = None,
-    min_flux_err: float = 5e-5,
-    use_empirical_noise_floor: bool = True,
+    window_duration_mult: float | None = 2.0,
+    point_reduction: Literal["bin", "none"] | None = "bin",
+    target_points: int | None = 100,
+    min_flux_err: float = 0.0,
+    use_empirical_noise_floor: bool = False,
     replicates: int | None = None,
     seed: int | None = None,
     external_lightcurves: list[Any] | None = None,
@@ -1785,32 +1717,9 @@ def calculate_fpp_handler(
             sectors_used_value=sectors,
         )
 
-    if bin_stat not in _BIN_STAT_MODES:
-        return _err(
-            f"bin_stat must be one of {', '.join(_BIN_STAT_MODES)}.",
-            error_type="input_error",
-            stage="validate_point_reduction",
-            sectors_used_value=sectors,
-        )
-    if bin_err not in _BIN_ERR_MODES:
-        return _err(
-            f"bin_err must be one of {', '.join(_BIN_ERR_MODES)}.",
-            error_type="input_error",
-            stage="validate_point_reduction",
-            sectors_used_value=sectors,
-        )
-    if bin_stat == "median" and bin_err == "propagate":
-        return _err(
-            "bin_stat=median cannot be used with bin_err=propagate; use bin_err=robust.",
-            error_type="input_error",
-            stage="validate_point_reduction",
-            sectors_used_value=sectors,
-        )
-
     requested_config, resolution_trace, config_warnings_raw = _resolve_point_reduction_config(
         point_reduction=point_reduction,
         target_points=target_points,
-        max_points=max_points,
     )
     if (
         not requested_config
@@ -1825,13 +1734,9 @@ def calculate_fpp_handler(
         )
     config_warnings = list(config_warnings_raw or [])
     point_reduction_effective = cast(
-        Literal["downsample", "bin", "none"], str(requested_config["point_reduction"])
+        Literal["bin", "none"], str(requested_config["point_reduction"])
     )
     target_points_requested = requested_config["target_points"]
-    if requested_config.get("bin_stat") is None:
-        requested_config["bin_stat"] = str(bin_stat)
-    if requested_config.get("bin_err") is None:
-        requested_config["bin_err"] = str(bin_err)
 
     lc_data, sectors_used = _gather_light_curves(cache, tic_id, sectors, flux_type)
     if lc_data is None:
@@ -2076,7 +1981,6 @@ def calculate_fpp_handler(
         n_points_used = n_points_raw
         low_window_point_count = False
         windowed_points_empty = False
-        bin_err_robust_fallback_bins = 0
         target_points_effective: int | None = None
         target_points_clamped = False
         try:
@@ -2125,29 +2029,25 @@ def calculate_fpp_handler(
         flux_arr = flux_arr[sort_idx]
         flux_err_arr = flux_err_arr[sort_idx]
 
-        if point_reduction_effective in ("downsample", "bin"):
+        if point_reduction_effective == "none":
+            target_points_effective = None
+            target_points_clamped = False
+        else:
             if target_points_requested is None:
                 return _err(
-                    "target_points is required for downsample/bin reduction.",
+                    "target_points is required for tutorial binning.",
                     error_type="input_error",
                     stage="point_reduction",
                     sectors_used_value=sectors_used,
                 )
             target_points_effective = int(min(int(target_points_requested), n_points_windowed))
             target_points_clamped = target_points_effective != int(target_points_requested)
-        else:
-            target_points_effective = None
-            target_points_clamped = False
-
-        time_folded, flux_arr, flux_err_arr, bin_err_robust_fallback_bins = _apply_point_reduction(
-            time_folded=time_folded,
-            flux_arr=flux_arr,
-            flux_err_arr=flux_err_arr,
-            mode=point_reduction_effective,
-            effective_target_points=target_points_effective,
-            bin_stat=bin_stat,
-            bin_err=bin_err,
-        )
+            time_folded, flux_arr, flux_err_arr, _ = _apply_point_reduction(
+                time_folded=time_folded,
+                flux_arr=flux_arr,
+                flux_err_arr=flux_err_arr,
+                effective_target_points=target_points_effective,
+            )
         sort_idx = np.argsort(time_folded)
         time_folded = time_folded[sort_idx]
         flux_arr = flux_arr[sort_idx]
@@ -2167,22 +2067,7 @@ def calculate_fpp_handler(
 
         # Calculate mean flux uncertainty for scalar flux_err_0
         flux_err_scalar = float(np.nanmean(flux_err_arr))
-        # TRICERATOPS assumes flux_err_0 is a representative per-point uncertainty.
-        # For very bright targets, formal pipeline uncertainties can be unrealistically small,
-        # driving all scenario evidences (lnZ) toward -inf and yielding NaN probabilities.
-        # Use an empirical noise floor from out-of-transit scatter to stabilize.
         empirical_sigma = 0.0
-        if use_empirical_noise_floor:
-            try:
-                oot_mask = np.abs(time_folded) > (dur_days / 2.0)
-                oot_flux = flux_arr[oot_mask] if np.any(oot_mask) else flux_arr
-                med = float(np.median(oot_flux))
-                mad = float(np.median(np.abs(oot_flux - med)))
-                empirical_sigma = 1.4826 * mad
-            except Exception:
-                empirical_sigma = 0.0
-
-        flux_err_scalar = float(max(flux_err_scalar, empirical_sigma, float(min_flux_err)))
 
         # Convert depth from ppm to fractional for TRICERATOPS
         depth_fractional = depth_ppm / 1e6
@@ -2221,12 +2106,11 @@ def calculate_fpp_handler(
             else max(float(TRICERATOPS_CALC_TIMEOUT), float(FPP_STAGE_CALC_PROBS_BUDGET_SECONDS))
         )
         logger.info(
-            "[fpp] Stage triceratops_calc_probs: start (TIC=%s draws=%s mode=%s target_points=%s max_points=%s budget=%.1fs replicates=%s)",
+            "[fpp] Stage triceratops_calc_probs: start (TIC=%s draws=%s mode=%s target_points=%s budget=%.1fs replicates=%s)",
             tic_id,
             draws,
             point_reduction_effective,
             target_points_effective if point_reduction_effective != "none" else None,
-            max_points,
             float(calc_timeout),
             max(1, int(replicates)) if replicates is not None else 1,
         )
@@ -2382,14 +2266,10 @@ def calculate_fpp_handler(
                         target_points_requested=target_points_requested,
                         target_points_effective=target_points_effective,
                         target_points_clamped=target_points_clamped,
-                        bin_stat=bin_stat,
-                        bin_err=bin_err,
-                        max_points=max_points,
                         resolution_trace=resolution_trace,
                         config_warnings=config_warnings,
                         low_window_point_count=low_window_point_count,
                         windowed_points_empty=windowed_points_empty,
-                        bin_err_robust_fallback_bins=bin_err_robust_fallback_bins,
                         draws=draws,
                         exptime_days=exptime_days,
                         flux_err_scalar=flux_err_scalar,
