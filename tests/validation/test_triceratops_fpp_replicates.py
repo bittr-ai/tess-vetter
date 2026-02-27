@@ -6,6 +6,7 @@ requiring network access by monkeypatching the vendored TRICERATOPS target.
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -846,3 +847,128 @@ def test_low_window_metrics_semantics(
     assert int(metrics["bin_err_robust_fallback_bins"]) == 0
     assert metrics["flux_err_0_method"] == "nanmean_reduced_flux_err"
     assert int(metrics["flux_err_0_source_count"]) == int(metrics["n_points_used"])
+
+
+@pytest.mark.skipif(
+    not HAS_TRICERATOPS,
+    reason="TRICERATOPS vendor not available (requires triceratops extra)",
+)
+@patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+@patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+def test_calc_probs_has_no_implicit_timeout_when_unset(
+    mock_load: MagicMock, mock_save: MagicMock, monkeypatch: pytest.MonkeyPatch  # noqa: ARG001
+) -> None:
+    from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+
+    del mock_save
+    mock_load.return_value = make_valid_target(fpp=0.02, seed=11)
+    cache = _make_mock_cache(time=1500.0 + np.linspace(-0.3, 0.3, 250))
+    timeout_calls: list[float] = []
+
+    @contextlib.contextmanager
+    def _recording_timeout(timeout_seconds: float, operation: str):  # type: ignore[override]
+        if "calc_probs" in str(operation):
+            timeout_calls.append(float(timeout_seconds))
+        yield
+
+    monkeypatch.setattr("tess_vetter.validation.triceratops_fpp.network_timeout", _recording_timeout)
+
+    result = calculate_fpp_handler(
+        cache=cache,
+        tic_id=12345,
+        period=1.0,
+        t0=1500.0,
+        depth_ppm=500,
+        duration_hours=3.0,
+        replicates=2,
+        seed=99,
+        timeout_seconds=None,
+    )
+
+    assert "error" not in result
+    assert timeout_calls == []
+
+
+@pytest.mark.skipif(
+    not HAS_TRICERATOPS,
+    reason="TRICERATOPS vendor not available (requires triceratops extra)",
+)
+@patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+@patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+def test_calc_probs_timeout_applies_when_explicit_budget_set(
+    mock_load: MagicMock, mock_save: MagicMock, monkeypatch: pytest.MonkeyPatch  # noqa: ARG001
+) -> None:
+    from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+
+    del mock_save
+    mock_load.return_value = make_valid_target(fpp=0.02, seed=12)
+    cache = _make_mock_cache(time=1500.0 + np.linspace(-0.3, 0.3, 250))
+    timeout_calls: list[float] = []
+
+    @contextlib.contextmanager
+    def _recording_timeout(timeout_seconds: float, operation: str):  # type: ignore[override]
+        if "calc_probs" in str(operation):
+            timeout_calls.append(float(timeout_seconds))
+        yield
+
+    monkeypatch.setattr("tess_vetter.validation.triceratops_fpp.network_timeout", _recording_timeout)
+
+    result = calculate_fpp_handler(
+        cache=cache,
+        tic_id=12345,
+        period=1.0,
+        t0=1500.0,
+        depth_ppm=500,
+        duration_hours=3.0,
+        replicates=2,
+        seed=99,
+        timeout_seconds=60.0,
+    )
+
+    assert "error" not in result
+    assert len(timeout_calls) >= 1
+
+
+@pytest.mark.skipif(
+    not HAS_TRICERATOPS,
+    reason="TRICERATOPS vendor not available (requires triceratops extra)",
+)
+@patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+@patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+def test_explicit_budget_exhaustion_before_replicates_reports_timeout(
+    mock_load: MagicMock, mock_save: MagicMock, monkeypatch: pytest.MonkeyPatch  # noqa: ARG001
+) -> None:
+    from tess_vetter.validation import triceratops_fpp as fpp_mod
+
+    del mock_save
+    mock_load.return_value = make_valid_target(fpp=0.02, seed=13)
+    cache = _make_mock_cache(time=1500.0 + np.linspace(-0.3, 0.3, 250))
+    state = {"expired": False}
+
+    def _fake_time() -> float:
+        # Keep budget alive through pre-calc checks; force expiry immediately after
+        # calc stage start log to trigger timeout before first replicate runs.
+        return 1002.0 if state["expired"] else 1000.0
+
+    def _fake_info(msg: Any, *args: Any, **kwargs: Any) -> None:  # noqa: ARG001
+        if "Stage triceratops_calc_probs: start" in str(msg):
+            state["expired"] = True
+
+    monkeypatch.setattr(fpp_mod.time, "time", _fake_time)
+    monkeypatch.setattr(fpp_mod.logger, "info", _fake_info)
+
+    result = fpp_mod.calculate_fpp_handler(
+        cache=cache,
+        tic_id=12345,
+        period=1.0,
+        t0=1500.0,
+        depth_ppm=500,
+        duration_hours=3.0,
+        replicates=3,
+        seed=99,
+        timeout_seconds=1.0,
+    )
+
+    assert result.get("error_type") == "timeout"
+    assert result.get("stage") == "replicate_aggregation"
+    assert int(result.get("n_success", -1)) == 0

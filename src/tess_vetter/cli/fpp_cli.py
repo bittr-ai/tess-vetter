@@ -199,9 +199,9 @@ def _load_cli_contrast_curve(
 
 
 def _is_degenerate_fpp_result(result: dict[str, Any]) -> bool:
-    """Mirror API helper contract checks for degenerate FPP outputs."""
+    """Mirror API helper contract checks for degenerate posterior outputs only."""
     if "error" in result:
-        return True
+        return False
 
     fpp = result.get("fpp")
     if fpp is None or not np.isfinite(float(fpp)):

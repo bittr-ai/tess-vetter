@@ -356,6 +356,52 @@ def test_btv_fpp_standard_non_degenerate_omits_retry_guidance(monkeypatch, tmp_p
     assert "retry_guidance" not in payload["provenance"]
 
 
+def test_btv_fpp_timeout_error_does_not_emit_degenerate_retry_guidance(
+    monkeypatch, tmp_path: Path
+) -> None:
+    def _fake_build_cache_for_fpp(**_kwargs: Any) -> tuple[object, list[int]]:
+        return object(), [14, 15]
+
+    def _fake_calculate_fpp(**_kwargs: Any) -> dict[str, Any]:
+        return {
+            "error": "replicate budget exhausted",
+            "error_type": "timeout",
+            "stage": "replicate_aggregation",
+            "base_seed": 7,
+        }
+
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli._build_cache_for_fpp", _fake_build_cache_for_fpp)
+    monkeypatch.setattr("tess_vetter.cli.fpp_cli.calculate_fpp", _fake_calculate_fpp)
+
+    out_path = tmp_path / "fpp_timeout_error_no_degenerate_guidance.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        enrich_cli.cli,
+        [
+            "fpp",
+            "--tic-id",
+            "123",
+            "--period-days",
+            "7.5",
+            "--t0-btjd",
+            "2500.25",
+            "--duration-hours",
+            "3.0",
+            "--depth-ppm",
+            "900.0",
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["fpp_result"]["error_type"] == "timeout"
+    assert "retry_guidance" not in payload["provenance"]
+    guard = payload["provenance"]["runtime"]["degenerate_guard"]
+    assert guard["guard_triggered"] is False
+
+
 def test_btv_fpp_degenerate_guard_does_not_retry_with_reduced_target_points(
     monkeypatch, tmp_path: Path
 ) -> None:
