@@ -599,3 +599,268 @@ class TestCalculateFppHandlerReplicates:
         assert runtime["drop_scenario"] == ["EB", "DEB"]
         assert runtime["conditioning_type"] == "hard_exclusion"
         assert runtime["drop_scenario_justification"] is None
+
+
+def _make_mock_cache(
+    *,
+    time: np.ndarray,
+    flux: np.ndarray | None = None,
+    flux_err: np.ndarray | None = None,
+    tic_id: int = 12345,
+    sector: int = 1,
+) -> MagicMock:
+    """Build a lightweight cache mock with one TIC/sector light curve."""
+    cache = MagicMock()
+    cache.cache_dir = "/tmp/test_cache"
+
+    lc_mock = MagicMock()
+    lc_mock.time = np.asarray(time, dtype=float)
+    lc_mock.flux = np.asarray(flux if flux is not None else np.ones_like(time), dtype=float)
+    lc_mock.flux_err = np.asarray(
+        flux_err if flux_err is not None else np.full_like(time, 1e-3),
+        dtype=float,
+    )
+    lc_mock.valid_mask = np.ones(lc_mock.time.shape, dtype=bool)
+
+    key = f"lc:{int(tic_id)}:{int(sector)}:pdcsap"
+    cache.keys = lambda: [key]
+    cache.get = lambda lookup_key: lc_mock if lookup_key == key else None
+    return cache
+
+
+@pytest.mark.skipif(
+    not HAS_TRICERATOPS,
+    reason="TRICERATOPS vendor not available (requires triceratops extra)",
+)
+@patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+@patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+def test_reduction_modes_and_bin_downsample_divergence(
+    mock_load: MagicMock, mock_save: MagicMock  # noqa: ARG001
+) -> None:
+    from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+
+    del mock_save
+    base_time = 1500.0 + np.linspace(-0.49, 0.49, 401)
+    cache = _make_mock_cache(time=base_time)
+
+    def _run_mode(mode: str, *, repeat: bool = False) -> tuple[dict[str, Any], np.ndarray]:
+        target = make_valid_target(fpp=0.02, seed=5 if not repeat else 6)
+        mock_load.return_value = target
+        result = calculate_fpp_handler(
+            cache=cache,
+            tic_id=12345,
+            period=1.0,
+            t0=1500.0,
+            depth_ppm=500,
+            duration_hours=3.0,
+            point_reduction=mode,
+            target_points=100,
+            max_points=None,
+            bin_stat="mean",
+            bin_err="propagate",
+            replicates=1,
+            seed=77,
+        )
+        assert "error" not in result
+        return result, np.asarray(target.last_calc_probs_kwargs["time"], dtype=float)
+
+    downsample_result, downsample_time = _run_mode("downsample")
+    bin_result, bin_time_first = _run_mode("bin")
+    _, bin_time_second = _run_mode("bin", repeat=True)
+    none_result, none_time = _run_mode("none")
+
+    assert np.all(np.diff(downsample_time) >= 0.0)
+    assert np.all(np.diff(bin_time_first) >= 0.0)
+    assert np.all(np.diff(none_time) >= 0.0)
+
+    assert len(downsample_time) <= 100
+    assert 1 <= len(bin_time_first) <= 100
+    assert len(none_time) == int(none_result["runtime_metrics"]["n_points_windowed"])
+
+    assert not np.array_equal(downsample_time, bin_time_first)
+    np.testing.assert_allclose(bin_time_first, bin_time_second)
+    assert int(downsample_result["runtime_metrics"]["n_points_used"]) == len(downsample_time)
+    assert int(bin_result["runtime_metrics"]["n_points_used"]) == len(bin_time_first)
+
+
+@pytest.mark.skipif(
+    not HAS_TRICERATOPS,
+    reason="TRICERATOPS vendor not available (requires triceratops extra)",
+)
+@patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+@patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+def test_bin_stat_median_with_propagate_is_rejected(
+    mock_load: MagicMock, mock_save: MagicMock  # noqa: ARG001
+) -> None:
+    from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+
+    del mock_save
+    mock_load.return_value = make_valid_target(fpp=0.02, seed=9)
+    cache = _make_mock_cache(time=1500.0 + np.linspace(-0.2, 0.2, 120))
+
+    result = calculate_fpp_handler(
+        cache=cache,
+        tic_id=12345,
+        period=1.0,
+        t0=1500.0,
+        depth_ppm=500,
+        duration_hours=3.0,
+        point_reduction="bin",
+        target_points=60,
+        max_points=None,
+        bin_stat="median",
+        bin_err="propagate",
+        replicates=1,
+        seed=101,
+    )
+
+    assert "error" in result
+    assert "median" in str(result.get("error", "")).lower()
+    assert "robust" in str(result.get("error", "")).lower()
+
+
+@pytest.mark.skipif(
+    not HAS_TRICERATOPS,
+    reason="TRICERATOPS vendor not available (requires triceratops extra)",
+)
+@pytest.mark.parametrize("mode", ["downsample", "bin", "none"])
+@patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+@patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+def test_empty_window_fails_for_all_modes(
+    mock_load: MagicMock,
+    mock_save: MagicMock,  # noqa: ARG001
+    mode: str,
+) -> None:
+    from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+
+    del mock_save
+    mock_load.return_value = make_valid_target(fpp=0.02, seed=3)
+    # All folded points sit outside the default transit window.
+    cache = _make_mock_cache(time=1500.0 + np.array([0.4, 0.41, 0.42]))
+
+    result = calculate_fpp_handler(
+        cache=cache,
+        tic_id=12345,
+        period=1.0,
+        t0=1500.0,
+        depth_ppm=500,
+        duration_hours=1.0,
+        point_reduction=mode,
+        target_points=25,
+        max_points=None,
+        replicates=1,
+        seed=20,
+    )
+
+    assert "error" in result
+    marker = " ".join(
+        [
+            str(result.get("error_type", "")),
+            str(result.get("stage", "")),
+            str(result.get("error", "")),
+        ]
+    ).lower()
+    assert "no_windowed_points" in marker
+
+
+@pytest.mark.skipif(
+    not HAS_TRICERATOPS,
+    reason="TRICERATOPS vendor not available (requires triceratops extra)",
+)
+@patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+@patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+def test_runtime_and_resolution_provenance_fields_for_none_mode_ignored_target_points(
+    mock_load: MagicMock, mock_save: MagicMock  # noqa: ARG001
+) -> None:
+    from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+
+    del mock_save
+    mock_load.return_value = make_valid_target(fpp=0.01, seed=10)
+    cache = _make_mock_cache(time=1500.0 + np.linspace(-0.2, 0.2, 160))
+
+    result = calculate_fpp_handler(
+        cache=cache,
+        tic_id=12345,
+        period=1.0,
+        t0=1500.0,
+        depth_ppm=500,
+        duration_hours=3.0,
+        point_reduction="none",
+        target_points=80,
+        max_points=None,
+        replicates=1,
+        seed=22,
+    )
+
+    assert "error" not in result
+    assert "requested_config" in result
+    assert "effective_config" in result
+    assert "runtime_metrics" in result
+    assert "resolution_trace" in result
+
+    requested = result["requested_config"]
+    effective = result["effective_config"]
+    metrics = result["runtime_metrics"]
+    trace = result["resolution_trace"]
+
+    for key in ("point_reduction", "target_points", "bin_stat", "bin_err"):
+        assert key in requested
+        assert key in effective
+    for key in (
+        "n_points_raw",
+        "n_points_windowed",
+        "n_points_used",
+        "flux_err_0",
+        "flux_err_0_method",
+        "flux_err_0_source_count",
+        "bin_err_robust_fallback_bins",
+        "low_window_point_count",
+        "windowed_points_empty",
+    ):
+        assert key in metrics
+    assert trace["target_points"]["source"] == "target_points_ignored_for_none"
+    assert "legacy_alias_matched" in trace["target_points"]
+    assert "legacy_alias_value" in trace["target_points"]
+    assert effective["target_points"] is None
+    assert effective["target_points_clamped"] is False
+
+
+@pytest.mark.skipif(
+    not HAS_TRICERATOPS,
+    reason="TRICERATOPS vendor not available (requires triceratops extra)",
+)
+@patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+@patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+def test_low_window_and_robust_fallback_metrics_semantics(
+    mock_load: MagicMock, mock_save: MagicMock  # noqa: ARG001
+) -> None:
+    from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+
+    del mock_save
+    mock_load.return_value = make_valid_target(fpp=0.03, seed=12)
+    # 10 points in window triggers low_window_point_count semantics.
+    cache = _make_mock_cache(time=1500.0 + np.linspace(-0.08, 0.08, 10))
+
+    result = calculate_fpp_handler(
+        cache=cache,
+        tic_id=12345,
+        period=1.0,
+        t0=1500.0,
+        depth_ppm=500,
+        duration_hours=3.0,
+        point_reduction="bin",
+        target_points=50,
+        max_points=None,
+        bin_stat="median",
+        bin_err="robust",
+        replicates=1,
+        seed=33,
+    )
+
+    assert "error" not in result
+    metrics = result["runtime_metrics"]
+    assert metrics["windowed_points_empty"] is False
+    assert metrics["low_window_point_count"] is True
+    assert int(metrics["bin_err_robust_fallback_bins"]) > 0
+    assert metrics["flux_err_0_method"] == "nanmean_reduced_flux_err"
+    assert int(metrics["flux_err_0_source_count"]) == int(metrics["n_points_used"])

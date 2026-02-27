@@ -31,7 +31,9 @@ def test_calculate_fpp_fast_preset_wires_expected_defaults() -> None:
         kwargs = handler.call_args.kwargs
         assert kwargs["mc_draws"] == FAST_PRESET.mc_draws
         assert kwargs["window_duration_mult"] == FAST_PRESET.window_duration_mult
-        assert kwargs["max_points"] == FAST_PRESET.max_points
+        assert kwargs["point_reduction"] == FAST_PRESET.point_reduction
+        assert kwargs["target_points"] == FAST_PRESET.target_points
+        assert kwargs["max_points"] is None
         assert kwargs["min_flux_err"] == FAST_PRESET.min_flux_err
         assert kwargs["use_empirical_noise_floor"] is True
 
