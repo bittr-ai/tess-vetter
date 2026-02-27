@@ -440,9 +440,6 @@ if TYPE_CHECKING:
 
     # FPP (TRICERATOPS) presets
     from tess_vetter.api.fpp import (
-        FAST_PRESET,
-        STANDARD_PRESET,
-        TriceratopsFppPreset,
         calculate_fpp,
     )
     from tess_vetter.api.fpp_helpers import (  # noqa: F401
