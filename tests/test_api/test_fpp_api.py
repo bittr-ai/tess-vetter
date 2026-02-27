@@ -8,15 +8,21 @@ from tess_vetter.api.contracts import callable_input_schema_from_signature, opaq
 from tess_vetter.api.fpp import (
     CALCULATE_FPP_CALL_SCHEMA,
     CALCULATE_FPP_OUTPUT_SCHEMA,
-    FAST_PRESET,
-    STANDARD_PRESET,
+    DEFAULT_BIN_ERR,
+    DEFAULT_BIN_STAT,
+    DEFAULT_MC_DRAWS,
+    DEFAULT_MIN_FLUX_ERR,
+    DEFAULT_POINT_REDUCTION,
+    DEFAULT_TARGET_POINTS,
+    DEFAULT_USE_EMPIRICAL_NOISE_FLOOR,
+    DEFAULT_WINDOW_DURATION_MULT,
     ContrastCurve,
     ExternalLightCurve,
     calculate_fpp,
 )
 
 
-def test_calculate_fpp_fast_preset_wires_expected_defaults() -> None:
+def test_calculate_fpp_knob_defaults_wire_expected_values() -> None:
     cache = MagicMock()
     with patch("tess_vetter.api.fpp.calculate_fpp_handler") as handler:
         handler.return_value = {"fpp": 0.1}
@@ -26,19 +32,20 @@ def test_calculate_fpp_fast_preset_wires_expected_defaults() -> None:
             period=1.0,
             t0=0.0,
             depth_ppm=100.0,
-            preset="fast",
         )
         kwargs = handler.call_args.kwargs
-        assert kwargs["mc_draws"] == FAST_PRESET.mc_draws
-        assert kwargs["window_duration_mult"] == FAST_PRESET.window_duration_mult
-        assert kwargs["point_reduction"] == FAST_PRESET.point_reduction
-        assert kwargs["target_points"] == FAST_PRESET.target_points
+        assert kwargs["mc_draws"] == DEFAULT_MC_DRAWS
+        assert kwargs["window_duration_mult"] == DEFAULT_WINDOW_DURATION_MULT
+        assert kwargs["point_reduction"] == DEFAULT_POINT_REDUCTION
+        assert kwargs["target_points"] == DEFAULT_TARGET_POINTS
+        assert kwargs["bin_stat"] == DEFAULT_BIN_STAT
+        assert kwargs["bin_err"] == DEFAULT_BIN_ERR
         assert kwargs["max_points"] is None
-        assert kwargs["min_flux_err"] == FAST_PRESET.min_flux_err
-        assert kwargs["use_empirical_noise_floor"] is True
+        assert kwargs["min_flux_err"] == DEFAULT_MIN_FLUX_ERR
+        assert kwargs["use_empirical_noise_floor"] is DEFAULT_USE_EMPIRICAL_NOISE_FLOOR
 
 
-def test_calculate_fpp_standard_preset_wires_expected_defaults() -> None:
+def test_calculate_fpp_explicit_knobs_override_defaults() -> None:
     cache = MagicMock()
     with patch("tess_vetter.api.fpp.calculate_fpp_handler") as handler:
         handler.return_value = {"fpp": 0.1}
@@ -48,41 +55,26 @@ def test_calculate_fpp_standard_preset_wires_expected_defaults() -> None:
             period=1.0,
             t0=0.0,
             depth_ppm=100.0,
-            preset="standard",
-        )
-        kwargs = handler.call_args.kwargs
-        assert kwargs["mc_draws"] == STANDARD_PRESET.mc_draws
-        assert kwargs["window_duration_mult"] is None
-        assert kwargs["max_points"] is None
-        assert kwargs["min_flux_err"] == STANDARD_PRESET.min_flux_err
-        assert kwargs["use_empirical_noise_floor"] is False
-
-
-def test_calculate_fpp_overrides_take_precedence() -> None:
-    cache = MagicMock()
-    with patch("tess_vetter.api.fpp.calculate_fpp_handler") as handler:
-        handler.return_value = {"fpp": 0.1}
-        calculate_fpp(
-            cache=cache,
-            tic_id=1,
-            period=1.0,
-            t0=0.0,
-            depth_ppm=100.0,
-            preset="fast",
-            overrides={
-                "mc_draws": 123,
-                "window_duration_mult": None,
-                "max_points": 0,
-                "min_flux_err": 1e-4,
-                "use_empirical_noise_floor": False,
-            },
+            mc_draws=123,
+            window_duration_mult=None,
+            point_reduction="bin",
+            target_points=250,
+            bin_stat="mean",
+            bin_err="propagate",
+            max_points=250,
+            min_flux_err=1e-4,
+            use_empirical_noise_floor=False,
+            drop_scenario=["SEB"],
         )
         kwargs = handler.call_args.kwargs
         assert kwargs["mc_draws"] == 123
         assert kwargs["window_duration_mult"] is None
-        assert kwargs["max_points"] == 0
+        assert kwargs["point_reduction"] == "bin"
+        assert kwargs["target_points"] == 250
+        assert kwargs["max_points"] == 250
         assert kwargs["min_flux_err"] == 1e-4
         assert kwargs["use_empirical_noise_floor"] is False
+        assert kwargs["drop_scenario"] == ["SEB"]
 
 
 def test_external_lightcurve_dataclass_creation() -> None:
@@ -167,14 +159,20 @@ def test_calculate_fpp_call_schema_is_stable() -> None:
         "type": "object",
         "properties": {
             "allow_network": {},
+            "bin_err": {},
+            "bin_stat": {},
             "cache": {},
             "contrast_curve": {},
             "depth_ppm": {},
+            "drop_scenario": {},
             "duration_hours": {},
             "external_lightcurves": {},
+            "max_points": {},
+            "mc_draws": {},
+            "min_flux_err": {},
             "overrides": {},
             "period": {},
-            "preset": {},
+            "point_reduction": {},
             "progress_hook": {},
             "replicates": {},
             "seed": {},
@@ -182,9 +180,12 @@ def test_calculate_fpp_call_schema_is_stable() -> None:
             "stellar_mass": {},
             "stellar_radius": {},
             "t0": {},
+            "target_points": {},
             "tic_id": {},
             "timeout_seconds": {},
             "tmag": {},
+            "use_empirical_noise_floor": {},
+            "window_duration_mult": {},
         },
         "additionalProperties": False,
         "required": ["cache", "depth_ppm", "period", "t0", "tic_id"],
