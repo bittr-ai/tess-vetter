@@ -6,6 +6,25 @@ This project follows semantic versioning (SemVer).
 
 - No unreleased changes.
 
+## 0.3.17 (2026-02-27)
+
+- Replaced legacy preset/profile-style FPP controls with explicit runtime knobs
+  centered on tutorial-equivalent binning (`point_reduction`, `target_points`)
+  plus first-class full-points mode.
+- Enabled TRICERATOPS `parallel=True` in runtime execution and aligned calc
+  timeout behavior for long-running replicate jobs.
+- Removed implicit calc-stage timeout enforcement when `timeout_seconds` is not
+  provided, while preserving explicit timeout behavior when requested.
+- Separated timeout vs degenerate-posterior semantics in FPP aggregation and
+  CLI guidance so timeout failures are classified and surfaced correctly.
+- Added sector cadence/author fallback knobs in FPP staging/loading to support
+  long-period candidates with mixed cadence sector coverage.
+- Stabilized vendored TRICERATOPS numerics with logsumexp-based likelihood
+  normalization changes to prevent NaN/underflow behavior in extreme scenarios.
+- Added/expanded FPP contract and regression coverage across API, CLI,
+  replicate aggregation, and vendored numerics paths.
+- Added FPP binning specification/implementation docs under `working_docs/`.
+
 ## 0.3.16 (2026-02-26)
 
 - Reverted FPP CLI/runtime-policy changes introduced after `0.3.13` to restore
