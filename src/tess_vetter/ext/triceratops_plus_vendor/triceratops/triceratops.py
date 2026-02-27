@@ -1,4 +1,5 @@
 from math import ceil, floor
+import warnings
 
 import astropy.units as u
 import lightkurve
@@ -14,6 +15,7 @@ from mpl_toolkits.axes_grid1.anchored_artists import AnchoredDirectionArrows
 from pandas import DataFrame
 from scipy.integrate import dblquad
 
+from ._numerics import _normalize_probabilities
 from .funcs import Gauss2D, query_TRILEGAL, renorm_flux, save_trilegal
 from .likelihoods import simulate_EB_transit, simulate_TP_transit
 from .marginal_likelihoods import *
@@ -653,7 +655,8 @@ class target:
             external_lc_file (str): Path to external light curve.
             filt_lc (str): Photometric filter of external light curve. Options are
                 TESS, Vis, J, H, and K.
-            lnz_const (float): Fudge factor for lnZ calculation.
+            lnz_const (float): Compatibility parameter retained for API stability.
+                It is not used in evidence computation.
             Z_star (float) = Metallicity of target star.
             external_lc_files (list[str]): List of paths to external light curves (up to 4).
             filt_lcs (list[str]): List of photometric filters for external light curves.
@@ -1577,10 +1580,18 @@ class target:
                 lnZ[j] = res_twin["lnZ"]
 
         # calculate the relative probability of each scenario
-        relative_probs = np.zeros(N_scenarios)
-        relative_probs_p = np.zeros(N_scenarios) # for palomar
-        for i in range(N_scenarios):
-            relative_probs[i] = (np.exp(lnZ[i])) / np.sum(np.exp(lnZ))
+        relative_probs, normalization_status = _normalize_probabilities(lnZ)
+        if normalization_status == "all_neginf":
+            warnings.warn(
+                "All scenario log-evidences are -inf; probabilities set to zeros.",
+                RuntimeWarning,
+            )
+        elif normalization_status == "anomaly":
+            warnings.warn(
+                "Scenario log-evidences contain NaN/+inf or invalid normalization; "
+                "probabilities set to zeros.",
+                RuntimeWarning,
+            )
 
         prob_df = DataFrame({
             "ID": targets,
@@ -1614,6 +1625,8 @@ class target:
         self.u2 = best_u2
         self.fluxratio_EB = best_fluxratio_EB
         self.fluxratio_comp = best_fluxratio_comp
+        self.lnZ = lnZ
+        self.FPP_degenerate = normalization_status != "ok"
 
         if (external_lc_files != None):
             self.u1_p = best_u1_p
