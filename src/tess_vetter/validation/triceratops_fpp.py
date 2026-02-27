@@ -43,7 +43,6 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from tess_vetter.platform.network.timeout import (
-    TRICERATOPS_CALC_TIMEOUT,
     NetworkTimeoutError,
     network_timeout,
 )
@@ -59,7 +58,6 @@ TRICERATOPS_INIT_TIMEOUT_DEFAULT = 300.0
 REPLICATE_SUCCESS_RATE_WARN_THRESHOLD = 0.5
 FPP_STAGE_INIT_BUDGET_SECONDS = 500.0
 FPP_STAGE_TRILEGAL_BUDGET_SECONDS = 120.0
-FPP_STAGE_CALC_PROBS_BUDGET_SECONDS = 1000.0
 
 _INSECURE_PERMS_MASK = 0o022  # group/other writable
 _VALID_DROP_SCENARIO_LABELS: tuple[str, ...] = (
@@ -2099,19 +2097,18 @@ def calculate_fpp_handler(
 
         # Timeout policy:
         # - If caller provided an overall timeout budget, respect remaining budget.
-        # - Otherwise use a high default for calc_probs to avoid silent under-budget truncation.
-        calc_timeout = (
-            float(rem)
-            if rem is not None
-            else max(float(TRICERATOPS_CALC_TIMEOUT), float(FPP_STAGE_CALC_PROBS_BUDGET_SECONDS))
+        # - Otherwise do not enforce an internal calc timeout.
+        calc_timeout = float(rem) if rem is not None else None
+        calc_budget_label = (
+            f"{float(calc_timeout):.1f}s" if calc_timeout is not None else "none"
         )
         logger.info(
-            "[fpp] Stage triceratops_calc_probs: start (TIC=%s draws=%s mode=%s target_points=%s budget=%.1fs replicates=%s)",
+            "[fpp] Stage triceratops_calc_probs: start (TIC=%s draws=%s mode=%s target_points=%s budget=%s replicates=%s)",
             tic_id,
             draws,
             point_reduction_effective,
             target_points_effective if point_reduction_effective != "none" else None,
-            float(calc_timeout),
+            calc_budget_label,
             max(1, int(replicates)) if replicates is not None else 1,
         )
 
@@ -2145,6 +2142,7 @@ def calculate_fpp_handler(
         contrast_curve_filter_raw: str | None = None
 
         stage_calc_probs_start = time.time()
+        calc_budget_exhausted = False
         try:
             if external_lightcurves and temp_dir_obj is not None:
                 temp_dir_path = Path(temp_dir_obj.name)
@@ -2198,6 +2196,7 @@ def calculate_fpp_handler(
                 # Check timeout budget before each replicate
                 rem = _remaining_seconds()
                 if rem is not None and rem <= 0:
+                    calc_budget_exhausted = True
                     break
 
                 run_seed = base_seed + rep_idx
@@ -2217,16 +2216,36 @@ def calculate_fpp_handler(
                 np.random.seed(run_seed)
 
                 try:
-                    rep_timeout = (
-                        float(calc_timeout / max(1, n_replicates - rep_idx))
-                        if rem is None
-                        else float(rem / max(1, n_replicates - rep_idx))
-                    )
+                    if calc_timeout is not None:
+                        rep_timeout = float(rem / max(1, n_replicates - rep_idx))
+                        with network_timeout(
+                            float(rep_timeout),
+                            operation=f"TRICERATOPS calc_probs for TIC {tic_id} (rep {rep_idx + 1}/{n_replicates})",
+                        ):
+                            # Pass external LC args to calc_probs (TRICERATOPS+ extension)
+                            calc_kwargs: dict[str, Any] = {
+                                "time": time_folded,
+                                "flux_0": flux_arr,
+                                "flux_err_0": flux_err_scalar,
+                                "P_orb": period,
+                                "N": draws,
+                                "parallel": True,
+                                "exptime": float(exptime_days)
+                                if np.isfinite(exptime_days) and exptime_days > 0
+                                else 0.00139,
+                                "verbose": 0,
+                            }
+                            if external_lc_files:
+                                calc_kwargs["external_lc_files"] = external_lc_files
+                                calc_kwargs["filt_lcs"] = filt_lcs
+                            if contrast_curve_file is not None:
+                                calc_kwargs["contrast_curve_file"] = contrast_curve_file
+                                calc_kwargs["filt"] = contrast_curve_filter or "Vis"
+                            if drop_scenario_effective:
+                                calc_kwargs["drop_scenario"] = list(drop_scenario_effective)
 
-                    with network_timeout(
-                        float(rep_timeout),
-                        operation=f"TRICERATOPS calc_probs for TIC {tic_id} (rep {rep_idx + 1}/{n_replicates})",
-                    ):
+                            target.calc_probs(**calc_kwargs)
+                    else:
                         # Pass external LC args to calc_probs (TRICERATOPS+ extension)
                         calc_kwargs: dict[str, Any] = {
                             "time": time_folded,
@@ -2402,6 +2421,32 @@ def calculate_fpp_handler(
 
     if n_success == 0:
         # All runs failed or were degenerate.
+        if calc_budget_exhausted and calc_timeout is not None and not replicate_errors:
+            return {
+                "error": (
+                    f"Explicit timeout budget exhausted before any of {n_replicates} "
+                    "replicate(s) produced a valid posterior."
+                ),
+                "error_type": "timeout",
+                "stage": "replicate_aggregation",
+                "tic_id": tic_id,
+                "tmag": tmag,
+                "sectors_used": sectors_used,
+                "runtime_seconds": round(total_runtime, 1),
+                "replicates": n_replicates,
+                "n_success": 0,
+                "n_fail": n_fail,
+                "replicate_success_rate": replicate_success_rate,
+                "base_seed": base_seed,
+                "replicate_errors": [],
+                "warning_note": high_failure_warning,
+                "actionable_guidance": [
+                    "Increase timeout_seconds to allow TRICERATOPS calc_probs to finish.",
+                    "Reduce replicates to lower total runtime pressure.",
+                    "Lower mc_draws and/or use tutorial binning to reduce per-replicate cost.",
+                ],
+            }
+
         # Special-case timeout-only failures with clearer semantics/actionable guidance.
         if replicate_errors and all(
             str(e.get("error_type", "")).lower() == "timeout" for e in replicate_errors
