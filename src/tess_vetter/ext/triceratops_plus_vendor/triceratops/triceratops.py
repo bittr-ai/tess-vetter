@@ -15,7 +15,11 @@ from mpl_toolkits.axes_grid1.anchored_artists import AnchoredDirectionArrows
 from pandas import DataFrame
 from scipy.integrate import dblquad
 
-from ._numerics import _normalize_probabilities
+from ._numerics import (
+    _is_degenerate_status,
+    _normalization_warning_message,
+    _normalize_probabilities,
+)
 from .funcs import Gauss2D, query_TRILEGAL, renorm_flux, save_trilegal
 from .likelihoods import simulate_EB_transit, simulate_TP_transit
 from .marginal_likelihoods import *
@@ -1581,16 +1585,12 @@ class target:
 
         # calculate the relative probability of each scenario
         relative_probs, normalization_status = _normalize_probabilities(lnZ)
-        if normalization_status == "all_neginf":
+        warning_message = _normalization_warning_message(normalization_status)
+        if warning_message is not None:
             warnings.warn(
-                "All scenario log-evidences are -inf; probabilities set to zeros.",
+                warning_message,
                 RuntimeWarning,
-            )
-        elif normalization_status == "anomaly":
-            warnings.warn(
-                "Scenario log-evidences contain NaN/+inf or invalid normalization; "
-                "probabilities set to zeros.",
-                RuntimeWarning,
+                stacklevel=2,
             )
 
         prob_df = DataFrame({
@@ -1626,7 +1626,7 @@ class target:
         self.fluxratio_EB = best_fluxratio_EB
         self.fluxratio_comp = best_fluxratio_comp
         self.lnZ = lnZ
-        self.FPP_degenerate = normalization_status != "ok"
+        self.FPP_degenerate = _is_degenerate_status(normalization_status)
 
         if (external_lc_files != None):
             self.u1_p = best_u1_p
