@@ -60,11 +60,16 @@ from tess_vetter.validation.triceratops_fpp import (
     normalize_drop_scenario_labels,
 )
 
-_STANDARD_PRESET_TIMEOUT_SECONDS = 900.0
 _MAX_POINTS_RETRY_VALUES = (3000, 2000, 1500, 1000, 750, 500, 300)
 _MAX_POINTS_RETRY_LIMIT = 3
-_FAST_PRESET_TARGET_POINTS_DEFAULT = 1500
-_TUTORIAL_PRESET_TARGET_POINTS_DEFAULT = 3000
+_DEFAULT_POINT_REDUCTION = "downsample"
+_DEFAULT_TARGET_POINTS = 1500
+_DEFAULT_BIN_STAT = "mean"
+_DEFAULT_BIN_ERR = "propagate"
+_DEFAULT_MC_DRAWS = 50_000
+_DEFAULT_WINDOW_DURATION_MULT = 2.0
+_DEFAULT_MIN_FLUX_ERR = 5e-5
+_DEFAULT_USE_EMPIRICAL_NOISE_FLOOR = True
 _VERDICT_TOKEN_PATTERN = re.compile(r"[^A-Z0-9]+")
 _LC_KEY_PATTERN = re.compile(r"^lc:(?P<tic>\d+):(?P<sector>\d+):(?P<flux>[a-z0-9_]+)$")
 _FPP_PREPARE_SCHEMA_VERSION = "cli.fpp.prepare.v1"
@@ -163,8 +168,8 @@ def _derive_fpp_verdict(result: dict[str, Any]) -> tuple[str, str]:
     return "FPP_UNAVAILABLE", "$.fpp_result"
 
 
-def _build_retry_guidance(result: dict[str, Any], preset_name: str) -> dict[str, Any] | None:
-    if preset_name != "standard" or not _is_degenerate_fpp_result(result):
+def _build_retry_guidance(result: dict[str, Any]) -> dict[str, Any] | None:
+    if not _is_degenerate_fpp_result(result):
         return None
 
     has_error_key = "error" in result
@@ -194,19 +199,19 @@ def _build_retry_guidance(result: dict[str, Any], preset_name: str) -> dict[str,
             posterior_prob_nan_count_positive = True
 
     guidance_overrides = {
-        "mc_draws": 200_000,
-        "point_reduction": "downsample",
-        "target_points": _TUTORIAL_PRESET_TARGET_POINTS_DEFAULT,
-        "bin_stat": "mean",
-        "bin_err": "propagate",
-        "window_duration_mult": 2.0,
-        "min_flux_err": 5e-5,
-        "use_empirical_noise_floor": True,
+        "mc_draws": _DEFAULT_MC_DRAWS,
+        "point_reduction": _DEFAULT_POINT_REDUCTION,
+        "target_points": _DEFAULT_TARGET_POINTS,
+        "bin_stat": _DEFAULT_BIN_STAT,
+        "bin_err": _DEFAULT_BIN_ERR,
+        "window_duration_mult": _DEFAULT_WINDOW_DURATION_MULT,
+        "min_flux_err": _DEFAULT_MIN_FLUX_ERR,
+        "use_empirical_noise_floor": _DEFAULT_USE_EMPIRICAL_NOISE_FLOOR,
     }
 
     return {
         "reason": result.get("degenerate_reason") or "degenerate_fpp_result",
-        "preset": "tutorial",
+        "strategy": "knobs_default_retry",
         "overrides": guidance_overrides,
         "degenerate_checks": {
             "has_error_key": has_error_key,
@@ -249,7 +254,6 @@ def _resolve_drop_scenario_override(
 
 def _apply_point_reduction_contract(
     *,
-    preset_name: str,
     parsed_overrides: dict[str, Any],
     point_reduction: str | None,
     target_points: int | None,
@@ -271,7 +275,7 @@ def _apply_point_reduction_contract(
         )
     )
     if not has_point_inputs:
-        parsed_overrides["point_reduction"] = _default_point_reduction_for_preset(preset_name)
+        parsed_overrides["point_reduction"] = _DEFAULT_POINT_REDUCTION
         return
 
     override_target_points = _coerce_positive_int(parsed_overrides.get("target_points"))
@@ -326,8 +330,8 @@ def _apply_point_reduction_contract(
         selected_point_reduction = "downsample"
         point_reduction_source = "legacy_max_points_alias"
     else:
-        selected_point_reduction = _default_point_reduction_for_preset(preset_name)
-        point_reduction_source = "preset_default"
+        selected_point_reduction = _DEFAULT_POINT_REDUCTION
+        point_reduction_source = "default"
     none_mode_explicit = selected_point_reduction == "none" and point_reduction_source in {
         "point_reduction",
         "override",
@@ -347,7 +351,7 @@ def _apply_point_reduction_contract(
             exit_code=EXIT_INPUT_ERROR,
         )
 
-    target_points_source = "preset_default"
+    target_points_source = "default"
     if selected_target_points is not None and (
         explicit_target_points
         or override_target_points is not None
@@ -419,27 +423,19 @@ def _apply_point_reduction_contract(
         parsed_overrides.pop("max_points", None)
 
 
-def _default_point_reduction_for_preset(preset_name: str) -> str:
-    return "none" if preset_name == "standard" else "downsample"
-
-
-def _effective_point_reduction_for_attempt_zero(*, preset_name: str, overrides: dict[str, Any]) -> str:
+def _effective_point_reduction_for_attempt_zero(*, overrides: dict[str, Any]) -> str:
     reduction = overrides.get("point_reduction")
     if isinstance(reduction, str) and reduction in {"downsample", "bin", "none"}:
         return reduction
-    return _default_point_reduction_for_preset(preset_name)
+    return _DEFAULT_POINT_REDUCTION
 
 
-def _effective_target_points_for_attempt_zero(*, preset_name: str, overrides: dict[str, Any]) -> int | None:
+def _effective_target_points_for_attempt_zero(*, overrides: dict[str, Any]) -> int | None:
     if "target_points" in overrides:
         return _coerce_positive_int(overrides.get("target_points"))
     if "max_points" in overrides:
         return _coerce_positive_int(overrides.get("max_points"))
-    if preset_name == "fast":
-        return _FAST_PRESET_TARGET_POINTS_DEFAULT
-    if preset_name == "tutorial":
-        return _TUTORIAL_PRESET_TARGET_POINTS_DEFAULT
-    return None
+    return _DEFAULT_TARGET_POINTS
 
 
 def _build_reduced_target_points_schedule(initial_target_points: int | None) -> list[int]:
@@ -465,7 +461,6 @@ def _degenerate_fallback_enabled() -> bool:
 
 def _execute_fpp_with_retry(
     *,
-    preset_name: str,
     parsed_overrides: dict[str, Any],
     run_attempt: Callable[[dict[str, Any]], tuple[dict[str, Any], Any]],
 ) -> tuple[dict[str, Any], Any, dict[str, Any]]:
@@ -476,11 +471,9 @@ def _execute_fpp_with_retry(
     )
     explicit_point_reduction = point_reduction_source in {"point_reduction", "override"}
     initial_point_reduction = _effective_point_reduction_for_attempt_zero(
-        preset_name=preset_name,
         overrides=parsed_overrides,
     )
     initial_target_points = _effective_target_points_for_attempt_zero(
-        preset_name=preset_name,
         overrides=parsed_overrides,
     )
     retry_reduction_mode = initial_point_reduction
@@ -753,7 +746,6 @@ def _execute_fpp(
     duration_hours: float,
     depth_ppm: float,
     sectors: list[int] | None,
-    preset: str,
     replicates: int | None,
     seed: int | None,
     timeout_seconds: float | None,
@@ -799,11 +791,10 @@ def _execute_fpp(
         stellar_mass=stellar_mass,
         tmag=stellar_tmag,
         timeout_seconds=timeout_seconds,
-        preset=preset,
+        overrides=overrides,
         replicates=replicates,
         seed=seed,
         contrast_curve=contrast_curve,
-        overrides=overrides,
         allow_network=allow_network,
         progress_hook=progress_hook,
     )
@@ -1441,7 +1432,6 @@ def fpp_prepare_command(
 def _run_fpp_from_prepare_manifest(
     prepare_manifest: Path,
     require_prepared: bool,
-    preset: str,
     replicates: int | None,
     seed: int | None,
     overrides: tuple[str, ...],
@@ -1450,6 +1440,10 @@ def _run_fpp_from_prepare_manifest(
     max_points: int | None,
     bin_stat: str,
     bin_err: str,
+    mc_draws: int | None,
+    window_duration_mult: float | None,
+    min_flux_err: float | None,
+    use_empirical_noise_floor: bool | None,
     timeout_seconds: float | None,
     contrast_curve: Path | None,
     contrast_curve_filter: str | None,
@@ -1510,10 +1504,8 @@ def _run_fpp_from_prepare_manifest(
     if timeout_seconds is not None and float(timeout_seconds) <= 0.0:
         raise BtvCliError("--timeout-seconds must be > 0", exit_code=EXIT_INPUT_ERROR)
 
-    preset_name = str(preset).lower()
     parsed_overrides = parse_extra_params(overrides)
     _apply_point_reduction_contract(
-        preset_name=preset_name,
         parsed_overrides=parsed_overrides,
         point_reduction=point_reduction,
         target_points=target_points,
@@ -1523,16 +1515,15 @@ def _run_fpp_from_prepare_manifest(
         emit_warning=lambda message: click.echo(message, err=True),
     )
     _resolve_drop_scenario_override(parsed_overrides=parsed_overrides)
-    effective_timeout_seconds = (
-        float(timeout_seconds)
-        if timeout_seconds is not None
-        else (_STANDARD_PRESET_TIMEOUT_SECONDS if preset_name == "standard" else None)
-    )
-    if timeout_seconds is None and preset_name == "standard":
-        click.echo(
-            "Using default timeout_seconds=900 for --preset standard.",
-            err=True,
-        )
+    if mc_draws is not None:
+        parsed_overrides["mc_draws"] = int(mc_draws)
+    if window_duration_mult is not None:
+        parsed_overrides["window_duration_mult"] = float(window_duration_mult)
+    if min_flux_err is not None:
+        parsed_overrides["min_flux_err"] = float(min_flux_err)
+    if use_empirical_noise_floor is not None:
+        parsed_overrides["use_empirical_noise_floor"] = bool(use_empirical_noise_floor)
+    effective_timeout_seconds = float(timeout_seconds) if timeout_seconds is not None else None
 
     parsed_contrast_curve, contrast_curve_parse_provenance = _load_cli_contrast_curve(
         contrast_curve=contrast_curve,
@@ -1561,7 +1552,6 @@ def _run_fpp_from_prepare_manifest(
     click.echo("[fpp-run] Running FPP compute using prepared cache...")
     try:
         result, selected_sectors, retry_meta = _execute_fpp_with_retry(
-            preset_name=preset_name,
             parsed_overrides=parsed_overrides,
             run_attempt=lambda attempt_overrides: (
                 calculate_fpp(
@@ -1576,11 +1566,10 @@ def _run_fpp_from_prepare_manifest(
                     stellar_mass=resolved_stellar.get("mass"),
                     tmag=resolved_stellar.get("tmag"),
                     timeout_seconds=effective_timeout_seconds,
-                    preset=preset_name,
+                    overrides=attempt_overrides,
                     replicates=replicates,
                     seed=seed,
                     contrast_curve=parsed_contrast_curve,
-                    overrides=attempt_overrides,
                     allow_network=bool(network_ok),
                     progress_hook=lambda payload: _emit_fpp_replicate_progress("fpp-run", payload),
                 ),
@@ -1632,7 +1621,6 @@ def _run_fpp_from_prepare_manifest(
                 "parse_provenance": contrast_curve_parse_provenance,
             },
             "runtime": {
-                "preset": preset_name,
                 "replicates": replicates,
                 "overrides": parsed_overrides,
                 "detrend_cache": bool(prepared["detrend"].get("cache_applied", False)),
@@ -1659,7 +1647,7 @@ def _run_fpp_from_prepare_manifest(
             },
         },
     }
-    retry_guidance = _build_retry_guidance(result=result, preset_name=preset_name)
+    retry_guidance = _build_retry_guidance(result=result)
     if retry_guidance is not None:
         payload["provenance"]["retry_guidance"] = retry_guidance
     click.echo("[fpp-run] Writing FPP output...")
@@ -1678,13 +1666,6 @@ def _run_fpp_from_prepare_manifest(
     default=True,
     show_default=True,
     help="Fail fast when staged cache artifacts referenced by the manifest are missing.",
-)
-@click.option(
-    "--preset",
-    type=click.Choice(["fast", "standard", "tutorial"], case_sensitive=False),
-    default="fast",
-    show_default=True,
-    help="TRICERATOPS runtime preset (standard typically expects a longer timeout budget).",
 )
 @click.option("--replicates", type=int, default=None, help="Replicate count for FPP aggregation.")
 @click.option("--seed", type=int, default=None, help="Base RNG seed.")
@@ -1716,11 +1697,24 @@ def _run_fpp_from_prepare_manifest(
     show_default=True,
     help="Per-bin uncertainty aggregation mode when --point-reduction=bin.",
 )
+@click.option("--mc-draws", type=int, default=None, help="Monte Carlo draw count.")
+@click.option(
+    "--window-duration-mult",
+    type=float,
+    default=None,
+    help="Transit-duration multiplier for folded-window extraction.",
+)
+@click.option("--min-flux-err", type=float, default=None, help="Minimum scalar flux error floor.")
+@click.option(
+    "--use-empirical-noise-floor/--no-use-empirical-noise-floor",
+    default=None,
+    help="Use empirical out-of-transit noise floor.",
+)
 @click.option(
     "--timeout-seconds",
     type=float,
     default=None,
-    help="Optional timeout budget. If omitted with --preset standard, defaults to 900 seconds.",
+    help="Optional timeout budget in seconds.",
 )
 @click.option(
     "--contrast-curve",
@@ -1768,7 +1762,6 @@ def _run_fpp_from_prepare_manifest(
 def fpp_run_command(
     prepare_manifest: Path,
     require_prepared: bool,
-    preset: str,
     replicates: int | None,
     seed: int | None,
     overrides: tuple[str, ...],
@@ -1777,6 +1770,10 @@ def fpp_run_command(
     max_points: int | None,
     bin_stat: str,
     bin_err: str,
+    mc_draws: int | None,
+    window_duration_mult: float | None,
+    min_flux_err: float | None,
+    use_empirical_noise_floor: bool | None,
     timeout_seconds: float | None,
     contrast_curve: Path | None,
     contrast_curve_filter: str | None,
@@ -1797,7 +1794,6 @@ def fpp_run_command(
     _run_fpp_from_prepare_manifest(
         prepare_manifest=prepare_manifest,
         require_prepared=require_prepared,
-        preset=preset,
         replicates=replicates,
         seed=seed,
         overrides=overrides,
@@ -1806,6 +1802,10 @@ def fpp_run_command(
         max_points=max_points,
         bin_stat=bin_stat,
         bin_err=bin_err,
+        mc_draws=mc_draws,
+        window_duration_mult=window_duration_mult,
+        min_flux_err=min_flux_err,
+        use_empirical_noise_floor=use_empirical_noise_floor,
         timeout_seconds=timeout_seconds,
         contrast_curve=contrast_curve,
         contrast_curve_filter=contrast_curve_filter,
@@ -1871,13 +1871,6 @@ def fpp_run_command(
         "(enabled automatically when --detrend is set)."
     ),
 )
-@click.option(
-    "--preset",
-    type=click.Choice(["fast", "standard", "tutorial"], case_sensitive=False),
-    default="fast",
-    show_default=True,
-    help="TRICERATOPS runtime preset (standard typically expects a longer timeout budget).",
-)
 @click.option("--replicates", type=int, default=None, help="Replicate count for FPP aggregation.")
 @click.option("--seed", type=int, default=None, help="Base RNG seed.")
 @click.option("--override", "overrides", multiple=True, help="Repeat KEY=VALUE TRICERATOPS override entries.")
@@ -1918,6 +1911,19 @@ def fpp_run_command(
         f"Droppable options: {', '.join(droppable_scenario_labels())}. TP is not allowed."
     ),
 )
+@click.option("--mc-draws", type=int, default=None, help="Monte Carlo draw count.")
+@click.option(
+    "--window-duration-mult",
+    type=float,
+    default=None,
+    help="Transit-duration multiplier for folded-window extraction.",
+)
+@click.option("--min-flux-err", type=float, default=None, help="Minimum scalar flux error floor.")
+@click.option(
+    "--use-empirical-noise-floor/--no-use-empirical-noise-floor",
+    default=None,
+    help="Use empirical out-of-transit noise floor.",
+)
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
     "--cache-only-sectors/--allow-sector-download",
@@ -1929,7 +1935,7 @@ def fpp_run_command(
     "--timeout-seconds",
     type=float,
     default=None,
-    help="Optional timeout budget. If omitted with --preset standard, defaults to 900 seconds.",
+    help="Optional timeout budget in seconds.",
 )
 @click.option(
     "--contrast-curve",
@@ -1996,7 +2002,6 @@ def fpp_command(
     detrend_buffer: float,
     detrend_sigma_clip: float,
     detrend_cache: bool,
-    preset: str,
     replicates: int | None,
     seed: int | None,
     overrides: tuple[str, ...],
@@ -2006,6 +2011,10 @@ def fpp_command(
     bin_stat: str,
     bin_err: str,
     drop_scenarios: tuple[str, ...],
+    mc_draws: int | None,
+    window_duration_mult: float | None,
+    min_flux_err: float | None,
+    use_empirical_noise_floor: bool | None,
     sectors: tuple[int, ...],
     cache_only_sectors: bool,
     timeout_seconds: float | None,
@@ -2077,7 +2086,6 @@ def fpp_command(
         return _run_fpp_from_prepare_manifest(
             prepare_manifest=prepare_manifest,
             require_prepared=bool(require_prepared),
-            preset=preset,
             replicates=replicates,
             seed=seed,
             overrides=overrides,
@@ -2086,6 +2094,10 @@ def fpp_command(
             max_points=max_points,
             bin_stat=bin_stat,
             bin_err=bin_err,
+            mc_draws=mc_draws,
+            window_duration_mult=window_duration_mult,
+            min_flux_err=min_flux_err,
+            use_empirical_noise_floor=use_empirical_noise_floor,
             timeout_seconds=timeout_seconds,
             contrast_curve=contrast_curve,
             contrast_curve_filter=contrast_curve_filter,
@@ -2186,10 +2198,8 @@ def fpp_command(
     if timeout_seconds is not None and float(timeout_seconds) <= 0.0:
         raise BtvCliError("--timeout-seconds must be > 0", exit_code=EXIT_INPUT_ERROR)
 
-    preset_name = str(preset).lower()
     parsed_overrides = parse_extra_params(overrides)
     _apply_point_reduction_contract(
-        preset_name=preset_name,
         parsed_overrides=parsed_overrides,
         point_reduction=point_reduction,
         target_points=target_points,
@@ -2202,16 +2212,15 @@ def fpp_command(
         parsed_overrides=parsed_overrides,
         explicit_drop_scenarios=drop_scenarios,
     )
-    effective_timeout_seconds = (
-        float(timeout_seconds)
-        if timeout_seconds is not None
-        else (_STANDARD_PRESET_TIMEOUT_SECONDS if preset_name == "standard" else None)
-    )
-    if timeout_seconds is None and preset_name == "standard":
-        click.echo(
-            "Using default timeout_seconds=900 for --preset standard.",
-            err=True,
-        )
+    if mc_draws is not None:
+        parsed_overrides["mc_draws"] = int(mc_draws)
+    if window_duration_mult is not None:
+        parsed_overrides["window_duration_mult"] = float(window_duration_mult)
+    if min_flux_err is not None:
+        parsed_overrides["min_flux_err"] = float(min_flux_err)
+    if use_empirical_noise_floor is not None:
+        parsed_overrides["use_empirical_noise_floor"] = bool(use_empirical_noise_floor)
+    effective_timeout_seconds = float(timeout_seconds) if timeout_seconds is not None else None
 
     parsed_contrast_curve, contrast_curve_parse_provenance = _load_cli_contrast_curve(
         contrast_curve=contrast_curve,
@@ -2291,7 +2300,6 @@ def fpp_command(
 
     try:
         result, sectors_loaded, retry_meta = _execute_fpp_with_retry(
-            preset_name=preset_name,
             parsed_overrides=parsed_overrides,
             run_attempt=lambda attempt_overrides: _execute_fpp(
                 tic_id=resolved_tic_id,
@@ -2300,7 +2308,6 @@ def fpp_command(
                 duration_hours=resolved_duration_hours,
                 depth_ppm=float(depth_ppm_used),
                 sectors=effective_sectors,
-                preset=preset_name,
                 replicates=replicates,
                 seed=seed,
                 timeout_seconds=effective_timeout_seconds,
@@ -2362,7 +2369,6 @@ def fpp_command(
                 "parse_provenance": contrast_curve_parse_provenance,
             },
             "runtime": {
-                "preset": preset_name,
                 "replicates": replicates,
                 "overrides": parsed_overrides,
                 "detrend_cache": bool(detrend_cache_effective),
@@ -2388,7 +2394,7 @@ def fpp_command(
             },
         },
     }
-    retry_guidance = _build_retry_guidance(result=result, preset_name=preset_name)
+    retry_guidance = _build_retry_guidance(result=result)
     if retry_guidance is not None:
         payload["provenance"]["retry_guidance"] = retry_guidance
     dump_json_output(payload, out_path)
