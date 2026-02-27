@@ -4,6 +4,7 @@ import numpy as np
 from astropy import constants
 from pandas import read_csv
 
+from ._numerics import _log_mean_exp
 from .funcs import (
     estimate_sdss_magnitudes,
     file_to_contrast_curve,
@@ -317,10 +318,7 @@ def lnZ_TTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     N_samples = 1000
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL + lnz_const )  # where does 600 come from?
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL, N_total=N)
 
     res = {
         'M_s': np.full(N_samples, M_s),
@@ -623,10 +621,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     N_samples = 1000
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL + lnz_const )
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL, N_total=N)
 
     # Modify the result dictionaries to include information for each external light curve
     res = {
@@ -650,10 +645,7 @@ def lnZ_TEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     N_samples = 1000
     idx = (-lnL_twin).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL_twin + lnz_const )
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL_twin, N_total=N)
 
     res_twin = {
         'M_s': np.full(N_samples, M_s),
@@ -895,8 +887,7 @@ def lnZ_PTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     N_samples = 1000
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(np.exp(lnL + lnprior_companion + lnz_const)))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
 
     res = {
         'M_s': np.full(N_samples, M_s),
@@ -1235,12 +1226,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     N_samples = 1000
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL + lnprior_companion + lnz_const )
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
 
     res = {
         'M_s': np.full(N_samples, M_s),
@@ -1265,12 +1251,7 @@ def lnZ_PEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     N_samples = 1000
     idx = (-lnL_twin).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL_twin + lnprior_companion + lnz_const )
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL_twin + lnprior_companion, N_total=N)
 
     res_twin = {
         'M_s': np.full(N_samples, M_s),
@@ -1587,12 +1568,7 @@ def lnZ_STP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     N_samples = 1000
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL + lnprior_companion + lnz_const )
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
 
     res = {
         'M_s': masses_comp[idx],
@@ -1995,12 +1971,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     N_samples = 1000
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL + lnprior_companion + lnz_const )
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
 
     res = {
         'M_s': masses_comp[idx],
@@ -2032,12 +2003,7 @@ def lnZ_SEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     N_samples = 1000
     idx = (-lnL_twin).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL_twin + lnprior_companion + lnz_const )
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL_twin + lnprior_companion, N_total=N)
 
     res_twin = {
         'M_s': masses_comp[idx],
@@ -2358,12 +2324,7 @@ def lnZ_DTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     N_samples = 1000
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp( lnL + lnprior_companion + lnz_const )
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
 
     res = {
         'M_s': np.full(N_samples, M_s),
@@ -2760,12 +2721,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     N_samples = 1000
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL + lnprior_companion + lnz_const )
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
 
     res = {
         'M_s': np.full(N_samples, M_s),
@@ -2797,12 +2753,7 @@ def lnZ_DEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     N_samples = 1000
     idx = (-lnL_twin).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL_twin + lnprior_companion + lnz_const)
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL_twin + lnprior_companion, N_total=N)
 
     res_twin = {
         'M_s': np.full(N_samples, M_s),
@@ -3134,12 +3085,7 @@ def lnZ_BTP(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     N_samples = 1000
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL + lnprior_companion + lnz_const )
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
 
     res = {
         'M_s': masses_comp[idxs[idx]],
@@ -3612,12 +3558,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     N_samples = 1000
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL + lnprior_companion + lnz_const )
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL + lnprior_companion, N_total=N)
 
     res = {
         'M_s': masses_comp[idxs[idx]],
@@ -3648,12 +3589,7 @@ def lnZ_BEB(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     N_samples = 1000
     idx = (-lnL_twin).argsort()[:N_samples]
-    Z = np.mean(
-        np.nan_to_num(
-            np.exp(lnL_twin + lnprior_companion + lnz_const )
-            )
-        )
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL_twin + lnprior_companion, N_total=N)
 
     res_twin = {
         'M_s': masses_comp[idxs[idx]],
@@ -3852,10 +3788,7 @@ def lnZ_NTP_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     N_samples = 1000
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL+600)
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL, N_total=N)
     res = {
         'M_s': masses_possible[idxs[idx]],
         'R_s': radii_possible[idxs[idx]],
@@ -4112,10 +4045,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     N_samples = 1000
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL+600)
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL, N_total=N)
     res = {
         'M_s': masses_possible[idxs[idx]],
         'R_s': radii_possible[idxs[idx]],
@@ -4136,10 +4066,7 @@ def lnZ_NEB_unknown(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     N_samples = 1000
     idx = (-lnL_twin).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL_twin+600)
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL_twin, N_total=N)
     res_twin = {
         'M_s': masses_possible[idxs[idx]],
         'R_s': radii_possible[idxs[idx]],
@@ -4276,10 +4203,7 @@ def lnZ_NTP_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
 
     N_samples = 1000
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL+600)
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL, N_total=N)
     res = {
         'M_s': np.full(N_samples, M_s),
         'R_s': np.full(N_samples, R_s),
@@ -4470,10 +4394,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q < 0.95
     N_samples = 1000
     idx = (-lnL).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL + 600)
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL, N_total=N)
     res = {
         'M_s': np.full(N_samples, M_s),
         'R_s': np.full(N_samples, R_s),
@@ -4494,10 +4415,7 @@ def lnZ_NEB_evolved(time: np.ndarray, flux: np.ndarray, sigma: float,
     # results for q >= 0.95 and 2xP_orb
     N_samples = 1000
     idx = (-lnL_twin).argsort()[:N_samples]
-    Z = np.mean(np.nan_to_num(
-        np.exp(lnL_twin+600)
-        ))
-    lnZ = np.log(Z)
+    lnZ = _log_mean_exp(lnL_twin, N_total=N)
     res_twin = {
         'M_s': np.full(N_samples, M_s),
         'R_s': np.full(N_samples, R_s),
