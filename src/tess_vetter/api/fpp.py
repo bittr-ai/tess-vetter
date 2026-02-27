@@ -41,12 +41,10 @@ REFERENCES = [
 
 DEFAULT_MC_DRAWS = 50_000
 DEFAULT_WINDOW_DURATION_MULT = 2.0
-DEFAULT_POINT_REDUCTION: Literal["downsample", "bin", "none"] = "downsample"
-DEFAULT_TARGET_POINTS = 1500
-DEFAULT_BIN_STAT: Literal["mean", "median"] = "mean"
-DEFAULT_BIN_ERR: Literal["propagate", "robust"] = "propagate"
-DEFAULT_MIN_FLUX_ERR = 5e-5
-DEFAULT_USE_EMPIRICAL_NOISE_FLOOR = True
+DEFAULT_POINT_REDUCTION: Literal["bin", "none"] = "bin"
+DEFAULT_TARGET_POINTS = 100
+DEFAULT_MIN_FLUX_ERR = 0.0
+DEFAULT_USE_EMPIRICAL_NOISE_FLOOR = False
 
 
 @dataclass(frozen=True)
@@ -96,11 +94,8 @@ def calculate_fpp(
     timeout_seconds: float | None = None,
     mc_draws: int | None = DEFAULT_MC_DRAWS,
     window_duration_mult: float | None = DEFAULT_WINDOW_DURATION_MULT,
-    point_reduction: Literal["downsample", "bin", "none"] = DEFAULT_POINT_REDUCTION,
+    point_reduction: Literal["bin", "none"] = DEFAULT_POINT_REDUCTION,
     target_points: int | None = DEFAULT_TARGET_POINTS,
-    bin_stat: Literal["mean", "median"] = DEFAULT_BIN_STAT,
-    bin_err: Literal["propagate", "robust"] = DEFAULT_BIN_ERR,
-    max_points: int | None = None,
     min_flux_err: float = DEFAULT_MIN_FLUX_ERR,
     use_empirical_noise_floor: bool = DEFAULT_USE_EMPIRICAL_NOISE_FLOOR,
     drop_scenario: str | list[str] | None = None,
@@ -118,9 +113,11 @@ def calculate_fpp(
     window_duration_mult = extra.get("window_duration_mult", window_duration_mult)
     point_reduction = extra.get("point_reduction", point_reduction)
     target_points = extra.get("target_points", target_points)
-    bin_stat = extra.get("bin_stat", bin_stat)
-    bin_err = extra.get("bin_err", bin_err)
-    max_points = extra.get("max_points", max_points)
+    if any(k in extra for k in ("max_points", "bin_stat", "bin_err")):
+        raise ValueError(
+            "Unsupported FPP override keys: max_points/bin_stat/bin_err. "
+            "Use point_reduction ('bin'|'none') and target_points."
+        )
     min_flux_err = extra.get("min_flux_err", min_flux_err)
     use_empirical_noise_floor = extra.get("use_empirical_noise_floor", use_empirical_noise_floor)
     drop_scenario = extra.get("drop_scenario", drop_scenario)
@@ -141,9 +138,6 @@ def calculate_fpp(
         window_duration_mult=window_duration_mult,
         point_reduction=point_reduction,
         target_points=target_points,
-        bin_stat=bin_stat,
-        bin_err=bin_err,
-        max_points=max_points,
         min_flux_err=min_flux_err,
         use_empirical_noise_floor=use_empirical_noise_floor,
         drop_scenario=_normalize_drop_scenario(drop_scenario),
