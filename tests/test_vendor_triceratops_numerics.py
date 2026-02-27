@@ -3,7 +3,9 @@ from __future__ import annotations
 import numpy as np
 
 from tess_vetter.ext.triceratops_plus_vendor.triceratops._numerics import (
+    _is_degenerate_status,
     _log_mean_exp,
+    _normalization_warning_message,
     _normalize_probabilities,
 )
 
@@ -53,6 +55,20 @@ def test_log_mean_exp_n_total_mismatch_raises() -> None:
         pass
 
 
+def test_log_mean_exp_n_total_non_integer_raises() -> None:
+    logw = np.array([0.0, -1.0, -2.0])
+    try:
+        _log_mean_exp(logw, N_total=3.0)  # type: ignore[arg-type]
+        raise AssertionError("Expected ValueError")
+    except ValueError:
+        pass
+
+
+def test_log_mean_exp_all_posinf_propagates() -> None:
+    logw = np.array([np.inf, np.inf])
+    assert np.isposinf(_log_mean_exp(logw, N_total=2))
+
+
 def test_normalize_probabilities_ok_case() -> None:
     lnz = np.array([-2.0, -3.0, -4.0])
     probs, status = _normalize_probabilities(lnz)
@@ -80,3 +96,21 @@ def test_normalize_probabilities_anomaly_posinf() -> None:
     probs, status = _normalize_probabilities(lnz)
     assert status == "anomaly"
     np.testing.assert_allclose(probs, np.zeros_like(lnz))
+
+
+def test_normalize_probabilities_partial_neginf_is_ok() -> None:
+    lnz = np.array([-np.inf, -2.0, -4.0])
+    probs, status = _normalize_probabilities(lnz)
+    assert status == "ok"
+    np.testing.assert_allclose(np.sum(probs), 1.0, atol=1e-12, rtol=1e-12)
+
+
+def test_normalization_warning_messages_and_degenerate_flag() -> None:
+    assert _normalization_warning_message("ok") is None
+    assert "All scenario log-evidences are -inf" in str(
+        _normalization_warning_message("all_neginf")
+    )
+    assert "contain NaN/+inf" in str(_normalization_warning_message("anomaly"))
+    assert _is_degenerate_status("ok") is False
+    assert _is_degenerate_status("all_neginf") is True
+    assert _is_degenerate_status("anomaly") is True

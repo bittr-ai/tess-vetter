@@ -19,9 +19,11 @@ def _log_mean_exp(logw: np.ndarray, *, N_total: int) -> float:
     - +inf propagates to +inf.
     """
     logw_arr = np.asarray(logw, dtype=float)
-    if int(N_total) != int(logw_arr.size):
+    if not isinstance(N_total, (int, np.integer)):
+        raise ValueError("N_total must be an integer.")
+    if N_total != logw_arr.size:
         raise ValueError("N_total must match len(logw).")
-    if int(N_total) <= 0:
+    if N_total <= 0:
         raise ValueError("N_total must be positive.")
     if np.any(np.isposinf(logw_arr)):
         return float(np.inf)
@@ -54,3 +56,20 @@ def _normalize_probabilities(lnz: np.ndarray) -> tuple[np.ndarray, str]:
     if (not np.all(np.isfinite(probs))) or float(np.sum(probs)) <= 0.0:
         return np.zeros_like(lnz_arr, dtype=float), "anomaly"
     return probs, "ok"
+
+
+def _normalization_warning_message(status: str) -> str | None:
+    """Return warning text for non-ok normalization statuses."""
+    if status == "all_neginf":
+        return "All scenario log-evidences are -inf; probabilities set to zeros."
+    if status == "anomaly":
+        return (
+            "Scenario log-evidences contain NaN/+inf or invalid normalization; "
+            "probabilities set to zeros."
+        )
+    return None
+
+
+def _is_degenerate_status(status: str) -> bool:
+    """Map normalization status to degenerate computation flag."""
+    return status != "ok"
