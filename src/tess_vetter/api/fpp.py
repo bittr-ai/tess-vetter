@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Literal, NotRequired, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -37,6 +37,10 @@ class FppPresetOverrides(TypedDict, total=False):
 
     mc_draws: int | None
     window_duration_mult: float | None
+    point_reduction: Literal["downsample", "bin", "none"] | None
+    target_points: int | None
+    bin_stat: Literal["mean", "median"] | None
+    bin_err: Literal["propagate", "robust"] | None
     max_points: int | None
     min_flux_err: float
     use_empirical_noise_floor: bool
@@ -111,6 +115,10 @@ class TriceratopsFppPreset:
     name: Literal["fast", "standard", "tutorial"]
     mc_draws: int | None
     window_duration_mult: float | None
+    point_reduction: Literal["downsample", "bin", "none"]
+    target_points: int | None
+    bin_stat: Literal["mean", "median"]
+    bin_err: Literal["propagate", "robust"]
     max_points: int | None
     min_flux_err: float
     use_empirical_noise_floor: bool
@@ -120,6 +128,10 @@ FAST_PRESET = TriceratopsFppPreset(
     name="fast",
     mc_draws=50_000,
     window_duration_mult=2.0,
+    point_reduction="downsample",
+    target_points=1500,
+    bin_stat="mean",
+    bin_err="propagate",
     max_points=1500,
     min_flux_err=5e-5,
     use_empirical_noise_floor=True,
@@ -129,6 +141,10 @@ STANDARD_PRESET = TriceratopsFppPreset(
     name="standard",
     mc_draws=1_000_000,
     window_duration_mult=None,  # no windowing
+    point_reduction="none",
+    target_points=None,
+    bin_stat="mean",
+    bin_err="propagate",
     max_points=None,  # no downsampling
     min_flux_err=0.0,  # prefer TRICERATOPS-native uncertainty treatment
     use_empirical_noise_floor=False,
@@ -136,6 +152,10 @@ STANDARD_PRESET = TriceratopsFppPreset(
 
 TUTORIAL_PRESET_OVERRIDES: FppPresetOverrides = {
     "mc_draws": 200_000,
+    "point_reduction": "downsample",
+    "target_points": 3000,
+    "bin_stat": "mean",
+    "bin_err": "propagate",
     "max_points": 3000,
     "window_duration_mult": 2.0,
     "min_flux_err": 5e-5,
@@ -258,7 +278,28 @@ def calculate_fpp(
     window_duration_mult = _optional_float(
         extra.get("window_duration_mult", missing), base.window_duration_mult
     )
-    max_points = _optional_int(extra.get("max_points", missing), base.max_points)
+    point_reduction_raw = extra.get("point_reduction", missing)
+    point_reduction: Literal["downsample", "bin", "none"] = (
+        cast(Literal["downsample", "bin", "none"], point_reduction_raw)
+        if point_reduction_raw in ("downsample", "bin", "none")
+        else base.point_reduction
+    )
+    target_points = _optional_int(extra.get("target_points", missing), base.target_points)
+    bin_stat_raw = extra.get("bin_stat", missing)
+    bin_stat: Literal["mean", "median"] = (
+        cast(Literal["mean", "median"], bin_stat_raw)
+        if bin_stat_raw in ("mean", "median")
+        else base.bin_stat
+    )
+    bin_err_raw = extra.get("bin_err", missing)
+    bin_err: Literal["propagate", "robust"] = (
+        cast(Literal["propagate", "robust"], bin_err_raw)
+        if bin_err_raw in ("propagate", "robust")
+        else base.bin_err
+    )
+    # Legacy alias: only forward max_points when explicitly provided by caller.
+    # Avoid passing preset-derived max_points alongside canonical target_points.
+    max_points = _optional_int(extra.get("max_points", missing), None)
     min_flux_err = _required_float(extra.get("min_flux_err", missing), base.min_flux_err)
     use_empirical_noise_floor = _bool(
         extra.get("use_empirical_noise_floor"), base.use_empirical_noise_floor
@@ -279,6 +320,10 @@ def calculate_fpp(
         timeout_seconds=timeout_seconds,
         mc_draws=mc_draws,
         window_duration_mult=window_duration_mult,
+        point_reduction=point_reduction,
+        target_points=target_points,
+        bin_stat=bin_stat,
+        bin_err=bin_err,
         max_points=max_points,
         min_flux_err=min_flux_err,
         use_empirical_noise_floor=use_empirical_noise_floor,
