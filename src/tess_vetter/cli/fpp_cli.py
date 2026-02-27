@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -60,16 +59,12 @@ from tess_vetter.validation.triceratops_fpp import (
     normalize_drop_scenario_labels,
 )
 
-_MAX_POINTS_RETRY_VALUES = (3000, 2000, 1500, 1000, 750, 500, 300)
-_MAX_POINTS_RETRY_LIMIT = 3
-_DEFAULT_POINT_REDUCTION = "downsample"
-_DEFAULT_TARGET_POINTS = 1500
-_DEFAULT_BIN_STAT = "mean"
-_DEFAULT_BIN_ERR = "propagate"
+_DEFAULT_POINT_REDUCTION = "bin"
+_DEFAULT_TARGET_POINTS = 100
 _DEFAULT_MC_DRAWS = 50_000
 _DEFAULT_WINDOW_DURATION_MULT = 2.0
-_DEFAULT_MIN_FLUX_ERR = 5e-5
-_DEFAULT_USE_EMPIRICAL_NOISE_FLOOR = True
+_DEFAULT_MIN_FLUX_ERR = 0.0
+_DEFAULT_USE_EMPIRICAL_NOISE_FLOOR = False
 _VERDICT_TOKEN_PATTERN = re.compile(r"[^A-Z0-9]+")
 _LC_KEY_PATTERN = re.compile(r"^lc:(?P<tic>\d+):(?P<sector>\d+):(?P<flux>[a-z0-9_]+)$")
 _FPP_PREPARE_SCHEMA_VERSION = "cli.fpp.prepare.v1"
@@ -202,8 +197,6 @@ def _build_retry_guidance(result: dict[str, Any]) -> dict[str, Any] | None:
         "mc_draws": _DEFAULT_MC_DRAWS,
         "point_reduction": _DEFAULT_POINT_REDUCTION,
         "target_points": _DEFAULT_TARGET_POINTS,
-        "bin_stat": _DEFAULT_BIN_STAT,
-        "bin_err": _DEFAULT_BIN_ERR,
         "window_duration_mult": _DEFAULT_WINDOW_DURATION_MULT,
         "min_flux_err": _DEFAULT_MIN_FLUX_ERR,
         "use_empirical_noise_floor": _DEFAULT_USE_EMPIRICAL_NOISE_FLOOR,
@@ -230,6 +223,47 @@ def _coerce_positive_int(value: Any) -> int | None:
     return parsed if parsed > 0 else None
 
 
+def _enforce_tutorial_binning_contract(
+    *,
+    parsed_overrides: dict[str, Any],
+    target_points: int | None,
+    full_points: bool,
+) -> None:
+    legacy_keys = [k for k in ("point_reduction", "max_points", "bin_stat", "bin_err") if k in parsed_overrides]
+    if legacy_keys:
+        raise BtvCliError(
+            "Unsupported FPP override keys: "
+            + ", ".join(legacy_keys)
+            + ". Use --target-points and --full-points/--binned-points.",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    override_target_points = _coerce_positive_int(parsed_overrides.get("target_points"))
+    selected_target_points = int(target_points) if target_points is not None else override_target_points
+    if bool(full_points) and selected_target_points is not None:
+        raise BtvCliError(
+            "--full-points cannot be combined with --target-points.",
+            exit_code=EXIT_INPUT_ERROR,
+        )
+    trace_payload = parsed_overrides.get("resolution_trace")
+    if not isinstance(trace_payload, dict):
+        trace_payload = {}
+    target_source = "default"
+    if selected_target_points is not None:
+        if int(selected_target_points) < 20:
+            raise BtvCliError("--target-points must be >= 20.", exit_code=EXIT_INPUT_ERROR)
+        parsed_overrides["target_points"] = int(selected_target_points)
+        target_source = "target_points"
+    else:
+        parsed_overrides.pop("target_points", None)
+    parsed_overrides["point_reduction"] = "none" if bool(full_points) else "bin"
+    trace_payload["point_reduction"] = {
+        "source": "full_points" if bool(full_points) else "tutorial_default",
+        "value": "none" if bool(full_points) else "bin",
+    }
+    trace_payload["target_points"] = {"source": target_source}
+    parsed_overrides["resolution_trace"] = trace_payload
+
+
 def _resolve_drop_scenario_override(
     *,
     parsed_overrides: dict[str, Any],
@@ -252,180 +286,9 @@ def _resolve_drop_scenario_override(
     return normalized
 
 
-def _apply_point_reduction_contract(
-    *,
-    parsed_overrides: dict[str, Any],
-    point_reduction: str | None,
-    target_points: int | None,
-    max_points_alias: int | None,
-    bin_stat: str,
-    bin_err: str,
-    emit_warning: Callable[[str], None],
-) -> None:
-    has_point_inputs = any(
-        (
-            point_reduction is not None,
-            target_points is not None,
-            max_points_alias is not None,
-            "point_reduction" in parsed_overrides,
-            "target_points" in parsed_overrides,
-            "max_points" in parsed_overrides,
-            "bin_stat" in parsed_overrides,
-            "bin_err" in parsed_overrides,
-        )
-    )
-    if not has_point_inputs:
-        parsed_overrides["point_reduction"] = _DEFAULT_POINT_REDUCTION
-        return
-
-    override_target_points = _coerce_positive_int(parsed_overrides.get("target_points"))
-    override_max_points = _coerce_positive_int(parsed_overrides.get("max_points"))
-    override_point_reduction = parsed_overrides.get("point_reduction")
-    override_bin_stat = parsed_overrides.get("bin_stat")
-    override_bin_err = parsed_overrides.get("bin_err")
-
-    explicit_target_points = target_points is not None
-    explicit_max_points = max_points_alias is not None
-
-    selected_target_points = target_points if explicit_target_points else override_target_points
-    selected_legacy_alias = max_points_alias if explicit_max_points else override_max_points
-
-    if selected_target_points is not None and selected_legacy_alias is not None:
-        if int(selected_target_points) != int(selected_legacy_alias):
-            raise BtvCliError(
-                (
-                    "Conflicting point budget inputs: --target-points and --max-points differ "
-                    f"({int(selected_target_points)} vs {int(selected_legacy_alias)}). "
-                    "Use a single source of truth."
-                ),
-                exit_code=EXIT_INPUT_ERROR,
-            )
-        emit_warning(
-            "--max-points is a deprecated legacy alias for --target-points and will be removed in a future release."
-        )
-        selected_target_points = int(selected_target_points)
-        selected_legacy_alias = int(selected_legacy_alias)
-        legacy_alias_matched = True
-    elif selected_target_points is None and selected_legacy_alias is not None:
-        selected_target_points = int(selected_legacy_alias)
-        legacy_alias_matched = False
-        emit_warning(
-            "--max-points is deprecated; prefer --target-points."
-        )
-    else:
-        legacy_alias_matched = False
-
-    point_reduction_explicit = point_reduction is not None
-    if point_reduction_explicit:
-        selected_point_reduction = str(point_reduction).lower()
-        point_reduction_source = "point_reduction"
-    elif isinstance(override_point_reduction, str) and override_point_reduction.lower() in {
-        "downsample",
-        "bin",
-        "none",
-    }:
-        selected_point_reduction = override_point_reduction.lower()
-        point_reduction_source = "override"
-    elif selected_legacy_alias is not None:
-        selected_point_reduction = "downsample"
-        point_reduction_source = "legacy_max_points_alias"
-    else:
-        selected_point_reduction = _DEFAULT_POINT_REDUCTION
-        point_reduction_source = "default"
-    none_mode_explicit = selected_point_reduction == "none" and point_reduction_source in {
-        "point_reduction",
-        "override",
-    }
-
-    selected_bin_stat = str(bin_stat).lower()
-    if isinstance(override_bin_stat, str):
-        selected_bin_stat = override_bin_stat.lower()
-
-    selected_bin_err = str(bin_err).lower()
-    if isinstance(override_bin_err, str):
-        selected_bin_err = override_bin_err.lower()
-
-    if selected_bin_stat == "median" and selected_bin_err == "propagate":
-        raise BtvCliError(
-            "Invalid binning config: --bin-stat median requires --bin-err robust.",
-            exit_code=EXIT_INPUT_ERROR,
-        )
-
-    target_points_source = "default"
-    if selected_target_points is not None and (
-        explicit_target_points
-        or override_target_points is not None
-        or (selected_legacy_alias is not None and legacy_alias_matched)
-    ):
-        target_points_source = "target_points"
-    elif selected_target_points is not None and selected_legacy_alias is not None:
-        target_points_source = "legacy_max_points_alias"
-
-    if selected_point_reduction in {"downsample", "bin"}:
-        if selected_target_points is not None and int(selected_target_points) < 20:
-            raise BtvCliError(
-                f"--target-points must be >= 20 when --point-reduction={selected_point_reduction}.",
-                exit_code=EXIT_INPUT_ERROR,
-            )
-    else:
-        has_ignored_target = selected_target_points is not None
-        if has_ignored_target and none_mode_explicit:
-            if selected_legacy_alias is not None and not explicit_target_points:
-                target_points_source = "legacy_max_points_alias_ignored_for_none"
-            else:
-                target_points_source = "target_points_ignored_for_none"
-            emit_warning(
-                "--point-reduction=none ignores --target-points/--max-points input; all windowed points are used."
-            )
-
-    trace_target_points = {
-        "source": target_points_source,
-        "legacy_alias_matched": bool(legacy_alias_matched),
-        "legacy_alias_value": int(selected_legacy_alias) if selected_legacy_alias is not None else None,
-    }
-    trace_point_reduction = {
-        "source": point_reduction_source,
-        "value": selected_point_reduction,
-    }
-
-    trace_payload = parsed_overrides.get("resolution_trace")
-    if not isinstance(trace_payload, dict):
-        trace_payload = {}
-    trace_payload["point_reduction"] = trace_point_reduction
-    trace_payload["target_points"] = trace_target_points
-
-    parsed_overrides["point_reduction"] = selected_point_reduction
-    if bin_stat != "mean" or "bin_stat" in parsed_overrides:
-        parsed_overrides["bin_stat"] = selected_bin_stat
-    if bin_err != "propagate" or "bin_err" in parsed_overrides:
-        parsed_overrides["bin_err"] = selected_bin_err
-
-    should_emit_trace = any(
-        (
-            explicit_max_points,
-            selected_target_points is not None and selected_legacy_alias is not None,
-            none_mode_explicit and selected_target_points is not None,
-            point_reduction is not None,
-            "point_reduction" in parsed_overrides,
-            "resolution_trace" in parsed_overrides,
-        )
-    )
-    if should_emit_trace:
-        parsed_overrides["resolution_trace"] = trace_payload
-
-    if selected_target_points is not None:
-        parsed_overrides["target_points"] = int(selected_target_points)
-    else:
-        parsed_overrides.pop("target_points", None)
-    if selected_legacy_alias is not None:
-        parsed_overrides["max_points"] = int(selected_legacy_alias)
-    else:
-        parsed_overrides.pop("max_points", None)
-
-
 def _effective_point_reduction_for_attempt_zero(*, overrides: dict[str, Any]) -> str:
     reduction = overrides.get("point_reduction")
-    if isinstance(reduction, str) and reduction in {"downsample", "bin", "none"}:
+    if isinstance(reduction, str) and reduction in {"bin", "none"}:
         return reduction
     return _DEFAULT_POINT_REDUCTION
 
@@ -433,30 +296,7 @@ def _effective_point_reduction_for_attempt_zero(*, overrides: dict[str, Any]) ->
 def _effective_target_points_for_attempt_zero(*, overrides: dict[str, Any]) -> int | None:
     if "target_points" in overrides:
         return _coerce_positive_int(overrides.get("target_points"))
-    if "max_points" in overrides:
-        return _coerce_positive_int(overrides.get("max_points"))
     return _DEFAULT_TARGET_POINTS
-
-
-def _build_reduced_target_points_schedule(initial_target_points: int | None) -> list[int]:
-    if initial_target_points is None:
-        return list(_MAX_POINTS_RETRY_VALUES[:_MAX_POINTS_RETRY_LIMIT])
-
-    candidates = [value for value in _MAX_POINTS_RETRY_VALUES if value < initial_target_points]
-    if not candidates:
-        current = int(initial_target_points)
-        while current > 1 and len(candidates) < _MAX_POINTS_RETRY_LIMIT:
-            current = max(current // 2, 1)
-            if current < initial_target_points and current not in candidates:
-                candidates.append(current)
-            if current == 1:
-                break
-    return candidates[:_MAX_POINTS_RETRY_LIMIT]
-
-
-def _degenerate_fallback_enabled() -> bool:
-    raw = os.getenv("BTV_FPP_DEGENERATE_FALLBACK", "").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
 
 
 def _execute_fpp_with_retry(
@@ -464,81 +304,37 @@ def _execute_fpp_with_retry(
     parsed_overrides: dict[str, Any],
     run_attempt: Callable[[dict[str, Any]], tuple[dict[str, Any], Any]],
 ) -> tuple[dict[str, Any], Any, dict[str, Any]]:
-    point_reduction_source = (
-        parsed_overrides.get("resolution_trace", {})
-        .get("point_reduction", {})
-        .get("source")
-    )
-    explicit_point_reduction = point_reduction_source in {"point_reduction", "override"}
     initial_point_reduction = _effective_point_reduction_for_attempt_zero(
         overrides=parsed_overrides,
     )
-    initial_target_points = _effective_target_points_for_attempt_zero(
-        overrides=parsed_overrides,
-    )
-    retry_reduction_mode = initial_point_reduction
-    if initial_point_reduction == "none" and not explicit_point_reduction:
-        retry_reduction_mode = "downsample"
-
-    fallback_enabled = _degenerate_fallback_enabled()
-    retry_schedule_target_points = (
-        []
-        if (
-            not fallback_enabled
-            or (initial_point_reduction == "none" and explicit_point_reduction)
+    initial_target_points = None
+    if initial_point_reduction == "bin":
+        initial_target_points = _effective_target_points_for_attempt_zero(
+            overrides=parsed_overrides,
         )
-        else _build_reduced_target_points_schedule(initial_target_points)
-    )
-    explicit_target_points_override = ("target_points" in parsed_overrides) or ("max_points" in parsed_overrides)
-    attempts: list[dict[str, Any]] = []
-    final_selected_attempt = 1
-    fallback_succeeded = False
-    attempts_target_points: list[int | None] = [initial_target_points, *retry_schedule_target_points]
-
-    result: dict[str, Any] | None = None
-    selected_data: Any = None
-    for attempt_index, attempt_target_points in enumerate(attempts_target_points, start=1):
-        attempt_overrides = dict(parsed_overrides)
-        if attempt_index > 1:
-            if retry_reduction_mode != initial_point_reduction:
-                attempt_overrides["point_reduction"] = retry_reduction_mode
-            attempt_overrides["target_points"] = attempt_target_points
-            attempt_overrides["max_points"] = attempt_target_points
-        result, selected_data = run_attempt(attempt_overrides)
-        is_degenerate = _is_degenerate_fpp_result(result)
-        attempts.append(
-            {
-                "attempt": int(attempt_index),
-                "target_points": attempt_overrides.get("target_points"),
-                "max_points": attempt_overrides.get("max_points"),
-                "degenerate": bool(is_degenerate),
-                "reason": result.get("degenerate_reason"),
-            }
-        )
-        final_selected_attempt = int(attempt_index)
-        if not is_degenerate:
-            if attempt_index > 1:
-                fallback_succeeded = True
-            break
-        if attempt_index >= len(attempts_target_points):
-            break
-
-    if result is None:
-        raise BtvCliError("FPP execution did not return a result.", exit_code=EXIT_RUNTIME_ERROR)
+    explicit_target_points_override = "target_points" in parsed_overrides
+    attempt_overrides = dict(parsed_overrides)
+    result, selected_data = run_attempt(attempt_overrides)
+    is_degenerate = _is_degenerate_fpp_result(result)
+    attempts = [
+        {
+            "attempt": 1,
+            "target_points": attempt_overrides.get("target_points"),
+            "degenerate": bool(is_degenerate),
+            "reason": result.get("degenerate_reason"),
+        }
+    ]
     retry_meta = {
-        "fallback_enabled": bool(fallback_enabled),
+        "fallback_enabled": False,
         "initial_point_reduction": initial_point_reduction,
-        "retry_reduction_mode": retry_reduction_mode,
-        "explicit_point_reduction": bool(explicit_point_reduction),
+        "retry_reduction_mode": initial_point_reduction,
+        "explicit_point_reduction": True,
         "explicit_target_points_override": bool(explicit_target_points_override),
-        "explicit_max_points_override": bool("max_points" in parsed_overrides),
         "initial_target_points": initial_target_points,
-        "initial_max_points": parsed_overrides.get("max_points"),
-        "retry_schedule_target_points": retry_schedule_target_points,
-        "retry_schedule_max_points": [int(value) for value in retry_schedule_target_points],
+        "retry_schedule_target_points": [],
         "attempts": attempts,
-        "final_selected_attempt": int(final_selected_attempt),
-        "fallback_succeeded": bool(fallback_succeeded),
+        "final_selected_attempt": 1,
+        "fallback_succeeded": False,
     }
     return result, selected_data, retry_meta
 
@@ -1435,11 +1231,8 @@ def _run_fpp_from_prepare_manifest(
     replicates: int | None,
     seed: int | None,
     overrides: tuple[str, ...],
-    point_reduction: str | None,
     target_points: int | None,
-    max_points: int | None,
-    bin_stat: str,
-    bin_err: str,
+    full_points: bool,
     mc_draws: int | None,
     window_duration_mult: float | None,
     min_flux_err: float | None,
@@ -1505,14 +1298,10 @@ def _run_fpp_from_prepare_manifest(
         raise BtvCliError("--timeout-seconds must be > 0", exit_code=EXIT_INPUT_ERROR)
 
     parsed_overrides = parse_extra_params(overrides)
-    _apply_point_reduction_contract(
+    _enforce_tutorial_binning_contract(
         parsed_overrides=parsed_overrides,
-        point_reduction=point_reduction,
         target_points=target_points,
-        max_points_alias=max_points,
-        bin_stat=bin_stat,
-        bin_err=bin_err,
-        emit_warning=lambda message: click.echo(message, err=True),
+        full_points=bool(full_points),
     )
     _resolve_drop_scenario_override(parsed_overrides=parsed_overrides)
     if mc_draws is not None:
@@ -1637,9 +1426,6 @@ def _run_fpp_from_prepare_manifest(
                     "explicit_target_points_override": bool(retry_meta["explicit_target_points_override"]),
                     "initial_target_points": retry_meta["initial_target_points"],
                     "retry_schedule_target_points": retry_meta["retry_schedule_target_points"],
-                    "explicit_max_points_override": bool(retry_meta["explicit_max_points_override"]),
-                    "initial_max_points": retry_meta["initial_max_points"],
-                    "retry_schedule_max_points": retry_meta["retry_schedule_max_points"],
                     "attempts": retry_meta["attempts"],
                     "final_selected_attempt": int(retry_meta["final_selected_attempt"]),
                     "fallback_succeeded": bool(retry_meta["fallback_succeeded"]),
@@ -1669,33 +1455,22 @@ def _run_fpp_from_prepare_manifest(
 )
 @click.option("--replicates", type=int, default=None, help="Replicate count for FPP aggregation.")
 @click.option("--seed", type=int, default=None, help="Base RNG seed.")
-@click.option("--override", "overrides", multiple=True, help="Repeat KEY=VALUE TRICERATOPS override entries.")
 @click.option(
-    "--point-reduction",
-    type=click.Choice(["downsample", "bin", "none"], case_sensitive=False),
-    default=None,
-    help="Point reduction strategy before TRICERATOPS calc_probs.",
+    "--override",
+    "overrides",
+    multiple=True,
+    help=(
+        "Repeat KEY=VALUE runtime overrides. Supported keys: mc_draws, "
+        "window_duration_mult, target_points, min_flux_err, "
+        "use_empirical_noise_floor, drop_scenario."
+    ),
 )
-@click.option("--target-points", type=int, default=None, help="Canonical point budget for downsample/bin modes.")
+@click.option("--target-points", type=int, default=None, help="Tutorial bin count (n_bins) for folded-window light-curve binning.")
 @click.option(
-    "--max-points",
-    type=int,
-    default=None,
-    help="Legacy alias for --target-points (deprecated).",
-)
-@click.option(
-    "--bin-stat",
-    type=click.Choice(["mean", "median"], case_sensitive=False),
-    default="mean",
+    "--full-points/--binned-points",
+    default=False,
     show_default=True,
-    help="Per-bin flux aggregation statistic when --point-reduction=bin.",
-)
-@click.option(
-    "--bin-err",
-    type=click.Choice(["propagate", "robust"], case_sensitive=False),
-    default="propagate",
-    show_default=True,
-    help="Per-bin uncertainty aggregation mode when --point-reduction=bin.",
+    help="Use all folded-window points (no binning) or tutorial binning.",
 )
 @click.option("--mc-draws", type=int, default=None, help="Monte Carlo draw count.")
 @click.option(
@@ -1704,11 +1479,11 @@ def _run_fpp_from_prepare_manifest(
     default=None,
     help="Transit-duration multiplier for folded-window extraction.",
 )
-@click.option("--min-flux-err", type=float, default=None, help="Minimum scalar flux error floor.")
+@click.option("--min-flux-err", type=float, default=None, help="Optional scalar flux_err_0 floor override (tutorial default: 0).")
 @click.option(
     "--use-empirical-noise-floor/--no-use-empirical-noise-floor",
     default=None,
-    help="Use empirical out-of-transit noise floor.",
+    help="Optional empirical noise-floor override (tutorial default: disabled).",
 )
 @click.option(
     "--timeout-seconds",
@@ -1765,11 +1540,8 @@ def fpp_run_command(
     replicates: int | None,
     seed: int | None,
     overrides: tuple[str, ...],
-    point_reduction: str | None,
     target_points: int | None,
-    max_points: int | None,
-    bin_stat: str,
-    bin_err: str,
+    full_points: bool,
     mc_draws: int | None,
     window_duration_mult: float | None,
     min_flux_err: float | None,
@@ -1788,8 +1560,7 @@ def fpp_run_command(
 ) -> None:
     """Run FPP compute from a prepared staging manifest.
 
-    Supports --point-reduction {downsample,bin,none}, canonical --target-points,
-    and legacy --max-points alias migration behavior.
+    Uses tutorial-style folded-window binning with configurable --target-points.
     """
     _run_fpp_from_prepare_manifest(
         prepare_manifest=prepare_manifest,
@@ -1797,11 +1568,8 @@ def fpp_run_command(
         replicates=replicates,
         seed=seed,
         overrides=overrides,
-        point_reduction=point_reduction,
         target_points=target_points,
-        max_points=max_points,
-        bin_stat=bin_stat,
-        bin_err=bin_err,
+        full_points=bool(full_points),
         mc_draws=mc_draws,
         window_duration_mult=window_duration_mult,
         min_flux_err=min_flux_err,
@@ -1873,33 +1641,22 @@ def fpp_run_command(
 )
 @click.option("--replicates", type=int, default=None, help="Replicate count for FPP aggregation.")
 @click.option("--seed", type=int, default=None, help="Base RNG seed.")
-@click.option("--override", "overrides", multiple=True, help="Repeat KEY=VALUE TRICERATOPS override entries.")
 @click.option(
-    "--point-reduction",
-    type=click.Choice(["downsample", "bin", "none"], case_sensitive=False),
-    default=None,
-    help="Point reduction strategy before TRICERATOPS calc_probs.",
+    "--override",
+    "overrides",
+    multiple=True,
+    help=(
+        "Repeat KEY=VALUE runtime overrides. Supported keys: mc_draws, "
+        "window_duration_mult, target_points, min_flux_err, "
+        "use_empirical_noise_floor, drop_scenario."
+    ),
 )
-@click.option("--target-points", type=int, default=None, help="Canonical point budget for downsample/bin modes.")
+@click.option("--target-points", type=int, default=None, help="Tutorial bin count (n_bins) for folded-window light-curve binning.")
 @click.option(
-    "--max-points",
-    type=int,
-    default=None,
-    help="Legacy alias for --target-points (deprecated).",
-)
-@click.option(
-    "--bin-stat",
-    type=click.Choice(["mean", "median"], case_sensitive=False),
-    default="mean",
+    "--full-points/--binned-points",
+    default=False,
     show_default=True,
-    help="Per-bin flux aggregation statistic when --point-reduction=bin.",
-)
-@click.option(
-    "--bin-err",
-    type=click.Choice(["propagate", "robust"], case_sensitive=False),
-    default="propagate",
-    show_default=True,
-    help="Per-bin uncertainty aggregation mode when --point-reduction=bin.",
+    help="Use all folded-window points (no binning) or tutorial binning.",
 )
 @click.option(
     "--drop-scenario",
@@ -1918,11 +1675,11 @@ def fpp_run_command(
     default=None,
     help="Transit-duration multiplier for folded-window extraction.",
 )
-@click.option("--min-flux-err", type=float, default=None, help="Minimum scalar flux error floor.")
+@click.option("--min-flux-err", type=float, default=None, help="Optional scalar flux_err_0 floor override (tutorial default: 0).")
 @click.option(
     "--use-empirical-noise-floor/--no-use-empirical-noise-floor",
     default=None,
-    help="Use empirical out-of-transit noise floor.",
+    help="Optional empirical noise-floor override (tutorial default: disabled).",
 )
 @click.option("--sectors", multiple=True, type=int, help="Optional sector filters.")
 @click.option(
@@ -2005,11 +1762,8 @@ def fpp_command(
     replicates: int | None,
     seed: int | None,
     overrides: tuple[str, ...],
-    point_reduction: str | None,
     target_points: int | None,
-    max_points: int | None,
-    bin_stat: str,
-    bin_err: str,
+    full_points: bool,
     drop_scenarios: tuple[str, ...],
     mc_draws: int | None,
     window_duration_mult: float | None,
@@ -2033,13 +1787,9 @@ def fpp_command(
     """Calculate candidate FPP and emit schema-stable JSON.
 
     Examples:
-      btv fpp --tic-id 123 --period-days 7.5 --t0-btjd 2500.25 --duration-hours 3.0 --depth-ppm 900 --point-reduction downsample --target-points 1500 -o fpp.json
-      btv fpp --tic-id 123 --period-days 7.5 --t0-btjd 2500.25 --duration-hours 3.0 --depth-ppm 900 --point-reduction bin --target-points 250 --bin-stat mean --bin-err propagate -o fpp_bin.json
-      btv fpp --tic-id 123 --period-days 7.5 --t0-btjd 2500.25 --duration-hours 3.0 --depth-ppm 900 --point-reduction none -o fpp_none.json
-
-    Migration:
-      --max-points is a deprecated alias for --target-points. Prefer --target-points.
-      If both are supplied and equal, CLI warns and continues. If they differ, CLI fails.
+      btv fpp --tic-id 123 --period-days 7.5 --t0-btjd 2500.25 --duration-hours 3.0 --depth-ppm 900 -o fpp_default.json
+      btv fpp --tic-id 123 --period-days 7.5 --t0-btjd 2500.25 --duration-hours 3.0 --depth-ppm 900 --target-points 250 -o fpp_bins250.json
+      btv fpp --tic-id 123 --period-days 7.5 --t0-btjd 2500.25 --duration-hours 3.0 --depth-ppm 900 --target-points 1500 -o fpp_bins1500.json
     """
     out_path = resolve_optional_output_path(output_path_arg)
     if prepare_manifest is not None:
@@ -2089,11 +1839,8 @@ def fpp_command(
             replicates=replicates,
             seed=seed,
             overrides=overrides,
-            point_reduction=point_reduction,
             target_points=target_points,
-            max_points=max_points,
-            bin_stat=bin_stat,
-            bin_err=bin_err,
+            full_points=bool(full_points),
             mc_draws=mc_draws,
             window_duration_mult=window_duration_mult,
             min_flux_err=min_flux_err,
@@ -2199,14 +1946,10 @@ def fpp_command(
         raise BtvCliError("--timeout-seconds must be > 0", exit_code=EXIT_INPUT_ERROR)
 
     parsed_overrides = parse_extra_params(overrides)
-    _apply_point_reduction_contract(
+    _enforce_tutorial_binning_contract(
         parsed_overrides=parsed_overrides,
-        point_reduction=point_reduction,
         target_points=target_points,
-        max_points_alias=max_points,
-        bin_stat=bin_stat,
-        bin_err=bin_err,
-        emit_warning=lambda message: click.echo(message, err=True),
+        full_points=bool(full_points),
     )
     _resolve_drop_scenario_override(
         parsed_overrides=parsed_overrides,
@@ -2384,9 +2127,6 @@ def fpp_command(
                     "explicit_target_points_override": bool(retry_meta["explicit_target_points_override"]),
                     "initial_target_points": retry_meta["initial_target_points"],
                     "retry_schedule_target_points": retry_meta["retry_schedule_target_points"],
-                    "explicit_max_points_override": bool(retry_meta["explicit_max_points_override"]),
-                    "initial_max_points": retry_meta["initial_max_points"],
-                    "retry_schedule_max_points": retry_meta["retry_schedule_max_points"],
                     "attempts": retry_meta["attempts"],
                     "final_selected_attempt": int(retry_meta["final_selected_attempt"]),
                     "fallback_succeeded": bool(retry_meta["fallback_succeeded"]),

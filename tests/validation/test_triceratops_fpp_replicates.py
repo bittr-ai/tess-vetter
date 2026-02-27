@@ -634,7 +634,7 @@ def _make_mock_cache(
 )
 @patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
 @patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
-def test_reduction_modes_and_bin_downsample_divergence(
+def test_reduction_modes_bin_and_none(
     mock_load: MagicMock, mock_save: MagicMock  # noqa: ARG001
 ) -> None:
     from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
@@ -655,31 +655,24 @@ def test_reduction_modes_and_bin_downsample_divergence(
             duration_hours=3.0,
             point_reduction=mode,
             target_points=100,
-            max_points=None,
-            bin_stat="mean",
-            bin_err="propagate",
             replicates=1,
             seed=77,
         )
         assert "error" not in result
         return result, np.asarray(target.last_calc_probs_kwargs["time"], dtype=float)
 
-    downsample_result, downsample_time = _run_mode("downsample")
     bin_result, bin_time_first = _run_mode("bin")
     _, bin_time_second = _run_mode("bin", repeat=True)
     none_result, none_time = _run_mode("none")
 
-    assert np.all(np.diff(downsample_time) >= 0.0)
     assert np.all(np.diff(bin_time_first) >= 0.0)
     assert np.all(np.diff(none_time) >= 0.0)
 
-    assert len(downsample_time) <= 100
     assert 1 <= len(bin_time_first) <= 100
     assert len(none_time) == int(none_result["runtime_metrics"]["n_points_windowed"])
 
-    assert not np.array_equal(downsample_time, bin_time_first)
+    assert not np.array_equal(none_time, bin_time_first)
     np.testing.assert_allclose(bin_time_first, bin_time_second)
-    assert int(downsample_result["runtime_metrics"]["n_points_used"]) == len(downsample_time)
     assert int(bin_result["runtime_metrics"]["n_points_used"]) == len(bin_time_first)
 
 
@@ -689,7 +682,7 @@ def test_reduction_modes_and_bin_downsample_divergence(
 )
 @patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
 @patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
-def test_bin_stat_median_with_propagate_is_rejected(
+def test_point_reduction_downsample_is_rejected(
     mock_load: MagicMock, mock_save: MagicMock  # noqa: ARG001
 ) -> None:
     from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
@@ -705,25 +698,21 @@ def test_bin_stat_median_with_propagate_is_rejected(
         t0=1500.0,
         depth_ppm=500,
         duration_hours=3.0,
-        point_reduction="bin",
+        point_reduction="downsample",
         target_points=60,
-        max_points=None,
-        bin_stat="median",
-        bin_err="propagate",
         replicates=1,
         seed=101,
     )
 
     assert "error" in result
-    assert "median" in str(result.get("error", "")).lower()
-    assert "robust" in str(result.get("error", "")).lower()
+    assert "point_reduction must be one of" in str(result.get("error", "")).lower()
 
 
 @pytest.mark.skipif(
     not HAS_TRICERATOPS,
     reason="TRICERATOPS vendor not available (requires triceratops extra)",
 )
-@pytest.mark.parametrize("mode", ["downsample", "bin", "none"])
+@pytest.mark.parametrize("mode", ["bin", "none"])
 @patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
 @patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
 def test_empty_window_fails_for_all_modes(
@@ -747,7 +736,6 @@ def test_empty_window_fails_for_all_modes(
         duration_hours=1.0,
         point_reduction=mode,
         target_points=25,
-        max_points=None,
         replicates=1,
         seed=20,
     )
@@ -787,7 +775,6 @@ def test_runtime_and_resolution_provenance_fields_for_none_mode_ignored_target_p
         duration_hours=3.0,
         point_reduction="none",
         target_points=80,
-        max_points=None,
         replicates=1,
         seed=22,
     )
@@ -819,8 +806,6 @@ def test_runtime_and_resolution_provenance_fields_for_none_mode_ignored_target_p
     ):
         assert key in metrics
     assert trace["target_points"]["source"] == "target_points_ignored_for_none"
-    assert "legacy_alias_matched" in trace["target_points"]
-    assert "legacy_alias_value" in trace["target_points"]
     assert effective["target_points"] is None
     assert effective["target_points_clamped"] is False
 
@@ -831,7 +816,7 @@ def test_runtime_and_resolution_provenance_fields_for_none_mode_ignored_target_p
 )
 @patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
 @patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
-def test_low_window_and_robust_fallback_metrics_semantics(
+def test_low_window_metrics_semantics(
     mock_load: MagicMock, mock_save: MagicMock  # noqa: ARG001
 ) -> None:
     from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
@@ -850,9 +835,6 @@ def test_low_window_and_robust_fallback_metrics_semantics(
         duration_hours=3.0,
         point_reduction="bin",
         target_points=50,
-        max_points=None,
-        bin_stat="median",
-        bin_err="robust",
         replicates=1,
         seed=33,
     )
@@ -861,6 +843,6 @@ def test_low_window_and_robust_fallback_metrics_semantics(
     metrics = result["runtime_metrics"]
     assert metrics["windowed_points_empty"] is False
     assert metrics["low_window_point_count"] is True
-    assert int(metrics["bin_err_robust_fallback_bins"]) > 0
+    assert int(metrics["bin_err_robust_fallback_bins"]) == 0
     assert metrics["flux_err_0_method"] == "nanmean_reduced_flux_err"
     assert int(metrics["flux_err_0_source_count"]) == int(metrics["n_points_used"])

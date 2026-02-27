@@ -8,8 +8,6 @@ from tess_vetter.api.contracts import callable_input_schema_from_signature, opaq
 from tess_vetter.api.fpp import (
     CALCULATE_FPP_CALL_SCHEMA,
     CALCULATE_FPP_OUTPUT_SCHEMA,
-    DEFAULT_BIN_ERR,
-    DEFAULT_BIN_STAT,
     DEFAULT_MC_DRAWS,
     DEFAULT_MIN_FLUX_ERR,
     DEFAULT_POINT_REDUCTION,
@@ -38,9 +36,6 @@ def test_calculate_fpp_knob_defaults_wire_expected_values() -> None:
         assert kwargs["window_duration_mult"] == DEFAULT_WINDOW_DURATION_MULT
         assert kwargs["point_reduction"] == DEFAULT_POINT_REDUCTION
         assert kwargs["target_points"] == DEFAULT_TARGET_POINTS
-        assert kwargs["bin_stat"] == DEFAULT_BIN_STAT
-        assert kwargs["bin_err"] == DEFAULT_BIN_ERR
-        assert kwargs["max_points"] is None
         assert kwargs["min_flux_err"] == DEFAULT_MIN_FLUX_ERR
         assert kwargs["use_empirical_noise_floor"] is DEFAULT_USE_EMPIRICAL_NOISE_FLOOR
 
@@ -59,9 +54,6 @@ def test_calculate_fpp_explicit_knobs_override_defaults() -> None:
             window_duration_mult=None,
             point_reduction="bin",
             target_points=250,
-            bin_stat="mean",
-            bin_err="propagate",
-            max_points=250,
             min_flux_err=1e-4,
             use_empirical_noise_floor=False,
             drop_scenario=["SEB"],
@@ -71,10 +63,26 @@ def test_calculate_fpp_explicit_knobs_override_defaults() -> None:
         assert kwargs["window_duration_mult"] is None
         assert kwargs["point_reduction"] == "bin"
         assert kwargs["target_points"] == 250
-        assert kwargs["max_points"] == 250
         assert kwargs["min_flux_err"] == 1e-4
         assert kwargs["use_empirical_noise_floor"] is False
         assert kwargs["drop_scenario"] == ["SEB"]
+
+
+def test_calculate_fpp_rejects_unsupported_override_knobs() -> None:
+    cache = MagicMock()
+    with patch("tess_vetter.api.fpp.calculate_fpp_handler"):
+        try:
+            calculate_fpp(
+                cache=cache,
+                tic_id=1,
+                period=1.0,
+                t0=0.0,
+                depth_ppm=100.0,
+                overrides={"max_points": 200},
+            )
+            raise AssertionError("Expected ValueError for unsupported override key")
+        except ValueError as exc:
+            assert "max_points/bin_stat/bin_err" in str(exc)
 
 
 def test_external_lightcurve_dataclass_creation() -> None:
@@ -159,15 +167,12 @@ def test_calculate_fpp_call_schema_is_stable() -> None:
         "type": "object",
         "properties": {
             "allow_network": {},
-            "bin_err": {},
-            "bin_stat": {},
             "cache": {},
             "contrast_curve": {},
             "depth_ppm": {},
             "drop_scenario": {},
             "duration_hours": {},
             "external_lightcurves": {},
-            "max_points": {},
             "mc_draws": {},
             "min_flux_err": {},
             "overrides": {},
