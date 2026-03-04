@@ -78,8 +78,6 @@ _VALID_DROP_SCENARIO_LABELS: tuple[str, ...] = (
     "BEBx2P",
 )
 _POINT_REDUCTION_MODES: tuple[str, ...] = ("bin", "none")
-_FIXED_BIN_STAT = "median"
-_FIXED_BIN_ERR = "propagate"
 
 
 def _triceratops_sectors_key(sectors_used: list[int]) -> str:
@@ -1329,6 +1327,15 @@ def _apply_point_reduction(
     effective_target_points: int | None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
     """Apply tutorial-style binning in folded-time space."""
+    def _propagated_sigma(err_values: np.ndarray) -> float:
+        finite_err = np.asarray(err_values[np.isfinite(err_values)], dtype=float)
+        if finite_err.size == 0:
+            fallback = np.asarray(flux_err_arr[np.isfinite(flux_err_arr)], dtype=float)
+            if fallback.size == 0:
+                return float("nan")
+            return float(np.nanmean(fallback))
+        return float(np.sqrt(np.nansum(np.square(finite_err))) / float(finite_err.size))
+
     if effective_target_points is None:
         return time_folded, flux_arr, flux_err_arr, 0
     t_min = float(np.min(time_folded))
@@ -1336,11 +1343,10 @@ def _apply_point_reduction(
     if not np.isfinite(t_min) or not np.isfinite(t_max):
         return time_folded, flux_arr, flux_err_arr, 0
     if t_max <= t_min:
-        n = int(np.count_nonzero(np.isfinite(flux_err_arr)))
-        propagated = float(np.nanmean(flux_err_arr) / np.sqrt(max(1, n)))
+        propagated = _propagated_sigma(flux_err_arr)
         return (
             np.array([0.5 * (t_min + t_max)], dtype=float),
-            np.array([np.nanmedian(flux_arr)], dtype=float),
+            np.array([np.nanmean(flux_arr)], dtype=float),
             np.array([propagated], dtype=float),
             0,
         )
@@ -1359,9 +1365,11 @@ def _apply_point_reduction(
         t_used.append(float(np.nanmean(time_folded[mask])))
         flux_bin = flux_arr[mask]
         err_bin = flux_err_arr[mask]
-        flux_val = float(np.nanmedian(flux_bin))
-        n_bin = int(np.count_nonzero(np.isfinite(flux_bin)))
-        sigma = float(np.nanmean(err_bin) / np.sqrt(max(1, n_bin)))
+        # Tutorial-aligned aggregation: mean flux and propagated uncertainty.
+        flux_val = float(np.nanmean(flux_bin))
+        sigma = _propagated_sigma(err_bin)
+        if not np.isfinite(sigma):
+            continue
         f_used.append(flux_val)
         ferr_used.append(sigma)
     return (
@@ -1513,13 +1521,17 @@ def _extract_single_run_result(
     out["posterior_prob_nan_count"] = posterior_prob_nan_count
     out["scenario_prob_top"] = scenario_prob_top
     out["run_seed"] = run_seed
-    requested_config_payload: dict[str, Any] = {
+    input_target_points: int | None = None
+    target_points_source = str((resolution_trace.get("target_points") or {}).get("source") or "")
+    if target_points_source in {"target_points", "target_points_ignored_for_none"}:
+        input_target_points = (
+            int(target_points_requested) if target_points_requested is not None else None
+        )
+    input_config_payload: dict[str, Any] = {
         "point_reduction": str(point_reduction),
-        "target_points": int(target_points_requested) if target_points_requested is not None else None,
-        "bin_stat": _FIXED_BIN_STAT,
-        "bin_err": _FIXED_BIN_ERR,
+        "target_points": input_target_points,
     }
-    out["requested_config"] = requested_config_payload
+    out["input_config"] = input_config_payload
     out["effective_config"] = {
         "point_reduction": str(point_reduction),
         "target_points": (
@@ -1527,8 +1539,6 @@ def _extract_single_run_result(
             if target_points_effective is not None
             else None
         ),
-        "bin_stat": _FIXED_BIN_STAT,
-        "bin_err": _FIXED_BIN_ERR,
         "target_points_clamped": bool(target_points_clamped) if point_reduction != "none" else False,
     }
     out["runtime_metrics"] = {
@@ -1538,7 +1548,6 @@ def _extract_single_run_result(
         "flux_err_0": float(flux_err_scalar),
         "flux_err_0_method": "nanmean_reduced_flux_err",
         "flux_err_0_source_count": int(n_points_used),
-        "bin_err_robust_fallback_bins": 0,
         "low_window_point_count": bool(low_window_point_count),
         "windowed_points_empty": bool(windowed_points_empty),
     }
@@ -1561,9 +1570,6 @@ def _extract_single_run_result(
             int(target_points_effective) if target_points_effective is not None else None
         ),
         "target_points_clamped": bool(target_points_clamped),
-        "bin_stat": _FIXED_BIN_STAT,
-        "bin_err": _FIXED_BIN_ERR,
-        "bin_err_robust_fallback_bins": 0,
         "mc_draws": int(draws),
         "exptime_days": float(exptime_days),
         "flux_err_scalar_used": float(flux_err_scalar),

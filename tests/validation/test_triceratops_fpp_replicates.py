@@ -781,17 +781,17 @@ def test_runtime_and_resolution_provenance_fields_for_none_mode_ignored_target_p
     )
 
     assert "error" not in result
-    assert "requested_config" in result
+    assert "input_config" in result
     assert "effective_config" in result
     assert "runtime_metrics" in result
     assert "resolution_trace" in result
 
-    requested = result["requested_config"]
+    requested = result["input_config"]
     effective = result["effective_config"]
     metrics = result["runtime_metrics"]
     trace = result["resolution_trace"]
 
-    for key in ("point_reduction", "target_points", "bin_stat", "bin_err"):
+    for key in ("point_reduction", "target_points"):
         assert key in requested
         assert key in effective
     for key in (
@@ -801,12 +801,12 @@ def test_runtime_and_resolution_provenance_fields_for_none_mode_ignored_target_p
         "flux_err_0",
         "flux_err_0_method",
         "flux_err_0_source_count",
-        "bin_err_robust_fallback_bins",
         "low_window_point_count",
         "windowed_points_empty",
     ):
         assert key in metrics
     assert trace["target_points"]["source"] == "target_points_ignored_for_none"
+    assert requested["target_points"] == 80
     assert effective["target_points"] is None
     assert effective["target_points_clamped"] is False
 
@@ -844,7 +844,6 @@ def test_low_window_metrics_semantics(
     metrics = result["runtime_metrics"]
     assert metrics["windowed_points_empty"] is False
     assert metrics["low_window_point_count"] is True
-    assert int(metrics["bin_err_robust_fallback_bins"]) == 0
     assert metrics["flux_err_0_method"] == "nanmean_reduced_flux_err"
     assert int(metrics["flux_err_0_source_count"]) == int(metrics["n_points_used"])
 
