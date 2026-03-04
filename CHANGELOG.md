@@ -6,6 +6,18 @@ This project follows semantic versioning (SemVer).
 
 - No unreleased changes.
 
+## 0.3.18 (2026-03-04)
+
+- Merged the FPP binning/runtime/sector-loading/vendor-numerics integration
+  stack into `main` for release readiness.
+- Refined FPP point-reduction robustness by using tutorial-aligned mean flux
+  aggregation with safer propagated uncertainty handling in sparse/edge bins.
+- Improved FPP run provenance so `input_config.target_points` preserves user
+  intent even when `point_reduction=none` ignores the knob at runtime.
+- Preserved explicit timeout semantics for replicate aggregation:
+  no implicit calc timeout when unset, and timeout vs degenerate outcomes are
+  reported as distinct error classes.
+
 ## 0.3.17 (2026-02-27)
 
 - Replaced legacy preset/profile-style FPP controls with explicit runtime knobs
