@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -40,6 +41,18 @@ class TestPersistentCache:
         with tempfile.TemporaryDirectory() as td:
             cache = PersistentCache(td)
             assert cache.get("nonexistent") is None
+
+    def test_get_read_failure_preserves_cached_entry(self) -> None:
+        """Transient read failures should not delete the on-disk cache entry."""
+        with tempfile.TemporaryDirectory() as td:
+            cache = PersistentCache(td)
+            cache.set("key1", {"foo": "bar"})
+
+            with patch("tess_vetter.platform.io.cache.pickle.load", side_effect=OSError("transient read failure")):
+                assert cache.get("key1") is None
+
+            assert cache.has("key1")
+            assert cache.get("key1") == {"foo": "bar"}
 
     def test_has_returns_correct_bool(self) -> None:
         """has() returns True for existing keys, False otherwise."""

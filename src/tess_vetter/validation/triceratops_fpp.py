@@ -1750,6 +1750,20 @@ def calculate_fpp_handler(
             stage="gather_light_curves",
             sectors_used_value=None,
         )
+    if sectors is not None:
+        requested_sectors = sorted({int(s) for s in sectors})
+        recovered_sectors = sorted({int(s) for s in sectors_used})
+        missing_sectors = [sector for sector in requested_sectors if sector not in recovered_sectors]
+        if missing_sectors:
+            return _err(
+                (
+                    f"Missing cached light curves for requested sectors: {', '.join(str(s) for s in missing_sectors)}. "
+                    "Prepared-manifest/runtime sector mismatches are not allowed; rerun `btv fpp-prepare` to restage artifacts."
+                ),
+                error_type="cache_miss",
+                stage="gather_light_curves",
+                sectors_used_value=recovered_sectors,
+            )
 
     # Step 2: Check for saturation
     if tmag is not None and tmag < 4.0:

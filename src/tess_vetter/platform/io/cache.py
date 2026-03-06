@@ -308,7 +308,8 @@ class PersistentCache:
                         if fcntl is not None:
                             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
             except Exception:
-                self._remove_entry(key)
+                # A transient read/load failure should not mutate persistent cache state.
+                # Callers can treat this as a miss and decide whether to retry.
                 return None
 
             self._update_access_time(key)

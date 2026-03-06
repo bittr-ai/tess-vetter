@@ -629,6 +629,32 @@ def _make_mock_cache(
     return cache
 
 
+def _make_multi_sector_mock_cache(
+    *,
+    sector_times: dict[int, np.ndarray],
+    tic_id: int = 12345,
+    missing_sectors: set[int] | None = None,
+) -> MagicMock:
+    """Build a lightweight cache mock with multiple TIC sectors."""
+    cache = MagicMock()
+    cache.cache_dir = "/tmp/test_cache"
+    missing = {int(sector) for sector in (missing_sectors or set())}
+    lc_by_key: dict[str, Any] = {}
+
+    for sector, time in sector_times.items():
+        lc_mock = MagicMock()
+        lc_mock.time = np.asarray(time, dtype=float)
+        lc_mock.flux = np.ones_like(lc_mock.time, dtype=float)
+        lc_mock.flux_err = np.full_like(lc_mock.time, 1e-3, dtype=float)
+        lc_mock.valid_mask = np.ones(lc_mock.time.shape, dtype=bool)
+        key = f"lc:{int(tic_id)}:{int(sector)}:pdcsap"
+        lc_by_key[key] = None if int(sector) in missing else lc_mock
+
+    cache.keys = lambda: list(lc_by_key.keys())
+    cache.get = lambda lookup_key: lc_by_key.get(lookup_key)
+    return cache
+
+
 @pytest.mark.skipif(
     not HAS_TRICERATOPS,
     reason="TRICERATOPS vendor not available (requires triceratops extra)",
@@ -675,6 +701,45 @@ def test_reduction_modes_bin_and_none(
     assert not np.array_equal(none_time, bin_time_first)
     np.testing.assert_allclose(bin_time_first, bin_time_second)
     assert int(bin_result["runtime_metrics"]["n_points_used"]) == len(bin_time_first)
+
+
+@pytest.mark.skipif(
+    not HAS_TRICERATOPS,
+    reason="TRICERATOPS vendor not available (requires triceratops extra)",
+)
+@patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+@patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+def test_requested_sector_mismatch_returns_cache_miss_error(
+    mock_load: MagicMock, mock_save: MagicMock  # noqa: ARG001
+) -> None:
+    from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+
+    del mock_save
+    mock_load.return_value = make_valid_target(fpp=0.02, seed=5)
+    cache = _make_multi_sector_mock_cache(
+        sector_times={
+            1: 1500.0 + np.linspace(-0.2, 0.2, 120),
+            2: 1500.0 + np.linspace(-0.2, 0.2, 140),
+        },
+        missing_sectors={2},
+    )
+
+    result = calculate_fpp_handler(
+        cache=cache,
+        tic_id=12345,
+        period=1.0,
+        t0=1500.0,
+        depth_ppm=500,
+        duration_hours=3.0,
+        sectors=[1, 2],
+        replicates=1,
+        seed=77,
+    )
+
+    assert result["error_type"] == "cache_miss"
+    assert result["stage"] == "gather_light_curves"
+    assert result["sectors_used"] == [1]
+    assert "requested sectors: 2" in result["error"]
 
 
 @pytest.mark.skipif(
