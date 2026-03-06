@@ -6,6 +6,15 @@ This project follows semantic versioning (SemVer).
 
 - No unreleased changes.
 
+## 0.3.19 (2026-03-05)
+
+- Fixed persistent-cache read failure handling so transient pickle/load errors
+  no longer delete cached light-curve entries from disk.
+- Fixed FPP sector integrity so requested/prepared sector mismatches now fail
+  fast with `cache_miss` instead of silently computing on a degraded subset.
+- Added regression coverage for transient cache read failures and requested
+  sector mismatch handling in FPP.
+
 ## 0.3.18 (2026-03-04)
 
 - Merged the FPP binning/runtime/sector-loading/vendor-numerics integration
