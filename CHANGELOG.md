@@ -6,6 +6,14 @@ This project follows semantic versioning (SemVer).
 
 - No unreleased changes.
 
+## 0.3.20 (2026-03-06)
+
+- Fixed FPP replicate acceptance so finite TRICERATOPS scenario tables are no
+  longer marked degenerate solely because `btv` reporting buckets do not cover
+  every returned scenario label.
+- Added regression coverage for valid finite scenario tables whose posterior
+  mass lives in labels such as `BTP`, `PTP`, and `PEB`.
+
 ## 0.3.19 (2026-03-05)
 
 - Fixed persistent-cache read failure handling so transient pickle/load errors
