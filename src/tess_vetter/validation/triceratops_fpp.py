@@ -1593,8 +1593,6 @@ def _extract_single_run_result(
         degenerate.append("posterior_sum_total_zero")
     if posterior_prob_nan_count is not None and posterior_prob_nan_count > 0:
         degenerate.append(f"posterior_prob_nan_count={posterior_prob_nan_count}")
-    if out.get("prob_planet", 0.0) == 0.0 and out.get("prob_eb", 0.0) == 0.0 and scenario_prob_sums:
-        degenerate.append("scenario_probs_missing_expected_keys")
     out["degenerate_reason"] = ",".join(degenerate) if degenerate else None
 
     return out

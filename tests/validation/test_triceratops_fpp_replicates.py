@@ -344,6 +344,19 @@ def make_valid_target(fpp: float = 0.01, seed: int = 0) -> MockTriceratopsTarget
     )
 
 
+def make_valid_target_with_unbucketed_scenarios() -> MockTriceratopsTarget:
+    """Create a finite target whose posterior mass lives in non-bucketed labels."""
+    return MockTriceratopsTarget(
+        FPP=0.25,
+        NFPP=0.02,
+        probs=MockProbsDataFrame(
+            scenarios=["BTP", "PTP", "PEB", "PEBx2P", "STP"],
+            probs=[0.40, 0.25, 0.15, 0.10, 0.10],
+        ),
+        stars=[{"Tmag": 10.0}, {"Tmag": 12.0}],
+    )
+
+
 # =============================================================================
 # Integration tests with mocked TRICERATOPS
 # =============================================================================
@@ -422,6 +435,31 @@ class TestCalculateFppHandlerReplicates:
         assert result["replicates"] == 1
         assert result["n_success"] == 1
         assert result["n_fail"] == 0
+
+    @patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
+    @patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
+    def test_single_replicate_with_unbucketed_scenarios_is_not_marked_degenerate(
+        self, mock_save, mock_load, mock_cache
+    ):
+        """Finite scenario tables should remain valid even if bucket helpers miss labels."""
+        from tess_vetter.validation.triceratops_fpp import calculate_fpp_handler
+
+        mock_load.return_value = make_valid_target_with_unbucketed_scenarios()
+
+        result = calculate_fpp_handler(
+            cache=mock_cache,
+            tic_id=12345,
+            period=10.0,
+            t0=1500.0,
+            depth_ppm=500,
+            duration_hours=3.0,
+            replicates=1,
+            seed=42,
+        )
+
+        assert "error" not in result
+        assert result["n_success"] == 1
+        assert result["degenerate_reason"] is None
 
     @patch("tess_vetter.validation.triceratops_fpp._load_cached_triceratops_target")
     @patch("tess_vetter.validation.triceratops_fpp._save_cached_triceratops_target")
