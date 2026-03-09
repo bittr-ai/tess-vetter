@@ -32,8 +32,7 @@ def hydrate_cache_from_dataset(
 ) -> PersistentCache:
     """Hydrate a PersistentCache with per-sector LightCurveData for TRICERATOPS.
 
-    This matches the pattern used in `04-real-candidate-validation.ipynb`:
-    store one LightCurveData per sector under a `make_data_ref(...)` key so the
+    Store one LightCurveData per sector under a `make_data_ref(...)` key so the
     FPP engine can load per-sector light curves from cache.
 
     Args:

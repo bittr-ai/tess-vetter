@@ -7,7 +7,7 @@ This tutorial demonstrates a common TESS failure mode: a transit signal can look
 - Dilution plausibility (“how deep would the eclipse have to be on that neighbor?”) (`tess_vetter.api.stellar_dilution.compute_dilution_scenarios`)
 - An aperture-family sanity check (`tess_vetter.api.compute_aperture_family_depth_curve`)
 
-**Example target**: `TIC 188646744` (TOI-5807.01). This is an extremely bright star where localization can be baseline-sensitive, so the “localization + physics” combination is the point of the example.
+**Example target**: a bright multi-sector TESS target with nearby Gaia sources in the aperture. The goal is to show the localization-plus-dilution workflow, not to anchor the tutorial to one specific published candidate.
 
 ## Prerequisites
 

@@ -6,10 +6,10 @@ outputs, then (manually) hardcode "Expected Output" blocks.
 
 Examples:
   # Execute from the start through the code cell with id 'run-baseline'
-  uv run python scripts/exec_notebook_until.py docs/tutorials/09-toi-5807-validation-walkthrough.ipynb --to-id run-baseline
+  uv run python scripts/exec_notebook_until.py docs/tutorials/01-basic-vetting.ipynb --to-id run-baseline
 
   # Execute the first 10 cells (0-based index inclusive)
-  uv run python scripts/exec_notebook_until.py docs/tutorials/09-toi-5807-validation-walkthrough.ipynb --to-index 10
+  uv run python scripts/exec_notebook_until.py docs/tutorials/01-basic-vetting.ipynb --to-index 10
 
 Notes:
   - Executes in a fresh kernel each run.

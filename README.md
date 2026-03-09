@@ -214,8 +214,8 @@ For repeatable FPP runs, use a two-step flow:
 Example:
 
 ```bash
-btv fpp-prepare --toi "TOI-5807.01" --network-ok --cache-dir outputs/cache -o outputs/fpp/toi_5807.prepare.json
-btv fpp --prepare-manifest outputs/fpp/toi_5807.prepare.json --no-network -o outputs/fpp/toi_5807.fast.json
+btv fpp-prepare --tic-id 123456789 --period-days 12.345 --t0-btjd 2450.123 --duration-hours 3.2 --depth-ppm 450 --network-ok --cache-dir outputs/cache -o outputs/fpp/example.prepare.json
+btv fpp --prepare-manifest outputs/fpp/example.prepare.json --no-network -o outputs/fpp/example.fast.json
 ```
 
 Notes:
